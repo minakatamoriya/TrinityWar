@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trinity War 阵营经营策略战争 Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="left-rail">
+      <div class="brand-block">
+        <p class="eyebrow">TRINITY WAR</p>
+        <h1>阵营经营策略战争 Demo</h1>
+        <p class="subline">给产品、程序和 UI 共用的一版可点击原型。</p>
+      </div>
+
+      <div class="summary-card war-card">
+        <p class="card-label">当前阵营</p>
+        <div class="faction-row">
+          <span class="faction-badge human">人界</span>
+          <span class="soft-tag">调度优势</span>
+        </div>
+        <p class="muted">上缴贡献 +10%，贡献分红 +5%</p>
+      </div>
+
+      <div class="summary-card">
+        <p class="card-label">今日主目标</p>
+        <ul class="mini-list">
+          <li>领取待领取收益</li>
+          <li>收取 1 块成熟外场</li>
+          <li>完成 1 次匿名掠夺</li>
+        </ul>
+      </div>
+
+      <div class="summary-card">
+        <p class="card-label">关键提醒</p>
+        <button class="rail-alert" data-modal-title="收益领取" data-modal-body="你有 920 金币待领取，其中 200 即将于 2 小时后到达 24 小时保留上限。">待领取 920</button>
+        <button class="rail-alert" data-modal-title="战报提醒" data-modal-body="你在 37 分钟前被魔界玩家成功掠夺一次，已解锁免费复仇。">战报未读 2</button>
+      </div>
+    </aside>
+
+    <main class="phone-stage">
+      <section class="phone-frame">
+        <header class="top-bar">
+          <div>
+            <p class="eyebrow">领主简报</p>
+            <h2 id="scene-title">主城首页</h2>
+          </div>
+          <button class="ghost-button" data-modal-title="设置" data-modal-body="这里预留音效、震动、账号和调试开关。Demo 先只做入口。">设置</button>
+        </header>
+
+        <section class="resource-strip">
+          <div class="resource-chip vault">
+            <span class="resource-name">金库</span>
+            <strong>4,280 / 5,000</strong>
+          </div>
+          <div class="resource-chip balance">
+            <span class="resource-name">余额</span>
+            <strong>620</strong>
+          </div>
+          <button class="resource-chip pending actionable" data-modal-title="领取收益" data-modal-body="当前待领取收益 920。若现在领取，按可承接部分入库；若金库空间不足，可取消或确认损失溢出部分。">
+            <span class="resource-name">待领取</span>
+            <strong>920</strong>
+          </button>
+        </section>
+
+        <section class="screen active" id="screen-home" data-title="主城首页">
+          <div class="hero-panel parchment">
+            <div>
+              <p class="eyebrow">今日状态</p>
+              <h3>主城 Lv.4 · 金库即将满仓</h3>
+              <p class="muted">成熟外场 1 块，免费掠夺 2 次，免费复仇 1 次。</p>
+            </div>
+            <button class="primary-button" data-modal-title="收益领取" data-modal-body="建议先领取待领取收益，再决定扩仓、升级还是上缴。">领取收益</button>
+          </div>
+
+          <div class="grid two-col">
+            <article class="panel-card">
+              <div class="panel-head">
+                <h4>外场摘要</h4>
+                <button class="text-link" data-target-screen="build">去收外场</button>
+              </div>
+              <div class="field-preview ripe">
+                <span class="stage-tag">丰熟期</span>
+                <strong>外场 01</strong>
+                <p>当前可收 1,260 金币，2 小时后进入过熟衰减。</p>
+              </div>
+              <div class="field-preview growing">
+                <span class="stage-tag">成长期</span>
+                <strong>外场 02</strong>
+                <p>预计 01:42 后成熟，可成为匿名掠夺目标。</p>
+              </div>
+            </article>
+
+            <article class="panel-card">
+              <div class="panel-head">
+                <h4>兵力摘要</h4>
+                <button class="text-link" data-target-screen="army">去训练</button>
+              </div>
+              <div class="stat-row"><span>空闲掠夺兵</span><strong>126</strong></div>
+              <div class="stat-row"><span>出征中</span><strong>0</strong></div>
+              <div class="stat-row"><span>伤兵</span><strong>18</strong></div>
+              <div class="stat-row"><span>今日免费掠夺</span><strong>2 / 3</strong></div>
+            </article>
+          </div>
+
+          <article class="panel-card event-card">
+            <div class="panel-head">
+              <h4>今日简报</h4>
+              <button class="text-link" data-target-screen="report">看战报</button>
+            </div>
+            <ul class="timeline-list">
+              <li><span>10:00</span><p>阵营小时分红 +200，已进入待领取收益。</p></li>
+              <li><span>09:23</span><p>魔界玩家“烬牙”掠走你外场 240 金币，可免费复仇。</p></li>
+              <li><span>08:40</span><p>你成功匿名掠夺，获得 310 金币与 18 点掠夺积分。</p></li>
+            </ul>
+          </article>
+
+          <div class="quick-actions">
+            <button class="action-tile" data-target-screen="building">
+              <span>建筑</span>
+              <strong>升级主城 / 扩仓</strong>
+            </button>
+            <button class="action-tile" data-target-screen="farm">
+              <span>农场</span>
+              <strong>播种 / 收取外场</strong>
+            </button>
+            <button class="action-tile" data-target-screen="raid">
+              <span>掠夺</span>
+              <strong>查看匿名目标</strong>
+            </button>
+            <button class="action-tile" data-target-screen="report">
+              <span>战报</span>
+              <strong>处理未读与复仇</strong>
+            </button>
+            <button class="action-tile" data-target-screen="faction">
+              <span>阵营</span>
+              <strong>上缴与领取分红</strong>
+            </button>
+          </div>
+        </section>
+
+        <section class="screen" id="screen-building" data-title="建筑页">
+            <article class="upgrade-card">
+              <div>
+                <h4>主城升级</h4>
+                <p>Lv.4 → Lv.5，解锁更高税收与建筑上限。</p>
+              </div>
+              <div class="cost-box">
+                <span>消耗 1,800 金币</span>
+                <button class="primary-button" data-modal-title="升级主城" data-modal-body="需要 1,800 金币，当前金库足够。升级后主城税收提高，每小时待领取税收增加。">升级主城</button>
+              </div>
+            </article>
+
+            <article class="upgrade-card">
+              <div>
+                <h4>金库升级</h4>
+                <p>Lv.3 → Lv.4，容量由 5,000 提升到 6,600。</p>
+              </div>
+              <div class="cost-box">
+                <span>消耗 1,150 金币</span>
+                <button class="secondary-button" data-modal-title="升级金库" data-modal-body="当前待领取收益较多，建议优先扩仓，减少收益确认时的溢出损失。">升级金库</button>
+              </div>
+            </article>
+
+            <article class="upgrade-card">
+              <div>
+                <h4>外场位升级</h4>
+                <p>Lv.1 → Lv.2，新增第 2 个培育位。</p>
+              </div>
+              <div class="cost-box">
+                <span>消耗 980 金币</span>
+                <button class="secondary-button" data-modal-title="升级外场位" data-modal-body="升级后可同时培育两块外场，但会增加被盯上的概率。">升级外场位</button>
+              </div>
+            </article>
+
+            <article class="upgrade-card locked">
+              <div>
+                <h4>防守建筑升级</h4>
+                <p>Lv.1 → Lv.2，降低余额与外场被掠损失。</p>
+              </div>
+              <div class="cost-box">
+                <span>需要主城 Lv.5</span>
+                <button class="ghost-button" data-modal-title="条件不足" data-modal-body="防守建筑升级需要主城达到 5 级。Demo 里会以灰置按钮和条件提示表现。">查看条件</button>
+              </div>
+            </article>
+
+            <article class="panel-card">
+              <div class="panel-head">
+                <h4>建筑线引导</h4>
+                <button class="text-link" data-target-screen="farm">去农场</button>
+              </div>
+              <p>建筑页只承接主城、金库、外场位和防守建筑等长期成长内容，避免和农场经营混在一起。</p>
+              <div class="inline-actions">
+                <button class="secondary-button" data-target-screen="farm">打开农场页</button>
+                <button class="ghost-button" data-target-screen="army">去训练</button>
+              </div>
+            </article>
+        </section>
+
+        <section class="screen" id="screen-farm" data-title="农场页">
+          <div class="hero-panel parchment">
+            <div>
+              <p class="eyebrow">外场经营</p>
+              <h3>成熟 1 块 · 成长中 1 块</h3>
+              <p class="muted">农场页单独承接外场培育、收取、阶段说明和后续扩展玩法。</p>
+            </div>
+            <button class="primary-button" data-modal-title="开始培育" data-modal-body="Demo 中点击后会弹出投入金额与预估成长时间。">开始培育</button>
+          </div>
+
+            <article class="field-card ripe">
+              <div class="field-head">
+                <div>
+                  <p class="eyebrow">外场 01</p>
+                  <h4>丰熟期</h4>
+                </div>
+                <span class="stage-tag">高风险高收益</span>
+              </div>
+              <p>投入 600 金币，当前可收 1,260 金币，过熟倒计时 02:00:00。</p>
+              <div class="field-actions">
+                <button class="secondary-button" data-modal-title="提前收取" data-modal-body="若现在提前收取，则按当前可收价值折算入金库。">提前收取</button>
+                <button class="primary-button" data-modal-title="丰熟收取" data-modal-body="收取后金币进入金库。若金库不足，会先走收益确认流程。">成熟收取</button>
+              </div>
+            </article>
+
+            <article class="field-card growing">
+              <div class="field-head">
+                <div>
+                  <p class="eyebrow">外场 02</p>
+                  <h4>成长期</h4>
+                </div>
+                <span class="stage-tag muted-tag">01:42 后成熟</span>
+              </div>
+              <p>投入 420 金币，当前提前收取仅返还 520 金币。</p>
+              <div class="field-actions">
+                <button class="ghost-button" data-modal-title="提前收取预览" data-modal-body="此时收取收益偏低，建议等成熟再收。">收益预览</button>
+                <button class="ghost-button" data-modal-title="外场说明" data-modal-body="成熟是默认最佳性价比，丰熟更赚但暴露更高，过熟开始衰减。">阶段说明</button>
+              </div>
+            </article>
+
+            <article class="field-card empty">
+              <div class="field-head">
+                <div>
+                  <p class="eyebrow">外场 03</p>
+                  <h4>未解锁</h4>
+                </div>
+                <span class="stage-tag">升级解锁</span>
+              </div>
+              <p>外场位升级到 Lv.2 后开放。</p>
+              <div class="field-actions">
+                <button class="primary-button" data-modal-title="开始培育" data-modal-body="Demo 中点击后会弹出投入金额与预估成长时间。">开始培育</button>
+              </div>
+            </article>
+ 
+            <article class="panel-card">
+              <div class="panel-head">
+                <h4>农场线引导</h4>
+                <button class="text-link" data-target-screen="building">去建筑</button>
+              </div>
+              <p>以后如果农场增加培育品类、天气、地块事件和成熟策略，都可以继续在这个页面扩展。</p>
+              <div class="inline-actions">
+                <button class="secondary-button" data-target-screen="building">打开建筑页</button>
+                <button class="ghost-button" data-target-screen="home">返回主城</button>
+              </div>
+            </article>
+        </section>
+
+        <section class="screen" id="screen-army" data-title="部队页">
+          <div class="hero-panel steel">
+            <div>
+              <p class="eyebrow">战备状态</p>
+              <h3>空闲掠夺兵 126</h3>
+              <p class="muted">伤兵 18，恢复结束时间 00:26:12，当前余额 620。</p>
+            </div>
+            <button class="primary-button" data-modal-title="转入余额" data-modal-body="训练和补兵必须先从金库转入余额，再从余额扣费。">金库转入余额</button>
+          </div>
+
+          <div class="grid two-col">
+            <article class="panel-card">
+              <div class="panel-head">
+                <h4>训练掠夺兵</h4>
+                <span class="soft-tag">单兵种 demo</span>
+              </div>
+              <div class="stat-row"><span>训练 10 名</span><strong>消耗 300 金币</strong></div>
+              <div class="stat-row"><span>训练 30 名</span><strong>消耗 900 金币</strong></div>
+              <div class="inline-actions">
+                <button class="secondary-button" data-modal-title="训练确认" data-modal-body="训练会优先校验余额是否足够，余额不足时给出转入引导。">训练 10 名</button>
+                <button class="primary-button" data-modal-title="训练确认" data-modal-body="一次性训练 30 名，适合掠夺前补齐兵力。">训练 30 名</button>
+              </div>
+            </article>
+
+            <article class="panel-card">
+              <div class="panel-head">
+                <h4>恢复伤兵</h4>
+                <span class="soft-tag">恢复成本低于训练</span>
+              </div>
+              <div class="stat-row"><span>恢复 18 名</span><strong>消耗 270 金币</strong></div>
+              <div class="stat-row"><span>恢复完成</span><strong>00:26:12</strong></div>
+              <div class="inline-actions">
+                <button class="secondary-button" data-modal-title="恢复确认" data-modal-body="恢复成本约为训练的一半，更适合作为日常止损动作。">恢复伤兵</button>
+                <button class="ghost-button" data-modal-title="快捷补满" data-modal-body="Demo 中此按钮会自动计算缺口并组合训练和恢复。">快捷补满</button>
+              </div>
+            </article>
+          </div>
+
+          <article class="panel-card">
+            <div class="panel-head">
+              <h4>余额调度</h4>
+              <button class="text-link" data-modal-title="余额说明" data-modal-body="余额属于暴露资金，可被掠夺。普通建设不会自动消耗余额。">查看规则</button>
+            </div>
+            <div class="stat-row"><span>当前余额</span><strong>620</strong></div>
+            <div class="stat-row"><span>保护比例</span><strong>30%</strong></div>
+            <div class="inline-actions">
+              <button class="secondary-button" data-modal-title="转入余额" data-modal-body="输入从金库转入余额的金额。">金库转入余额</button>
+              <button class="ghost-button" data-modal-title="回存余额" data-modal-body="余额回存金库不收手续费，但会受冷却或冻结窗口限制。">余额回存金库</button>
+              <button class="primary-button" data-target-screen="raid">去掠夺</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="screen" id="screen-raid" data-title="掠夺目标页">
+          <div class="hero-panel ember">
+            <div>
+              <p class="eyebrow">匿名目标池</p>
+              <h3>剩余免费掠夺 2 / 3</h3>
+              <p class="muted">系统按综合战力匹配 3 个目标，重点看值不值得打。</p>
+            </div>
+            <button class="secondary-button" data-modal-title="刷新目标" data-modal-body="Demo 首发保留刷新目标入口，但免费次数不足时只提示，不跳付费。">刷新目标</button>
+          </div>
+
+          <div class="target-list">
+            <article class="target-card selected" data-target-name="赤砂营地" data-target-risk="高风险" data-target-loot="预估可掠 420~560 金币" data-target-detail="魔界 · 主城等级 4~5 · 外场成熟 2 块 · 防守偏弱 · 今日被掠 1 次。">
+              <div class="target-head">
+                <strong>赤砂营地</strong>
+                <span class="faction-badge demon">魔界</span>
+              </div>
+              <p>等级段 4~5 · 资源预估高 · 防守偏弱</p>
+              <div class="target-foot">
+                <span>420~560 金币</span>
+                <button class="primary-button small attack-button">发起掠夺</button>
+              </div>
+            </article>
+
+            <article class="target-card" data-target-name="天穹边仓" data-target-risk="中风险" data-target-loot="预估可掠 260~340 金币" data-target-detail="仙界 · 主城等级 4 · 外场成熟 1 块 · 防守偏稳 · 今日未被掠。">
+              <div class="target-head">
+                <strong>天穹边仓</strong>
+                <span class="faction-badge immortal">仙界</span>
+              </div>
+              <p>等级段 4 · 资源预估中 · 被掠损失低</p>
+              <div class="target-foot">
+                <span>260~340 金币</span>
+                <button class="secondary-button small attack-button">发起掠夺</button>
+              </div>
+            </article>
+
+            <article class="target-card" data-target-name="灰堡驿站" data-target-risk="低风险" data-target-loot="预估可掠 180~260 金币" data-target-detail="人界 · 主城等级 3~4 · 余额暴露较低 · 适合保守出手。">
+              <div class="target-head">
+                <strong>灰堡驿站</strong>
+                <span class="faction-badge human">人界</span>
+              </div>
+              <p>等级段 3~4 · 资源预估低 · 风险较稳</p>
+              <div class="target-foot">
+                <span>180~260 金币</span>
+                <button class="secondary-button small attack-button">发起掠夺</button>
+              </div>
+            </article>
+          </div>
+
+          <article class="panel-card detail-panel">
+            <div class="panel-head">
+              <h4 id="target-name">赤砂营地</h4>
+              <span class="soft-tag" id="target-risk">高风险</span>
+            </div>
+            <p id="target-detail">魔界 · 主城等级 4~5 · 外场成熟 2 块 · 防守偏弱 · 今日被掠 1 次。</p>
+            <div class="stat-row"><span>可掠预估</span><strong id="target-loot">420~560 金币</strong></div>
+            <div class="stat-row"><span>出征建议</span><strong>派出 90~110 掠夺兵</strong></div>
+            <div class="inline-actions">
+              <button class="ghost-button" data-modal-title="兵力不足提示" data-modal-body="若兵力不足，则弹出引导去部队页训练或恢复。">更换兵力</button>
+              <button class="primary-button attack-button">确认出兵</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="screen" id="screen-result" data-title="掠夺结果页">
+          <div class="result-banner">
+            <p class="eyebrow">战斗结果</p>
+            <h3>匿名掠夺成功</h3>
+            <p>你从赤砂营地带回 436 金币，战损 12 名掠夺兵，获得 18 点掠夺积分。</p>
+          </div>
+
+          <div class="grid two-col">
+            <article class="panel-card">
+              <h4>本次收益</h4>
+              <div class="stat-row"><span>掠夺金币</span><strong>+436</strong></div>
+              <div class="stat-row"><span>掠夺积分</span><strong>+18</strong></div>
+              <div class="stat-row"><span>对方外场损失</span><strong>240</strong></div>
+            </article>
+
+            <article class="panel-card">
+              <h4>本次代价</h4>
+              <div class="stat-row"><span>我方战损</span><strong>12</strong></div>
+              <div class="stat-row"><span>伤兵待恢复</span><strong>9</strong></div>
+              <div class="stat-row"><span>永久阵亡</span><strong>3</strong></div>
+            </article>
+          </div>
+
+          <div class="inline-actions result-actions">
+            <button class="secondary-button" data-target-screen="raid">再找一个目标</button>
+            <button class="ghost-button" data-target-screen="report">查看完整战报</button>
+            <button class="primary-button" data-target-screen="home">回主城</button>
+          </div>
+        </section>
+
+        <section class="screen" id="screen-report" data-title="战报页">
+          <div class="section-tabs">
+            <button class="tab active" data-report-tab="defense">防守战报</button>
+            <button class="tab" data-report-tab="attack">进攻战报</button>
+          </div>
+
+          <div class="report-tab-content active" id="report-tab-defense">
+            <article class="report-card unread revengeable">
+              <div class="report-head">
+                <strong>魔界 · 烬牙</strong>
+                <span class="soft-tag danger">可复仇</span>
+              </div>
+              <p>37 分钟前成功掠走你外场 240 金币，击伤 8 名守备兵。</p>
+              <div class="inline-actions">
+                <button class="ghost-button" data-modal-title="战报详情" data-modal-body="这里会展开显示外场损失、兵力变化、保护状态和复仇资格。">查看详情</button>
+                <button class="primary-button" data-modal-title="复仇确认" data-modal-body="点击后进入复仇模式，并自动带入目标。">复仇</button>
+              </div>
+            </article>
+
+            <article class="report-card unread">
+              <div class="report-head">
+                <strong>系统结算</strong>
+                <span class="soft-tag">分红记录</span>
+              </div>
+              <p>10:00 阵营小时分红 +200，已计入待领取收益。</p>
+              <div class="inline-actions">
+                <button class="ghost-button" data-modal-title="分红详情" data-modal-body="基础分红 160，贡献加成分红 40。">查看详情</button>
+              </div>
+            </article>
+          </div>
+
+          <div class="report-tab-content" id="report-tab-attack">
+            <article class="report-card">
+              <div class="report-head">
+                <strong>匿名目标 · 赤砂营地</strong>
+                <span class="soft-tag success">掠夺成功</span>
+              </div>
+              <p>08:40 你成功掠夺 436 金币，获得 18 点掠夺积分。</p>
+              <div class="inline-actions">
+                <button class="ghost-button" data-modal-title="进攻详情" data-modal-body="显示本次掠夺的金币、战损、保护规则命中情况与积分变化。">查看详情</button>
+              </div>
+            </article>
+          </div>
+
+          <div class="inline-actions report-actions">
+            <button class="secondary-button" data-modal-title="一键已读" data-modal-body="Demo 中会清掉红点，但保留战报内容。">一键已读</button>
+            <button class="primary-button" data-target-screen="home">返回主城</button>
+          </div>
+        </section>
+
+        <section class="screen" id="screen-faction" data-title="阵营页">
+          <div class="hero-panel royal">
+            <div>
+              <p class="eyebrow">人界阵营面板</p>
+              <h3>当前待领取分红 540</h3>
+              <p class="muted">个人贡献值 1,260，本小时贡献加成分红 +5%。</p>
+            </div>
+            <button class="primary-button" data-modal-title="领取分红" data-modal-body="分红先进入待领取收益，领取后才进入金库。">领取分红</button>
+          </div>
+
+          <div class="section-tabs">
+            <button class="tab active" data-faction-tab="overview">阵营总览</button>
+            <button class="tab" data-faction-tab="donate">上缴与分红</button>
+            <button class="tab" data-faction-tab="rank">排行榜</button>
+          </div>
+
+          <div class="faction-tab-content active" id="faction-tab-overview">
+            <article class="panel-card">
+              <h4>阵营状态</h4>
+              <div class="stat-row"><span>阵营公库</span><strong>82,400</strong></div>
+              <div class="stat-row"><span>本小时基础分红</span><strong>160</strong></div>
+              <div class="stat-row"><span>个人贡献加成</span><strong>+40</strong></div>
+            </article>
+          </div>
+
+          <div class="faction-tab-content" id="faction-tab-donate">
+            <article class="panel-card">
+              <h4>金币上缴</h4>
+              <p>上缴会立刻增加贡献值，并通过后续小时分红慢慢回收部分价值。</p>
+              <div class="inline-actions">
+                <button class="secondary-button" data-modal-title="上缴输入" data-modal-body="Demo 中这里会弹出输入框，输入上缴金币后返回贡献值预估。">金币上缴</button>
+                <button class="ghost-button" data-modal-title="上缴说明" data-modal-body="上缴不是短线套利，主要收益来自持续分红权和贡献榜价值。">查看说明</button>
+              </div>
+            </article>
+          </div>
+
+          <div class="faction-tab-content" id="faction-tab-rank">
+            <article class="leaderboard-card">
+              <div class="panel-head">
+                <h4>三榜切页</h4>
+                <div class="inline-chip-group">
+                  <button class="mini-chip active">掠夺榜</button>
+                  <button class="mini-chip">发展榜</button>
+                  <button class="mini-chip">贡献榜</button>
+                </div>
+              </div>
+              <ol class="leaderboard-list">
+                <li><span>1. 烬牙</span><strong>2,340</strong></li>
+                <li><span>2. 你</span><strong>2,120</strong></li>
+                <li><span>3. 玄潮</span><strong>1,980</strong></li>
+              </ol>
+            </article>
+          </div>
+        </section>
+
+        <nav class="bottom-nav">
+          <button class="nav-item active" data-target-screen="home">主城</button>
+          <button class="nav-item" data-target-screen="building">建筑</button>
+          <button class="nav-item" data-target-screen="farm">农场</button>
+          <button class="nav-item" data-target-screen="raid">掠夺</button>
+          <button class="nav-item" data-target-screen="report">战报</button>
+          <button class="nav-item" data-target-screen="faction">阵营</button>
+        </nav>
+      </section>
+
+      <aside class="right-panel">
+        <div class="summary-card">
+          <p class="card-label">原型说明</p>
+          <p class="muted">这版不是视觉终稿，而是把文档中的页面结构、按钮、弹窗和主链路做成可点原型。</p>
+        </div>
+
+        <div class="summary-card">
+          <p class="card-label">本页交互</p>
+          <ul class="mini-list">
+            <li>底部导航切换主场景</li>
+            <li>建设页和战报页支持分栏切换</li>
+            <li>掠夺页可切换目标详情</li>
+            <li>按钮会弹出演示型说明弹窗</li>
+          </ul>
+        </div>
+
+        <div class="summary-card">
+          <p class="card-label">下一步可继续补</p>
+          <ul class="mini-list">
+            <li>每页字段对照接口返回</li>
+            <li>线框版组件拆分</li>
+            <li>高保真视觉风格稿</li>
+          </ul>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="modal-backdrop">
+    <div class="modal-card">
+      <div class="panel-head">
+        <h4 id="modal-title">提示</h4>
+        <button class="ghost-button small" id="modal-close">关闭</button>
+      </div>
+      <p id="modal-body"></p>
+      <div class="inline-actions">
+        <button class="secondary-button" id="modal-cancel">取消</button>
+        <button class="primary-button" id="modal-confirm">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
