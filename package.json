@@ -1,0 +1,21 @@
+{
+  "name": "trinitywar-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n admin,server -c green,yellow \"npm run dev --workspace @trinitywar/game-admin\" \"npm run dev --workspace @trinitywar/game-server\"",
+    "dev:client": "npm run editor --workspace @trinitywar/game-client",
+    "dev:admin": "npm run dev --workspace @trinitywar/game-admin",
+    "dev:server": "npm run dev --workspace @trinitywar/game-server",
+    "build": "npm run build --workspace @trinitywar/game-admin && npm run build --workspace @trinitywar/game-server",
+    "build:client": "npm run build --workspace @trinitywar/game-client"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

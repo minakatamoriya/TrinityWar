@@ -1,0 +1,22 @@
+{
+  "name": "@trinitywar/game-client",
+  "private": true,
+  "version": "0.1.0",
+  "description": "TrinityWar Cocos Creator 3.8 LTS client project",
+  "uuid": "7d37ef08-f676-4b89-a629-6ad0e0be6aa5",
+  "creator": {
+    "version": "3.8.6"
+  },
+  "scripts": {
+    "editor": "node -e \"console.log('Open apps/game-client in Cocos Creator 3.8 LTS and use Preview or Build from the editor.');\"",
+    "dev": "npm run editor",
+    "build": "node -e \"console.log('Build @trinitywar/game-client from Cocos Creator: Project > Build > WeChat Mini Game or Web Mobile.');\"",
+    "preview": "node -e \"console.log('Use Cocos Creator Preview for @trinitywar/game-client.');\""
+  },
+  "dependencies": {
+    "@trinitywar/shared": "file:../../packages/shared"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
