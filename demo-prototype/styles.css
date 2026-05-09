@@ -548,7 +548,6 @@ button {
 
 @media (max-width: 720px) {
   .app-shell {
-    padding: 16px;
   }
 
   .left-rail {

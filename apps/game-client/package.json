@@ -2,21 +2,23 @@
   "name": "@trinitywar/game-client",
   "private": true,
   "version": "0.1.0",
-  "description": "TrinityWar Cocos Creator 3.8 LTS client project",
-  "uuid": "7d37ef08-f676-4b89-a629-6ad0e0be6aa5",
-  "creator": {
-    "version": "3.8.6"
-  },
+  "type": "module",
+  "description": "TrinityWar web validation client",
   "scripts": {
-    "editor": "node -e \"console.log('Open apps/game-client in Cocos Creator 3.8 LTS and use Preview or Build from the editor.');\"",
-    "dev": "npm run editor",
-    "build": "node -e \"console.log('Build @trinitywar/game-client from Cocos Creator: Project > Build > WeChat Mini Game or Web Mobile.');\"",
-    "preview": "node -e \"console.log('Use Cocos Creator Preview for @trinitywar/game-client.');\""
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "@trinitywar/shared": "file:../../packages/shared"
   },
   "devDependencies": {
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.2.1",
     "typescript": "^5.4.5"
+    ,"vite": "^4.5.14"
   }
 }

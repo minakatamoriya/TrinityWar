@@ -1,43 +1,52 @@
-# TrinityWar Cocos Client Migration
+# TrinityWar Frontend Validation Client
 
 ## Status
 
-`apps/game-client` is now a Cocos Creator project root.
+`apps/game-client` 已从 Cocos 项目根切回 Web 验证前端。
 
-The previous Pixi/Vite prototype entry files were removed.
+当前目标不是直接交付小游戏壳，而是用最小成本验证经营、掠夺、分红和战报的主循环是否成立。
 
-## What Was Preserved
+## Why This Direction
 
-- Client API endpoints remain the same.
-- Module routing still targets `home`, `building`, `farm`, `raid`, `report`, and `faction`.
-- Shared DTO imports continue to come from `@trinitywar/shared`.
+1. 当前前端需求以 2D 面板、按钮、状态切换和少量动画为主。
+2. Web 前端的迭代速度和 AI 辅助效率明显高于 Cocos 编辑器工作流。
+3. 等玩法、页面结构和接口字段稳定后，再决定是否迁回小游戏容器更稳妥。
 
-## What Must Be Done In Cocos Creator
+## Current Stack
 
-1. Create the main scene and save it under `assets/scenes`.
-2. Create prefabs for each main page under `assets/prefabs/pages`.
-3. Create prefabs for `TopBarController` and `BottomDockController`.
-4. Wire the prefabs and nodes to `AppRoot` from the Inspector.
-5. Set the project build target to WeChat Mini Game.
+1. Vite
+2. React
+3. TypeScript
+4. 现有 `@trinitywar/shared` DTO
+5. 现有 `services/game-server` client 路由
 
-## Recommended First Layout
+## Validation Scope
 
-1. Canvas design resolution: `720 x 1280`
-2. Top bar height: `88`
-3. Bottom dock height: `132`
-4. Main page safe width: `660`
-5. Content panels use 9-slice sprites instead of code-drawn borders.
+1. 首页：资源条、状态摘要、今日简报、快捷入口。
+2. 建筑页：长期成长线和升级入口。
+3. 农场页：外场状态、阶段收益和收取决策。
+4. 掠夺页：目标选择、风险对比和出兵模拟。
+5. 战报页：防守/进攻切换与结果回看。
+6. 阵营页：总览、上缴分红、排行榜。
 
-## Recommended Asset Structure
+## Implementation Notes
 
-- `assets/art/common`
-- `assets/art/topbar`
-- `assets/art/dock`
-- `assets/art/home`
-- `assets/art/building`
-- `assets/art/farm`
-- `assets/art/raid`
-- `assets/art/report`
-- `assets/art/faction`
-- `assets/prefabs/common`
-- `assets/prefabs/pages`
+1. 前端优先调用现有 `/api/client/bootstrap`、`/api/client/home-summary`、`/api/client/scene-content`。
+2. 当本地服务未启动时，前端自动回退到 demo 数据，保证单独预览与走查不中断。
+3. 页面结构继续沿用 `home`、`building`、`farm`、`raid`、`report`、`faction` 六个核心模块。
+4. 交互先收敛为页签、弹窗、选择态和结果提示，不引入复杂动画系统。
+
+## 任务开发日志
+
+2026-05-09：将 game-client 从 Cocos 迁回 Web 验证前端，重建 Vite + React + TypeScript 工程，并按 demo 收敛首页、建筑、农场、掠夺、战报、阵营六个核心验证页面。
+2026-05-09：继续按手机单屏验证壳优化布局，收紧农场等长页面的场景高度模型，统一按钮、页签、弹框与底部导航样式，并改用跨平台稳定的无衬线系统字体栈。
+2026-05-09：补齐领取待领取收益的共享契约、服务端内存态和客户端写接口，先用无数据库的模拟状态打通首页资源变更链路。
+2026-05-09：继续补齐农场收取、开始培育和建筑升级三条写链路，让产出钱与花钱都能在无数据库内存态下完成联调验证。
+2026-05-09：补充根目录一键联调脚本 dev:game，并把顶部资金总览提升为全局置顶，方便跨场景观察实时金额变化。
+2026-05-09：按联调反馈移除顶部总资金汇总卡，保留各项资金实时显示，并新增实验数据一键重置入口。
+2026-05-09：将顶部资金区改为仅保留金库与余额的常驻资金 dock，待领取按钮收回主城页，并补齐金库与余额之间的滑条转账操作。
+2026-05-09：继续微调顶部资金 dock 的金额视觉层级，强化金库金色高亮和余额淡蓝色识别。
+2026-05-09：继续放大顶部资金 dock 的标题文字，提升金库与余额标签在移动端的可读性。
+2026-05-09：拆分主城税收与阵营分红两条待领取链路，在主城与阵营页分别接入领取按钮，并为主城补充任务列表面板。
+2026-05-09：继续把主城税收和阵营分红的说明收敛到“每小时具体产出”口径，明确建设页与阵营页展示语义。
+2026-05-09：移除顶部页面名称，改为商城与设置两个常驻按钮组成的顶部功能组，简化主界面认知负担。

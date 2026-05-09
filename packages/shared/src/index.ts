@@ -26,7 +26,16 @@ export interface AdminOverviewResponse {
 export interface HomeResourceSummary {
   label: string;
   value: string;
-  tone: 'vault' | 'wallet' | 'pending';
+  tone: 'vault' | 'wallet';
+}
+
+export type ClientPendingClaimSource = 'tax' | 'faction';
+
+export interface ClientPendingClaimSummary {
+  source: ClientPendingClaimSource;
+  label: string;
+  value: string;
+  description: string;
 }
 
 export interface HomeActionItem {
@@ -44,7 +53,66 @@ export interface HomeSummaryResponse {
   fieldStatus: string;
   reportStatus: string;
   resources: HomeResourceSummary[];
+  pendingClaims: ClientPendingClaimSummary[];
   primaryActions: HomeActionItem[];
+}
+
+export interface ClientResourceLedger {
+  vaultGold: number;
+  vaultCapacity: number;
+  walletGold: number;
+  walletCapacity: number;
+  taxPendingGold: number;
+  factionDividendGold: number;
+}
+
+export interface ClientClaimPendingRequest {
+  source: ClientPendingClaimSource;
+}
+
+export interface ClientClaimPendingResponse {
+  app: string;
+  summary: string;
+  source: ClientPendingClaimSource;
+  claimedGold: number;
+  remainingPendingGold: number;
+  ledger: ClientResourceLedger;
+  home: HomeSummaryResponse;
+  scenes: ClientSceneContentResponse;
+}
+
+export type ClientBuildingUpgradeId = 'castle' | 'vault' | 'field-slot' | 'watchtower';
+
+export interface ClientStateMutationResponse {
+  app: string;
+  summary: string;
+  home: HomeSummaryResponse;
+  scenes: ClientSceneContentResponse;
+}
+
+export interface ClientCollectFieldRequest {
+  fieldId: string;
+  collectMode: 'ripe' | 'early';
+}
+
+export interface ClientStartCultivationRequest {
+  fieldId: string;
+}
+
+export interface ClientUpgradeBuildingRequest {
+  buildingId: ClientBuildingUpgradeId;
+}
+
+export interface ClientTransferGoldRequest {
+  from: 'vault' | 'wallet';
+  amount: number;
+}
+
+export interface ClientResetDemoStateResponse {
+  app: string;
+  summary: string;
+  home: HomeSummaryResponse;
+  scenes: ClientSceneContentResponse;
 }
 
 export type ClientSceneKey = 'home' | 'building' | 'farm' | 'raid' | 'report' | 'faction';
@@ -63,6 +131,7 @@ export interface ClientMetricRow {
 }
 
 export interface ClientBuildingUpgrade {
+  id: ClientBuildingUpgradeId;
   title: string;
   description: string;
   costText: string;
@@ -84,6 +153,7 @@ export interface ClientFarmHero {
 }
 
 export interface ClientFarmField {
+  id: string;
   code: string;
   title: string;
   badge: string;
