@@ -5,13 +5,13 @@ import {
   type ClientCollectFieldRequest,
   type ClientBuildingUpgradeId,
   type ClientPendingClaimSource,
+  type ClientRaidTargetDetailResponse,
   type ClientResetDemoStateResponse,
   type ClientSceneAction,
   type ClientSceneContentResponse,
   type ClientResourceLedger,
   type ClientStartCultivationRequest,
   type ClientStateMutationResponse,
-  type ClientTransferGoldRequest,
   type ClientUpgradeBuildingRequest,
   type HomeSummaryResponse,
 } from '@trinitywar/shared';
@@ -20,7 +20,7 @@ interface FieldState {
   id: string;
   code: string;
   unlocked: boolean;
-  status: 'empty' | 'growing' | 'ripe';
+  status: 'empty' | 'seeded' | 'growing' | 'mature' | 'withered';
   plantedGold: number;
   currentYield: number;
   badgeText: string;
@@ -56,33 +56,40 @@ const initialPlayerState: InMemoryPlayerState = {
   ledger: {
     vaultGold: 4280,
     vaultCapacity: 5000,
-    walletGold: 620,
-    walletCapacity: 1500,
     taxPendingGold: 380,
     factionDividendGold: 540,
   },
   fields: [
     {
       id: 'field-1',
-      code: '外场 01',
+      code: '田地 01',
       unlocked: true,
-      status: 'ripe',
+      status: 'mature',
       plantedGold: 600,
       currentYield: 1260,
-      badgeText: '高风险高收益',
+      badgeText: '成熟',
     },
     {
       id: 'field-2',
-      code: '外场 02',
+      code: '田地 02',
       unlocked: true,
-      status: 'growing',
+      status: 'seeded',
       plantedGold: 420,
       currentYield: 520,
-      badgeText: '01:42 后成熟',
+      badgeText: '播种',
     },
     {
       id: 'field-3',
-      code: '外场 03',
+      code: '田地 03',
+      unlocked: true,
+      status: 'growing',
+      plantedGold: 520,
+      currentYield: 660,
+      badgeText: '成长',
+    },
+    {
+      id: 'field-4',
+      code: '田地 04',
       unlocked: false,
       status: 'empty',
       plantedGold: 0,
@@ -115,7 +122,7 @@ function getFieldCounts(): { mature: number; growing: number; empty: number } {
       };
     }
 
-    if (field.status === 'ripe') {
+    if (field.status === 'mature' || field.status === 'withered') {
       return { ...counts, mature: counts.mature + 1 };
     }
 
@@ -125,7 +132,7 @@ function getFieldCounts(): { mature: number; growing: number; empty: number } {
 
 function buildFieldStatus(): string {
   const counts = getFieldCounts();
-  return `成熟外场 ${counts.mature} 块，成长中 ${counts.growing} 块`;
+  return `成熟田地 ${counts.mature} 块，成长中 ${counts.growing} 块`;
 }
 
 function buildReportStatus(): string {
@@ -184,14 +191,9 @@ export function buildHomeSummary(): HomeSummaryResponse {
     reportStatus: buildReportStatus(),
     resources: [
       {
-        label: '金库',
+        label: '我的金币',
         value: `${formatNumber(ledger.vaultGold)} / ${formatNumber(ledger.vaultCapacity)}`,
         tone: 'vault',
-      },
-      {
-        label: '余额',
-        value: `${formatNumber(ledger.walletGold)} / ${formatNumber(ledger.walletCapacity)}`,
-        tone: 'wallet',
       },
     ],
     pendingClaims: [
@@ -209,12 +211,141 @@ export function buildHomeSummary(): HomeSummaryResponse {
       },
     ],
     primaryActions: [
-      { key: 'building', title: '建筑', description: '升级主城与金库' },
-      { key: 'farm', title: '农场', description: '收成熟外场' },
-      { key: 'raid', title: '掠夺', description: '查看匿名目标' },
+      { key: 'building', title: '建筑', description: '升级主城与金币容量' },
+      { key: 'farm', title: '农场', description: '收成熟田地' },
+      { key: 'raid', title: '掠夺', description: '查看可掠夺目标' },
       { key: 'report', title: '战报', description: '处理未读与复仇' },
       { key: 'faction', title: '阵营', description: '上缴并查看分红' },
     ],
+  };
+}
+
+function buildRaidDetailActions(): ClientSceneAction[] {
+  return [
+    { label: '发起掠夺', target: 'raid', tone: 'primary' },
+    { label: '发布通缉令', target: 'raid', tone: 'secondary' },
+    { label: '邀请摇人', target: 'raid', tone: 'ghost' },
+    { label: '分享目标', target: 'raid', tone: 'ghost' },
+  ];
+}
+
+export function buildRaidTargetDetail(targetId: string): ClientRaidTargetDetailResponse {
+  if (targetId === 'target-1') {
+    return {
+      app: APP_NAME,
+      targetId,
+      name: '烬牙',
+      faction: '魔界',
+      level: 5,
+      combatPower: '1,320',
+      fieldPreviewTone: 'mature',
+      fieldStatus: '成熟田 2 块，成长期 1 块',
+      raidableGold: '520 金币',
+      exposedFruit: '2 块成熟田 · 预计 880 金币',
+      raidRule: '按当前金币的一部分结算，本次预计命中 520 金币',
+      defenseStatus: '防守偏弱，驻守兵少于常见同级目标',
+      protectionStatus: '当前无保护，可直接发起掠夺或通缉令',
+      detail: '对手昵称烬牙，刚结束一轮农场收取，外露收益仍然较高。魔界加成偏向进攻，适合快速出手。',
+      actions: buildRaidDetailActions(),
+    };
+  }
+
+  if (targetId === 'target-2') {
+    return {
+      app: APP_NAME,
+      targetId,
+      name: '云栖',
+      faction: '仙界',
+      level: 4,
+      combatPower: '1,080',
+      fieldPreviewTone: 'seeded',
+      fieldStatus: '成熟田 1 块，播种田 2 块',
+      raidableGold: '260 金币',
+      exposedFruit: '1 块成熟田 · 预计 420 金币',
+      raidRule: '按当前金币的一部分结算，本次预计命中 260 金币',
+      defenseStatus: '防守偏稳，仙界被掠损失减免明显',
+      protectionStatus: '刚结束保护期，可被单人试探',
+      detail: '对手昵称云栖，收益中等但仙界自带减损，适合先做一轮稳妥试探。',
+      actions: buildRaidDetailActions(),
+    };
+  }
+
+  if (targetId === 'target-3') {
+    return {
+      app: APP_NAME,
+      targetId,
+      name: '临风',
+      faction: '人界',
+      level: 4,
+      combatPower: '920',
+      fieldPreviewTone: 'growing',
+      fieldStatus: '成长期 1 块，空闲田 1 块',
+      raidableGold: '180 金币',
+      exposedFruit: '1 块成长尾段田 · 预计 260 金币',
+      raidRule: '按当前金币的一部分结算，本次预计命中 180 金币',
+      defenseStatus: '人界经营向，防守一般，但暴露收益偏低',
+      protectionStatus: '今日未被掠，可正常查看并试探',
+      detail: '对手昵称临风，收益较低，更适合作为保守出手对象。',
+      actions: buildRaidDetailActions(),
+    };
+  }
+
+  if (targetId === 'target-4') {
+    return {
+      app: APP_NAME,
+      targetId,
+      name: '玄潮',
+      faction: '魔界',
+      level: 5,
+      combatPower: '1,240',
+      fieldPreviewTone: 'mature',
+      fieldStatus: '成熟田 1 块，成长期 2 块',
+      raidableGold: '460 金币',
+      exposedFruit: '1 块成熟田 · 预计 510 金币',
+      raidRule: '按当前金币的一部分结算，本次预计命中 460 金币',
+      defenseStatus: '中等防守，战力高但驻防分散',
+      protectionStatus: '当前无保护，可立即出手',
+      detail: '对手昵称玄潮，主城等级高一档，收益不错，但正面强碰战损会更高。',
+      actions: buildRaidDetailActions(),
+    };
+  }
+
+  if (targetId === 'target-5') {
+    return {
+      app: APP_NAME,
+      targetId,
+      name: '青槐',
+      faction: '仙界',
+      level: 3,
+      combatPower: '760',
+      fieldPreviewTone: 'mature',
+      fieldStatus: '成熟田 1 块，空闲田 2 块',
+      raidableGold: '140 金币',
+      exposedFruit: '1 块成熟田 · 预计 190 金币',
+      raidRule: '按当前金币的一部分结算，本次预计命中 140 金币',
+      defenseStatus: '防守偏弱，适合低损验证',
+      protectionStatus: '保护已结束，可正常掠夺',
+      detail: '对手昵称青槐，适合低风险起手，重点看田地收益是否值得你消耗免费次数。',
+      actions: buildRaidDetailActions(),
+    };
+  }
+
+  return {
+    app: APP_NAME,
+    targetId,
+    name: '碎星',
+    faction: '人界',
+    level: 4,
+    combatPower: '880',
+    fieldPreviewTone: 'seeded',
+    fieldStatus: '播种田 2 块，空闲田 1 块',
+    raidableGold: '120 金币',
+    exposedFruit: '成熟收益较低 · 预计 120 金币',
+    raidRule: '按当前金币的一部分结算，本次预计命中 120 金币',
+    defenseStatus: '防守一般，当前暴露值较低',
+    protectionStatus: '可查看，但当前不算优质目标',
+    detail: '对手昵称碎星，属于当前列表里价值最低的一档，更多用于衬托目标筛选判断。',
+    actions: buildRaidDetailActions(),
   };
 }
 
@@ -253,7 +384,6 @@ function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrad
   const watchtowerLocked = castleLevel < 5;
   const currentTaxIncome = getTaxIncomePerHour(castleLevel);
   const nextTaxIncome = getTaxIncomePerHour(castleLevel + 1);
-  const factionDividend = getFactionDividendPerHour();
 
   return [
     {
@@ -274,18 +404,18 @@ function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrad
     },
     {
       id: 'field-slot',
-      title: '外场位升级',
+      title: '田地位升级',
       description: lockedFieldExists
         ? `Lv.${fieldSlotLevel} -> Lv.${fieldSlotLevel + 1}，新增第 3 个培育位。`
-        : `Lv.${fieldSlotLevel}，当前验证版外场位已全部解锁。`,
+        : `Lv.${fieldSlotLevel}，当前验证版田地位已全部解锁。`,
       costText: lockedFieldExists && getUpgradeCost('field-slot') ? `消耗 ${formatNumber(getUpgradeCost('field-slot') ?? 0)} 金币` : '当前已全部解锁',
-      action: buildUpgradeAction(lockedFieldExists && getUpgradeCost('field-slot') ? '升级外场位' : '查看条件', lockedFieldExists && getUpgradeCost('field-slot') ? 'secondary' : 'ghost'),
+      action: buildUpgradeAction(lockedFieldExists && getUpgradeCost('field-slot') ? '升级田地位' : '查看条件', lockedFieldExists && getUpgradeCost('field-slot') ? 'secondary' : 'ghost'),
       locked: !lockedFieldExists || !getUpgradeCost('field-slot'),
     },
     {
       id: 'watchtower',
       title: '防守建筑升级',
-      description: `Lv.${watchtowerLevel} -> Lv.${watchtowerLevel + 1}，降低余额与外场被掠损失。`,
+      description: `Lv.${watchtowerLevel} -> Lv.${watchtowerLevel + 1}，降低单次被掠比例并强化田地防守。`,
       costText: watchtowerLocked ? '需要主城 Lv.5' : `消耗 ${formatNumber(getUpgradeCost('watchtower') ?? 0)} 金币`,
       locked: watchtowerLocked || !getUpgradeCost('watchtower'),
       action: buildUpgradeAction(watchtowerLocked ? '查看条件' : '升级防守建筑', watchtowerLocked ? 'ghost' : 'secondary'),
@@ -298,14 +428,14 @@ function buildFarmHero(): ClientSceneContentResponse['farm']['hero'] {
   const emptyUnlockedField = playerState.fields.find((field) => field.unlocked && field.status === 'empty');
 
   return {
-    eyebrow: '外场经营',
-    title: `成熟 ${counts.mature} 块 · 成长中 ${counts.growing} 块`,
+    eyebrow: '田地经营',
+    title: `成熟 ${counts.mature} 块 · 生长中 ${counts.growing} 块`,
     description: emptyUnlockedField
-      ? '农场页已接入真实收取与培育写接口，可以直接验证产出和再投入循环。'
-      : '当前没有空闲地块，建议先收取成熟外场或升级外场位继续扩产。',
+      ? '农场以田地为主，点击空地即可继续播种，成熟后直接收取。'
+      : '农场地块已排满，可直接收取成熟地块或解锁新田位。',
     action: emptyUnlockedField
       ? { label: '开始培育', target: 'farm', tone: 'primary' }
-      : { label: '查看说明', target: 'farm', tone: 'ghost' },
+      : { label: '解锁田地', target: 'farm', tone: 'secondary' },
   };
 }
 
@@ -315,24 +445,43 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       id: field.id,
       code: field.code,
       title: '未解锁',
-      badge: '升级解锁',
-      tone: 'empty',
-      description: '外场位升级到 Lv.2 后开放。',
-      actions: [{ label: '去建筑', target: 'building', tone: 'primary' }],
+      badge: '待解锁',
+      tone: 'locked',
+      progressRemainingSeconds: 0,
+      progressTotalSeconds: 1,
+      description: '收取金额 0 金币',
+      actions: [{ label: '解锁田地', target: 'farm', tone: 'secondary' }],
     };
   }
 
-  if (field.status === 'ripe') {
+  if (field.status === 'mature') {
     return {
       id: field.id,
       code: field.code,
-      title: '丰熟期',
+      title: '成熟期',
       badge: field.badgeText,
-      tone: 'ripe',
-      description: `投入 ${formatNumber(field.plantedGold)} 金币，当前可收 ${formatNumber(field.currentYield)} 金币，过熟倒计时 02:00:00。`,
+      tone: 'mature',
+      progressRemainingSeconds: 0,
+      progressTotalSeconds: 1,
+      description: `收取金额 ${formatNumber(field.currentYield)} 金币`,
       actions: [
         { label: '成熟收取', target: 'farm', tone: 'primary' },
-        { label: '收益预览', target: 'farm', tone: 'ghost' },
+      ],
+    };
+  }
+
+  if (field.status === 'withered') {
+    return {
+      id: field.id,
+      code: field.code,
+      title: '枯萎期',
+      badge: field.badgeText,
+      tone: 'withered',
+      progressRemainingSeconds: 0,
+      progressTotalSeconds: 1,
+      description: `收取金额 ${formatNumber(field.currentYield)} 金币`,
+      actions: [
+        { label: '枯萎收取', target: 'farm', tone: 'secondary' },
       ],
     };
   }
@@ -344,10 +493,27 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       title: '成长期',
       badge: field.badgeText,
       tone: 'growing',
-      description: `投入 ${formatNumber(field.plantedGold)} 金币，当前提前收取仅返还 ${formatNumber(field.currentYield)} 金币。`,
+      progressRemainingSeconds: 4690,
+      progressTotalSeconds: 7200,
+      description: `收取金额 ${formatNumber(field.currentYield)} 金币`,
       actions: [
         { label: '提前收取', target: 'farm', tone: 'secondary' },
-        { label: '阶段说明', target: 'farm', tone: 'ghost' },
+      ],
+    };
+  }
+
+  if (field.status === 'seeded') {
+    return {
+      id: field.id,
+      code: field.code,
+      title: '播种期',
+      badge: field.badgeText,
+      tone: 'seeded',
+      progressRemainingSeconds: 2535,
+      progressTotalSeconds: 3600,
+      description: `收取金额 ${formatNumber(field.currentYield)} 金币`,
+      actions: [
+        { label: '查看阶段', target: 'farm', tone: 'ghost' },
       ],
     };
   }
@@ -358,7 +524,9 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
     title: '可培育',
     badge: '空闲地块',
     tone: 'empty',
-    description: '投入 520 金币后开始新一轮培育，成熟后可以继续收取再投入。',
+    progressRemainingSeconds: 0,
+    progressTotalSeconds: 1,
+    description: '收取金额 0 金币',
     actions: [{ label: '开始培育', target: 'farm', tone: 'primary' }],
   };
 }
@@ -373,18 +541,12 @@ function buildMutationResponse(summary: string): ClientStateMutationResponse {
 }
 
 export function buildSceneContent(): ClientSceneContentResponse {
+  const factionDividend = getFactionDividendPerHour();
+
   return {
     app: APP_NAME,
     building: {
       upgrades: buildBuildingUpgrades(),
-      guide: {
-        title: '建筑线引导',
-        description: '建筑页已经接入真实花费链路，优先验证主城、金库和外场位升级的资源扣减与状态回写。',
-        actions: [
-          { label: '打开农场页', target: 'farm', tone: 'secondary' },
-          { label: '去掠夺', target: 'raid', tone: 'ghost' },
-        ],
-      },
     },
     farm: {
       hero: buildFarmHero(),
@@ -400,40 +562,70 @@ export function buildSceneContent(): ClientSceneContentResponse {
     },
     raid: {
       hero: {
-        eyebrow: '匿名目标池',
+        eyebrow: '可掠夺目标',
         title: '剩余免费掠夺 2 / 3',
-        description: '系统按综合战力匹配 3 个目标，重点看值不值得打。',
+        description: '进入页面后先看目标列表，重点判断等级、阵营和当前值不值得出手。',
         action: { label: '刷新目标', target: 'raid', tone: 'secondary' },
       },
       targets: [
         {
           id: 'target-1',
-          name: '赤砂营地',
+          name: '烬牙',
           faction: '魔界',
-          summary: '等级段 4~5 · 资源预估高 · 防守偏弱',
+          level: 5,
+          combatPower: '1,320',
+          summary: '魔界 · 资源高 · 防守偏弱',
           loot: '420~560 金币',
           risk: '高风险',
-          detail: '魔界 · 主城等级 4~5 · 外场成熟 2 块 · 防守偏弱 · 今日被掠 1 次。',
+          detail: '成熟田 2 块 · 可掠 520 · 今日被掠 1 次',
           action: { label: '发起掠夺', target: 'raid', tone: 'primary' },
         },
         {
           id: 'target-2',
-          name: '天穹边仓',
+          name: '云栖',
           faction: '仙界',
-          summary: '等级段 4 · 资源预估中 · 被掠损失低',
+          level: 4,
+          combatPower: '1,080',
+          summary: '仙界 · 资源中 · 减损明显',
           loot: '260~340 金币',
           risk: '中风险',
-          detail: '仙界 · 主城等级 4 · 外场成熟 1 块 · 防守偏稳 · 今日未被掠。',
+          detail: '成熟田 1 块 · 可掠 260 · 防守偏稳',
           action: { label: '发起掠夺', target: 'raid', tone: 'secondary' },
         },
         {
           id: 'target-3',
-          name: '灰堡驿站',
+          name: '临风',
           faction: '人界',
-          summary: '等级段 3~4 · 资源预估低 · 风险较稳',
+          level: 4,
+          combatPower: '920',
+          summary: '人界 · 资源低 · 风险较稳',
           loot: '180~260 金币',
           risk: '低风险',
-          detail: '人界 · 主城等级 3~4 · 余额暴露较低 · 适合保守出手。',
+          detail: '成长期 1 块 · 可掠 180 · 适合保守出手',
+          action: { label: '发起掠夺', target: 'raid', tone: 'secondary' },
+        },
+        {
+          id: 'target-4',
+          name: '玄潮',
+          faction: '魔界',
+          level: 5,
+          combatPower: '1,240',
+          summary: '魔界 · 资源中高 · 战力偏高',
+          loot: '360~480 金币',
+          risk: '中高风险',
+          detail: '成熟田 1 块 · 可掠 460 · 驻防分散',
+          action: { label: '发起掠夺', target: 'raid', tone: 'secondary' },
+        },
+        {
+          id: 'target-5',
+          name: '青槐',
+          faction: '仙界',
+          level: 3,
+          combatPower: '760',
+          summary: '仙界 · 资源低 · 适合起手',
+          loot: '150~220 金币',
+          risk: '低风险',
+          detail: '成熟田 1 块 · 可掠 140 · 防守偏弱',
           action: { label: '发起掠夺', target: 'raid', tone: 'secondary' },
         },
       ],
@@ -453,7 +645,7 @@ export function buildSceneContent(): ClientSceneContentResponse {
           tone: 'danger',
           unread: true,
           revengeable: true,
-          summary: '37 分钟前成功掠走你外场 240 金币，击伤 8 名守备兵。',
+          summary: '37 分钟前成功掠走你田地 240 金币，击伤 8 名守备兵。',
           actions: [
             { label: '查看详情', target: 'report', tone: 'ghost' },
             { label: '复仇', target: 'raid', tone: 'primary' },
@@ -523,8 +715,8 @@ export function claimPendingGold(input: ClientClaimPendingRequest): Omit<ClientC
   const remainingPendingGold = getPendingClaimAmount(input.source);
   const sourceLabel = input.source === 'tax' ? '主城税收' : '阵营分红';
   const summary = claimedGold > 0
-    ? `${sourceLabel}本次入库 ${formatNumber(claimedGold)} 金币，剩余待领取 ${formatNumber(remainingPendingGold)}。`
-    : `金库空间不足，当前没有可入库的${sourceLabel}。`;
+    ? `${sourceLabel}本次入账 ${formatNumber(claimedGold)} 金币，剩余待领取 ${formatNumber(remainingPendingGold)}。`
+    : `我的金币空间不足，当前没有可入账的${sourceLabel}。`;
 
   return {
     app: APP_NAME,
@@ -540,10 +732,10 @@ export function collectFieldGold(input: ClientCollectFieldRequest): ClientStateM
   const field = playerState.fields.find((item) => item.id === input.fieldId);
 
   if (!field || !field.unlocked) {
-    return buildMutationResponse('当前地块不可操作，请先解锁对应外场位。');
+    return buildMutationResponse('当前地块不可操作，请先解锁对应田地位。');
   }
 
-  if (input.collectMode === 'ripe' && field.status !== 'ripe') {
+  if (input.collectMode === 'ripe' && field.status !== 'mature' && field.status !== 'withered') {
     return buildMutationResponse('这块地当前不在成熟收取阶段。');
   }
 
@@ -562,7 +754,7 @@ export function collectFieldGold(input: ClientCollectFieldRequest): ClientStateM
   field.badgeText = '空闲地块';
 
   const summary = overflowGold > 0
-    ? `${field.code} 已收取 ${formatNumber(depositedGold)} 金币，另有 ${formatNumber(overflowGold)} 因金库满额未能入库。`
+    ? `${field.code} 已收取 ${formatNumber(depositedGold)} 金币，另有 ${formatNumber(overflowGold)} 因我的金币已满未能入账。`
     : `${field.code} 已收取 ${formatNumber(depositedGold)} 金币，可以立即再投入新一轮培育。`;
 
   return buildMutationResponse(summary);
@@ -581,14 +773,14 @@ export function startCultivation(input: ClientStartCultivationRequest): ClientSt
   }
 
   if (playerState.ledger.vaultGold < cultivationCost) {
-    return buildMutationResponse('金库余额不足，无法开始本轮培育。');
+    return buildMutationResponse('我的金币不足，无法开始本轮培育。');
   }
 
   playerState.ledger.vaultGold -= cultivationCost;
-  field.status = 'growing';
+  field.status = 'seeded';
   field.plantedGold = cultivationCost;
-  field.currentYield = 660;
-  field.badgeText = '01:42 后成熟';
+  field.currentYield = 520;
+  field.badgeText = '播种';
 
   return buildMutationResponse(`${field.code} 已投入 ${formatNumber(cultivationCost)} 金币，开始新一轮培育。`);
 }
@@ -601,7 +793,7 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
   }
 
   if (playerState.ledger.vaultGold < cost) {
-    return buildMutationResponse('金库余额不足，当前无法完成升级。');
+    return buildMutationResponse('我的金币不足，当前无法完成升级。');
   }
 
   playerState.ledger.vaultGold -= cost;
@@ -625,7 +817,7 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
       lockedField.status = 'empty';
       lockedField.badgeText = '空闲地块';
     }
-    return buildMutationResponse('外场位升级完成，新地块已经开放，可直接开始培育。');
+    return buildMutationResponse('田地位升级完成，新地块已经开放，可直接开始培育。');
   }
 
   playerState.buildingLevels.watchtower += 1;
@@ -652,42 +844,3 @@ export function resetDemoState(): ClientResetDemoStateResponse {
   };
 }
 
-export function transferGold(input: ClientTransferGoldRequest): ClientStateMutationResponse {
-  const amount = Math.max(Math.floor(input.amount), 0);
-
-  if (amount <= 0) {
-    return buildMutationResponse('请输入大于 0 的转账金额。');
-  }
-
-  if (input.from === 'vault') {
-    const transferableGold = Math.min(
-      amount,
-      playerState.ledger.vaultGold,
-      Math.max(playerState.ledger.walletCapacity - playerState.ledger.walletGold, 0),
-    );
-
-    if (transferableGold <= 0) {
-      return buildMutationResponse('余额已满或金库可转金额不足，当前无法转入余额。');
-    }
-
-    playerState.ledger.vaultGold -= transferableGold;
-    playerState.ledger.walletGold += transferableGold;
-
-    return buildMutationResponse(`已从金库转出 ${formatNumber(transferableGold)} 金币到余额。`);
-  }
-
-  const transferableGold = Math.min(
-    amount,
-    playerState.ledger.walletGold,
-    Math.max(playerState.ledger.vaultCapacity - playerState.ledger.vaultGold, 0),
-  );
-
-  if (transferableGold <= 0) {
-    return buildMutationResponse('金库已满或余额可转金额不足，当前无法转回金库。');
-  }
-
-  playerState.ledger.walletGold -= transferableGold;
-  playerState.ledger.vaultGold += transferableGold;
-
-  return buildMutationResponse(`已从余额转入 ${formatNumber(transferableGold)} 金币到金库。`);
-}

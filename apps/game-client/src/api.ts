@@ -4,15 +4,15 @@ import {
   type ClientClaimPendingRequest,
   type ClientClaimPendingResponse,
   type ClientCollectFieldRequest,
+  type ClientRaidTargetDetailResponse,
   type ClientResetDemoStateResponse,
   type ClientSceneContentResponse,
   type ClientStartCultivationRequest,
   type ClientStateMutationResponse,
-  type ClientTransferGoldRequest,
   type ClientUpgradeBuildingRequest,
   type HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { mockBootstrap, mockHomeSummary, mockSceneContent } from './mockData';
+import { mockBootstrap, mockHomeSummary, mockRaidTargetDetails, mockSceneContent } from './mockData';
 
 type DataSource = 'api' | 'mock';
 
@@ -118,17 +118,17 @@ function parseFieldYield(description: string): number {
 }
 
 function updateMockFieldStatus(): void {
-  const matureCount = mockSceneSnapshot.farm.fields.filter((field) => field.tone === 'ripe').length;
-  const growingCount = mockSceneSnapshot.farm.fields.filter((field) => field.tone === 'growing').length;
+  const matureCount = mockSceneSnapshot.farm.fields.filter((field) => field.tone === 'mature' || field.tone === 'withered').length;
+  const growingCount = mockSceneSnapshot.farm.fields.filter((field) => field.tone === 'seeded' || field.tone === 'growing').length;
 
-  mockHomeSnapshot.fieldStatus = `成熟外场 ${matureCount} 块，成长中 ${growingCount} 块`;
-  mockSceneSnapshot.farm.hero.title = `成熟 ${matureCount} 块 · 成长中 ${growingCount} 块`;
-  mockSceneSnapshot.farm.hero.description = mockSceneSnapshot.farm.fields.some((field) => field.tone === 'empty' && field.title !== '未解锁')
-    ? '农场页已接入真实收取与培育写接口，可以直接验证产出和再投入循环。'
-    : '当前没有空闲地块，建议先收取成熟外场或升级外场位继续扩产。';
-  mockSceneSnapshot.farm.hero.action = mockSceneSnapshot.farm.fields.some((field) => field.tone === 'empty' && field.title !== '未解锁')
+  mockHomeSnapshot.fieldStatus = `成熟田地 ${matureCount} 块，生长中 ${growingCount} 块`;
+  mockSceneSnapshot.farm.hero.title = `成熟 ${matureCount} 块 · 生长中 ${growingCount} 块`;
+  mockSceneSnapshot.farm.hero.description = mockSceneSnapshot.farm.fields.some((field) => field.tone === 'empty')
+    ? '农场以田地为主，点击空地即可继续播种，成熟后直接收取。'
+    : '农场地块已排满，可直接收取成熟地块或解锁新田位。';
+  mockSceneSnapshot.farm.hero.action = mockSceneSnapshot.farm.fields.some((field) => field.tone === 'empty')
     ? { label: '开始培育', target: 'farm', tone: 'primary' }
-    : { label: '查看说明', target: 'farm', tone: 'ghost' };
+    : { label: '解锁田地', target: 'farm', tone: 'secondary' };
 }
 
 function buildMockMutation(summary: string): ClientStateMutationResponse {
@@ -143,7 +143,7 @@ function buildMockMutation(summary: string): ClientStateMutationResponse {
 }
 
 function applyVaultGoldDelta(delta: number): void {
-  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '金库');
+  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '我的金币');
   if (!vaultResource) {
     return;
   }
@@ -164,7 +164,7 @@ function updateMockFactionHero(): void {
 }
 
 function setVaultCapacity(nextCapacity: number): void {
-  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '金库');
+  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '我的金币');
   if (!vaultResource) {
     return;
   }
@@ -174,16 +174,14 @@ function setVaultCapacity(nextCapacity: number): void {
 }
 
 function applyMockClaimPending(input: ClientClaimPendingRequest): ClientClaimPendingResponse {
-  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '金库');
-  const walletResource = mockHomeSnapshot.resources.find((resource) => resource.label === '余额');
+  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '我的金币');
   const pendingClaim = findMockPendingClaim(input.source);
 
-  if (!vaultResource || !walletResource || !pendingClaim) {
+  if (!vaultResource || !pendingClaim) {
     throw new Error('Mock home summary is missing required resources.');
   }
 
   const vault = parseCurrentAndCapacity(vaultResource.value);
-  const wallet = parseCurrentAndCapacity(walletResource.value);
   const pendingClaimGold = parseNumberText(pendingClaim.value);
   const claimableGold = Math.min(Math.max(vault.capacity - vault.current, 0), pendingClaimGold);
   const nextVaultGold = vault.current + claimableGold;
@@ -196,7 +194,7 @@ function applyMockClaimPending(input: ClientClaimPendingRequest): ClientClaimPen
 
   const summary = claimableGold > 0
     ? `${sourceLabel}本次入库 ${formatNumber(claimableGold)} 金币，剩余待领取 ${formatNumber(remainingPendingGold)}。`
-    : `金库空间不足，当前没有可入库的${sourceLabel}。`;
+    : `我的金币空间不足，当前没有可入账的${sourceLabel}。`;
 
   return {
     app: mockHomeSnapshot.app,
@@ -207,8 +205,6 @@ function applyMockClaimPending(input: ClientClaimPendingRequest): ClientClaimPen
     ledger: {
       vaultGold: nextVaultGold,
       vaultCapacity: vault.capacity,
-      walletGold: wallet.current,
-      walletCapacity: wallet.capacity,
       taxPendingGold: parseNumberText(findMockPendingClaim('tax')?.value ?? '0'),
       factionDividendGold: parseNumberText(findMockPendingClaim('faction')?.value ?? '0'),
     },
@@ -237,13 +233,13 @@ export async function claimPendingEarnings(input: ClientClaimPendingRequest): Pr
 
 function applyMockCollectField(input: ClientCollectFieldRequest): ClientStateMutationResponse {
   const field = mockSceneSnapshot.farm.fields.find((item) => item.id === input.fieldId);
-  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '金库');
+  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '我的金币');
 
   if (!field || !vaultResource || field.title === '未解锁') {
-    return buildMockMutation('当前地块不可操作，请先解锁对应外场位。');
+    return buildMockMutation('当前地块不可操作，请先解锁对应田地位。');
   }
 
-  if (input.collectMode === 'ripe' && field.tone !== 'ripe') {
+  if (input.collectMode === 'ripe' && field.tone !== 'mature' && field.tone !== 'withered') {
     return buildMockMutation('这块地当前不在成熟收取阶段。');
   }
 
@@ -260,12 +256,12 @@ function applyMockCollectField(input: ClientCollectFieldRequest): ClientStateMut
   field.title = '可培育';
   field.badge = '空闲地块';
   field.tone = 'empty';
-  field.description = '投入 520 金币后开始新一轮培育，成熟后可以继续收取再投入。';
+  field.description = '收取金额 0 金币';
   field.actions = [{ label: '开始培育', target: 'farm', tone: 'primary' }];
 
   return buildMockMutation(
     overflowGold > 0
-      ? `${field.code} 已收取 ${formatNumber(depositedGold)} 金币，另有 ${formatNumber(overflowGold)} 因金库满额未能入库。`
+      ? `${field.code} 已收取 ${formatNumber(depositedGold)} 金币，另有 ${formatNumber(overflowGold)} 因我的金币已满未能入账。`
       : `${field.code} 已收取 ${formatNumber(depositedGold)} 金币，可以立即再投入新一轮培育。`,
   );
 }
@@ -273,29 +269,28 @@ function applyMockCollectField(input: ClientCollectFieldRequest): ClientStateMut
 function applyMockStartCultivation(input: ClientStartCultivationRequest): ClientStateMutationResponse {
   const field = mockSceneSnapshot.farm.fields.find((item) => item.id === input.fieldId);
   const cultivationCost = 520;
-  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '金库');
+  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '我的金币');
 
-  if (!field || !vaultResource || field.title === '未解锁') {
+  if (!field || !vaultResource || field.tone === 'locked') {
     return buildMockMutation('当前地块尚未解锁，无法开始培育。');
   }
 
-  if (field.tone !== 'empty' || field.title === '未解锁') {
+  if (field.tone !== 'empty') {
     return buildMockMutation('当前地块已经在培育中或可直接收取。');
   }
 
   const vault = parseCurrentAndCapacity(vaultResource.value);
   if (vault.current < cultivationCost) {
-    return buildMockMutation('金库余额不足，无法开始本轮培育。');
+    return buildMockMutation('我的金币不足，无法开始本轮培育。');
   }
 
   applyVaultGoldDelta(-cultivationCost);
-  field.title = '成长期';
-  field.badge = '01:42 后成熟';
-  field.tone = 'growing';
-  field.description = '投入 520 金币，当前提前收取仅返还 660 金币。';
+  field.title = '播种期';
+  field.badge = '播种';
+  field.tone = 'seeded';
+  field.description = '收取金额 520 金币';
   field.actions = [
-    { label: '提前收取', target: 'farm', tone: 'secondary' },
-    { label: '阶段说明', target: 'farm', tone: 'ghost' },
+    { label: '查看阶段', target: 'farm', tone: 'ghost' },
   ];
 
   return buildMockMutation(`${field.code} 已投入 ${formatNumber(cultivationCost)} 金币，开始新一轮培育。`);
@@ -303,7 +298,7 @@ function applyMockStartCultivation(input: ClientStartCultivationRequest): Client
 
 function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStateMutationResponse {
   const upgrade = mockSceneSnapshot.building.upgrades.find((item) => item.id === input.buildingId);
-  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '金库');
+  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '我的金币');
 
   if (!upgrade || !vaultResource || upgrade.locked) {
     return buildMockMutation('当前建筑不满足升级条件，或已达到验证上限。');
@@ -313,7 +308,7 @@ function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientSt
   const cost = parseNumberText(upgrade.costText.replace('消耗', '').replace('金币', ''));
 
   if (vault.current < cost) {
-    return buildMockMutation('金库余额不足，当前无法完成升级。');
+    return buildMockMutation('我的金币不足，当前无法完成升级。');
   }
 
   applyVaultGoldDelta(-cost);
@@ -337,21 +332,22 @@ function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientSt
   }
 
   if (input.buildingId === 'field-slot') {
-    const lockedField = mockSceneSnapshot.farm.fields.find((field) => field.title === '未解锁');
+    const lockedField = mockSceneSnapshot.farm.fields.find((field) => field.tone === 'locked');
     if (lockedField) {
       lockedField.title = '可培育';
       lockedField.badge = '空闲地块';
-      lockedField.description = '投入 520 金币后开始新一轮培育，成熟后可以继续收取再投入。';
+      lockedField.tone = 'empty';
+      lockedField.description = '收取金额 0 金币';
       lockedField.actions = [{ label: '开始培育', target: 'farm', tone: 'primary' }];
     }
     upgrade.locked = true;
     upgrade.costText = '当前已全部解锁';
     upgrade.action = { label: '查看条件', target: 'building', tone: 'ghost' };
-    upgrade.description = 'Lv.2，当前验证版外场位已全部解锁。';
-    return buildMockMutation('外场位升级完成，新地块已经开放，可直接开始培育。');
+    upgrade.description = 'Lv.2，当前验证版田地位已全部解锁。';
+    return buildMockMutation('田地位升级完成，新地块已经开放，可直接开始培育。');
   }
 
-  upgrade.description = 'Lv.2 -> Lv.3，进一步降低余额与外场被掠损失。';
+  upgrade.description = 'Lv.2 -> Lv.3，进一步降低余额与田地被掠损失。';
   return buildMockMutation('防守建筑升级完成，当前已完成一轮验证内升级。');
 }
 
@@ -408,62 +404,6 @@ export async function upgradeClientBuilding(input: ClientUpgradeBuildingRequest)
     return applyMockUpgradeBuilding(input);
   }
 }
-
-function applyMockTransferGold(input: ClientTransferGoldRequest): ClientStateMutationResponse {
-  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.label === '金库');
-  const walletResource = mockHomeSnapshot.resources.find((resource) => resource.label === '余额');
-
-  if (!vaultResource || !walletResource) {
-    return buildMockMutation('当前资金数据缺失，无法完成转账。');
-  }
-
-  const vault = parseCurrentAndCapacity(vaultResource.value);
-  const wallet = parseCurrentAndCapacity(walletResource.value);
-  const requestedAmount = Math.max(Math.floor(input.amount), 0);
-
-  if (requestedAmount <= 0) {
-    return buildMockMutation('请输入大于 0 的转账金额。');
-  }
-
-  if (input.from === 'vault') {
-    const transferableGold = Math.min(requestedAmount, vault.current, Math.max(wallet.capacity - wallet.current, 0));
-    if (transferableGold <= 0) {
-      return buildMockMutation('余额已满或金库可转金额不足，当前无法转入余额。');
-    }
-
-    vaultResource.value = `${formatNumber(vault.current - transferableGold)} / ${formatNumber(vault.capacity)}`;
-    walletResource.value = `${formatNumber(wallet.current + transferableGold)} / ${formatNumber(wallet.capacity)}`;
-    return buildMockMutation(`已从金库转出 ${formatNumber(transferableGold)} 金币到余额。`);
-  }
-
-  const transferableGold = Math.min(requestedAmount, wallet.current, Math.max(vault.capacity - vault.current, 0));
-  if (transferableGold <= 0) {
-    return buildMockMutation('金库已满或余额可转金额不足，当前无法转回金库。');
-  }
-
-  vaultResource.value = `${formatNumber(vault.current + transferableGold)} / ${formatNumber(vault.capacity)}`;
-  walletResource.value = `${formatNumber(wallet.current - transferableGold)} / ${formatNumber(wallet.capacity)}`;
-  return buildMockMutation(`已从余额转入 ${formatNumber(transferableGold)} 金币到金库。`);
-}
-
-export async function transferClientGold(input: ClientTransferGoldRequest): Promise<ClientStateMutationResponse> {
-  try {
-    const response = await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/transfer-gold`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    });
-
-    mockHomeSnapshot = cloneHomeSummary(response.home);
-    mockSceneSnapshot = cloneSceneContent(response.scenes);
-    return response;
-  } catch {
-    return applyMockTransferGold(input);
-  }
-}
-
 export async function resetDemoExperimentState(): Promise<ClientResetDemoStateResponse> {
   const resetMockState = (): ClientResetDemoStateResponse => {
     mockHomeSnapshot = cloneHomeSummary(mockHomeSummary);
@@ -491,5 +431,18 @@ export async function resetDemoExperimentState(): Promise<ClientResetDemoStateRe
     return response;
   } catch {
     return resetMockState();
+  }
+}
+
+export async function loadRaidTargetDetail(targetId: string): Promise<ClientRaidTargetDetailResponse> {
+  try {
+    return await fetchJson<ClientRaidTargetDetailResponse>(`${CLIENT_API_PREFIX}/raid-targets/${targetId}`);
+  } catch {
+    const fallback = mockRaidTargetDetails[targetId];
+    if (!fallback) {
+      throw new Error(`Missing mock raid target detail for ${targetId}`);
+    }
+
+    return structuredClone(fallback);
   }
 }

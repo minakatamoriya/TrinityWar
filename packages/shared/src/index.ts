@@ -15,6 +15,13 @@ export interface ClientBootstrapResponse {
   env: 'local';
   version: string;
   serverTime: string;
+  season: ClientSeasonStatus;
+}
+
+export interface ClientSeasonStatus {
+  seasonNumber: number;
+  currentWeek: number;
+  totalWeeks: number;
 }
 
 export interface AdminOverviewResponse {
@@ -26,7 +33,7 @@ export interface AdminOverviewResponse {
 export interface HomeResourceSummary {
   label: string;
   value: string;
-  tone: 'vault' | 'wallet';
+  tone: 'vault';
 }
 
 export type ClientPendingClaimSource = 'tax' | 'faction';
@@ -60,8 +67,6 @@ export interface HomeSummaryResponse {
 export interface ClientResourceLedger {
   vaultGold: number;
   vaultCapacity: number;
-  walletGold: number;
-  walletCapacity: number;
   taxPendingGold: number;
   factionDividendGold: number;
 }
@@ -101,11 +106,6 @@ export interface ClientStartCultivationRequest {
 
 export interface ClientUpgradeBuildingRequest {
   buildingId: ClientBuildingUpgradeId;
-}
-
-export interface ClientTransferGoldRequest {
-  from: 'vault' | 'wallet';
-  amount: number;
 }
 
 export interface ClientResetDemoStateResponse {
@@ -157,7 +157,9 @@ export interface ClientFarmField {
   code: string;
   title: string;
   badge: string;
-  tone: 'ripe' | 'growing' | 'empty';
+  tone: 'seeded' | 'growing' | 'mature' | 'withered' | 'empty' | 'locked';
+  progressRemainingSeconds: number;
+  progressTotalSeconds: number;
   description: string;
   actions: ClientSceneAction[];
 }
@@ -166,11 +168,31 @@ export interface ClientRaidTarget {
   id: string;
   name: string;
   faction: string;
+  level: number;
+  combatPower: string;
   summary: string;
   loot: string;
   risk: string;
   detail: string;
   action: ClientSceneAction;
+}
+
+export interface ClientRaidTargetDetailResponse {
+  app: string;
+  targetId: string;
+  name: string;
+  faction: string;
+  level: number;
+  combatPower: string;
+  fieldPreviewTone: ClientFarmField['tone'];
+  fieldStatus: string;
+  raidableGold: string;
+  exposedFruit: string;
+  raidRule: string;
+  defenseStatus: string;
+  protectionStatus: string;
+  detail: string;
+  actions: ClientSceneAction[];
 }
 
 export interface ClientRaidDetail {
@@ -204,7 +226,6 @@ export interface ClientSceneContentResponse {
   app: string;
   building: {
     upgrades: ClientBuildingUpgrade[];
-    guide: ClientGuideSection;
   };
   farm: {
     hero: ClientFarmHero;

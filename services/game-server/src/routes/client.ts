@@ -15,8 +15,17 @@ export const clientRoutes: FastifyPluginAsync = async (server) => {
             env: { type: 'string', enum: ['local'] },
             version: { type: 'string' },
             serverTime: { type: 'string', format: 'date-time' },
+            season: {
+              type: 'object',
+              properties: {
+                seasonNumber: { type: 'number' },
+                currentWeek: { type: 'number' },
+                totalWeeks: { type: 'number' },
+              },
+              required: ['seasonNumber', 'currentWeek', 'totalWeeks'],
+            },
           },
-          required: ['app', 'env', 'version', 'serverTime'],
+          required: ['app', 'env', 'version', 'serverTime', 'season'],
         },
       },
     },
@@ -26,6 +35,11 @@ export const clientRoutes: FastifyPluginAsync = async (server) => {
       env: 'local',
       version: '0.1.0',
       serverTime: new Date().toISOString(),
+      season: {
+        seasonNumber: 3,
+        currentWeek: 1,
+        totalWeeks: 4,
+      },
     };
   });
 };

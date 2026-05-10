@@ -4,15 +4,15 @@ import {
   type ClientClaimPendingRequest,
   type ClientClaimPendingResponse,
   type ClientCollectFieldRequest,
+  type ClientRaidTargetDetailResponse,
   type ClientResetDemoStateResponse,
   type ClientSceneContentResponse,
   type ClientStartCultivationRequest,
   type ClientStateMutationResponse,
-  type ClientTransferGoldRequest,
   type ClientUpgradeBuildingRequest,
   type HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { buildHomeSummary, buildSceneContent, claimPendingGold, collectFieldGold, resetDemoState, startCultivation, transferGold, upgradeBuilding } from '../lib/client-state.js';
+import { buildHomeSummary, buildRaidTargetDetail, buildSceneContent, claimPendingGold, collectFieldGold, resetDemoState, startCultivation, upgradeBuilding } from '../lib/client-state.js';
 
 export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
   server.get<{ Reply: HomeSummaryResponse }>(`${CLIENT_API_PREFIX}/home-summary`, {
@@ -38,7 +38,7 @@ export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
                 properties: {
                   label: { type: 'string' },
                   value: { type: 'string' },
-                  tone: { type: 'string', enum: ['vault', 'wallet'] },
+                  tone: { type: 'string', enum: ['vault'] },
                 },
                 required: ['label', 'value', 'tone'],
               },
@@ -87,6 +87,16 @@ export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
     return buildSceneContent();
   });
 
+  server.get<{ Params: { targetId: string }; Reply: ClientRaidTargetDetailResponse }>(`${CLIENT_API_PREFIX}/raid-targets/:targetId`, {
+    schema: {
+      tags: ['client'],
+      summary: 'Client raid target detail payload',
+      description: 'Provides the modal detail payload for a visible raid target.',
+    },
+  }, async (request) => {
+    return buildRaidTargetDetail(request.params.targetId);
+  });
+
   server.post<{ Body: ClientClaimPendingRequest; Reply: ClientClaimPendingResponse }>(`${CLIENT_API_PREFIX}/actions/claim-pending`, {
     schema: {
       tags: ['client'],
@@ -131,16 +141,6 @@ export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request) => {
     return upgradeBuilding(request.body);
-  });
-
-  server.post<{ Body: ClientTransferGoldRequest; Reply: ClientStateMutationResponse }>(`${CLIENT_API_PREFIX}/actions/transfer-gold`, {
-    schema: {
-      tags: ['client'],
-      summary: 'Transfer gold between vault and wallet',
-      description: 'Transfers gold between vault and wallet while respecting both source balance and target capacity.',
-    },
-  }, async (request) => {
-    return transferGold(request.body);
   });
 
   server.post<{ Reply: ClientResetDemoStateResponse }>(`${CLIENT_API_PREFIX}/actions/reset-demo-state`, {

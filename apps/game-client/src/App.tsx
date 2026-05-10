@@ -1,37 +1,74 @@
 import { useEffect, useState } from 'react';
 import type {
   ClientBuildingUpgradeId,
-  ClientButtonTone,
   ClientClaimPendingRequest,
-  ClientGuideSection,
   ClientRaidTarget,
-  ClientReportEntry,
+  ClientRaidTargetDetailResponse,
   ClientSceneAction,
   ClientSceneKey,
-  ClientTransferGoldRequest,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { claimPendingEarnings, collectFieldEarnings, loadClientViewModel, resetDemoExperimentState, startFieldCultivation, transferClientGold, type ClientViewModel, upgradeClientBuilding } from './api';
+import { claimPendingEarnings, collectFieldEarnings, loadClientViewModel, loadRaidTargetDetail, resetDemoExperimentState, startFieldCultivation, type ClientViewModel, upgradeClientBuilding } from './api';
+import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
+import { RaidScene } from './ui/raid/RaidScene';
+import { BuildingScene } from './ui/scenes/BuildingScene';
+import { FactionScene } from './ui/scenes/FactionScene';
+import { FarmScene } from './ui/scenes/FarmScene';
+import { HomeScene } from './ui/scenes/HomeScene';
+import { ReportScene } from './ui/scenes/ReportScene';
 
 type ReportTabKey = 'defense' | 'attack';
 type FactionTabKey = 'overview' | 'donate' | 'rank';
 
-interface ModalState {
-  title: string;
-  body: string;
-}
-
-interface TransferPanelState {
-  from: ClientTransferGoldRequest['from'];
-  title: string;
-  amount: number;
-  maxAmount: number;
+interface ToastState {
+  id: number;
+  message: string;
+  tone: 'info' | 'success' | 'error';
 }
 
 interface RaidResultState {
   targetName: string;
   summary: string;
   loot: string;
+}
+
+interface RaidTargetModalState {
+  targetId: string;
+  targetName: string;
+  mode: 'raid' | 'revenge';
+}
+
+interface HomeTaskItem {
+  id: string;
+  title: string;
+  description: string;
+  scene: ClientSceneKey;
+}
+
+const homeTaskItems: HomeTaskItem[] = [
+  {
+    id: 'claim-tax',
+    title: '领取主城税收',
+    description: '先把待领取税收入库，保证后续升级和播种不断档。',
+    scene: 'home',
+  },
+  {
+    id: 'collect-farm',
+    title: '收取成熟田地',
+    description: '直接前往农场收菜，成熟地块收回后可继续播种。',
+    scene: 'farm',
+  },
+  {
+    id: 'raid-target',
+    title: '发起一次掠夺',
+    description: '跳转到掠夺页，直接查看匿名目标并验证出兵。',
+    scene: 'raid',
+  },
+];
+
+interface ResourcePulseState {
+  vaultTone: 'gain' | 'spend' | null;
+  vaultToken: number;
 }
 
 const sceneNavLabels: Record<ClientSceneKey, string> = {
@@ -44,8 +81,6 @@ const sceneNavLabels: Record<ClientSceneKey, string> = {
 };
 
 const sceneKeys: ClientSceneKey[] = ['home', 'building', 'farm', 'raid', 'report', 'faction'];
-
-const todayChecklist = ['领取待领取收益', '收取 1 块成熟外场', '完成 1 次匿名掠夺'];
 
 const factionBackgroundMap: Record<string, string> = {
   人界: '/assets/backgrounds/renjie.png',
@@ -73,8 +108,13 @@ function normalizeScene(scene: string): ClientSceneKey {
   return 'home';
 }
 
-function toneClassName(tone: ClientButtonTone): string {
-  return `action-button ${tone}`;
+function parseHourlyTax(description?: string): number {
+  if (!description) {
+    return 0;
+  }
+
+  const match = description.match(/每小时(?:产出|可分到)\s([\d,]+)/);
+  return match ? Number(match[1].replace(/,/g, '')) : 0;
 }
 
 function formatServerTime(serverTime: string): string {
@@ -84,6 +124,19 @@ function formatServerTime(serverTime: string): string {
     month: 'numeric',
     day: 'numeric',
   }).format(new Date(serverTime));
+}
+
+function buildSeasonProgress(status: ClientViewModel['bootstrap']['season']): {
+  label: string;
+  detail: string;
+} {
+  const safeTotalWeeks = Math.max(status.totalWeeks, 1);
+  const safeCurrentWeek = Math.min(Math.max(status.currentWeek, 1), safeTotalWeeks);
+
+  return {
+    label: `S${status.seasonNumber} 赛季`,
+    detail: `${safeCurrentWeek}/${safeTotalWeeks} 周`,
+  };
 }
 
 function buildActionMessage(label: string, context?: string): string {
@@ -141,104 +194,25 @@ function getSceneBackground(scene: ClientSceneKey, factionName: string): string 
   return sceneBackgroundMap[scene];
 }
 
-function ActionButton(props: {
-  action: ClientSceneAction;
-  onClick: (action: ClientSceneAction) => void;
-}): JSX.Element {
-  const { action, onClick } = props;
-
-  return (
-    <button className={toneClassName(action.tone)} onClick={() => onClick(action)} type="button">
-      {action.label}
-    </button>
-  );
-}
-
-function GuideCard(props: {
-  section: ClientGuideSection;
-  onAction: (action: ClientSceneAction) => void;
-}): JSX.Element {
-  const { section, onAction } = props;
-
-  return (
-    <article className="panel-card">
-      <div className="panel-head">
-        <h4>{section.title}</h4>
-      </div>
-      <p className="panel-text">{section.description}</p>
-      <div className="button-row wrap">
-        {section.actions.map((action) => (
-          <ActionButton action={action} key={`${section.title}-${action.label}`} onClick={onAction} />
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function ReportCard(props: {
-  entry: ClientReportEntry;
-  onAction: (action: ClientSceneAction, context?: string) => void;
-}): JSX.Element {
-  const { entry, onAction } = props;
-
-  return (
-    <article className={`report-card ${entry.tone}`}>
-      <div className="report-head">
-        <div>
-          <h4>{entry.title}</h4>
-          <p className="report-tag-row">
-            <span className="tag-pill">{entry.tag}</span>
-            {entry.unread ? <span className="tag-pill unread">未读</span> : null}
-            {entry.revengeable ? <span className="tag-pill revenge">可复仇</span> : null}
-          </p>
-        </div>
-      </div>
-      <p className="panel-text">{entry.summary}</p>
-      <div className="button-row wrap">
-        {entry.actions.map((action) => (
-          <ActionButton action={action} key={`${entry.title}-${action.label}`} onClick={(nextAction) => onAction(nextAction, entry.title)} />
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function RaidTargetCard(props: {
-  target: ClientRaidTarget;
-  selected: boolean;
-  onSelect: (id: string) => void;
-}): JSX.Element {
-  const { target, selected, onSelect } = props;
-
-  return (
-    <button className={`target-card ${selected ? 'selected' : ''}`} onClick={() => onSelect(target.id)} type="button">
-      <div className="target-head">
-        <div>
-          <strong>{target.name}</strong>
-          <span>{target.faction}</span>
-        </div>
-        <span className="risk-pill">{target.risk}</span>
-      </div>
-      <p>{target.summary}</p>
-      <div className="target-meta">
-        <span>预估收益</span>
-        <strong>{target.loot}</strong>
-      </div>
-    </button>
-  );
-}
-
-export function App(): JSX.Element {
+function App(): JSX.Element {
   const [viewModel, setViewModel] = useState<ClientViewModel | null>(null);
   const [activeScene, setActiveScene] = useState<ClientSceneKey>('home');
   const [reportTab, setReportTab] = useState<ReportTabKey>('defense');
   const [factionTab, setFactionTab] = useState<FactionTabKey>('overview');
-  const [modal, setModal] = useState<ModalState | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const [selectedRaidTargetId, setSelectedRaidTargetId] = useState<string>('');
+  const [raidTargetModal, setRaidTargetModal] = useState<RaidTargetModalState | null>(null);
+  const [raidTargetDetail, setRaidTargetDetail] = useState<ClientRaidTargetDetailResponse | null>(null);
+  const [raidTargetDetailLoading, setRaidTargetDetailLoading] = useState(false);
+  const [raidTargetDetailError, setRaidTargetDetailError] = useState<string | null>(null);
   const [raidResult, setRaidResult] = useState<RaidResultState | null>(null);
   const [claimingSource, setClaimingSource] = useState<ClientClaimPendingRequest['source'] | null>(null);
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null);
-  const [transferPanel, setTransferPanel] = useState<TransferPanelState | null>(null);
+  const [farmTick, setFarmTick] = useState(0);
+  const [resourcePulse, setResourcePulse] = useState<ResourcePulseState>({
+    vaultTone: null,
+    vaultToken: 0,
+  });
 
   useEffect(() => {
     let active = true;
@@ -257,6 +231,73 @@ export function App(): JSX.Element {
     };
   }, []);
 
+  useEffect(() => {
+    if (!viewModel) {
+      return;
+    }
+
+    setFarmTick(0);
+
+    const timer = window.setInterval(() => {
+      setFarmTick((currentTick) => currentTick + 1);
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [viewModel]);
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setToast((current) => current?.id === toast.id ? null : current);
+    }, 2400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [toast]);
+
+  useEffect(() => {
+    if (!raidTargetModal) {
+      setRaidTargetDetail(null);
+      setRaidTargetDetailError(null);
+      setRaidTargetDetailLoading(false);
+      return;
+    }
+
+    let active = true;
+    setRaidTargetDetailLoading(true);
+    setRaidTargetDetailError(null);
+
+    void loadRaidTargetDetail(raidTargetModal.targetId).then((detail) => {
+      if (!active) {
+        return;
+      }
+
+      setRaidTargetDetail(detail);
+    }).catch(() => {
+      if (!active) {
+        return;
+      }
+
+      setRaidTargetDetailError('当前无法读取对手详情，请稍后重试。');
+    }).finally(() => {
+      if (!active) {
+        return;
+      }
+
+      setRaidTargetDetailLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [raidTargetModal]);
+
   if (!viewModel) {
     return (
       <main className="loading-shell">
@@ -273,30 +314,32 @@ export function App(): JSX.Element {
   const selectedRaidTarget = scenes.raid.targets.find((target) => target.id === selectedRaidTargetId) ?? scenes.raid.targets[0];
   const activeReportEntries = reportTab === 'defense' ? scenes.report.defense : scenes.report.attack;
   const activeBackgroundImage = `url(${getSceneBackground(activeScene, home.factionName)})`;
-  const vaultResource = findResource('金库', home.resources);
-  const walletResource = findResource('余额', home.resources);
+  const vaultResource = findResource('我的金币', home.resources);
   const pendingClaims = home.pendingClaims ?? [];
   const taxPending = pendingClaims.find((claim) => claim.source === 'tax');
   const factionPending = pendingClaims.find((claim) => claim.source === 'faction');
   const totalPending = pendingClaims.reduce((sum, claim) => sum + Number(claim.value.replace(/,/g, '')), 0);
   const vaultProgress = vaultResource ? parseVaultValue(vaultResource.value) : null;
-  const walletProgress = walletResource && walletResource.value.includes('/') ? parseVaultValue(walletResource.value) : null;
+  const seasonProgress = buildSeasonProgress(bootstrap.season);
+  const hourlyTax = parseHourlyTax(taxPending?.description);
 
-  const openTransferPanel = (from: ClientTransferGoldRequest['from']): void => {
-    if (!vaultProgress || !walletProgress) {
-      return;
-    }
-
-    const maxAmount = from === 'vault'
-      ? Math.min(vaultProgress.current, Math.max(walletProgress.capacity - walletProgress.current, 0))
-      : Math.min(walletProgress.current, Math.max(vaultProgress.capacity - vaultProgress.current, 0));
-
-    setTransferPanel({
-      from,
-      title: from === 'vault' ? '金库转入余额' : '余额转回金库',
-      amount: maxAmount,
-      maxAmount,
+  const showToast = (message: string, tone: ToastState['tone'] = 'info'): void => {
+    setToast({
+      id: Date.now(),
+      message,
+      tone,
     });
+  };
+
+  const triggerResourcePulse = (nextHome: HomeSummaryResponse): void => {
+    const currentVaultAmount = vaultResource ? parseVaultValue(vaultResource.value).current : 0;
+    const nextVaultResource = findResource('我的金币', nextHome.resources);
+    const nextVaultAmount = nextVaultResource ? parseVaultValue(nextVaultResource.value).current : 0;
+
+    setResourcePulse((current) => ({
+      vaultTone: nextVaultAmount === currentVaultAmount ? current.vaultTone : nextVaultAmount > currentVaultAmount ? 'gain' : 'spend',
+      vaultToken: nextVaultAmount === currentVaultAmount ? current.vaultToken : current.vaultToken + 1,
+    }));
   };
 
   const handleClaimPending = async (source: ClientClaimPendingRequest['source']): Promise<void> => {
@@ -310,41 +353,9 @@ export function App(): JSX.Element {
       const result = await claimPendingEarnings({ source });
       applyMutationResult(result);
     } catch {
-      setModal({
-        title: '领取收益失败',
-        body: '当前无法完成收益入库，请稍后重试。',
-      });
+      showToast('当前无法完成收益入库，请稍后重试。', 'error');
     } finally {
       setClaimingSource(null);
-    }
-  };
-
-  const handleTransferGold = async (): Promise<void> => {
-    if (!transferPanel) {
-      return;
-    }
-
-    const actionKey = `transfer:${transferPanel.from}`;
-    if (pendingActionKey === actionKey) {
-      return;
-    }
-
-    setPendingActionKey(actionKey);
-
-    try {
-      const result = await transferClientGold({
-        from: transferPanel.from,
-        amount: transferPanel.amount,
-      });
-      applyMutationResult(result);
-      setTransferPanel(null);
-    } catch {
-      setModal({
-        title: transferPanel.title,
-        body: '当前无法完成转账，请稍后重试。',
-      });
-    } finally {
-      setPendingActionKey(null);
     }
   };
 
@@ -357,6 +368,7 @@ export function App(): JSX.Element {
 
     try {
       const result = await resetDemoExperimentState();
+      triggerResourcePulse(result.home);
       setViewModel((current) => {
         if (!current) {
           return current;
@@ -369,25 +381,57 @@ export function App(): JSX.Element {
         };
       });
 
-      setModal({
-        title: '实验数据已重置',
-        body: result.summary,
-      });
+      showToast(result.summary, 'success');
       setActiveScene('home');
       setReportTab('defense');
       setFactionTab('overview');
       setRaidResult(null);
     } catch {
-      setModal({
-        title: '重置失败',
-        body: '当前无法重置实验数据，请稍后重试。',
-      });
+      showToast('当前无法重置实验数据，请稍后重试。', 'error');
     } finally {
       setPendingActionKey(null);
     }
   };
 
+  const handleRefreshRaidTargets = async (): Promise<void> => {
+    if (pendingActionKey === 'raid:refresh-targets') {
+      return;
+    }
+
+    setPendingActionKey('raid:refresh-targets');
+
+    try {
+      const nextViewModel = await loadClientViewModel();
+      setViewModel(nextViewModel);
+      setSelectedRaidTargetId(nextViewModel.scenes.raid.targets[0]?.id ?? '');
+      showToast('目标列表已刷新，可以重新挑选掠夺对象。', 'success');
+    } catch {
+      showToast('当前无法刷新目标列表，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleOpenRaidTargetModal = (target: ClientRaidTarget): void => {
+    setSelectedRaidTargetId(target.id);
+    setRaidTargetModal({
+      targetId: target.id,
+      targetName: target.name,
+      mode: 'raid',
+    });
+  };
+
+  const findRaidTargetByContext = (context?: string): ClientRaidTarget | null => {
+    if (!context) {
+      return scenes.raid.targets[0] ?? null;
+    }
+
+    const matchedTarget = scenes.raid.targets.find((target) => context.includes(target.name));
+    return matchedTarget ?? scenes.raid.targets[0] ?? null;
+  };
+
   const applyMutationResult = (result: { home: HomeSummaryResponse; scenes: ClientViewModel['scenes']; summary: string }): void => {
+    triggerResourcePulse(result.home);
     setViewModel((current) => {
       if (!current) {
         return current;
@@ -400,10 +444,7 @@ export function App(): JSX.Element {
       };
     });
 
-    setModal({
-      title: '操作完成',
-      body: result.summary,
-    });
+    showToast(result.summary, 'success');
   };
 
   const handleBuildingAction = async (action: ClientSceneAction, buildingId: ClientBuildingUpgradeId, context: string): Promise<void> => {
@@ -419,7 +460,7 @@ export function App(): JSX.Element {
         const result = await upgradeClientBuilding({ buildingId });
         applyMutationResult(result);
       } catch {
-        setModal({ title: action.label, body: `${context} 当前升级失败，请稍后重试。` });
+        showToast(`${context} 当前升级失败，请稍后重试。`, 'error');
       } finally {
         setPendingActionKey(null);
       }
@@ -435,6 +476,20 @@ export function App(): JSX.Element {
       return;
     }
 
+    if (action.label.includes('解锁')) {
+      setPendingActionKey(actionKey);
+
+      try {
+        const result = await upgradeClientBuilding({ buildingId: 'field-slot' });
+        applyMutationResult(result);
+      } catch {
+        showToast(`${context} 当前无法完成解锁，请稍后重试。`, 'error');
+      } finally {
+        setPendingActionKey(null);
+      }
+      return;
+    }
+
     if (action.label === '开始培育') {
       setPendingActionKey(actionKey);
 
@@ -442,7 +497,7 @@ export function App(): JSX.Element {
         const result = await startFieldCultivation({ fieldId });
         applyMutationResult(result);
       } catch {
-        setModal({ title: action.label, body: `${context} 当前无法开始培育，请稍后重试。` });
+        showToast(`${context} 当前无法开始培育，请稍后重试。`, 'error');
       } finally {
         setPendingActionKey(null);
       }
@@ -459,7 +514,7 @@ export function App(): JSX.Element {
         });
         applyMutationResult(result);
       } catch {
-        setModal({ title: action.label, body: `${context} 当前无法完成收取，请稍后重试。` });
+        showToast(`${context} 当前无法完成收取，请稍后重试。`, 'error');
       } finally {
         setPendingActionKey(null);
       }
@@ -470,33 +525,46 @@ export function App(): JSX.Element {
   };
 
   const handleSceneAction = (action: ClientSceneAction, context?: string): void => {
-    if (action.label === '确认出兵' && selectedRaidTarget) {
+    const actionContext = context ?? raidTargetDetail?.name ?? selectedRaidTarget?.name;
+    const actionLoot = selectedRaidTarget?.loot ?? '待结算';
+
+    if ((action.label === '确认出兵' || action.label === '发起掠夺') && actionContext) {
       setRaidResult({
-        targetName: selectedRaidTarget.name,
-        summary: `你对${selectedRaidTarget.name}发起了一次验证版出兵。`,
-        loot: selectedRaidTarget.loot,
+        targetName: actionContext,
+        summary: `你对${actionContext}发起了一次验证版出兵。`,
+        loot: actionLoot,
       });
       setActiveScene('report');
       setReportTab('attack');
-      setModal({
-        title: '出兵模拟完成',
-        body: `目标 ${selectedRaidTarget.name}，预估可得 ${selectedRaidTarget.loot}。当前仅做前端验证，真实结算以后端为准。`,
-      });
+      setRaidTargetModal(null);
+      showToast(`目标 ${actionContext}，预估可得 ${actionLoot}。`, 'success');
       return;
     }
 
-    if (action.target !== activeScene || action.label.includes('返回') || action.label.includes('打开') || action.label.includes('复仇')) {
-      setActiveScene(normalizeScene(action.target));
+    if (action.label === '刷新目标') {
+      void handleRefreshRaidTargets();
+      return;
     }
 
     if (action.label.includes('复仇')) {
-      setSelectedRaidTargetId(scenes.raid.targets[0]?.id ?? '');
+      const revengeTarget = findRaidTargetByContext(context);
+
+      if (revengeTarget) {
+        setSelectedRaidTargetId(revengeTarget.id);
+        setRaidTargetModal({
+          targetId: revengeTarget.id,
+          targetName: revengeTarget.name,
+          mode: 'revenge',
+        });
+        return;
+      }
     }
 
-    setModal({
-      title: action.label,
-      body: buildActionMessage(action.label, context),
-    });
+    if (action.target !== activeScene || action.label.includes('返回') || action.label.includes('打开')) {
+      setActiveScene(normalizeScene(action.target));
+    }
+
+    showToast(buildActionMessage(action.label, actionContext), 'info');
   };
 
   return (
@@ -520,8 +588,8 @@ export function App(): JSX.Element {
         <div className="summary-card">
           <p className="card-label">今日主目标</p>
           <ul className="mini-list">
-            {todayChecklist.map((item) => (
-              <li key={item}>{item}</li>
+            {homeTaskItems.map((item) => (
+              <li key={item.id}>{item.title}</li>
             ))}
           </ul>
         </div>
@@ -542,7 +610,7 @@ export function App(): JSX.Element {
               <em>{factionPending?.value ?? '0'}</em>
             </div>
           </div>
-          <button className="rail-alert" onClick={() => setModal({ title: '战报提醒', body: '最近 1 次被掠已解锁免费复仇，可直接跳到掠夺页验证复仇链路。' })} type="button">
+          <button className="rail-alert" onClick={() => showToast('最近 1 次被掠已解锁免费复仇，可直接跳到掠夺页验证复仇链路。')} type="button">
             战报未读 2
           </button>
         </div>
@@ -568,293 +636,122 @@ export function App(): JSX.Element {
         >
           <header className="top-bar">
             <div className="top-action-group">
-              <button className="ghost-button top-action-button" onClick={() => setModal({ title: '商城', body: '验证版先预留商城入口，后续可继续补礼包、月卡、限时折扣与购买链路。' })} type="button">
+              <div className="season-progress-inline" aria-label="赛季进度">
+                <span className="season-progress-inline-label">{seasonProgress.label}</span>
+                <span className="season-progress-inline-detail">{seasonProgress.detail}</span>
+              </div>
+              <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留好友入口，后续可继续补好友列表。')} type="button">
+                好友
+              </button>
+              <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留商城入口，后续可继续补礼包、月卡和折扣链路。')} type="button">
                 商城
               </button>
-              <button className="ghost-button top-action-button" onClick={() => setModal({ title: '设置', body: '验证版先预留设置入口，后续可继续补音效、账号、调试开关与埋点面板。' })} type="button">
+              <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留设置入口，后续可继续补音效、账号和调试开关。')} type="button">
                 设置
               </button>
             </div>
           </header>
 
+          {toast ? (
+            <div className={`top-toast top-toast-${toast.tone}`}>
+              <span>{toast.message}</span>
+            </div>
+          ) : null}
+
           <section className="global-resource-bar">
             <section className="resource-dock resource-dock-global">
               {vaultResource && vaultProgress ? (
-                <button className="resource-dock-card resource-dock-card-vault" key={vaultResource.label} onClick={() => openTransferPanel('vault')} type="button">
+                <div className={`resource-dock-card resource-dock-card-vault ${resourcePulse.vaultTone ? `pulse-${resourcePulse.vaultTone}` : ''}`} key={`${vaultResource.label}-${resourcePulse.vaultToken}`}>
                   <div className="resource-dock-head">
                     <span className="resource-name">{vaultResource.label}</span>
-                    <span className="resource-dock-hint">转出到余额</span>
+                    <span className="resource-dock-capacity">上限 {formatNumber(vaultProgress.capacity)}</span>
                   </div>
                   <strong className="resource-dock-amount">{formatNumber(vaultProgress.current)}</strong>
                   <div className="resource-dock-progress" aria-hidden="true">
                     <div className="resource-dock-progress-fill resource-dock-progress-fill-vault" style={{ width: `${vaultProgress.ratio * 100}%` }} />
                   </div>
                   <div className="resource-dock-foot">
-                    <span>上限 {formatNumber(vaultProgress.capacity)}</span>
+                    <span>当前持有</span>
                     <span>{Math.round(vaultProgress.ratio * 100)}%</span>
                   </div>
-                </button>
-              ) : null}
-
-              {walletResource && walletProgress ? (
-                <button className="resource-dock-card resource-dock-card-wallet" key={walletResource.label} onClick={() => openTransferPanel('wallet')} type="button">
-                  <div className="resource-dock-head">
-                    <span className="resource-name">{walletResource.label}</span>
-                    <span className="resource-dock-hint">转回金库</span>
-                  </div>
-                  <strong className="resource-dock-amount">{formatNumber(walletProgress.current)}</strong>
-                  <div className="resource-dock-progress" aria-hidden="true">
-                    <div className="resource-dock-progress-fill resource-dock-progress-fill-wallet" style={{ width: `${walletProgress.ratio * 100}%` }} />
-                  </div>
-                  <div className="resource-dock-foot">
-                    <span>上限 {formatNumber(walletProgress.capacity)}</span>
-                    <span>{Math.round(walletProgress.ratio * 100)}%</span>
-                  </div>
-                </button>
+                </div>
               ) : null}
             </section>
           </section>
 
           <section className={`screen-body scene-${activeScene}`}>
             {activeScene === 'home' ? (
-              <div className="scene-shell scene-shell-home">
-                <div className="scene-scroll scene-scroll-home">
-                <section className="hero-panel parchment">
-                  <div>
-                    <p className="eyebrow">今日状态</p>
-                    <h3>主城 Lv.{home.castleLevel}</h3>
-                    <p className="muted">{home.fieldStatus}，{home.reportStatus}。</p>
-                  </div>
-                  {taxPending ? (
-                    <button className="pending-claim-button" onClick={() => {
-                      void handleClaimPending('tax');
-                    }} type="button">
-                      <span>{taxPending.label}</span>
-                      <strong>{taxPending.value}</strong>
-                      <em>{claimingSource === 'tax' ? '领取中...' : '点击入库'}</em>
-                    </button>
-                  ) : null}
-                </section>
-
-                <article className="panel-card home-task-card">
-                  <div className="panel-head">
-                    <h4>主城任务列表</h4>
-                    <span className="soft-tag">今日推进</span>
-                  </div>
-                  <div className="task-list">
-                    {todayChecklist.map((item, index) => (
-                      <div className="task-row" key={item}>
-                        <span className="task-index">0{index + 1}</span>
-                        <div>
-                          <strong>{item}</strong>
-                          <p>{index === 0 ? '优先回收主城税收，确保金库有足够空间继续验证。'
-                            : index === 1 ? '把成熟地块收回后，可以立即再投入一轮培育。'
-                              : '战报与掠夺页联动已经接好，可继续验证一轮进攻结果。'}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-                </div>
-              </div>
+              <HomeScene
+                castleLevel={home.castleLevel}
+                claimingTax={claimingSource === 'tax'}
+                hourlyTax={hourlyTax}
+                onClaimTax={() => {
+                  void handleClaimPending('tax');
+                }}
+                onNavigate={setActiveScene}
+                taxPending={taxPending}
+              />
             ) : null}
 
             {activeScene === 'building' ? (
-              <div className="scene-shell">
-                <div className="scene-scroll card-grid compact-grid">
-                  {scenes.building.upgrades.map((upgrade) => (
-                    <article className={`upgrade-card ${upgrade.locked ? 'locked' : ''}`} key={upgrade.title}>
-                      <div>
-                        <h4>{upgrade.title}</h4>
-                        <p>{upgrade.description}</p>
-                      </div>
-                      <div className="cost-box">
-                        <span>{upgrade.costText}</span>
-                        <ActionButton action={upgrade.action} onClick={(action) => {
-                          void handleBuildingAction(action, upgrade.id, upgrade.title);
-                        }} />
-                      </div>
-                    </article>
-                  ))}
-                  <GuideCard onAction={handleSceneAction} section={scenes.building.guide} />
-                </div>
-              </div>
+              <BuildingScene
+                onUpgradeAction={(action, buildingId, context) => {
+                  void handleBuildingAction(action, buildingId, context);
+                }}
+                upgrades={scenes.building.upgrades}
+              />
             ) : null}
 
             {activeScene === 'farm' ? (
-              <div className="scene-shell">
-                <section className="hero-panel parchment compact-hero">
-                  <div>
-                    <p className="eyebrow">{scenes.farm.hero.eyebrow}</p>
-                    <h3>{scenes.farm.hero.title}</h3>
-                    <p className="muted">{scenes.farm.hero.description}</p>
-                  </div>
-                  <ActionButton action={scenes.farm.hero.action} onClick={(action) => {
-                    const emptyField = scenes.farm.fields.find((field) => field.tone === 'empty' && field.title !== '未解锁');
-                    if (!emptyField) {
-                      handleSceneAction(action, '农场总览');
-                      return;
-                    }
-
-                    void handleFarmAction(action, emptyField.id, emptyField.code);
-                  }} />
-                </section>
-
-                <div className="scene-scroll card-grid farm-field-grid">
-                  {scenes.farm.fields.map((field) => (
-                    <article className={`field-card ${field.tone}`} key={field.id}>
-                      <div className="field-head">
-                        <div>
-                          <p className="eyebrow">{field.code}</p>
-                          <h4>{field.title}</h4>
-                        </div>
-                        <span className="stage-tag">{field.badge}</span>
-                      </div>
-                      <p>{field.description}</p>
-                      <div className="button-row wrap compact-actions">
-                        {field.actions.map((action) => (
-                          <ActionButton action={action} key={`${field.id}-${action.label}`} onClick={(nextAction) => {
-                            void handleFarmAction(nextAction, field.id, field.code);
-                          }} />
-                        ))}
-                      </div>
-                    </article>
-                  ))}
-
-                  <GuideCard onAction={handleSceneAction} section={scenes.farm.guide} />
-                </div>
-              </div>
+              <FarmScene
+                farmTick={farmTick}
+                fields={scenes.farm.fields}
+                onAction={(action, fieldId, fieldCode) => {
+                  void handleFarmAction(action, fieldId, fieldCode);
+                }}
+              />
             ) : null}
 
             {activeScene === 'raid' ? (
-              <div className="scene-shell">
-                <section className="hero-panel parchment compact-hero">
-                  <div>
-                    <p className="eyebrow">{scenes.raid.hero.eyebrow}</p>
-                    <h3>{scenes.raid.hero.title}</h3>
-                    <p className="muted">{scenes.raid.hero.description}</p>
-                  </div>
-                  <ActionButton action={scenes.raid.hero.action} onClick={handleSceneAction} />
-                </section>
-
-                <div className="scene-scroll">
-                <div className="grid raid-layout">
-                  <div className="target-list">
-                    {scenes.raid.targets.map((target) => (
-                      <RaidTargetCard
-                        key={target.id}
-                        onSelect={setSelectedRaidTargetId}
-                        selected={target.id === selectedRaidTarget?.id}
-                        target={target}
-                      />
-                    ))}
-                  </div>
-
-                  <article className="panel-card target-detail-card">
-                    <div className="panel-head">
-                      <h4>{selectedRaidTarget.name}</h4>
-                      <span className="soft-tag">{selectedRaidTarget.risk}</span>
-                    </div>
-                    <p className="panel-text">{selectedRaidTarget.detail}</p>
-                    <div className="target-meta large">
-                      <span>预估收益</span>
-                      <strong>{selectedRaidTarget.loot}</strong>
-                    </div>
-                    <p className="advice-box">{scenes.raid.detail.advice}</p>
-                    <div className="button-row wrap">
-                      <ActionButton action={selectedRaidTarget.action} onClick={(action) => handleSceneAction(action, selectedRaidTarget.name)} />
-                      {scenes.raid.detail.actions.map((action) => (
-                        <ActionButton action={action} key={action.label} onClick={(nextAction) => handleSceneAction(nextAction, selectedRaidTarget.name)} />
-                      ))}
-                    </div>
-                  </article>
-                </div>
-                </div>
-              </div>
+              <RaidScene
+                heroTitle={scenes.raid.hero.title}
+                onOpenTarget={handleOpenRaidTargetModal}
+                onRefresh={() => {
+                  void handleRefreshRaidTargets();
+                }}
+                refreshLabel={scenes.raid.hero.action.label}
+                refreshPending={pendingActionKey === 'raid:refresh-targets'}
+                targets={scenes.raid.targets}
+              />
             ) : null}
 
             {activeScene === 'report' ? (
-              <div className="scene-shell">
-                {raidResult ? (
-                  <article className="hero-panel result-banner">
-                    <div>
-                      <p className="eyebrow">最新模拟结果</p>
-                      <h3>{raidResult.summary}</h3>
-                      <p className="muted">目标 {raidResult.targetName}，预估收益 {raidResult.loot}。</p>
-                    </div>
-                    <button className="ghost-button" onClick={() => setRaidResult(null)} type="button">
-                      收起
-                    </button>
-                  </article>
-                ) : null}
-
-                <div className="tab-row">
-                  <button className={`tab-button ${reportTab === 'defense' ? 'active' : ''}`} onClick={() => setReportTab('defense')} type="button">防守战报</button>
-                  <button className={`tab-button ${reportTab === 'attack' ? 'active' : ''}`} onClick={() => setReportTab('attack')} type="button">进攻战报</button>
-                </div>
-                <div className="scene-scroll stack-panel compact">
-                  {activeReportEntries.map((entry) => (
-                    <ReportCard entry={entry} key={`${reportTab}-${entry.title}`} onAction={handleSceneAction} />
-                  ))}
-                </div>
-                <div className="button-row wrap">
-                  {scenes.report.actions.map((action) => (
-                    <ActionButton action={action} key={action.label} onClick={handleSceneAction} />
-                  ))}
-                </div>
-              </div>
+              <ReportScene
+                actions={scenes.report.actions}
+                activeEntries={activeReportEntries}
+                onAction={handleSceneAction}
+                onChangeTab={setReportTab}
+                onDismissResult={() => setRaidResult(null)}
+                raidResult={raidResult}
+                reportTab={reportTab}
+              />
             ) : null}
 
             {activeScene === 'faction' ? (
-              <div className="scene-shell">
-                <section className="hero-panel parchment compact-hero">
-                  <div>
-                    <p className="eyebrow">{scenes.faction.hero.eyebrow}</p>
-                    <h3>{scenes.faction.hero.title}</h3>
-                    <p className="muted">{scenes.faction.hero.description}</p>
-                  </div>
-                  <button className="pending-claim-button pending-claim-button-faction" onClick={() => {
-                    void handleClaimPending('faction');
-                  }} type="button">
-                    <span>{factionPending?.label ?? '阵营分红'}</span>
-                    <strong>{factionPending?.value ?? '0'}</strong>
-                    <em>{claimingSource === 'faction' ? '领取中...' : '领取入库'}</em>
-                  </button>
-                </section>
-
-                <div className="tab-row">
-                  <button className={`tab-button ${factionTab === 'overview' ? 'active' : ''}`} onClick={() => setFactionTab('overview')} type="button">阵营总览</button>
-                  <button className={`tab-button ${factionTab === 'donate' ? 'active' : ''}`} onClick={() => setFactionTab('donate')} type="button">上缴与分红</button>
-                  <button className={`tab-button ${factionTab === 'rank' ? 'active' : ''}`} onClick={() => setFactionTab('rank')} type="button">排行榜</button>
-                </div>
-
-                <div className="scene-scroll">
-                  {factionTab === 'overview' ? (
-                    <article className="panel-card stats-card">
-                      {scenes.faction.overview.map((item) => (
-                        <div className="stat-row" key={item.label}>
-                          <span>{item.label}</span>
-                          <strong>{item.value}</strong>
-                        </div>
-                      ))}
-                    </article>
-                  ) : null}
-
-                  {factionTab === 'donate' ? <GuideCard onAction={handleSceneAction} section={scenes.faction.donate} /> : null}
-
-                  {factionTab === 'rank' ? (
-                    <article className="panel-card ranking-card">
-                      {scenes.faction.rankings.map((item) => (
-                        <div className="stat-row" key={item.label}>
-                          <span>{item.label}</span>
-                          <strong>{item.value}</strong>
-                        </div>
-                      ))}
-                    </article>
-                  ) : null}
-                </div>
-              </div>
+              <FactionScene
+                claiming={claimingSource === 'faction'}
+                donate={scenes.faction.donate}
+                factionPending={factionPending}
+                factionTab={factionTab}
+                hero={scenes.faction.hero}
+                onAction={handleSceneAction}
+                onChangeTab={setFactionTab}
+                onClaim={() => {
+                  void handleClaimPending('faction');
+                }}
+                overview={scenes.faction.overview}
+                rankings={scenes.faction.rankings}
+              />
             ) : null}
           </section>
 
@@ -865,67 +762,23 @@ export function App(): JSX.Element {
               </button>
             ))}
           </footer>
+
+          {raidTargetModal ? (
+            <RaidIntelScreen
+              detail={raidTargetDetail}
+              error={raidTargetDetailError}
+              loading={raidTargetDetailLoading}
+              mode={raidTargetModal.mode}
+              onAction={(action) => handleSceneAction(action, raidTargetDetail?.name)}
+              onClose={() => setRaidTargetModal(null)}
+              targetName={raidTargetModal.targetName}
+            />
+          ) : null}
         </div>
       </section>
 
-      {modal ? (
-        <div className="modal-backdrop" onClick={() => setModal(null)}>
-          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-            <div className="panel-head">
-              <h4>{modal.title}</h4>
-              <button className="ghost-button small" onClick={() => setModal(null)} type="button">关闭</button>
-            </div>
-            <p className="panel-text">{modal.body}</p>
-            <div className="button-row end">
-              <button className="secondary-button" onClick={() => setModal(null)} type="button">知道了</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {transferPanel ? (
-        <div className="modal-backdrop" onClick={() => setTransferPanel(null)}>
-          <div className="modal-card transfer-card" onClick={(event) => event.stopPropagation()}>
-            <div className="panel-head">
-              <h4>{transferPanel.title}</h4>
-              <button className="ghost-button small" onClick={() => setTransferPanel(null)} type="button">关闭</button>
-            </div>
-            <p className="panel-text">拖动滑条设置转账金额，系统会自动按源余额和目标上限截断。</p>
-            <div className="transfer-amount-row">
-              <span>转账金额</span>
-              <strong>{formatNumber(transferPanel.amount)}</strong>
-            </div>
-            <input
-              className="transfer-slider"
-              max={transferPanel.maxAmount}
-              min={0}
-              onChange={(event) => {
-                const nextAmount = Number(event.target.value);
-                setTransferPanel((current) => current ? { ...current, amount: nextAmount } : current);
-              }}
-              step={10}
-              type="range"
-              value={Math.min(transferPanel.amount, transferPanel.maxAmount)}
-            />
-            <div className="transfer-foot-row">
-              <span>可转上限 {formatNumber(transferPanel.maxAmount)}</span>
-              <button className="ghost-button small" onClick={() => {
-                setTransferPanel((current) => current ? { ...current, amount: current.maxAmount } : current);
-              }} type="button">
-                全部转出
-              </button>
-            </div>
-            <div className="button-row end">
-              <button className="secondary-button" onClick={() => setTransferPanel(null)} type="button">取消</button>
-              <button className="primary-button" disabled={transferPanel.maxAmount <= 0 || pendingActionKey === `transfer:${transferPanel.from}`} onClick={() => {
-                void handleTransferGold();
-              }} type="button">
-                {pendingActionKey === `transfer:${transferPanel.from}` ? '转账中...' : '确认转账'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </main>
   );
 }
+
+export default App;

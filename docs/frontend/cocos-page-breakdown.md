@@ -242,16 +242,22 @@
 建议结构：
 
 1. `Header`
-2. `TargetFilterBar`
-3. `TargetList`
-4. `TargetDetailCard`
-5. `FooterActions`
+2. `RaidTabs`
+3. `TargetFilterBar`
+4. `TargetList`
+5. `TargetDetailCard`
+6. `RallyList`
+7. `FooterActions`
 
 说明：
 
-1. 目标列表建议放上半区。
-2. 当前选中目标的详情固定在下半区。
-3. 目标项只显示必要信息：名称、阵营、收益、风险、操作按钮。
+1. `RaidTabs` 首发建议至少包含 `可偷目标`、`围猎大厅`、`我的求助`、`复仇记录`。
+2. 目标列表建议放上半区。
+3. 当前选中目标的详情固定在下半区。
+4. 目标项不要再只显示模糊收益，应该直接显示可抢果实值、暴露金币、守备风险和热度。
+5. 目标卡需要预留 `单抢`、`围猎`、`表情` 三个操作入口。
+6. `RallyList` 用于展示玩家发起的围猎令，包括目标、预计收益、参与人数和倒计时。
+7. 结果反馈应优先播放入账和战损变化，不要把长文本战报放在第一层。
 
 ### 5. ReportPage
 

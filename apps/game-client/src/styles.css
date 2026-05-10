@@ -51,6 +51,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 4px;
   border-radius: 16px;
   background: rgba(17, 13, 12, 0.42);
@@ -77,8 +78,11 @@ button {
 .app-shell {
   min-height: 100dvh;
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  place-items: stretch;
+  padding: 0;
+  overflow: hidden;
 }
 
 .left-rail,
@@ -97,7 +101,7 @@ button {
 }
 
 .left-rail {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 16px;
   padding: 24px;
@@ -298,6 +302,7 @@ button {
   display: flex;
   align-items: stretch;
   justify-content: center;
+  width: 100%;
 }
 
 .phone-frame {
@@ -341,6 +346,36 @@ button {
   padding: 12px 14px 10px;
 }
 
+.season-progress-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 248, 234, 0.05);
+  border: 1px solid rgba(255, 248, 234, 0.06);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.season-progress-inline-label,
+.season-progress-inline-detail {
+  font-variant-numeric: tabular-nums;
+}
+
+.season-progress-inline-label {
+  color: #fff1d2;
+  font-weight: 700;
+}
+
+.season-progress-inline-detail {
+  color: var(--text-secondary);
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 248, 234, 0.12);
+}
+
 .resource-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -351,15 +386,15 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 0 14px 10px;
+  padding: 0 14px 8px;
 }
 
 .resource-dock {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding: 10px;
-  border-radius: 22px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 8px 10px;
+  border-radius: 18px;
   border: 1px solid rgba(255, 248, 234, 0.08);
   background: rgba(17, 13, 12, 0.54);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
@@ -368,21 +403,25 @@ button {
 .resource-dock-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   min-height: 0;
-  padding: 12px 12px 10px;
-  border-radius: 18px;
+  padding: 9px 12px 8px;
+  border-radius: 14px;
   text-align: left;
   border: 1px solid rgba(255, 248, 234, 0.06);
   background: rgba(255, 248, 234, 0.04);
 }
 
-.resource-dock-card-vault {
-  background: linear-gradient(180deg, rgba(118, 92, 58, 0.38), rgba(55, 43, 31, 0.74));
+.resource-dock-card.pulse-gain {
+  animation: resourcePulseGain 520ms cubic-bezier(.2, .8, .2, 1);
 }
 
-.resource-dock-card-wallet {
-  background: linear-gradient(180deg, rgba(88, 103, 66, 0.34), rgba(38, 51, 37, 0.76));
+.resource-dock-card.pulse-spend {
+  animation: resourcePulseSpend 520ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.resource-dock-card-vault {
+  background: linear-gradient(180deg, rgba(118, 92, 58, 0.38), rgba(55, 43, 31, 0.74));
 }
 
 .resource-dock-head,
@@ -394,41 +433,33 @@ button {
 }
 
 .resource-dock-head .resource-name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #fff3dc;
 }
 
-.resource-dock-hint,
+.resource-dock-capacity,
 .resource-dock-foot {
   color: var(--text-secondary);
   font-size: 11px;
 }
 
-.resource-dock-hint {
-  font-size: 12px;
-}
-
 .resource-dock-amount {
-  font-size: 24px;
-  line-height: 1;
+  font-size: 27px;
+  line-height: 1.02;
+  letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums;
 }
 
 .resource-dock-card-vault .resource-dock-amount {
   color: #ffd66b;
-  text-shadow: 0 0 18px rgba(255, 214, 107, 0.22);
-}
-
-.resource-dock-card-wallet .resource-dock-amount {
-  color: #a9d8ff;
-  text-shadow: 0 0 18px rgba(169, 216, 255, 0.18);
+  text-shadow: 0 0 16px rgba(255, 214, 107, 0.24);
 }
 
 .resource-dock-progress {
   width: 100%;
-  height: 6px;
+  height: 5px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(255, 248, 234, 0.12);
@@ -441,10 +472,6 @@ button {
 
 .resource-dock-progress-fill-vault {
   background: linear-gradient(90deg, #f7d182 0%, #d8893d 100%);
-}
-
-.resource-dock-progress-fill-wallet {
-  background: linear-gradient(90deg, #b7ef8b 0%, #5cba66 100%);
 }
 
 .resource-strip-home {
@@ -561,6 +588,10 @@ button {
   background: linear-gradient(180deg, rgba(101, 83, 139, 0.82), rgba(63, 47, 101, 0.92));
 }
 
+.pending-claim-button-tax {
+  min-width: 164px;
+}
+
 .pending-claim-button strong {
   font-size: 24px;
   line-height: 1;
@@ -652,6 +683,20 @@ button {
   font-size: clamp(20px, 3vw, 28px);
 }
 
+.tax-hero-card {
+  align-items: stretch;
+  gap: 18px;
+}
+
+.tax-hero-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.tax-hero-copy .muted {
+  margin: 0;
+}
+
 .home-task-card {
   gap: 14px;
 }
@@ -692,11 +737,84 @@ button {
   margin-bottom: 4px;
 }
 
+.task-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-link {
+  color: #ffd7a8;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .task-row p {
   margin: 0;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.top-toast {
+  position: absolute;
+  top: 54px;
+  left: 16px;
+  right: 16px;
+  z-index: 12;
+  padding: 10px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 248, 234, 0.12);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
+  animation: toastSlideIn 220ms ease-out;
+}
+
+.top-toast span {
+  display: block;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.top-toast-info {
+  background: rgba(46, 34, 27, 0.92);
+  color: #f7e8cf;
+}
+
+.top-toast-success {
+  background: rgba(61, 48, 26, 0.94);
+  color: #ffe6b6;
+}
+
+.top-toast-error {
+  background: rgba(88, 34, 26, 0.94);
+  color: #ffd1c3;
+}
+
+@keyframes resourcePulseGain {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.09); }
+  65% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes resourcePulseSpend {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.92); }
+  65% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+@keyframes toastSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .grid {
@@ -726,18 +844,135 @@ button {
   background: rgba(255, 248, 234, 0.05);
 }
 
-.field-preview.ripe,
-.field-card.ripe {
-  background: linear-gradient(180deg, rgba(131, 97, 45, 0.3), rgba(70, 53, 34, 0.58));
+.farm-plot {
+  position: relative;
+  min-height: 0;
+  padding: 4px;
+  gap: 4px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(57, 42, 29, 0.84), rgba(30, 22, 18, 0.96));
 }
 
-.field-preview.growing,
-.field-card.growing {
-  background: linear-gradient(180deg, rgba(79, 103, 76, 0.26), rgba(45, 58, 46, 0.58));
+.farm-plot.seeded {
+  background: linear-gradient(180deg, rgba(110, 78, 40, 0.9), rgba(57, 39, 20, 0.98));
 }
 
-.field-card.empty {
-  background: linear-gradient(180deg, rgba(70, 70, 70, 0.24), rgba(48, 48, 48, 0.54));
+.farm-plot.growing {
+  background: linear-gradient(180deg, rgba(66, 98, 54, 0.88), rgba(31, 52, 26, 0.96));
+}
+
+.farm-plot.mature {
+  background: linear-gradient(180deg, rgba(166, 122, 48, 0.92), rgba(96, 63, 20, 0.98));
+}
+
+.farm-plot.withered {
+  background: linear-gradient(180deg, rgba(117, 87, 58, 0.9), rgba(60, 43, 30, 0.98));
+}
+
+.farm-plot.empty {
+  background: linear-gradient(180deg, rgba(86, 70, 52, 0.82), rgba(46, 37, 29, 0.96));
+}
+
+.farm-plot.locked {
+  background: linear-gradient(180deg, rgba(81, 81, 81, 0.88), rgba(46, 46, 46, 0.98));
+  cursor: pointer;
+}
+
+.farm-plot.locked:focus-visible {
+  outline: 2px solid rgba(255, 226, 183, 0.9);
+  outline-offset: 2px;
+}
+
+.farm-plot-image {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  border-radius: 16px;
+  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03) 58%, rgba(0, 0, 0, 0.1));
+}
+
+.farm-plot.locked .farm-plot-image {
+  filter: grayscale(1) brightness(0.82);
+}
+
+.farm-plot-meta {
+  display: grid;
+  gap: 6px;
+}
+
+.farm-progress-block {
+  display: block;
+}
+
+.farm-progress-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 22px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 248, 234, 0.12);
+  border: 1px solid rgba(255, 248, 234, 0.08);
+}
+
+.farm-progress-fill {
+  display: block;
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  background: linear-gradient(90deg, #f7d18b 0%, #e39a42 100%);
+}
+
+.farm-progress-label {
+  margin: 0;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding: 0 8px;
+  color: #fff5e4;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.farm-plot-amount {
+  margin: 0;
+  color: #fff0d2;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.farm-plot-actions {
+  display: flex;
+}
+
+.farm-plot-actions .action-button {
+  width: 100%;
+}
+
+.farm-plot-topline {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.farm-plot-topline .stage-tag {
+  backdrop-filter: blur(8px);
+  background: rgba(20, 16, 13, 0.5);
 }
 
 .timeline-list {
@@ -793,6 +1028,19 @@ button {
   gap: 12px;
 }
 
+.building-upgrade-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.building-upgrade-item {
+  gap: 12px;
+}
+
+.building-upgrade-copy {
+  display: grid;
+  gap: 6px;
+}
+
 .compact-grid .panel-card,
 .compact-grid .upgrade-card,
 .farm-field-grid .field-card,
@@ -817,6 +1065,16 @@ button {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.building-upgrade-list .cost-box {
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-direction: column;
+}
+
+.building-upgrade-list .cost-box .action-button {
+  width: 100%;
 }
 
 .field-head,
@@ -886,24 +1144,68 @@ button {
   gap: 12px;
 }
 
-.target-card {
-  width: 100%;
-  padding: 14px;
-  border-radius: 18px;
-  text-align: left;
-  background: rgba(255, 248, 234, 0.05);
+.target-list-raid {
+  grid-template-columns: 1fr;
+  gap: 8px;
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  height: 100%;
 }
 
-.target-card.selected {
-  border: 1px solid rgba(215, 143, 78, 0.6);
-  background: rgba(215, 143, 78, 0.12);
+.target-card {
+  width: 100%;
+  min-height: 0;
+  padding: 8px 10px;
+  border-radius: 16px;
+  text-align: left;
+  background: rgba(255, 248, 234, 0.05);
 }
 
 .target-head div,
 .field-head div {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
+}
+
+.target-head strong {
+  font-size: 14px;
+}
+
+.target-head span {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.target-card-line {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.target-card-line strong {
+  color: #ffe2b7;
+  font-size: 12px;
+}
+
+.target-card-subline {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10px;
+  color: rgba(247, 239, 225, 0.72);
+}
+
+.target-card-subline em {
+  color: #f3c98c;
+  font-style: normal;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .target-meta {
@@ -919,6 +1221,261 @@ button {
   padding: 12px 14px;
   background: rgba(255, 248, 234, 0.05);
   color: #ffe2b7;
+}
+
+.raid-toolbar {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.compact-raid-toolbar {
+  padding: 8px 10px;
+  gap: 12px;
+}
+
+.raid-toolbar-text {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f7e8cf;
+}
+
+.raid-list-shell {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+}
+
+.raid-scene-shell,
+.raid-scene-scroll {
+  overflow: hidden;
+}
+
+.raid-scene-scroll {
+  gap: 8px;
+}
+
+.raid-scene-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.raid-scene-scroll {
+  scrollbar-width: none;
+}
+
+.raid-detail-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.raid-intel-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(180deg, rgba(18, 12, 9, 0.92) 0%, rgba(22, 16, 13, 0.96) 40%, rgba(14, 10, 8, 0.98) 100%),
+    rgba(18, 12, 9, 0.96);
+}
+
+.raid-intel-topbar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(255, 248, 234, 0.08);
+}
+
+.raid-intel-title-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.raid-intel-title-block h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.raid-intel-title-block .eyebrow {
+  margin-bottom: 4px;
+}
+
+.raid-intel-name {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.raid-intel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 14px 16px 12px;
+}
+
+.raid-intel-body::-webkit-scrollbar {
+  width: 0;
+}
+
+.raid-intel-body {
+  scrollbar-width: none;
+}
+
+.raid-intel-assets {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.raid-intel-status-list {
+  padding: 2px 2px 0;
+}
+
+.raid-intel-note {
+  padding: 12px 14px;
+}
+
+.raid-intel-note .panel-text {
+  margin: 0;
+}
+
+.raid-intel-actionbar {
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 248, 234, 0.08);
+  background: rgba(14, 10, 8, 0.94);
+}
+
+.raid-detail-topline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.raid-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.raid-asset-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.raid-asset-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+}
+
+.raid-visual-card {
+  gap: 8px;
+}
+
+.raid-field-preview {
+  width: 100%;
+  max-width: 160px;
+  aspect-ratio: 1 / 1;
+  height: auto;
+  object-fit: contain;
+  border-radius: 16px;
+  align-self: center;
+  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03) 58%, rgba(0, 0, 0, 0.1));
+}
+
+.raid-gold-preview {
+  position: relative;
+  width: 100%;
+  max-width: 160px;
+  aspect-ratio: 1 / 1;
+  align-self: center;
+  border-radius: 16px;
+  background: radial-gradient(circle at 30% 25%, rgba(255, 245, 196, 0.4), rgba(197, 125, 49, 0.18) 42%, rgba(46, 29, 17, 0.4) 100%);
+  overflow: hidden;
+}
+
+.raid-gold-stack {
+  position: absolute;
+  left: 50%;
+  width: 58%;
+  height: 18%;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #ffe8a3 0%, #f0b24f 48%, #b56b27 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 8px 18px rgba(75, 39, 11, 0.28);
+}
+
+.raid-gold-stack-back {
+  top: 28%;
+  width: 44%;
+}
+
+.raid-gold-stack-mid {
+  top: 43%;
+  width: 54%;
+}
+
+.raid-gold-stack-front {
+  top: 58%;
+  width: 66%;
+}
+
+.raid-asset-card strong {
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.raid-asset-card em {
+  color: var(--text-secondary);
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.raid-detail-status-list {
+  display: grid;
+  gap: 8px;
+}
+
+.raid-detail-status-list p {
+  margin: 0;
+  color: #f7e8cf;
+  line-height: 1.5;
+}
+
+.raid-error-text {
+  color: #ffd1c3;
+}
+
+.raid-action-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.raid-action-row .action-button {
+  min-height: 36px;
+  padding: 8px 6px;
+  font-size: 12px;
+}
+
+.action-button:disabled,
+.primary-button:disabled,
+.secondary-button:disabled,
+.ghost-button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
 }
 
 .report-card.danger {
@@ -1033,8 +1590,15 @@ button {
 }
 
 @media (max-width: 960px) {
-  .left-rail {
-    display: none;
+  .two-col,
+  .raid-layout,
+  .target-list-raid,
+  .raid-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .raid-asset-strip {
+    grid-template-columns: 1fr;
   }
 
   .app-shell {
@@ -1062,6 +1626,7 @@ button {
 
   .hero-panel,
   .top-bar,
+  .raid-toolbar,
   .cost-box {
     flex-direction: column;
     align-items: stretch;
@@ -1097,6 +1662,7 @@ button {
   .top-action-group {
     width: 100%;
     justify-content: flex-end;
+    flex-wrap: nowrap;
   }
 
   .summary-card,
@@ -1132,10 +1698,13 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .farm-field-grid,
   .card-grid,
   .quick-actions {
     grid-template-columns: 1fr;
+  }
+
+  .farm-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .bottom-dock {

@@ -66,6 +66,7 @@
 
 1. docs/design/simple-game-design.md
 2. docs/design/demo-ui-scene-flow.md
+3. docs/design/raid-mechanism-redesign.md
 
 状态：部分具备
 
@@ -73,6 +74,7 @@
 
 1. 还没有单独的页面字段清单文档。
 2. 还没有把页面字段和接口字段一一对应起来。
+3. 掠夺页的多人协作、表情互动和即时结算字段还需要继续落成接口契约。
 
 ### 5. 客户端 API 契约文档
 
