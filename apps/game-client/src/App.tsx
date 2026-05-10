@@ -16,6 +16,7 @@ import { FactionScene } from './ui/scenes/FactionScene';
 import { FarmScene } from './ui/scenes/FarmScene';
 import { HomeScene } from './ui/scenes/HomeScene';
 import { ReportScene } from './ui/scenes/ReportScene';
+import { SeedSelectionScreen } from './ui/scenes/SeedSelectionScreen';
 
 type ReportTabKey = 'defense' | 'attack';
 type FactionTabKey = 'overview' | 'donate' | 'rank';
@@ -45,6 +46,30 @@ interface HomeTaskItem {
   scene: ClientSceneKey;
 }
 
+type SeedRarity = 'common' | 'rare' | 'legendary';
+
+interface SeedCatalogItem {
+  id: string;
+  name: string;
+  rarity: SeedRarity;
+  description: string;
+  unlockedByDefault: boolean;
+}
+
+interface SeedRewardModalState {
+  title: string;
+  summary: string;
+  items: Array<{
+    seedId: string;
+    quantity: number;
+  }>;
+}
+
+interface SeedSelectionState {
+  fieldId: string;
+  fieldCode: string;
+}
+
 const homeTaskItems: HomeTaskItem[] = [
   {
     id: 'claim-tax',
@@ -65,6 +90,33 @@ const homeTaskItems: HomeTaskItem[] = [
     scene: 'raid',
   },
 ];
+
+const seedCatalog: SeedCatalogItem[] = [
+  { id: 'lingmai', name: '灵麦', rarity: 'common', description: '普通、金币型、短线，初始唯一可培育种子。', unlockedByDefault: true },
+  { id: 'yingdou', name: '影豆', rarity: 'common', description: '普通、速熟型、短线，适合高频上线。', unlockedByDefault: false },
+  { id: 'chihu', name: '赤葫', rarity: 'common', description: '普通、金币型、标准，收益稳。', unlockedByDefault: false },
+  { id: 'yuzhe', name: '玉蔗', rarity: 'common', description: '普通、爆发型、标准，丰熟收益高。', unlockedByDefault: false },
+  { id: 'xuanSu', name: '玄粟', rarity: 'common', description: '普通、金币型、长线，适合低频上线。', unlockedByDefault: false },
+  { id: 'yaokui', name: '曜葵', rarity: 'rare', description: '稀有、金币型、标准，中期主力。', unlockedByDefault: false },
+  { id: 'hanmei', name: '寒莓', rarity: 'rare', description: '稀有、速熟型、短线，循环效率高。', unlockedByDefault: false },
+  { id: 'chijiao', name: '炽椒', rarity: 'rare', description: '稀有、爆发型、标准，容易成为目标。', unlockedByDefault: false },
+  { id: 'yuelan', name: '月兰', rarity: 'rare', description: '稀有、收藏型、长线，图鉴价值高。', unlockedByDefault: false },
+  { id: 'longteng', name: '龙藤', rarity: 'legendary', description: '传说、爆发型、长线，全服热度目标。', unlockedByDefault: false },
+  { id: 'xiaolian', name: '霄莲', rarity: 'legendary', description: '传说、收藏型、标准，身份价值最高。', unlockedByDefault: false },
+];
+
+const seedRarityLabels: Record<SeedRarity, string> = {
+  common: '普通',
+  rare: '稀有',
+  legendary: '传说',
+};
+
+const defaultUnlockedSeedIds = seedCatalog.filter((seed) => seed.unlockedByDefault).map((seed) => seed.id);
+
+const emptySeedInventory = seedCatalog.reduce<Record<string, number>>((inventory, seed) => {
+  inventory[seed.id] = 0;
+  return inventory;
+}, {});
 
 interface ResourcePulseState {
   vaultTone: 'gain' | 'spend' | null;
@@ -213,6 +265,13 @@ function App(): JSX.Element {
     vaultTone: null,
     vaultToken: 0,
   });
+  const [seedInventory, setSeedInventory] = useState<Record<string, number>>(emptySeedInventory);
+  const [unlockedSeedIds, setUnlockedSeedIds] = useState<string[]>(defaultUnlockedSeedIds);
+  const [starterSeedClaimed, setStarterSeedClaimed] = useState(false);
+  const [seedRewardModal, setSeedRewardModal] = useState<SeedRewardModalState | null>(null);
+  const [seedSelectionState, setSeedSelectionState] = useState<SeedSelectionState | null>(null);
+  const [selectedSeedId, setSelectedSeedId] = useState<string>('lingmai');
+  const [fieldSeedAssignments, setFieldSeedAssignments] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let active = true;
@@ -260,6 +319,20 @@ function App(): JSX.Element {
       window.clearTimeout(timer);
     };
   }, [toast]);
+
+  useEffect(() => {
+    if (!seedRewardModal) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setSeedRewardModal(null);
+    }, 2200);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [seedRewardModal]);
 
   useEffect(() => {
     if (!raidTargetModal) {
@@ -322,6 +395,31 @@ function App(): JSX.Element {
   const vaultProgress = vaultResource ? parseVaultValue(vaultResource.value) : null;
   const seasonProgress = buildSeasonProgress(bootstrap.season);
   const hourlyTax = parseHourlyTax(taxPending?.description);
+  const seedCatalogMap = new Map(seedCatalog.map((seed) => [seed.id, seed]));
+  const seedGroups = (['common', 'rare', 'legendary'] as const).map((rarity) => ({
+    rarity,
+    label: seedRarityLabels[rarity],
+    seeds: seedCatalog.filter((seed) => seed.rarity === rarity).map((seed) => ({
+      ...seed,
+      unlocked: unlockedSeedIds.includes(seed.id),
+      quantity: seedInventory[seed.id] ?? 0,
+    })),
+  }));
+  const starterSeedCount = seedInventory.lingmai ?? 0;
+  const farmFields = scenes.farm.fields.map((field) => {
+    const assignedSeedId = fieldSeedAssignments[field.id];
+    const assignedSeed = assignedSeedId ? seedCatalogMap.get(assignedSeedId) : undefined;
+
+    if (!assignedSeed || (field.tone !== 'seeded' && field.tone !== 'growing' && field.tone !== 'mature' && field.tone !== 'withered')) {
+      return field;
+    }
+
+    return {
+      ...field,
+      badge: `${field.badge} · ${assignedSeed.name}`,
+      description: `本轮培育：${assignedSeed.name}。${field.description}`,
+    };
+  });
 
   const showToast = (message: string, tone: ToastState['tone'] = 'info'): void => {
     setToast({
@@ -386,6 +484,13 @@ function App(): JSX.Element {
       setReportTab('defense');
       setFactionTab('overview');
       setRaidResult(null);
+      setSeedInventory(emptySeedInventory);
+      setUnlockedSeedIds(defaultUnlockedSeedIds);
+      setStarterSeedClaimed(false);
+      setSeedRewardModal(null);
+      setSeedSelectionState(null);
+      setSelectedSeedId('lingmai');
+      setFieldSeedAssignments({});
     } catch {
       showToast('当前无法重置实验数据，请稍后重试。', 'error');
     } finally {
@@ -491,16 +596,11 @@ function App(): JSX.Element {
     }
 
     if (action.label === '开始培育') {
-      setPendingActionKey(actionKey);
-
-      try {
-        const result = await startFieldCultivation({ fieldId });
-        applyMutationResult(result);
-      } catch {
-        showToast(`${context} 当前无法开始培育，请稍后重试。`, 'error');
-      } finally {
-        setPendingActionKey(null);
-      }
+      setSelectedSeedId('lingmai');
+      setSeedSelectionState({
+        fieldId,
+        fieldCode: context,
+      });
       return;
     }
 
@@ -513,6 +613,11 @@ function App(): JSX.Element {
           collectMode: action.label.includes('提前') ? 'early' : 'ripe',
         });
         applyMutationResult(result);
+        setFieldSeedAssignments((current) => {
+          const nextAssignments = { ...current };
+          delete nextAssignments[fieldId];
+          return nextAssignments;
+        });
       } catch {
         showToast(`${context} 当前无法完成收取，请稍后重试。`, 'error');
       } finally {
@@ -565,6 +670,69 @@ function App(): JSX.Element {
     }
 
     showToast(buildActionMessage(action.label, actionContext), 'info');
+  };
+
+  const handleClaimStarterSeeds = (): void => {
+    if (starterSeedClaimed) {
+      return;
+    }
+
+    setSeedInventory((current) => ({
+      ...current,
+      lingmai: (current.lingmai ?? 0) + 3,
+    }));
+    setUnlockedSeedIds((current) => current.includes('lingmai') ? current : [...current, 'lingmai']);
+    setStarterSeedClaimed(true);
+    setSeedRewardModal({
+      title: '领取成功',
+      summary: '已入库新手种子，可直接前往农场开始第一轮培育。',
+      items: [{ seedId: 'lingmai', quantity: 3 }],
+    });
+    showToast('已领取 3 颗灵麦种子。', 'success');
+  };
+
+  const handleConfirmSeedCultivation = async (): Promise<void> => {
+    if (!seedSelectionState) {
+      return;
+    }
+
+    const seed = seedCatalogMap.get(selectedSeedId);
+    if (!seed || !unlockedSeedIds.includes(seed.id)) {
+      showToast('当前只可选择已解锁的种子。', 'error');
+      return;
+    }
+
+    const currentCount = seedInventory[seed.id] ?? 0;
+    if (currentCount <= 0) {
+      showToast(`${seed.name} 库存不足，请先领取或获取种子。`, 'error');
+      return;
+    }
+
+    const actionKey = `farm:${seedSelectionState.fieldId}:开始培育`;
+    if (pendingActionKey === actionKey) {
+      return;
+    }
+
+    setPendingActionKey(actionKey);
+
+    try {
+      const result = await startFieldCultivation({ fieldId: seedSelectionState.fieldId });
+      applyMutationResult(result);
+      setSeedInventory((current) => ({
+        ...current,
+        [seed.id]: Math.max((current[seed.id] ?? 0) - 1, 0),
+      }));
+      setFieldSeedAssignments((current) => ({
+        ...current,
+        [seedSelectionState.fieldId]: seed.id,
+      }));
+      setSeedSelectionState(null);
+      showToast(`${seedSelectionState.fieldCode} 已投入 ${seed.name}，开始培育。`, 'success');
+    } catch {
+      showToast(`${seedSelectionState.fieldCode} 当前无法开始培育，请稍后重试。`, 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
   };
 
   return (
@@ -688,7 +856,10 @@ function App(): JSX.Element {
                 onClaimTax={() => {
                   void handleClaimPending('tax');
                 }}
+                onClaimStarterSeeds={handleClaimStarterSeeds}
                 onNavigate={setActiveScene}
+                starterSeedClaimed={starterSeedClaimed}
+                starterSeedCount={starterSeedCount}
                 taxPending={taxPending}
               />
             ) : null}
@@ -705,7 +876,7 @@ function App(): JSX.Element {
             {activeScene === 'farm' ? (
               <FarmScene
                 farmTick={farmTick}
-                fields={scenes.farm.fields}
+                fields={farmFields}
                 onAction={(action, fieldId, fieldCode) => {
                   void handleFarmAction(action, fieldId, fieldCode);
                 }}
@@ -773,6 +944,41 @@ function App(): JSX.Element {
               onClose={() => setRaidTargetModal(null)}
               targetName={raidTargetModal.targetName}
             />
+          ) : null}
+
+          {seedSelectionState ? (
+            <SeedSelectionScreen
+              confirming={pendingActionKey === `farm:${seedSelectionState.fieldId}:开始培育`}
+              fieldCode={seedSelectionState.fieldCode}
+              onClose={() => setSeedSelectionState(null)}
+              onConfirm={() => {
+                void handleConfirmSeedCultivation();
+              }}
+              onSelect={setSelectedSeedId}
+              seedGroups={seedGroups}
+              selectedSeedId={selectedSeedId}
+            />
+          ) : null}
+
+          {seedRewardModal ? (
+            <div className="seed-reward-modal" role="status" aria-live="polite">
+              <div className="seed-reward-card">
+                <p className="eyebrow">{seedRewardModal.title}</p>
+                <h3>种子入库</h3>
+                <p>{seedRewardModal.summary}</p>
+                <div className="seed-reward-list">
+                  {seedRewardModal.items.map((item) => {
+                    const seed = seedCatalogMap.get(item.seedId);
+                    return (
+                      <div className="seed-reward-item" key={item.seedId}>
+                        <strong>{seed?.name ?? item.seedId}</strong>
+                        <span>x {item.quantity}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           ) : null}
         </div>
       </section>

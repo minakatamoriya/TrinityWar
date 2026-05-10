@@ -34,6 +34,9 @@ interface HomeSceneProps {
   taxPending: ClientPendingClaimSummary | undefined;
   claimingTax: boolean;
   onClaimTax: () => void;
+  starterSeedCount: number;
+  starterSeedClaimed: boolean;
+  onClaimStarterSeeds: () => void;
   onNavigate: (scene: ClientSceneKey) => void;
 }
 
@@ -42,7 +45,17 @@ function formatNumber(value: number): string {
 }
 
 export function HomeScene(props: HomeSceneProps): JSX.Element {
-  const { castleLevel, hourlyTax, taxPending, claimingTax, onClaimTax, onNavigate } = props;
+  const {
+    castleLevel,
+    hourlyTax,
+    taxPending,
+    claimingTax,
+    onClaimTax,
+    starterSeedCount,
+    starterSeedClaimed,
+    onClaimStarterSeeds,
+    onNavigate,
+  } = props;
 
   return (
     <div className="scene-shell scene-shell-home">
@@ -77,6 +90,22 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
                 </div>
               </div>
             ))}
+          </div>
+        </article>
+
+        <article className="panel-card starter-seed-card">
+          <div className="panel-head starter-seed-head">
+            <div>
+              <h4>领取种子</h4>
+              <p className="starter-seed-subline">初始仅开放灵麦，领取后可在农场培育弹框中使用。</p>
+            </div>
+            <span className="soft-tag">灵麦 x {starterSeedCount}</span>
+          </div>
+          <div className="starter-seed-body">
+            <p>每日起手包：领取三颗灵麦种子，作为新手第一轮培育库存。</p>
+            <button className="primary-button starter-seed-button" disabled={starterSeedClaimed} onClick={onClaimStarterSeeds} type="button">
+              {starterSeedClaimed ? '今日已领取' : '领取三颗灵麦种子'}
+            </button>
           </div>
         </article>
       </div>
