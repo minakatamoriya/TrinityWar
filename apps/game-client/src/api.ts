@@ -85,6 +85,7 @@ const seedLabelMap: Record<string, string> = {
 function normalizeHomeSummary(home: HomeSummaryResponse): HomeSummaryResponse {
   return {
     ...home,
+    protectedUntil: home.protectedUntil ?? null,
     resources: (home.resources ?? []).map((resource) => ({ ...resource })),
     pendingClaims: (home.pendingClaims ?? []).map((claim) => ({ ...claim })),
     primaryActions: (home.primaryActions ?? []).map((action) => ({ ...action })),
@@ -690,6 +691,8 @@ function applyMockRaidTarget(input: ClientRaidActionRequest): ClientRaidActionRe
   targetDetail.actions = [{ label: '保护中', target: 'raid', tone: 'ghost' }];
   const remainingRaidCount = Math.max(mockSceneSnapshot.raid.targets.length, 0);
   mockSceneSnapshot.raid.hero.title = `剩余可掠夺目标 ${formatNumber(remainingRaidCount)} 个`;
+  const protectedUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  mockHomeSnapshot.protectedUntil = protectedUntil;
 
   const rewardSummary = rewards.length > 0 ? `，额外获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : '';
   const reportSummary = `你对${target.name}发起黑盒掠夺，带回 ${formatNumber(depositedGold)} 金币，战损 ${formatNumber(casualties)} 兵${rewardSummary}。`;
@@ -704,7 +707,7 @@ function applyMockRaidTarget(input: ClientRaidActionRequest): ClientRaidActionRe
       goldLoot: depositedGold,
       casualties,
       rewards,
-      protectedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      protectedUntil,
       reportSummary,
     },
   };

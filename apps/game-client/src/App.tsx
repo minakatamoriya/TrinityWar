@@ -260,6 +260,27 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value);
 }
 
+function getRemainingSeconds(dateText?: string | null): number {
+  if (!dateText) {
+    return 0;
+  }
+
+  return Math.max(Math.ceil((new Date(dateText).getTime() - Date.now()) / 1000), 0);
+}
+
+function formatProtectionCountdown(totalSeconds: number): string {
+  const safeSeconds = Math.max(totalSeconds, 0);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
 function findResourceByTone(tone: HomeSummaryResponse['resources'][number]['tone'], resources: HomeSummaryResponse['resources']): HomeSummaryResponse['resources'][number] | undefined {
   return resources.find((resource) => resource.tone === tone);
 }
@@ -508,6 +529,8 @@ function App(): JSX.Element {
   const taxPending = pendingClaims.find((claim) => claim.source === 'tax');
   const factionPending = pendingClaims.find((claim) => claim.source === 'faction');
   const totalPending = pendingClaims.reduce((sum, claim) => sum + Number(claim.value.replace(/,/g, '')), 0);
+  const protectionRemainingSeconds = getRemainingSeconds(home.protectedUntil);
+  const isProtectionActive = protectionRemainingSeconds > 0;
   const resourceCards = home.resources.map((resource) => ({
     resource,
     progress: parseCapacityResourceValue(resource.value),
@@ -1126,11 +1149,11 @@ function App(): JSX.Element {
                   <span className="season-progress-inline-label">{seasonProgress.label}</span>
                   <span className="season-progress-inline-detail">{seasonProgress.detail}</span>
                 </div>
+                <button className="ghost-button top-action-button" onClick={() => showToast('签到得奖券，日常活动。')} type="button">
+                  活动
+                </button>
                 <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留好友入口，后续可继续补好友列表。')} type="button">
                   好友
-                </button>
-                <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留商城入口，后续可继续补礼包、月卡和折扣链路。')} type="button">
-                  商城
                 </button>
                 <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留设置入口，后续可继续补音效、账号和调试开关。')} type="button">
                   设置
@@ -1148,6 +1171,7 @@ function App(): JSX.Element {
               <section className="resource-dock resource-dock-global">
                 {resourceCards.map(({ resource, progress }) => {
                   const isVaultResource = resource.tone === 'vault';
+                  const isProtectedVault = isVaultResource && isProtectionActive;
                   const pulseTone = resource.tone === 'vault'
                     ? resourcePulse.vaultTone
                     : resource.tone === 'army'
@@ -1159,13 +1183,19 @@ function App(): JSX.Element {
                       ? resourcePulse.armyToken
                       : 0;
                   const pulseToneClass = pulseTone ? ` pulse-${pulseTone}` : '';
-                  const amountLabel = resource.tone === 'army' ? '驻守兵力' : '当前持有';
+                  const amountLabel = isProtectedVault ? '保护期' : resource.tone === 'army' ? '驻守兵力' : '当前持有';
                   const isArmyResource = resource.tone === 'army';
+                  const footerValue = isProtectedVault
+                    ? formatProtectionCountdown(protectionRemainingSeconds)
+                    : `${Math.round(progress.ratio * 100)}%`;
 
                   const cardContent = (
                     <>
                       <div className="resource-dock-head">
-                        <span className="resource-name">{resource.label}</span>
+                        <span className="resource-name">
+                          {resource.label}
+                          {isProtectedVault ? <span className="resource-protection-tag">◆ 防护中</span> : null}
+                        </span>
                         <span className="resource-dock-capacity">上限 {formatNumber(progress.capacity)}</span>
                       </div>
                       <strong className="resource-dock-amount">{formatNumber(progress.current)}</strong>
@@ -1174,13 +1204,13 @@ function App(): JSX.Element {
                       </div>
                       <div className="resource-dock-foot">
                         <span>{amountLabel}</span>
-                        <span>{isArmyResource ? '前往部队查看' : `${Math.round(progress.ratio * 100)}%`}</span>
+                        <span>{footerValue}</span>
                       </div>
                     </>
                   );
 
                   return (
-                    <div className={`resource-dock-card resource-dock-card-${resource.tone}${pulseToneClass}`} key={`${resource.label}-${isVaultResource || isArmyResource ? pulseToken : 'steady'}`}>
+                    <div className={`resource-dock-card resource-dock-card-${resource.tone}${isProtectedVault ? ' resource-dock-card-protected' : ''}${pulseToneClass}`} key={`${resource.label}-${isVaultResource || isArmyResource ? pulseToken : 'steady'}`}>
                       {cardContent}
                     </div>
                   );
@@ -1315,7 +1345,7 @@ function App(): JSX.Element {
             />
           ) : null}
           {collectOverflowState ? (
-            <div className="modal-backdrop">
+            <div className="modal-backdrop collect-overflow-backdrop">
               <div className="modal-card transfer-card collect-overflow-card">
                 <div>
                   <p className="eyebrow">金币将溢出</p>

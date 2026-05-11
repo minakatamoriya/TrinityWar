@@ -437,6 +437,28 @@ button {
   background: linear-gradient(180deg, rgba(118, 92, 58, 0.38), rgba(55, 43, 31, 0.74));
 }
 
+.resource-dock-card-protected {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.28), transparent 30%),
+    linear-gradient(180deg, rgba(226, 234, 244, 0.24), rgba(71, 61, 50, 0.8));
+  border-color: rgba(235, 242, 255, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 10px 28px rgba(111, 135, 164, 0.16);
+}
+
+.resource-dock-card-protected::before {
+  content: '';
+  position: absolute;
+  inset: -45% auto auto -30%;
+  width: 62%;
+  height: 180%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.08) 35%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0.08) 65%, transparent 100%);
+  transform: rotate(24deg);
+  animation: resourceProtectionShine 3.4s linear infinite;
+  pointer-events: none;
+}
+
 .resource-dock-card-army {
   background: linear-gradient(180deg, rgba(79, 96, 57, 0.42), rgba(41, 57, 34, 0.76));
 }
@@ -450,10 +472,26 @@ button {
 }
 
 .resource-dock-head .resource-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #fff3dc;
+}
+
+.resource-protection-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.12);
+  color: #f7fbff;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
 }
 
 .resource-dock-capacity,
@@ -472,6 +510,11 @@ button {
 .resource-dock-card-vault .resource-dock-amount {
   color: #ffd66b;
   text-shadow: 0 0 16px rgba(255, 214, 107, 0.24);
+}
+
+.resource-dock-card-protected .resource-dock-amount {
+  color: #ffffff;
+  text-shadow: 0 0 18px rgba(255, 255, 255, 0.46), 0 0 30px rgba(198, 221, 248, 0.2);
 }
 
 .resource-dock-card-army .resource-dock-amount {
@@ -498,6 +541,35 @@ button {
 
 .resource-dock-progress-fill-army {
   background: linear-gradient(90deg, #b5ef88 0%, #53995a 100%);
+}
+
+.resource-dock-card-protected .resource-dock-progress-fill-vault {
+  background: linear-gradient(90deg, #ffffff 0%, #dfe8f3 48%, #aebccc 100%);
+}
+
+@keyframes resourceProtectionShine {
+  0% {
+    transform: translate3d(-40%, 0, 0) rotate(24deg);
+    opacity: 0;
+  }
+
+  12% {
+    opacity: 0.3;
+  }
+
+  34% {
+    opacity: 0.8;
+  }
+
+  56% {
+    transform: translate3d(185%, 0, 0) rotate(24deg);
+    opacity: 0;
+  }
+
+  100% {
+    transform: translate3d(185%, 0, 0) rotate(24deg);
+    opacity: 0;
+  }
 }
 
 .resource-strip-home {
@@ -914,16 +986,17 @@ button {
 
 .top-toast {
   position: absolute;
-  top: 54px;
+  top: 0;
   left: 16px;
   right: 16px;
-  z-index: 12;
+  z-index: 999;
   padding: 10px 14px;
   border-radius: 16px;
   border: 1px solid rgba(255, 248, 234, 0.12);
   backdrop-filter: blur(10px);
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
-  animation: toastSlideIn 220ms ease-out;
+  transform-origin: top center;
+  animation: toastSlideDown 240ms cubic-bezier(.2, .8, .2, 1);
 }
 
 .top-toast span {
@@ -961,10 +1034,10 @@ button {
   100% { transform: scale(1); }
 }
 
-@keyframes toastSlideIn {
+@keyframes toastSlideDown {
   0% {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-18px);
   }
   100% {
     opacity: 1;
@@ -1101,6 +1174,11 @@ button {
 .collect-overflow-card {
   display: grid;
   gap: 12px;
+}
+
+.collect-overflow-backdrop {
+  z-index: 1200;
+  align-items: center;
 }
 
 .farm-progress-fill {
@@ -1883,7 +1961,6 @@ button {
 @media (max-width: 480px) {
   .army-training-queue-meta,
   .army-recruit-stat-grid,
-  .army-recruit-preview-grid,
   .army-recruit-actionbar {
     grid-template-columns: 1fr;
   }
@@ -2704,7 +2781,7 @@ button {
     justify-content: flex-end;
     flex-wrap: nowrap;
     padding: 10px 12px 8px;
-    background: rgba(18, 14, 13, 0.84);
+    /* background: rgba(18, 14, 13, 0.84); */
   }
 
   .summary-card,
@@ -2728,6 +2805,16 @@ button {
     max-height: 72dvh;
     overflow-y: auto;
     border-radius: 22px 22px 18px 18px;
+  }
+
+  .collect-overflow-backdrop {
+    align-items: center;
+    padding: 20px 12px;
+  }
+
+  .collect-overflow-card {
+    width: min(520px, 100%);
+    border-radius: 18px;
   }
 
   .bottom-dock {

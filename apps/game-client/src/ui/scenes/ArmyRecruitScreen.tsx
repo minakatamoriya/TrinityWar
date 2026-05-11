@@ -94,14 +94,14 @@ export function ArmyRecruitScreen(props: ArmyRecruitScreenProps): JSX.Element {
                 <span>剩余时间</span>
                 <strong>{formatDuration(queueRemainingSeconds)}</strong>
               </div>
-              <div className="army-training-meta-item">
+              {/* <div className="army-training-meta-item">
                 <span>完成时刻</span>
                 <strong>{formatClockTime(trainingQueue.readyAt)}</strong>
               </div>
               <div className="army-training-meta-item">
                 <span>已扣金币</span>
                 <strong>{formatNumber(trainingQueue.totalCost)}</strong>
-              </div>
+              </div> */}
             </>
           ) : (
             <p className="army-training-empty-text">金币会在点击确认时立即扣除，兵力会在倒计时结束后统一入列。</p>

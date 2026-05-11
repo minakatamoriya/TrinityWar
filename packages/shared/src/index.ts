@@ -70,6 +70,7 @@ export interface HomeSummaryResponse {
   staminaStatus: string;
   fieldStatus: string;
   reportStatus: string;
+  protectedUntil: string | null;
   resources: HomeResourceSummary[];
   pendingClaims: ClientPendingClaimSummary[];
   primaryActions: HomeActionItem[];

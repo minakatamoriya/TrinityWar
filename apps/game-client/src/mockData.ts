@@ -37,6 +37,7 @@ export const mockHomeSummary: HomeSummaryResponse = {
   staminaStatus: '免费掠夺 2/3',
   fieldStatus: '丰熟田地 1 块，成熟中 1 块',
   reportStatus: '掠夺动态 2，免费复仇 1',
+  protectedUntil: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
   resources: [
     { label: '金币', value: '4,280 / 5,000', tone: 'vault' },
     { label: '战力', value: '40 / 100', tone: 'army' },
