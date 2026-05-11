@@ -32,14 +32,6 @@ function formatDuration(totalSeconds: number): string {
   return `${minutes}分 ${seconds}秒`;
 }
 
-function formatClockTime(dateText: string): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(new Date(dateText));
-}
-
 export function ArmyRecruitScreen(props: ArmyRecruitScreenProps): JSX.Element {
   const {
     currentArmy,

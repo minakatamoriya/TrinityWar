@@ -22,6 +22,8 @@ import {
 } from '@trinitywar/shared';
 import { mockBootstrap, mockHomeSummary, mockRaidTargetDetails, mockSceneContent } from './mockData';
 
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
+
 type DataSource = 'api' | 'mock';
 
 interface DataEnvelope<T> {
@@ -100,13 +102,21 @@ function cloneSceneContent(scenes: ClientSceneContentResponse): ClientSceneConte
   return structuredClone(scenes);
 }
 
+function buildApiUrl(path: string): string {
+  if (!apiBaseUrl) {
+    return path;
+  }
+
+  return path.startsWith('/') ? `${apiBaseUrl}${path}` : `${apiBaseUrl}/${path}`;
+}
+
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers ?? {});
   if (!headers.has('Accept')) {
     headers.set('Accept', 'application/json');
   }
 
-  const response = await fetch(path, {
+  const response = await fetch(buildApiUrl(path), {
     ...init,
     headers,
   });

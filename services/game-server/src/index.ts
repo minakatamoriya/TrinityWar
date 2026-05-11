@@ -7,6 +7,8 @@ import { clientHomeRoutes } from './routes/client-home.js';
 import { systemRoutes } from './routes/system.js';
 
 const server = Fastify({ logger: true });
+const serverHost = process.env.HOST ?? '0.0.0.0';
+const serverPort = Number(process.env.PORT ?? 3000);
 
 const buildServer = async (): Promise<void> => {
   await registerCors(server);
@@ -21,7 +23,7 @@ const buildServer = async (): Promise<void> => {
 const start = async (): Promise<void> => {
   try {
     await buildServer();
-    await server.listen({ port: 3000, host: '0.0.0.0' });
+    await server.listen({ port: serverPort, host: serverHost });
   } catch (error) {
     server.log.error(error);
     process.exit(1);

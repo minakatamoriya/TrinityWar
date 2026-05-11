@@ -14,6 +14,12 @@
 2. 运行 `npm run dev:client` 启动验证前端。
 3. 如需联调，再额外运行 `npm run dev:server`。
 
+## API Environment
+
+1. 默认情况下，前端直接请求同域名下的 `/api`，本地开发继续通过 Vite 代理转发到 `http://127.0.0.1:3000`。
+2. 需要连接独立测试服时，在 `apps/game-client/.env.local` 中设置 `VITE_API_BASE_URL=https://your-test-domain.com`。
+3. 构建部署后，前端会请求 `${VITE_API_BASE_URL}/api/client/...`；如果变量留空，则仍请求当前域名下的 `/api/client/...`。
+
 ## Current Layout
 
 - `src/App.tsx`: 页面壳、导航、弹窗和本地交互状态。

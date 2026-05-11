@@ -1,0 +1,11 @@
+node_modules
+**/node_modules
+dist
+**/dist
+.git
+.gitignore
+.vscode
+coverage
+npm-debug.log*
+apps/game-client/.env.local
+apps/game-admin/.env.local

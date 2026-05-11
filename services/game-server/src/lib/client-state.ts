@@ -542,6 +542,7 @@ export function buildHomeSummary(): HomeSummaryResponse {
     staminaStatus: buildStaminaStatus(),
     fieldStatus: buildFieldStatus(),
     reportStatus: buildReportStatus(),
+    protectedUntil: null,
     resources: [
       {
         label: '金币',
