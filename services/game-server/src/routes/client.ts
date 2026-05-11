@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { APP_NAME, CLIENT_API_PREFIX, type ClientBootstrapResponse } from '@trinitywar/shared';
+import { CLIENT_API_PREFIX, type ClientBootstrapResponse } from '@trinitywar/shared';
+import { buildClientBootstrap } from '../lib/client-state.js';
 
 export const clientRoutes: FastifyPluginAsync = async (server) => {
   server.get<{ Reply: ClientBootstrapResponse }>(`${CLIENT_API_PREFIX}/bootstrap`, {
@@ -24,22 +25,27 @@ export const clientRoutes: FastifyPluginAsync = async (server) => {
               },
               required: ['seasonNumber', 'currentWeek', 'totalWeeks'],
             },
+            backpack: {
+              type: 'object',
+              properties: {
+                seedInventory: {
+                  type: 'object',
+                  additionalProperties: { type: 'number' },
+                },
+                unlockedSeedIds: {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+                starterSeedClaimed: { type: 'boolean' },
+              },
+              required: ['seedInventory', 'unlockedSeedIds', 'starterSeedClaimed'],
+            },
           },
-          required: ['app', 'env', 'version', 'serverTime', 'season'],
+          required: ['app', 'env', 'version', 'serverTime', 'season', 'backpack'],
         },
       },
     },
   }, async () => {
-    return {
-      app: APP_NAME,
-      env: 'local',
-      version: '0.1.0',
-      serverTime: new Date().toISOString(),
-      season: {
-        seasonNumber: 3,
-        currentWeek: 1,
-        totalWeeks: 4,
-      },
-    };
+    return buildClientBootstrap();
   });
 };

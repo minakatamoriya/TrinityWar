@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
 import type {
+  ClientArmyTrainingQueue,
+  ClientCollectFieldRequest,
+  ClientCollectFieldResponse,
+  ClientRaidActionRequest,
+  ClientRecruitArmyRequest,
+  ClientFactionDonateRequest,
   ClientBuildingUpgradeId,
   ClientClaimPendingRequest,
   ClientRaidTarget,
@@ -8,9 +14,10 @@ import type {
   ClientSceneKey,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { claimPendingEarnings, collectFieldEarnings, loadClientViewModel, loadRaidTargetDetail, resetDemoExperimentState, startFieldCultivation, type ClientViewModel, upgradeClientBuilding } from './api';
+import { ARMY_RECRUIT_GOLD_COST_PER_UNIT } from '@trinitywar/shared';
+import { claimPendingEarnings, claimStarterSeedPack, collectFieldEarnings, donateFactionResources, loadClientViewModel, loadRaidTargetDetail, raidClientTarget, recruitArmyUnits, resetDemoExperimentState, startFieldCultivation, type ClientViewModel, upgradeClientBuilding } from './api';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
-import { RaidScene } from './ui/raid/RaidScene';
+import { ArmyScene } from './ui/scenes/ArmyScene';
 import { BuildingScene } from './ui/scenes/BuildingScene';
 import { FactionScene } from './ui/scenes/FactionScene';
 import { FarmScene } from './ui/scenes/FarmScene';
@@ -18,19 +25,13 @@ import { HomeScene } from './ui/scenes/HomeScene';
 import { ReportScene } from './ui/scenes/ReportScene';
 import { SeedSelectionScreen } from './ui/scenes/SeedSelectionScreen';
 
-type ReportTabKey = 'defense' | 'attack';
+type RaidHubTabKey = 'targets' | 'reports' | 'warrants';
 type FactionTabKey = 'overview' | 'donate' | 'rank';
 
 interface ToastState {
   id: number;
   message: string;
   tone: 'info' | 'success' | 'error';
-}
-
-interface RaidResultState {
-  targetName: string;
-  summary: string;
-  loot: string;
 }
 
 interface RaidTargetModalState {
@@ -62,12 +63,21 @@ interface SeedRewardModalState {
   items: Array<{
     seedId: string;
     quantity: number;
+    label?: string;
   }>;
 }
 
 interface SeedSelectionState {
   fieldId: string;
   fieldCode: string;
+}
+
+interface CollectOverflowState {
+  fieldId: string;
+  fieldCode: string;
+  collectMode: ClientCollectFieldRequest['collectMode'];
+  pendingYield: number;
+  overflowGold: number;
 }
 
 const homeTaskItems: HomeTaskItem[] = [
@@ -86,8 +96,8 @@ const homeTaskItems: HomeTaskItem[] = [
   {
     id: 'raid-target',
     title: '发起一次掠夺',
-    description: '跳转到掠夺页，直接查看匿名目标并验证出兵。',
-    scene: 'raid',
+    description: '跳转到新的掠夺页，在目标列表里直接挑选匿名目标。',
+    scene: 'report',
   },
 ];
 
@@ -121,14 +131,22 @@ const emptySeedInventory = seedCatalog.reduce<Record<string, number>>((inventory
 interface ResourcePulseState {
   vaultTone: 'gain' | 'spend' | null;
   vaultToken: number;
+  armyTone: 'gain' | 'spend' | null;
+  armyToken: number;
+}
+
+interface ResourceProgressValue {
+  current: number;
+  capacity: number;
+  ratio: number;
 }
 
 const sceneNavLabels: Record<ClientSceneKey, string> = {
-  home: '主城',
-  building: '建筑',
+  home: '首页',
+  building: '主城',
   farm: '农场',
-  raid: '掠夺',
-  report: '战报',
+  raid: '部队',
+  report: '掠夺',
   faction: '阵营',
 };
 
@@ -178,6 +196,18 @@ function formatServerTime(serverTime: string): string {
   }).format(new Date(serverTime));
 }
 
+function parseFieldYield(description: string): number {
+  const match = description.match(/收取金额\s([\d,]+)/);
+  return match ? Number(match[1].replace(/,/g, '')) : 0;
+}
+
+function getMaxRecruitable(currentGold: number, currentArmy: number, armyCapacity: number, queuedArmyCount = 0): number {
+  const remainingCapacity = Math.max(armyCapacity - currentArmy - queuedArmyCount, 0);
+  const affordableCount = Math.floor(currentGold / ARMY_RECRUIT_GOLD_COST_PER_UNIT);
+
+  return Math.min(remainingCapacity, affordableCount);
+}
+
 function buildSeasonProgress(status: ClientViewModel['bootstrap']['season']): {
   label: string;
   detail: string;
@@ -217,7 +247,7 @@ function buildActionMessage(label: string, context?: string): string {
   return `${subject}该入口已经接入前端交互壳，后续可以继续补确认弹窗、接口联调和状态回写。`;
 }
 
-function parseVaultValue(value: string): { current: number; capacity: number; ratio: number } {
+function parseCapacityResourceValue(value: string): ResourceProgressValue {
   const parts = value.split('/').map((part) => Number(part.replace(/,/g, '').trim()));
   const current = parts[0] ?? 0;
   const capacity = parts[1] ?? 1;
@@ -230,8 +260,20 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value);
 }
 
-function findResource(label: string, resources: HomeSummaryResponse['resources']): HomeSummaryResponse['resources'][number] | undefined {
-  return resources.find((resource) => resource.label === label);
+function findResourceByTone(tone: HomeSummaryResponse['resources'][number]['tone'], resources: HomeSummaryResponse['resources']): HomeSummaryResponse['resources'][number] | undefined {
+  return resources.find((resource) => resource.tone === tone);
+}
+
+function getDefaultRecruitCount(currentGold: number, currentArmy: number, armyCapacity: number, queuedArmyCount = 0): number {
+  const remainingCapacity = Math.max(armyCapacity - currentArmy - queuedArmyCount, 0);
+  const affordableCount = Math.floor(currentGold / ARMY_RECRUIT_GOLD_COST_PER_UNIT);
+  const maxRecruitable = Math.min(remainingCapacity, affordableCount);
+
+  if (maxRecruitable <= 0) {
+    return 0;
+  }
+
+  return Math.max(Math.floor(maxRecruitable / 2), 1);
 }
 
 function getFactionBackground(factionName: string): string {
@@ -249,7 +291,7 @@ function getSceneBackground(scene: ClientSceneKey, factionName: string): string 
 function App(): JSX.Element {
   const [viewModel, setViewModel] = useState<ClientViewModel | null>(null);
   const [activeScene, setActiveScene] = useState<ClientSceneKey>('home');
-  const [reportTab, setReportTab] = useState<ReportTabKey>('defense');
+  const [raidHubTab, setRaidHubTab] = useState<RaidHubTabKey>('targets');
   const [factionTab, setFactionTab] = useState<FactionTabKey>('overview');
   const [toast, setToast] = useState<ToastState | null>(null);
   const [selectedRaidTargetId, setSelectedRaidTargetId] = useState<string>('');
@@ -257,21 +299,37 @@ function App(): JSX.Element {
   const [raidTargetDetail, setRaidTargetDetail] = useState<ClientRaidTargetDetailResponse | null>(null);
   const [raidTargetDetailLoading, setRaidTargetDetailLoading] = useState(false);
   const [raidTargetDetailError, setRaidTargetDetailError] = useState<string | null>(null);
-  const [raidResult, setRaidResult] = useState<RaidResultState | null>(null);
   const [claimingSource, setClaimingSource] = useState<ClientClaimPendingRequest['source'] | null>(null);
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null);
   const [farmTick, setFarmTick] = useState(0);
   const [resourcePulse, setResourcePulse] = useState<ResourcePulseState>({
     vaultTone: null,
     vaultToken: 0,
+    armyTone: null,
+    armyToken: 0,
   });
   const [seedInventory, setSeedInventory] = useState<Record<string, number>>(emptySeedInventory);
   const [unlockedSeedIds, setUnlockedSeedIds] = useState<string[]>(defaultUnlockedSeedIds);
   const [starterSeedClaimed, setStarterSeedClaimed] = useState(false);
   const [seedRewardModal, setSeedRewardModal] = useState<SeedRewardModalState | null>(null);
   const [seedSelectionState, setSeedSelectionState] = useState<SeedSelectionState | null>(null);
+  const [armyRecruitCount, setArmyRecruitCount] = useState(0);
+  const [armyQueueRefreshReadyAt, setArmyQueueRefreshReadyAt] = useState<string | null>(null);
   const [selectedSeedId, setSelectedSeedId] = useState<string>('lingmai');
   const [fieldSeedAssignments, setFieldSeedAssignments] = useState<Record<string, string>>({});
+  const [collectOverflowState, setCollectOverflowState] = useState<CollectOverflowState | null>(null);
+
+  const syncSeedBackpackState = (backpack: ClientViewModel['bootstrap']['backpack']): void => {
+    setSeedInventory({
+      ...emptySeedInventory,
+      ...backpack.seedInventory,
+    });
+    setUnlockedSeedIds(backpack.unlockedSeedIds.length > 0 ? backpack.unlockedSeedIds : defaultUnlockedSeedIds);
+    setStarterSeedClaimed(backpack.starterSeedClaimed);
+    if (!backpack.unlockedSeedIds.includes(selectedSeedId)) {
+      setSelectedSeedId(backpack.unlockedSeedIds[0] ?? 'lingmai');
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -283,6 +341,7 @@ function App(): JSX.Element {
 
       setViewModel(data);
       setSelectedRaidTargetId(data.scenes.raid.targets[0]?.id ?? '');
+      syncSeedBackpackState(data.bootstrap.backpack);
     });
 
     return () => {
@@ -294,6 +353,25 @@ function App(): JSX.Element {
     if (!viewModel) {
       return;
     }
+
+    const nextVaultResource = findResourceByTone('vault', viewModel.home.resources);
+    const nextArmyResource = findResourceByTone('army', viewModel.home.resources);
+    const nextVaultProgress = nextVaultResource ? parseCapacityResourceValue(nextVaultResource.value) : { current: 0, capacity: 0, ratio: 0 };
+    const nextArmyProgress = nextArmyResource ? parseCapacityResourceValue(nextArmyResource.value) : { current: 0, capacity: 0, ratio: 0 };
+    const nextQueuedArmyCount = viewModel.scenes.army.queue?.queuedUnits ?? 0;
+    const maxRecruitable = getMaxRecruitable(nextVaultProgress.current, nextArmyProgress.current, nextArmyProgress.capacity, nextQueuedArmyCount);
+
+    setArmyRecruitCount((current) => {
+      if (maxRecruitable <= 0) {
+        return 0;
+      }
+
+      if (current <= 0 || current > maxRecruitable) {
+        return getDefaultRecruitCount(nextVaultProgress.current, nextArmyProgress.current, nextArmyProgress.capacity, nextQueuedArmyCount);
+      }
+
+      return current;
+    });
 
     setFarmTick(0);
 
@@ -371,6 +449,42 @@ function App(): JSX.Element {
     };
   }, [raidTargetModal]);
 
+  useEffect(() => {
+    const queue = viewModel?.scenes.army.queue;
+
+    if (!queue) {
+      setArmyQueueRefreshReadyAt(null);
+      return;
+    }
+
+    const readyAt = queue.readyAt;
+    if (Date.now() < new Date(readyAt).getTime() || armyQueueRefreshReadyAt === readyAt) {
+      return;
+    }
+
+    let active = true;
+    setArmyQueueRefreshReadyAt(readyAt);
+
+    void loadClientViewModel().then((data) => {
+      if (!active) {
+        return;
+      }
+
+      triggerResourcePulse(data.home);
+      setViewModel(data);
+    }).catch(() => {
+      if (!active) {
+        return;
+      }
+
+      setArmyQueueRefreshReadyAt(null);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [armyQueueRefreshReadyAt, farmTick, viewModel]);
+
   if (!viewModel) {
     return (
       <main className="loading-shell">
@@ -385,16 +499,25 @@ function App(): JSX.Element {
 
   const { bootstrap, home, scenes, usingMock } = viewModel;
   const selectedRaidTarget = scenes.raid.targets.find((target) => target.id === selectedRaidTargetId) ?? scenes.raid.targets[0];
-  const activeReportEntries = reportTab === 'defense' ? scenes.report.defense : scenes.report.attack;
+  const mergedReportEntries = [...scenes.report.attack, ...scenes.report.defense]
+    .filter((entry) => entry.title !== '系统结算')
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
   const activeBackgroundImage = `url(${getSceneBackground(activeScene, home.factionName)})`;
-  const vaultResource = findResource('我的金币', home.resources);
+  const vaultResource = findResourceByTone('vault', home.resources);
   const pendingClaims = home.pendingClaims ?? [];
   const taxPending = pendingClaims.find((claim) => claim.source === 'tax');
   const factionPending = pendingClaims.find((claim) => claim.source === 'faction');
   const totalPending = pendingClaims.reduce((sum, claim) => sum + Number(claim.value.replace(/,/g, '')), 0);
-  const vaultProgress = vaultResource ? parseVaultValue(vaultResource.value) : null;
+  const resourceCards = home.resources.map((resource) => ({
+    resource,
+    progress: parseCapacityResourceValue(resource.value),
+  }));
+  const vaultProgress = vaultResource ? parseCapacityResourceValue(vaultResource.value) : { current: 0, capacity: 0, ratio: 0 };
+  const armyResource = findResourceByTone('army', home.resources);
+  const armyProgress = armyResource ? parseCapacityResourceValue(armyResource.value) : { current: 0, capacity: 0, ratio: 0 };
   const seasonProgress = buildSeasonProgress(bootstrap.season);
   const hourlyTax = parseHourlyTax(taxPending?.description);
+  const armyTrainingQueue: ClientArmyTrainingQueue | null = scenes.army.queue;
   const seedCatalogMap = new Map(seedCatalog.map((seed) => [seed.id, seed]));
   const seedGroups = (['common', 'rare', 'legendary'] as const).map((rarity) => ({
     rarity,
@@ -405,7 +528,6 @@ function App(): JSX.Element {
       quantity: seedInventory[seed.id] ?? 0,
     })),
   }));
-  const starterSeedCount = seedInventory.lingmai ?? 0;
   const farmFields = scenes.farm.fields.map((field) => {
     const assignedSeedId = fieldSeedAssignments[field.id];
     const assignedSeed = assignedSeedId ? seedCatalogMap.get(assignedSeedId) : undefined;
@@ -430,14 +552,62 @@ function App(): JSX.Element {
   };
 
   const triggerResourcePulse = (nextHome: HomeSummaryResponse): void => {
-    const currentVaultAmount = vaultResource ? parseVaultValue(vaultResource.value).current : 0;
-    const nextVaultResource = findResource('我的金币', nextHome.resources);
-    const nextVaultAmount = nextVaultResource ? parseVaultValue(nextVaultResource.value).current : 0;
+    const currentVaultAmount = vaultResource ? parseCapacityResourceValue(vaultResource.value).current : 0;
+    const nextVaultResource = findResourceByTone('vault', nextHome.resources);
+    const nextVaultAmount = nextVaultResource ? parseCapacityResourceValue(nextVaultResource.value).current : 0;
+    const currentArmyAmount = armyResource ? parseCapacityResourceValue(armyResource.value).current : 0;
+    const nextArmyResource = findResourceByTone('army', nextHome.resources);
+    const nextArmyAmount = nextArmyResource ? parseCapacityResourceValue(nextArmyResource.value).current : 0;
 
     setResourcePulse((current) => ({
       vaultTone: nextVaultAmount === currentVaultAmount ? current.vaultTone : nextVaultAmount > currentVaultAmount ? 'gain' : 'spend',
       vaultToken: nextVaultAmount === currentVaultAmount ? current.vaultToken : current.vaultToken + 1,
+      armyTone: nextArmyAmount === currentArmyAmount ? current.armyTone : nextArmyAmount > currentArmyAmount ? 'gain' : 'spend',
+      armyToken: nextArmyAmount === currentArmyAmount ? current.armyToken : current.armyToken + 1,
     }));
+  };
+
+  const handleRecruitArmy = async (): Promise<void> => {
+    if (pendingActionKey === 'army:recruit') {
+      return;
+    }
+
+    const input: ClientRecruitArmyRequest = {
+      recruitCount: armyRecruitCount,
+    };
+
+    setPendingActionKey('army:recruit');
+
+    try {
+      const result = await recruitArmyUnits(input);
+      applyMutationResult(result);
+    } catch {
+      showToast('当前无法完成造兵，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleFactionDonate = async (goldAmount: number, armyAmount: number): Promise<void> => {
+    if (pendingActionKey === 'faction:donate') {
+      return;
+    }
+
+    const input: ClientFactionDonateRequest = {
+      goldAmount,
+      armyAmount,
+    };
+
+    setPendingActionKey('faction:donate');
+
+    try {
+      const result = await donateFactionResources(input);
+      applyMutationResult(result);
+    } catch {
+      showToast('当前无法完成阵营上缴，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
   };
 
   const handleClaimPending = async (source: ClientClaimPendingRequest['source']): Promise<void> => {
@@ -481,13 +651,14 @@ function App(): JSX.Element {
 
       showToast(result.summary, 'success');
       setActiveScene('home');
-      setReportTab('defense');
+      setRaidHubTab('targets');
       setFactionTab('overview');
-      setRaidResult(null);
       setSeedInventory(emptySeedInventory);
       setUnlockedSeedIds(defaultUnlockedSeedIds);
       setStarterSeedClaimed(false);
       setSeedRewardModal(null);
+      setArmyRecruitCount(0);
+      setArmyQueueRefreshReadyAt(null);
       setSeedSelectionState(null);
       setSelectedSeedId('lingmai');
       setFieldSeedAssignments({});
@@ -509,6 +680,7 @@ function App(): JSX.Element {
       const nextViewModel = await loadClientViewModel();
       setViewModel(nextViewModel);
       setSelectedRaidTargetId(nextViewModel.scenes.raid.targets[0]?.id ?? '');
+      syncSeedBackpackState(nextViewModel.bootstrap.backpack);
       showToast('目标列表已刷新，可以重新挑选掠夺对象。', 'success');
     } catch {
       showToast('当前无法刷新目标列表，请稍后重试。', 'error');
@@ -550,6 +722,18 @@ function App(): JSX.Element {
     });
 
     showToast(result.summary, 'success');
+  };
+
+  const navigateToScene = (scene: ClientSceneKey, nextRaidHubTab?: RaidHubTabKey): void => {
+    setActiveScene(scene);
+
+    if (scene === 'report' && nextRaidHubTab) {
+      setRaidHubTab(nextRaidHubTab);
+    }
+
+    if (scene !== 'report' && nextRaidHubTab) {
+      setRaidHubTab(nextRaidHubTab);
+    }
   };
 
   const handleBuildingAction = async (action: ClientSceneAction, buildingId: ClientBuildingUpgradeId, context: string): Promise<void> => {
@@ -605,19 +789,68 @@ function App(): JSX.Element {
     }
 
     if (action.label.includes('收取')) {
+      const collectMode: ClientCollectFieldRequest['collectMode'] = action.label.includes('提前') ? 'early' : 'ripe';
+      const field = farmFields.find((item) => item.id === fieldId);
+      const pendingYield = field ? parseFieldYield(field.description) : 0;
+      const overflowGold = Math.max(vaultProgress.current + pendingYield - vaultProgress.capacity, 0);
+
+      if (pendingYield > 0 && overflowGold > 0 && !collectOverflowState) {
+        setCollectOverflowState({
+          fieldId,
+          fieldCode: context,
+          collectMode,
+          pendingYield,
+          overflowGold,
+        });
+        return;
+      }
+
       setPendingActionKey(actionKey);
 
       try {
-        const result = await collectFieldEarnings({
+        const result: ClientCollectFieldResponse = await collectFieldEarnings({
           fieldId,
-          collectMode: action.label.includes('提前') ? 'early' : 'ripe',
+          collectMode,
         });
         applyMutationResult(result);
+        if (result.result.rewards.length > 0) {
+          setSeedInventory((current) => {
+            const nextInventory = { ...current };
+            result.result.rewards.forEach((reward) => {
+              nextInventory[reward.seedId] = (nextInventory[reward.seedId] ?? 0) + reward.quantity;
+            });
+            return nextInventory;
+          });
+          setUnlockedSeedIds((current) => {
+            const nextIds = new Set(current);
+            result.result.rewards.forEach((reward) => nextIds.add(reward.seedId));
+            return Array.from(nextIds);
+          });
+        }
+        setSeedRewardModal({
+          title: '收取所得',
+          summary: result.result.overflowGold > 0
+            ? `获得 ${formatNumber(result.result.collectedGold)} 金币，另有 ${formatNumber(result.result.overflowGold)} 因金币已满未能入账。`
+            : `获得 ${formatNumber(result.result.collectedGold)} 金币。`,
+          items: [
+            {
+              seedId: 'field-gold',
+              label: '金币',
+              quantity: result.result.collectedGold,
+            },
+            ...result.result.rewards.map((reward) => ({
+              seedId: reward.seedId,
+              quantity: reward.quantity,
+              label: reward.label,
+            })),
+          ],
+        });
         setFieldSeedAssignments((current) => {
           const nextAssignments = { ...current };
           delete nextAssignments[fieldId];
           return nextAssignments;
         });
+        setCollectOverflowState(null);
       } catch {
         showToast(`${context} 当前无法完成收取，请稍后重试。`, 'error');
       } finally {
@@ -631,18 +864,86 @@ function App(): JSX.Element {
 
   const handleSceneAction = (action: ClientSceneAction, context?: string): void => {
     const actionContext = context ?? raidTargetDetail?.name ?? selectedRaidTarget?.name;
-    const actionLoot = selectedRaidTarget?.loot ?? '待结算';
 
     if ((action.label === '确认出兵' || action.label === '发起掠夺') && actionContext) {
-      setRaidResult({
-        targetName: actionContext,
-        summary: `你对${actionContext}发起了一次验证版出兵。`,
-        loot: actionLoot,
-      });
-      setActiveScene('report');
-      setReportTab('attack');
-      setRaidTargetModal(null);
-      showToast(`目标 ${actionContext}，预估可得 ${actionLoot}。`, 'success');
+      const targetId = raidTargetModal?.targetId ?? selectedRaidTarget?.id;
+
+      if (!targetId) {
+        showToast('当前缺少可掠夺目标，请先重新选择目标。', 'error');
+        return;
+      }
+
+      if (pendingActionKey === 'raid:execute') {
+        return;
+      }
+
+      const runRaid = async (): Promise<void> => {
+        const input: ClientRaidActionRequest = {
+          targetId,
+          mode: raidTargetModal?.mode ?? 'raid',
+        };
+
+        setPendingActionKey('raid:execute');
+
+        try {
+          const response = await raidClientTarget(input);
+          triggerResourcePulse(response.home);
+          setViewModel((current) => {
+            if (!current) {
+              return current;
+            }
+
+            return {
+              ...current,
+              home: response.home,
+              scenes: response.scenes,
+            };
+          });
+          setSelectedRaidTargetId(response.scenes.raid.targets[0]?.id ?? '');
+
+          setSeedRewardModal({
+            title: '掠夺所得',
+            summary: `获得 ${formatNumber(response.result.goldLoot)} 金币，战损 ${formatNumber(response.result.casualties)} 兵。`,
+            items: [
+              {
+                seedId: 'raid-gold',
+                label: '金币',
+                quantity: response.result.goldLoot,
+              },
+              ...response.result.rewards.map((reward) => ({
+                seedId: reward.seedId,
+                quantity: reward.quantity,
+                label: reward.label,
+              })),
+            ],
+          });
+
+          if (response.result.rewards.length > 0) {
+            setSeedInventory((current) => {
+              const nextInventory = { ...current };
+
+              response.result.rewards.forEach((reward) => {
+                nextInventory[reward.seedId] = (nextInventory[reward.seedId] ?? 0) + reward.quantity;
+              });
+
+              return nextInventory;
+            });
+            setUnlockedSeedIds((current) => {
+              const nextIds = new Set(current);
+              response.result.rewards.forEach((reward) => nextIds.add(reward.seedId));
+              return Array.from(nextIds);
+            });
+          }
+
+          setRaidTargetModal(null);
+        } catch {
+          showToast(`${actionContext} 当前无法完成掠夺，请稍后重试。`, 'error');
+        } finally {
+          setPendingActionKey(null);
+        }
+      };
+
+      void runRaid();
       return;
     }
 
@@ -666,29 +967,42 @@ function App(): JSX.Element {
     }
 
     if (action.target !== activeScene || action.label.includes('返回') || action.label.includes('打开')) {
-      setActiveScene(normalizeScene(action.target));
+      navigateToScene(normalizeScene(action.target));
     }
 
     showToast(buildActionMessage(action.label, actionContext), 'info');
   };
 
-  const handleClaimStarterSeeds = (): void => {
+  const handleClaimStarterSeeds = async (): Promise<void> => {
     if (starterSeedClaimed) {
       return;
     }
 
-    setSeedInventory((current) => ({
-      ...current,
-      lingmai: (current.lingmai ?? 0) + 3,
-    }));
-    setUnlockedSeedIds((current) => current.includes('lingmai') ? current : [...current, 'lingmai']);
-    setStarterSeedClaimed(true);
-    setSeedRewardModal({
-      title: '领取成功',
-      summary: '已入库新手种子，可直接前往农场开始第一轮培育。',
-      items: [{ seedId: 'lingmai', quantity: 3 }],
-    });
-    showToast('已领取 3 颗灵麦种子。', 'success');
+    if (pendingActionKey === 'home:claim-starter-seeds') {
+      return;
+    }
+
+    setPendingActionKey('home:claim-starter-seeds');
+
+    try {
+      const result = await claimStarterSeedPack();
+      applyMutationResult(result);
+      setSeedInventory((current) => ({
+        ...current,
+        lingmai: (current.lingmai ?? 0) + 3,
+      }));
+      setUnlockedSeedIds((current) => current.includes('lingmai') ? current : [...current, 'lingmai']);
+      setStarterSeedClaimed(true);
+      setSeedRewardModal({
+        title: '获得物品',
+        summary: '',
+        items: [{ seedId: 'lingmai', quantity: 3 }],
+      });
+    } catch {
+      showToast('当前无法领取今日种子，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
   };
 
   const handleConfirmSeedCultivation = async (): Promise<void> => {
@@ -716,7 +1030,7 @@ function App(): JSX.Element {
     setPendingActionKey(actionKey);
 
     try {
-      const result = await startFieldCultivation({ fieldId: seedSelectionState.fieldId });
+      const result = await startFieldCultivation({ fieldId: seedSelectionState.fieldId, seedId: seed.id });
       applyMutationResult(result);
       setSeedInventory((current) => ({
         ...current,
@@ -778,8 +1092,11 @@ function App(): JSX.Element {
               <em>{factionPending?.value ?? '0'}</em>
             </div>
           </div>
-          <button className="rail-alert" onClick={() => showToast('最近 1 次被掠已解锁免费复仇，可直接跳到掠夺页验证复仇链路。')} type="button">
-            战报未读 2
+          <button className="rail-alert" onClick={() => {
+            navigateToScene('report', 'reports');
+            showToast('最近 1 次被掠已解锁免费复仇，已切到掠夺模块的战报页签。');
+          }} type="button">
+            掠夺动态 2
           </button>
         </div>
 
@@ -802,23 +1119,24 @@ function App(): JSX.Element {
           className="phone-frame phone-frame-scene"
           style={{ ['--scene-bg-image' as string]: activeBackgroundImage } as React.CSSProperties}
         >
-          <header className="top-bar">
-            <div className="top-action-group">
-              <div className="season-progress-inline" aria-label="赛季进度">
-                <span className="season-progress-inline-label">{seasonProgress.label}</span>
-                <span className="season-progress-inline-detail">{seasonProgress.detail}</span>
+          <section className="top-dock">
+            <header className="top-bar">
+              <div className="top-action-group">
+                <div className="season-progress-inline" aria-label="赛季进度">
+                  <span className="season-progress-inline-label">{seasonProgress.label}</span>
+                  <span className="season-progress-inline-detail">{seasonProgress.detail}</span>
+                </div>
+                <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留好友入口，后续可继续补好友列表。')} type="button">
+                  好友
+                </button>
+                <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留商城入口，后续可继续补礼包、月卡和折扣链路。')} type="button">
+                  商城
+                </button>
+                <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留设置入口，后续可继续补音效、账号和调试开关。')} type="button">
+                  设置
+                </button>
               </div>
-              <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留好友入口，后续可继续补好友列表。')} type="button">
-                好友
-              </button>
-              <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留商城入口，后续可继续补礼包、月卡和折扣链路。')} type="button">
-                商城
-              </button>
-              <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留设置入口，后续可继续补音效、账号和调试开关。')} type="button">
-                设置
-              </button>
-            </div>
-          </header>
+            </header>
 
           {toast ? (
             <div className={`top-toast top-toast-${toast.tone}`}>
@@ -826,46 +1144,69 @@ function App(): JSX.Element {
             </div>
           ) : null}
 
-          <section className="global-resource-bar">
-            <section className="resource-dock resource-dock-global">
-              {vaultResource && vaultProgress ? (
-                <div className={`resource-dock-card resource-dock-card-vault ${resourcePulse.vaultTone ? `pulse-${resourcePulse.vaultTone}` : ''}`} key={`${vaultResource.label}-${resourcePulse.vaultToken}`}>
-                  <div className="resource-dock-head">
-                    <span className="resource-name">{vaultResource.label}</span>
-                    <span className="resource-dock-capacity">上限 {formatNumber(vaultProgress.capacity)}</span>
-                  </div>
-                  <strong className="resource-dock-amount">{formatNumber(vaultProgress.current)}</strong>
-                  <div className="resource-dock-progress" aria-hidden="true">
-                    <div className="resource-dock-progress-fill resource-dock-progress-fill-vault" style={{ width: `${vaultProgress.ratio * 100}%` }} />
-                  </div>
-                  <div className="resource-dock-foot">
-                    <span>当前持有</span>
-                    <span>{Math.round(vaultProgress.ratio * 100)}%</span>
-                  </div>
-                </div>
-              ) : null}
+            <section className="global-resource-bar">
+              <section className="resource-dock resource-dock-global">
+                {resourceCards.map(({ resource, progress }) => {
+                  const isVaultResource = resource.tone === 'vault';
+                  const pulseTone = resource.tone === 'vault'
+                    ? resourcePulse.vaultTone
+                    : resource.tone === 'army'
+                      ? resourcePulse.armyTone
+                      : null;
+                  const pulseToken = resource.tone === 'vault'
+                    ? resourcePulse.vaultToken
+                    : resource.tone === 'army'
+                      ? resourcePulse.armyToken
+                      : 0;
+                  const pulseToneClass = pulseTone ? ` pulse-${pulseTone}` : '';
+                  const amountLabel = resource.tone === 'army' ? '驻守兵力' : '当前持有';
+                  const isArmyResource = resource.tone === 'army';
+
+                  const cardContent = (
+                    <>
+                      <div className="resource-dock-head">
+                        <span className="resource-name">{resource.label}</span>
+                        <span className="resource-dock-capacity">上限 {formatNumber(progress.capacity)}</span>
+                      </div>
+                      <strong className="resource-dock-amount">{formatNumber(progress.current)}</strong>
+                      <div className="resource-dock-progress" aria-hidden="true">
+                        <div className={`resource-dock-progress-fill resource-dock-progress-fill-${resource.tone}`} style={{ width: `${progress.ratio * 100}%` }} />
+                      </div>
+                      <div className="resource-dock-foot">
+                        <span>{amountLabel}</span>
+                        <span>{isArmyResource ? '前往部队查看' : `${Math.round(progress.ratio * 100)}%`}</span>
+                      </div>
+                    </>
+                  );
+
+                  return (
+                    <div className={`resource-dock-card resource-dock-card-${resource.tone}${pulseToneClass}`} key={`${resource.label}-${isVaultResource || isArmyResource ? pulseToken : 'steady'}`}>
+                      {cardContent}
+                    </div>
+                  );
+                })}
+              </section>
             </section>
           </section>
 
           <section className={`screen-body scene-${activeScene}`}>
             {activeScene === 'home' ? (
               <HomeScene
-                castleLevel={home.castleLevel}
                 claimingTax={claimingSource === 'tax'}
                 hourlyTax={hourlyTax}
                 onClaimTax={() => {
                   void handleClaimPending('tax');
                 }}
                 onClaimStarterSeeds={handleClaimStarterSeeds}
-                onNavigate={setActiveScene}
+                onNavigate={navigateToScene}
                 starterSeedClaimed={starterSeedClaimed}
-                starterSeedCount={starterSeedCount}
                 taxPending={taxPending}
               />
             ) : null}
 
             {activeScene === 'building' ? (
               <BuildingScene
+                castleLevel={home.castleLevel}
                 onUpgradeAction={(action, buildingId, context) => {
                   void handleBuildingAction(action, buildingId, context);
                 }}
@@ -884,43 +1225,57 @@ function App(): JSX.Element {
             ) : null}
 
             {activeScene === 'raid' ? (
-              <RaidScene
+              <ArmyScene
+                armyCapacity={armyProgress.capacity}
+                confirming={pendingActionKey === 'army:recruit'}
+                currentArmy={armyProgress.current}
+                currentGold={vaultProgress.current}
+                onConfirm={() => {
+                  void handleRecruitArmy();
+                }}
+                onSelectCount={setArmyRecruitCount}
+                selectedCount={armyRecruitCount}
+                trainingQueue={armyTrainingQueue}
+                unitCostGold={scenes.army.unitCostGold}
+                unitTrainingSeconds={scenes.army.unitTrainingSeconds}
+              />
+            ) : null}
+
+            {activeScene === 'report' ? (
+              <ReportScene
+                activeTab={raidHubTab}
                 heroTitle={scenes.raid.hero.title}
+                onAction={handleSceneAction}
+                onChangeTab={setRaidHubTab}
                 onOpenTarget={handleOpenRaidTargetModal}
                 onRefresh={() => {
                   void handleRefreshRaidTargets();
                 }}
                 refreshLabel={scenes.raid.hero.action.label}
                 refreshPending={pendingActionKey === 'raid:refresh-targets'}
+                reportEntries={mergedReportEntries}
                 targets={scenes.raid.targets}
-              />
-            ) : null}
-
-            {activeScene === 'report' ? (
-              <ReportScene
-                actions={scenes.report.actions}
-                activeEntries={activeReportEntries}
-                onAction={handleSceneAction}
-                onChangeTab={setReportTab}
-                onDismissResult={() => setRaidResult(null)}
-                raidResult={raidResult}
-                reportTab={reportTab}
               />
             ) : null}
 
             {activeScene === 'faction' ? (
               <FactionScene
-                claiming={claimingSource === 'faction'}
+                contribution={scenes.faction.contribution}
+                currentArmy={armyProgress.current}
+                currentGold={vaultProgress.current}
                 donate={scenes.faction.donate}
+                donating={pendingActionKey === 'faction:donate'}
                 factionPending={factionPending}
                 factionTab={factionTab}
                 hero={scenes.faction.hero}
-                onAction={handleSceneAction}
                 onChangeTab={setFactionTab}
                 onClaim={() => {
                   void handleClaimPending('faction');
                 }}
-                overview={scenes.faction.overview}
+                onDonate={(goldAmount, armyAmount) => {
+                  void handleFactionDonate(goldAmount, armyAmount);
+                }}
+                comparison={scenes.faction.comparison}
                 rankings={scenes.faction.rankings}
               />
             ) : null}
@@ -928,7 +1283,7 @@ function App(): JSX.Element {
 
           <footer className="bottom-dock">
             {sceneKeys.map((scene) => (
-              <button className={`nav-item ${activeScene === scene ? 'active' : ''}`} key={scene} onClick={() => setActiveScene(scene)} type="button">
+              <button className={`nav-item ${activeScene === scene ? 'active' : ''}`} key={scene} onClick={() => navigateToScene(scene)} type="button">
                 {sceneNavLabels[scene]}
               </button>
             ))}
@@ -959,19 +1314,42 @@ function App(): JSX.Element {
               selectedSeedId={selectedSeedId}
             />
           ) : null}
-
+          {collectOverflowState ? (
+            <div className="modal-backdrop">
+              <div className="modal-card transfer-card collect-overflow-card">
+                <div>
+                  <p className="eyebrow">金币将溢出</p>
+                  <h3>是否继续收取？</h3>
+                </div>
+                <p className="panel-text">{collectOverflowState.fieldCode} 本次预计收取 {formatNumber(collectOverflowState.pendingYield)} 金币，其中约 {formatNumber(collectOverflowState.overflowGold)} 会因金币已满无法入账。你可以先去处理金币，再回来收取。</p>
+                <div className="transfer-foot-row">
+                  <button className="ghost-button" onClick={() => setCollectOverflowState(null)} type="button">取消</button>
+                  <button className="secondary-button" onClick={() => {
+                    const nextField = farmFields.find((item) => item.id === collectOverflowState.fieldId);
+                    const nextAction: ClientSceneAction = {
+                      label: collectOverflowState.collectMode === 'early' ? '提前收取' : '成熟收取',
+                      target: 'farm',
+                      tone: collectOverflowState.collectMode === 'early' ? 'secondary' : 'primary',
+                    };
+                    setCollectOverflowState(null);
+                    void handleFarmAction(nextAction, collectOverflowState.fieldId, nextField?.code ?? collectOverflowState.fieldCode);
+                  }} type="button">继续收取</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
           {seedRewardModal ? (
             <div className="seed-reward-modal" role="status" aria-live="polite">
               <div className="seed-reward-card">
                 <p className="eyebrow">{seedRewardModal.title}</p>
-                <h3>种子入库</h3>
-                <p>{seedRewardModal.summary}</p>
+                <h3>{seedRewardModal.title}</h3>
+                {seedRewardModal.summary ? <p>{seedRewardModal.summary}</p> : null}
                 <div className="seed-reward-list">
                   {seedRewardModal.items.map((item) => {
                     const seed = seedCatalogMap.get(item.seedId);
                     return (
-                      <div className="seed-reward-item" key={item.seedId}>
-                        <strong>{seed?.name ?? item.seedId}</strong>
+                      <div className="seed-reward-item" key={`${item.seedId}-${item.label ?? 'default'}`}>
+                        <strong>{item.label ?? seed?.name ?? item.seedId}</strong>
                         <span>x {item.quantity}</span>
                       </div>
                     );

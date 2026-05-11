@@ -67,7 +67,7 @@ export function SeedSelectionScreen(props: SeedSelectionScreenProps): JSX.Elemen
                       <span className="seed-option-count">{seed.unlocked ? `x ${seed.quantity}` : '？？'}</span>
                     </div>
                     <strong>{seed.unlocked ? seed.name : '？？'}</strong>
-                    <p>{seed.unlocked ? seed.description : '尚未现世'}</p>
+                    <p>{seed.unlocked ? seed.description : '尚未发现'}</p>
                   </button>
                 );
               })}

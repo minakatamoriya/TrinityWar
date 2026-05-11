@@ -1,55 +1,101 @@
-import type { ClientReportEntry, ClientSceneAction } from '@trinitywar/shared';
-import { ActionButton } from '../ActionButton';
+import type { ClientRaidTarget, ClientReportEntry, ClientSceneAction } from '@trinitywar/shared';
 import { ReportCard } from '../ReportCard';
+import { RaidTargetCard } from '../raid/RaidTargetCard';
 
-interface RaidResultState {
-  targetName: string;
-  summary: string;
-  loot: string;
-}
+type RaidHubTabKey = 'targets' | 'reports' | 'warrants';
 
 interface ReportSceneProps {
-  raidResult: RaidResultState | null;
-  reportTab: 'defense' | 'attack';
-  activeEntries: ClientReportEntry[];
-  actions: ClientSceneAction[];
-  onDismissResult: () => void;
-  onChangeTab: (tab: 'defense' | 'attack') => void;
+  activeTab: RaidHubTabKey;
+  heroTitle: string;
+  refreshLabel: string;
+  refreshPending: boolean;
+  targets: ClientRaidTarget[];
+  reportEntries: ClientReportEntry[];
+  onChangeTab: (tab: RaidHubTabKey) => void;
+  onOpenTarget: (target: ClientRaidTarget) => void;
+  onRefresh: () => void;
   onAction: (action: ClientSceneAction, context?: string) => void;
 }
 
 export function ReportScene(props: ReportSceneProps): JSX.Element {
-  const { raidResult, reportTab, activeEntries, actions, onDismissResult, onChangeTab, onAction } = props;
+  const {
+    activeTab,
+    heroTitle,
+    refreshLabel,
+    refreshPending,
+    targets,
+    reportEntries,
+    onChangeTab,
+    onOpenTarget,
+    onRefresh,
+    onAction,
+  } = props;
 
   return (
     <div className="scene-shell">
-      {raidResult ? (
-        <article className="hero-panel result-banner">
-          <div>
-            <p className="eyebrow">最新模拟结果</p>
-            <h3>{raidResult.summary}</h3>
-            <p className="muted">目标 {raidResult.targetName}，预估收益 {raidResult.loot}。</p>
+      <div className="tab-row">
+        <button className={`tab-button ${activeTab === 'targets' ? 'active' : ''}`} onClick={() => onChangeTab('targets')} type="button">掠夺</button>
+        <button className={`tab-button ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => onChangeTab('reports')} type="button">战报</button>
+        <button className={`tab-button ${activeTab === 'warrants' ? 'active' : ''}`} onClick={() => onChangeTab('warrants')} type="button">通缉令</button>
+      </div>
+
+      {activeTab === 'targets' ? (
+        <div className="scene-scroll raid-scene-scroll">
+          <div className="raid-toolbar panel-card compact-raid-toolbar">
+            <p className="raid-toolbar-text">{heroTitle}</p>
+            <button className="secondary-button" disabled={refreshPending} onClick={onRefresh} type="button">
+              {refreshPending ? '刷新中...' : refreshLabel}
+            </button>
           </div>
-          <button className="ghost-button" onClick={onDismissResult} type="button">
-            收起
-          </button>
-        </article>
+
+          <div className="raid-list-shell">
+            <div className="target-list target-list-raid">
+              {targets.map((target) => (
+                <RaidTargetCard key={target.id} onSelect={onOpenTarget} target={target} />
+              ))}
+            </div>
+          </div>
+        </div>
       ) : null}
 
-      <div className="tab-row">
-        <button className={`tab-button ${reportTab === 'defense' ? 'active' : ''}`} onClick={() => onChangeTab('defense')} type="button">防守战报</button>
-        <button className={`tab-button ${reportTab === 'attack' ? 'active' : ''}`} onClick={() => onChangeTab('attack')} type="button">进攻战报</button>
-      </div>
-      <div className="scene-scroll stack-panel compact">
-        {activeEntries.map((entry) => (
-          <ReportCard entry={entry} key={`${reportTab}-${entry.title}`} onAction={onAction} />
-        ))}
-      </div>
-      <div className="button-row wrap">
-        {actions.map((action) => (
-          <ActionButton action={action} key={action.label} onClick={onAction} />
-        ))}
-      </div>
+      {activeTab === 'reports' ? (
+        <div className="scene-scroll stack-panel compact">
+          {reportEntries.map((entry, index) => (
+            <ReportCard entry={entry} key={`${entry.title}-${index}`} onAction={onAction} />
+          ))}
+        </div>
+      ) : null}
+
+      {activeTab === 'warrants' ? (
+        <div className="scene-scroll stack-panel compact">
+          <article className="panel-card warrant-placeholder-card">
+            <div className="panel-head">
+              <h4>通缉令内容待定</h4>
+              <span className="soft-tag">占位稿</span>
+            </div>
+            <p className="panel-text">这一栏先预留为通缉令模块，后续再按你定的规则补待接受、进行中和已结算内容。</p>
+          </article>
+          <article className="panel-card warrant-placeholder-card">
+            <div className="panel-head">
+              <h4>建议先定三块</h4>
+            </div>
+            <div className="warrant-placeholder-list">
+              <div className="warrant-placeholder-item">
+                <strong>待接受</strong>
+                <span>谁发起、剩余时间、预估收益</span>
+              </div>
+              <div className="warrant-placeholder-item">
+                <strong>进行中</strong>
+                <span>参与者、锁定份额、预计结算时间</span>
+              </div>
+              <div className="warrant-placeholder-item">
+                <strong>已结算</strong>
+                <span>结果、分成、战损与保护期</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      ) : null}
     </div>
   );
 }

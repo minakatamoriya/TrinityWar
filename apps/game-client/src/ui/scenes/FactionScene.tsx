@@ -1,62 +1,131 @@
-import type { ClientPendingClaimSummary, ClientSceneAction, ClientSceneContentResponse } from '@trinitywar/shared';
-import { GuideCard } from '../GuideCard';
+import { useEffect, useState } from 'react';
+import type { ClientPendingClaimSummary, ClientSceneContentResponse } from '@trinitywar/shared';
 
 interface FactionSceneProps {
   hero: ClientSceneContentResponse['faction']['hero'];
+  contribution: ClientSceneContentResponse['faction']['contribution'];
   factionPending: ClientPendingClaimSummary | undefined;
-  claiming: boolean;
+  donating: boolean;
+  currentGold: number;
+  currentArmy: number;
   factionTab: 'overview' | 'donate' | 'rank';
-  overview: ClientSceneContentResponse['faction']['overview'];
+  comparison: ClientSceneContentResponse['faction']['comparison'];
   donate: ClientSceneContentResponse['faction']['donate'];
   rankings: ClientSceneContentResponse['faction']['rankings'];
   onClaim: () => void;
   onChangeTab: (tab: 'overview' | 'donate' | 'rank') => void;
-  onAction: (action: ClientSceneAction) => void;
+  onDonate: (goldAmount: number, armyAmount: number) => void;
 }
 
 export function FactionScene(props: FactionSceneProps): JSX.Element {
-  const { hero, factionPending, claiming, factionTab, overview, donate, rankings, onClaim, onChangeTab, onAction } = props;
+  const { hero, contribution, factionPending, donating, currentGold, currentArmy, factionTab, comparison, donate, rankings, onClaim, onChangeTab, onDonate } = props;
+  const [donateGoldAmount, setDonateGoldAmount] = useState(0);
+  const [donateArmyAmount, setDonateArmyAmount] = useState(0);
+  const maxDonateGoldAmount = Math.floor(currentGold / donate.goldStep) * donate.goldStep;
+  const maxDonateArmyAmount = Math.max(currentArmy, 0);
+  const contributionGain = donateGoldAmount / donate.goldStep + donateArmyAmount;
+  const breakdownText = hero.breakdown.replace('金额构成：', '');
+
+  useEffect(() => {
+    setDonateGoldAmount((current) => Math.min(current, maxDonateGoldAmount));
+    setDonateArmyAmount((current) => Math.min(current, maxDonateArmyAmount));
+  }, [maxDonateGoldAmount, maxDonateArmyAmount]);
 
   return (
     <div className="scene-shell">
-      <section className="hero-panel parchment compact-hero">
-        <div>
-          <p className="eyebrow">{hero.eyebrow}</p>
-          <h3>{hero.title}</h3>
-          <p className="muted">{hero.description}</p>
+      <section className="hero-panel parchment compact-hero faction-overview-card">
+        <div className="faction-overview-grid">
+          <div className="faction-overview-column">
+            <button className="pending-claim-button pending-claim-button-faction" onClick={onClaim} type="button">
+              <span>领取阵营分红</span>
+              <strong>{factionPending?.value ?? '0'}</strong>
+            </button>
+            <div className="faction-overview-note-block">
+              {breakdownText.split(' + ').map((line) => (
+                <p className="faction-breakdown-line" key={line}>{line}</p>
+              ))}
+            </div>
+          </div>
+
+          <div className="faction-overview-column faction-overview-column-right">
+            <div className="faction-contribution-box">
+              <span className="faction-contribution-title">贡献值</span>
+              <strong className="faction-contribution-value">{contribution.value}</strong>
+            </div>
+            <div className="faction-overview-note-block">
+              <p className="faction-contribution-description">100 金 = 1 贡献</p>
+              <p className="faction-contribution-description">1 兵 = 1 贡献</p>
+            </div>
+          </div>
         </div>
-        <button className="pending-claim-button pending-claim-button-faction" onClick={onClaim} type="button">
-          <span>{factionPending?.label ?? '阵营分红'}</span>
-          <strong>{factionPending?.value ?? '0'}</strong>
-          <em>{claiming ? '领取中...' : '领取入库'}</em>
-        </button>
       </section>
 
       <div className="tab-row">
-        <button className={`tab-button ${factionTab === 'overview' ? 'active' : ''}`} onClick={() => onChangeTab('overview')} type="button">阵营总览</button>
-        <button className={`tab-button ${factionTab === 'donate' ? 'active' : ''}`} onClick={() => onChangeTab('donate')} type="button">上缴与分红</button>
+        <button className={`tab-button ${factionTab === 'overview' ? 'active' : ''}`} onClick={() => onChangeTab('overview')} type="button">阵营对比</button>
+        <button className={`tab-button ${factionTab === 'donate' ? 'active' : ''}`} onClick={() => onChangeTab('donate')} type="button">增加贡献</button>
         <button className={`tab-button ${factionTab === 'rank' ? 'active' : ''}`} onClick={() => onChangeTab('rank')} type="button">排行榜</button>
       </div>
 
       <div className="scene-scroll">
         {factionTab === 'overview' ? (
-          <article className="panel-card stats-card">
-            {overview.map((item) => (
-              <div className="stat-row" key={item.label}>
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-              </div>
+          <div className="faction-comparison-list">
+            {comparison.map((item) => (
+              <article className={`panel-card faction-comparison-card${item.isCurrent ? ' is-current' : ''}`} key={item.faction}>
+                <div className="panel-head">
+                  <h4>{item.faction}</h4>
+                  {item.isCurrent ? <span className="soft-tag">当前阵营</span> : null}
+                </div>
+                <p className="muted faction-comparison-advantage">{item.advantage}</p>
+                <div className="faction-comparison-metrics">
+                  <div className="stat-row"><span>阵营资金</span><strong>{item.gold}</strong></div>
+                  <div className="stat-row"><span>阵营战力</span><strong>{item.power}</strong></div>
+                </div>
+              </article>
             ))}
+          </div>
+        ) : null}
+
+        {factionTab === 'donate' ? (
+          <article className="panel-card faction-donate-card">
+            <div className="faction-donate-copy">
+              <p className="eyebrow">{donate.title}</p>
+              <h4>当前资源直接上缴</h4>
+              <p className="muted">{donate.description}</p>
+            </div>
+
+            <div className="faction-donate-slider-group">
+              <div className="faction-donate-slider-head">
+                <strong>金币 {donateGoldAmount}</strong>
+                <span>最多 {maxDonateGoldAmount}</span>
+              </div>
+              <input className="army-recruit-slider" max={maxDonateGoldAmount} min={0} onChange={(event) => setDonateGoldAmount(Number(event.target.value))} step={donate.goldStep} type="range" value={donateGoldAmount} />
+            </div>
+
+            <div className="faction-donate-slider-group">
+              <div className="faction-donate-slider-head">
+                <strong>部队 {donateArmyAmount}</strong>
+                <span>最多 {maxDonateArmyAmount}</span>
+              </div>
+              <input className="army-recruit-slider" max={maxDonateArmyAmount} min={0} onChange={(event) => setDonateArmyAmount(Number(event.target.value))} step={1} type="range" value={donateArmyAmount} />
+            </div>
+
+            <div className="faction-donate-footer">
+              <div className="faction-donate-summary">
+                <strong>本次贡献 +{contributionGain}</strong>
+                <span>{donate.contributionRule}</span>
+              </div>
+              <button className="secondary-button" disabled={donating || contributionGain <= 0} onClick={() => onDonate(donateGoldAmount, donateArmyAmount)} type="button">
+                {donating ? '上缴中...' : '确认上缴'}
+              </button>
+            </div>
           </article>
         ) : null}
 
-        {factionTab === 'donate' ? <GuideCard onAction={onAction} section={donate} /> : null}
-
         {factionTab === 'rank' ? (
-          <article className="panel-card ranking-card">
+          <article className="panel-card ranking-card faction-ranking-card">
             {rankings.map((item) => (
-              <div className="stat-row" key={item.label}>
-                <span>{item.label}</span>
+              <div className="stat-row faction-ranking-row" key={item.label}>
+                <span>{item.label}{item.note ? ` · ${item.note}` : ''}</span>
                 <strong>{item.value}</strong>
               </div>
             ))}

@@ -1,10 +1,15 @@
 import type { FastifyPluginAsync } from 'fastify';
 import {
   CLIENT_API_PREFIX,
+  type ClientRaidActionRequest,
+  type ClientRaidActionResponse,
+  type ClientFactionDonateRequest,
   type ClientClaimPendingRequest,
   type ClientClaimPendingResponse,
   type ClientCollectFieldRequest,
+  type ClientCollectFieldResponse,
   type ClientRaidTargetDetailResponse,
+  type ClientRecruitArmyRequest,
   type ClientResetDemoStateResponse,
   type ClientSceneContentResponse,
   type ClientStartCultivationRequest,
@@ -12,7 +17,7 @@ import {
   type ClientUpgradeBuildingRequest,
   type HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { buildHomeSummary, buildRaidTargetDetail, buildSceneContent, claimPendingGold, collectFieldGold, resetDemoState, startCultivation, upgradeBuilding } from '../lib/client-state.js';
+import { buildHomeSummary, buildRaidTargetDetail, buildSceneContent, claimPendingGold, claimStarterSeeds, collectFieldGold, donateFactionSupport, raidTarget, recruitArmy, resetDemoState, startCultivation, upgradeBuilding } from '../lib/client-state.js';
 
 export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
   server.get<{ Reply: HomeSummaryResponse }>(`${CLIENT_API_PREFIX}/home-summary`, {
@@ -38,7 +43,7 @@ export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
                 properties: {
                   label: { type: 'string' },
                   value: { type: 'string' },
-                  tone: { type: 'string', enum: ['vault'] },
+                  tone: { type: 'string', enum: ['vault', 'army'] },
                 },
                 required: ['label', 'value', 'tone'],
               },
@@ -113,7 +118,17 @@ export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
     };
   });
 
-  server.post<{ Body: ClientCollectFieldRequest; Reply: ClientStateMutationResponse }>(`${CLIENT_API_PREFIX}/actions/collect-field`, {
+  server.post<{ Reply: ClientStateMutationResponse }>(`${CLIENT_API_PREFIX}/actions/claim-starter-seeds`, {
+    schema: {
+      tags: ['client'],
+      summary: 'Claim daily starter seeds',
+      description: 'Claims the daily starter seed pack once and writes it into the in-memory backpack state.',
+    },
+  }, async () => {
+    return claimStarterSeeds();
+  });
+
+  server.post<{ Body: ClientCollectFieldRequest; Reply: ClientCollectFieldResponse }>(`${CLIENT_API_PREFIX}/actions/collect-field`, {
     schema: {
       tags: ['client'],
       summary: 'Collect field gold',
@@ -131,6 +146,36 @@ export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request) => {
     return startCultivation(request.body);
+  });
+
+  server.post<{ Body: ClientRecruitArmyRequest; Reply: ClientStateMutationResponse }>(`${CLIENT_API_PREFIX}/actions/recruit-army`, {
+    schema: {
+      tags: ['client'],
+      summary: 'Recruit army units',
+      description: 'Spends vault gold to recruit army units up to the current army capacity.',
+    },
+  }, async (request) => {
+    return recruitArmy(request.body);
+  });
+
+  server.post<{ Body: ClientRaidActionRequest; Reply: ClientRaidActionResponse }>(`${CLIENT_API_PREFIX}/actions/raid-target`, {
+    schema: {
+      tags: ['client'],
+      summary: 'Raid target with black-box resolution',
+      description: 'Resolves a raid attempt against a visible target, applies gold loot, casualties, item drops and a one-hour protection window.',
+    },
+  }, async (request) => {
+    return raidTarget(request.body);
+  });
+
+  server.post<{ Body: ClientFactionDonateRequest; Reply: ClientStateMutationResponse }>(`${CLIENT_API_PREFIX}/actions/faction-donate`, {
+    schema: {
+      tags: ['client'],
+      summary: 'Donate gold and army to faction',
+      description: 'Deducts selected gold and army immediately and converts them into faction contribution.',
+    },
+  }, async (request) => {
+    return donateFactionSupport(request.body);
   });
 
   server.post<{ Body: ClientUpgradeBuildingRequest; Reply: ClientStateMutationResponse }>(`${CLIENT_API_PREFIX}/actions/upgrade-building`, {

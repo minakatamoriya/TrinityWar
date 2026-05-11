@@ -29,15 +29,15 @@ function formatDuration(seconds: number): string {
 
 function getFarmProgressLabel(field: ClientFarmField, remainingSeconds: number): string {
   if (field.tone === 'seeded') {
-    return `距离成长期 ${formatDuration(remainingSeconds)}`;
-  }
-
-  if (field.tone === 'growing') {
     return `距离成熟 ${formatDuration(remainingSeconds)}`;
   }
 
+  if (field.tone === 'growing') {
+    return `距离丰熟 ${formatDuration(remainingSeconds)}`;
+  }
+
   if (field.tone === 'mature') {
-    return '当前可收取';
+    return '当前处于丰熟阶段';
   }
 
   if (field.tone === 'withered') {
@@ -65,7 +65,8 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
       <div className="scene-scroll card-grid farm-field-grid">
         {fields.map((field) => {
           const remainingSeconds = Math.max(field.progressRemainingSeconds - farmTick, 0);
-          const progressPercent = field.progressTotalSeconds > 0
+          const hasProgressTrack = field.tone !== 'empty' && field.tone !== 'locked';
+          const progressPercent = hasProgressTrack && field.progressTotalSeconds > 0
             ? Math.max(Math.min(((field.progressTotalSeconds - remainingSeconds) / field.progressTotalSeconds) * 100, 100), 0)
             : 0;
 
@@ -95,8 +96,8 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
               <img alt={field.title} className="farm-plot-image" decoding="async" fetchPriority="high" height={512} loading="eager" src={farmStageImageMap[field.tone]} width={512} />
               <div className="farm-plot-meta">
                 <div className="farm-progress-block">
-                  <div className="farm-progress-track">
-                    <span className="farm-progress-fill" style={{ width: `${progressPercent}%` }} />
+                  <div className={`farm-progress-track${hasProgressTrack ? '' : ' is-static'}`}>
+                    {hasProgressTrack ? <span className="farm-progress-fill" style={{ width: `${progressPercent}%` }} /> : null}
                     <span className="farm-progress-label">{getFarmProgressLabel(field, remainingSeconds)}</span>
                   </div>
                 </div>

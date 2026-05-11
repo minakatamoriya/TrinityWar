@@ -23,18 +23,16 @@ const homeTaskItems: HomeTaskItem[] = [
   {
     id: 'raid-target',
     title: '发起一次掠夺',
-    description: '跳转到掠夺页，直接查看匿名目标并验证出兵。',
-    scene: 'raid',
+    description: '跳转到新的掠夺页，在目标列表里直接挑选匿名目标。',
+    scene: 'report',
   },
 ];
 
 interface HomeSceneProps {
-  castleLevel: number;
   hourlyTax: number;
   taxPending: ClientPendingClaimSummary | undefined;
   claimingTax: boolean;
   onClaimTax: () => void;
-  starterSeedCount: number;
   starterSeedClaimed: boolean;
   onClaimStarterSeeds: () => void;
   onNavigate: (scene: ClientSceneKey) => void;
@@ -44,34 +42,65 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value);
 }
 
+function parseClaimValue(value?: string): number {
+  return value ? Number(value.replace(/,/g, '').trim()) : 0;
+}
+
 export function HomeScene(props: HomeSceneProps): JSX.Element {
   const {
-    castleLevel,
     hourlyTax,
     taxPending,
     claimingTax,
     onClaimTax,
-    starterSeedCount,
     starterSeedClaimed,
     onClaimStarterSeeds,
     onNavigate,
   } = props;
+  const taxPendingAmount = parseClaimValue(taxPending?.value);
+  const canClaimTax = taxPendingAmount > 0;
+  const canClaimStarterSeed = !starterSeedClaimed;
+  const hasClaimableRewards = canClaimTax || canClaimStarterSeed;
 
   return (
     <div className="scene-shell scene-shell-home">
       <div className="scene-scroll scene-scroll-home">
-        <section className="hero-panel parchment tax-hero-card">
-          <div className="tax-hero-copy">
-            <h3>主城 Lv.{castleLevel}</h3>
-          </div>
-          {taxPending ? (
-            <button className="pending-claim-button pending-claim-button-tax" onClick={onClaimTax} type="button">
-              <span>税收待领取</span>
-              <strong>{taxPending.value}</strong>
-              <em>{claimingTax ? '入库中...' : `${formatNumber(hourlyTax)} / 小时`}</em>
-            </button>
-          ) : null}
-        </section>
+        <article className="panel-card home-claim-card">
+          {hasClaimableRewards ? (
+            <div className="home-claim-list">
+              {canClaimTax ? (
+                <button className="home-claim-item home-claim-item-tax" disabled={claimingTax} onClick={onClaimTax} type="button">
+                  <div className="home-claim-item-head">
+                    <span className="home-claim-item-tag">金币</span>
+                    <strong>领取税收</strong>
+                  </div>
+                  <div className="home-claim-item-body">
+                    <strong className="home-claim-item-amount">{taxPending?.value}</strong>
+                    <span className="home-claim-item-meta">{claimingTax ? '入库中...' : `当前可领 ${taxPending?.value}`}</span>
+                  </div>
+                  <em className="home-claim-item-foot">{formatNumber(hourlyTax)} / 小时，金库未满时会持续累积</em>
+                </button>
+              ) : null}
+              {canClaimStarterSeed ? (
+                <button className="home-claim-item home-claim-item-seed" onClick={onClaimStarterSeeds} type="button">
+                  <div className="home-claim-item-head">
+                    <span className="home-claim-item-tag">物品</span>
+                    <strong>领取今日种子</strong>
+                  </div>
+                  <div className="home-claim-item-body">
+                    <strong className="home-claim-item-amount">今日可领</strong>
+                    <span className="home-claim-item-meta">点击后展示本次获得物品</span>
+                  </div>
+                  <em className="home-claim-item-foot">领取完成后入口自动隐藏</em>
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="home-claim-empty">
+              <strong>当前没有可领取内容</strong>
+              <p>税收、种子或后续补充的主城奖励会在可领取时显示在这里。</p>
+            </div>
+          )}
+        </article>
 
         <article className="panel-card home-task-card">
           <div className="panel-head">
@@ -90,22 +119,6 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
                 </div>
               </div>
             ))}
-          </div>
-        </article>
-
-        <article className="panel-card starter-seed-card">
-          <div className="panel-head starter-seed-head">
-            <div>
-              <h4>领取种子</h4>
-              <p className="starter-seed-subline">初始仅开放灵麦，领取后可在农场培育弹框中使用。</p>
-            </div>
-            <span className="soft-tag">灵麦 x {starterSeedCount}</span>
-          </div>
-          <div className="starter-seed-body">
-            <p>每日起手包：领取三颗灵麦种子，作为新手第一轮培育库存。</p>
-            <button className="primary-button starter-seed-button" disabled={starterSeedClaimed} onClick={onClaimStarterSeeds} type="button">
-              {starterSeedClaimed ? '今日已领取' : '领取三颗灵麦种子'}
-            </button>
           </div>
         </article>
       </div>

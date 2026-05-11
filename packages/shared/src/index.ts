@@ -3,6 +3,8 @@ export const API_PREFIX = '/api';
 export const CLIENT_API_PREFIX = `${API_PREFIX}/client`;
 export const ADMIN_API_PREFIX = `${API_PREFIX}/admin`;
 export const DOCS_ROUTE = '/docs';
+export const ARMY_RECRUIT_GOLD_COST_PER_UNIT = 100;
+export const ARMY_RECRUIT_SECONDS_PER_UNIT = 60;
 
 export interface HealthResponse {
   app: string;
@@ -16,6 +18,13 @@ export interface ClientBootstrapResponse {
   version: string;
   serverTime: string;
   season: ClientSeasonStatus;
+  backpack: ClientSeedBackpack;
+}
+
+export interface ClientSeedBackpack {
+  seedInventory: Record<string, number>;
+  unlockedSeedIds: string[];
+  starterSeedClaimed: boolean;
 }
 
 export interface ClientSeasonStatus {
@@ -30,10 +39,12 @@ export interface AdminOverviewResponse {
   modules: string[];
 }
 
+export type HomeResourceTone = 'vault' | 'army';
+
 export interface HomeResourceSummary {
   label: string;
   value: string;
-  tone: 'vault';
+  tone: HomeResourceTone;
 }
 
 export type ClientPendingClaimSource = 'tax' | 'faction';
@@ -86,7 +97,7 @@ export interface ClientClaimPendingResponse {
   scenes: ClientSceneContentResponse;
 }
 
-export type ClientBuildingUpgradeId = 'castle' | 'vault' | 'field-slot' | 'watchtower';
+export type ClientBuildingUpgradeId = 'castle' | 'vault' | 'field-slot' | 'population' | 'watchtower';
 
 export interface ClientStateMutationResponse {
   app: string;
@@ -100,8 +111,58 @@ export interface ClientCollectFieldRequest {
   collectMode: 'ripe' | 'early';
 }
 
+export interface ClientCollectRewardItem {
+  seedId: string;
+  label: string;
+  quantity: number;
+}
+
+export interface ClientCollectFieldResponse {
+  app: string;
+  summary: string;
+  home: HomeSummaryResponse;
+  scenes: ClientSceneContentResponse;
+  result: {
+    collectedGold: number;
+    overflowGold: number;
+    rewards: ClientCollectRewardItem[];
+  };
+}
+
 export interface ClientStartCultivationRequest {
   fieldId: string;
+  seedId: string;
+}
+
+export interface ClientRecruitArmyRequest {
+  recruitCount: number;
+}
+
+export interface ClientRaidActionRequest {
+  targetId: string;
+  mode?: 'raid' | 'revenge';
+}
+
+export interface ClientRaidRewardItem {
+  seedId: string;
+  label: string;
+  quantity: number;
+}
+
+export interface ClientRaidActionResponse {
+  app: string;
+  summary: string;
+  home: HomeSummaryResponse;
+  scenes: ClientSceneContentResponse;
+  result: {
+    targetId: string;
+    targetName: string;
+    goldLoot: number;
+    casualties: number;
+    rewards: ClientRaidRewardItem[];
+    protectedUntil: string;
+    reportSummary: string;
+  };
 }
 
 export interface ClientUpgradeBuildingRequest {
@@ -205,6 +266,7 @@ export interface ClientReportEntry {
   tag: string;
   tone: 'danger' | 'success' | 'neutral';
   summary: string;
+  createdAt: string;
   unread?: boolean;
   revengeable?: boolean;
   actions: ClientSceneAction[];
@@ -214,12 +276,56 @@ export interface ClientFactionHero {
   eyebrow: string;
   title: string;
   description: string;
+  advantage: string;
+  breakdown: string;
   action: ClientSceneAction;
+}
+
+export interface ClientFactionContributionSummary {
+  title: string;
+  value: string;
+  description: string;
+}
+
+export interface ClientFactionComparisonEntry {
+  faction: string;
+  advantage: string;
+  gold: string;
+  power: string;
+  isCurrent?: boolean;
+}
+
+export interface ClientFactionDonatePanel {
+  title: string;
+  description: string;
+  goldStep: number;
+  contributionRule: string;
 }
 
 export interface ClientFactionLeaderboardEntry {
   label: string;
   value: string;
+  note?: string;
+}
+
+export interface ClientFactionDonateRequest {
+  goldAmount: number;
+  armyAmount: number;
+}
+
+export interface ClientArmyTrainingQueue {
+  queuedUnits: number;
+  totalCost: number;
+  startedAt: string;
+  readyAt: string;
+  totalSeconds: number;
+  remainingSeconds: number;
+}
+
+export interface ClientArmySceneContent {
+  unitCostGold: number;
+  unitTrainingSeconds: number;
+  queue: ClientArmyTrainingQueue | null;
 }
 
 export interface ClientSceneContentResponse {
@@ -227,6 +333,7 @@ export interface ClientSceneContentResponse {
   building: {
     upgrades: ClientBuildingUpgrade[];
   };
+  army: ClientArmySceneContent;
   farm: {
     hero: ClientFarmHero;
     fields: ClientFarmField[];
@@ -244,8 +351,9 @@ export interface ClientSceneContentResponse {
   };
   faction: {
     hero: ClientFactionHero;
-    overview: ClientMetricRow[];
-    donate: ClientGuideSection;
+    contribution: ClientFactionContributionSummary;
+    comparison: ClientFactionComparisonEntry[];
+    donate: ClientFactionDonatePanel;
     rankings: ClientFactionLeaderboardEntry[];
   };
 }
