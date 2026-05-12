@@ -9,7 +9,7 @@ export function RaidTargetCard(props: RaidTargetCardProps): JSX.Element {
   const { target, onSelect } = props;
 
   return (
-    <button className="target-card" onClick={() => onSelect(target)} type="button">
+    <button className="target-card target-card-shell" onClick={() => onSelect(target)} type="button">
       <div className="target-head">
         <div>
           <strong>{target.name}</strong>
@@ -19,7 +19,7 @@ export function RaidTargetCard(props: RaidTargetCardProps): JSX.Element {
       </div>
       <div className="target-card-line">
         <span>{target.summary}</span>
-        <strong>战力 {target.combatPower}</strong>
+        <strong>灵宠守备 {target.combatPower}</strong>
       </div>
       <div className="target-card-subline">
         <span>{target.detail}</span>

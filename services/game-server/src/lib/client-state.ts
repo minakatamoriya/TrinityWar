@@ -64,6 +64,7 @@ interface RaidTargetState {
   detail: string;
   fieldPreviewTone: 'seeded' | 'growing' | 'mature' | 'withered' | 'empty' | 'locked';
   fieldStatus: string;
+  fields: FieldState[];
   raidableGold: number;
   exposedFruit: string;
   defenseStatus: string;
@@ -93,6 +94,10 @@ interface InMemoryPlayerState {
   factionTreasuryGold: number;
   factionArmyPower: number;
   ledger: ClientResourceLedger;
+  temporaryRaidClaim: {
+    goldAmount: number;
+    expiresAt: string;
+  } | null;
   fields: FieldState[];
   raidTargets: RaidTargetState[];
   defenseReports: ClientReportEntry[];
@@ -178,6 +183,12 @@ const initialRaidTargets: RaidTargetState[] = [
     detail: '成熟田 2 块 · 可掠 520 · 今日被掠 1 次',
     fieldPreviewTone: 'mature',
     fieldStatus: '成熟田 2 块，成长期 1 块',
+    fields: [
+      { id: 'target-1-field-1', code: '田地 01', unlocked: true, status: 'mature', plantedSeedId: 'longteng', plantedGold: 260, currentYield: 420, badgeText: '丰熟' },
+      { id: 'target-1-field-2', code: '田地 02', unlocked: true, status: 'mature', plantedSeedId: 'chijiao', plantedGold: 280, currentYield: 460, badgeText: '丰熟' },
+      { id: 'target-1-field-3', code: '田地 03', unlocked: true, status: 'growing', plantedSeedId: 'yaokui', plantedGold: 210, currentYield: 320, badgeText: '成长' },
+      { id: 'target-1-field-4', code: '田地 04', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
+    ],
     raidableGold: 520,
     exposedFruit: '2 块成熟田 · 预计 880 金币',
     defenseStatus: '防守偏弱，驻守兵少于常见同级目标',
@@ -194,6 +205,12 @@ const initialRaidTargets: RaidTargetState[] = [
     detail: '成熟田 1 块 · 可掠 260 · 防守偏稳',
     fieldPreviewTone: 'seeded',
     fieldStatus: '成熟田 1 块，播种田 2 块',
+    fields: [
+      { id: 'target-2-field-1', code: '田地 01', unlocked: true, status: 'mature', plantedSeedId: 'yuelan', plantedGold: 200, currentYield: 420, badgeText: '丰熟' },
+      { id: 'target-2-field-2', code: '田地 02', unlocked: true, status: 'seeded', plantedSeedId: 'lingmai', plantedGold: 120, currentYield: 180, badgeText: '播种' },
+      { id: 'target-2-field-3', code: '田地 03', unlocked: true, status: 'seeded', plantedSeedId: 'hanmei', plantedGold: 160, currentYield: 210, badgeText: '播种' },
+      { id: 'target-2-field-4', code: '田地 04', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
+    ],
     raidableGold: 260,
     exposedFruit: '1 块成熟田 · 预计 420 金币',
     defenseStatus: '防守偏稳，仙界被掠损失减免明显',
@@ -210,6 +227,12 @@ const initialRaidTargets: RaidTargetState[] = [
     detail: '成长期 1 块 · 可掠 180 · 适合保守出手',
     fieldPreviewTone: 'growing',
     fieldStatus: '成长期 1 块，空闲田 1 块',
+    fields: [
+      { id: 'target-3-field-1', code: '田地 01', unlocked: true, status: 'growing', plantedSeedId: 'hanmei', plantedGold: 140, currentYield: 260, badgeText: '成长' },
+      { id: 'target-3-field-2', code: '田地 02', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
+      { id: 'target-3-field-3', code: '田地 03', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
+      { id: 'target-3-field-4', code: '田地 04', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
+    ],
     raidableGold: 180,
     exposedFruit: '1 块成长尾段田 · 预计 260 金币',
     defenseStatus: '人界经营向，防守一般，但暴露收益偏低',
@@ -226,6 +249,12 @@ const initialRaidTargets: RaidTargetState[] = [
     detail: '成熟田 1 块 · 可掠 460 · 驻防分散',
     fieldPreviewTone: 'mature',
     fieldStatus: '成熟田 1 块，成长期 2 块',
+    fields: [
+      { id: 'target-4-field-1', code: '田地 01', unlocked: true, status: 'mature', plantedSeedId: 'chijiao', plantedGold: 250, currentYield: 510, badgeText: '丰熟' },
+      { id: 'target-4-field-2', code: '田地 02', unlocked: true, status: 'growing', plantedSeedId: 'yaokui', plantedGold: 220, currentYield: 300, badgeText: '成长' },
+      { id: 'target-4-field-3', code: '田地 03', unlocked: true, status: 'growing', plantedSeedId: 'longteng', plantedGold: 240, currentYield: 340, badgeText: '成长' },
+      { id: 'target-4-field-4', code: '田地 04', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
+    ],
     raidableGold: 460,
     exposedFruit: '1 块成熟田 · 预计 510 金币',
     defenseStatus: '中等防守，战力高但驻防分散',
@@ -242,6 +271,12 @@ const initialRaidTargets: RaidTargetState[] = [
     detail: '成熟田 1 块 · 可掠 140 · 防守偏弱',
     fieldPreviewTone: 'mature',
     fieldStatus: '成熟田 1 块，空闲田 2 块',
+    fields: [
+      { id: 'target-5-field-1', code: '田地 01', unlocked: true, status: 'mature', plantedSeedId: 'yaokui', plantedGold: 120, currentYield: 190, badgeText: '丰熟' },
+      { id: 'target-5-field-2', code: '田地 02', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
+      { id: 'target-5-field-3', code: '田地 03', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
+      { id: 'target-5-field-4', code: '田地 04', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
+    ],
     raidableGold: 140,
     exposedFruit: '1 块成熟田 · 预计 190 金币',
     defenseStatus: '防守偏弱，适合低损验证',
@@ -289,6 +324,7 @@ const initialPlayerState: InMemoryPlayerState = {
     taxPendingGold: 380,
     factionDividendGold: 540,
   },
+  temporaryRaidClaim: null,
   fields: [
     {
       id: 'field-1',
@@ -482,7 +518,16 @@ function buildFactionRankings(): ClientSceneContentResponse['faction']['rankings
 }
 
 function getPendingClaimAmount(source: ClientPendingClaimSource): number {
-  return source === 'tax' ? playerState.ledger.taxPendingGold : playerState.ledger.factionDividendGold;
+  if (source === 'tax') {
+    return playerState.ledger.taxPendingGold;
+  }
+
+  if (source === 'faction') {
+    return playerState.ledger.factionDividendGold;
+  }
+
+  settleTemporaryRaidClaim();
+  return playerState.temporaryRaidClaim?.goldAmount ?? 0;
 }
 
 function setPendingClaimAmount(source: ClientPendingClaimSource, value: number): void {
@@ -491,7 +536,46 @@ function setPendingClaimAmount(source: ClientPendingClaimSource, value: number):
     return;
   }
 
-  playerState.ledger.factionDividendGold = value;
+  if (source === 'faction') {
+    playerState.ledger.factionDividendGold = value;
+    return;
+  }
+
+  if (value <= 0) {
+    playerState.temporaryRaidClaim = null;
+    return;
+  }
+
+  playerState.temporaryRaidClaim = {
+    goldAmount: value,
+    expiresAt: playerState.temporaryRaidClaim?.expiresAt ?? new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+  };
+}
+
+function settleTemporaryRaidClaim(): void {
+  if (!playerState.temporaryRaidClaim) {
+    return;
+  }
+
+  if (Date.now() >= new Date(playerState.temporaryRaidClaim.expiresAt).getTime()) {
+    playerState.temporaryRaidClaim = null;
+  }
+}
+
+function addTemporaryRaidClaim(goldAmount: number): string {
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+  if (goldAmount <= 0) {
+    return expiresAt;
+  }
+
+  settleTemporaryRaidClaim();
+  playerState.temporaryRaidClaim = {
+    goldAmount: (playerState.temporaryRaidClaim?.goldAmount ?? 0) + goldAmount,
+    expiresAt,
+  };
+
+  return expiresAt;
 }
 
 function getQueuedArmyCount(): number {
@@ -528,6 +612,7 @@ function buildArmyTrainingQueue(): ClientArmyTrainingQueue | null {
 
 export function buildHomeSummary(): HomeSummaryResponse {
   settleArmyTrainingQueue();
+  settleTemporaryRaidClaim();
 
   const { ledger } = playerState;
   const castleLevel = getCastleLevel();
@@ -569,6 +654,15 @@ export function buildHomeSummary(): HomeSummaryResponse {
         description: `当前每小时可分到 ${formatNumber(factionDividend.total)} 金币，来自阵营结算与贡献加成。`,
       },
     ],
+    temporaryClaim: playerState.temporaryRaidClaim
+      ? {
+          source: 'raid-overflow',
+          label: '待领取',
+          goldAmount: playerState.temporaryRaidClaim.goldAmount,
+          expiresAt: playerState.temporaryRaidClaim.expiresAt,
+          description: '掠夺时金库已满，超出的金币会临时保留在这里，过期后消失。',
+        }
+      : null,
     primaryActions: [
       { key: 'building', title: '主城', description: '升级主城与金币容量' },
       { key: 'farm', title: '农场', description: '收成熟田地' },
@@ -588,7 +682,17 @@ function buildRaidDetailActions(): ClientSceneAction[] {
   ];
 }
 
+function buildRaidDetailField(field: FieldState): ClientRaidTargetDetailResponse['fields'][number] {
+  const farmField = buildFarmField(field);
+
+  return {
+    ...farmField,
+    actions: [],
+  };
+}
+
 export function buildRaidTargetDetail(targetId: string): ClientRaidTargetDetailResponse {
+
   settleArmyTrainingQueue();
 
   const target = playerState.raidTargets.find((item) => item.id === targetId);
@@ -603,6 +707,12 @@ export function buildRaidTargetDetail(targetId: string): ClientRaidTargetDetailR
       combatPower: '880',
       fieldPreviewTone: 'seeded',
       fieldStatus: '播种田 2 块，空闲田 1 块',
+      fields: [
+        buildRaidDetailField({ id: `${targetId}-field-1`, code: '田地 01', unlocked: true, status: 'seeded', plantedGold: 80, currentYield: 80, badgeText: '播种' }),
+        buildRaidDetailField({ id: `${targetId}-field-2`, code: '田地 02', unlocked: true, status: 'seeded', plantedGold: 90, currentYield: 90, badgeText: '播种' }),
+        buildRaidDetailField({ id: `${targetId}-field-3`, code: '田地 03', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' }),
+        buildRaidDetailField({ id: `${targetId}-field-4`, code: '田地 04', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' }),
+      ],
       raidableGold: '120 金币',
       exposedFruit: '成熟收益较低 · 预计 120 金币',
       raidRule: '按当前金币的一部分结算，本次预计命中 120 金币',
@@ -622,6 +732,7 @@ export function buildRaidTargetDetail(targetId: string): ClientRaidTargetDetailR
     combatPower: formatNumber(target.combatPower),
     fieldPreviewTone: target.fieldPreviewTone,
     fieldStatus: target.fieldStatus,
+    fields: target.fields.map((field) => buildRaidDetailField(field)),
     raidableGold: `${formatNumber(target.raidableGold)} 金币`,
     exposedFruit: target.exposedFruit,
     raidRule: '当前采用黑盒结算：低兵力也能直接掠夺，但收益更低、战损更高，仍有概率带回高级种子。',
@@ -736,16 +847,20 @@ function buildFarmHero(): ClientSceneContentResponse['farm']['hero'] {
 }
 
 function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['fields'][number] {
+  const cropName = field.plantedSeedId ? (seedLabelMap[field.plantedSeedId] ?? field.plantedSeedId) : undefined;
+
   if (!field.unlocked) {
     return {
       id: field.id,
       code: field.code,
       title: '未解锁',
       badge: '待解锁',
+      cropName: undefined,
       tone: 'locked',
       progressRemainingSeconds: 0,
       progressTotalSeconds: 1,
-      description: '收取金额 0 金币',
+      yieldGold: 0,
+      description: '点击中央入口，直接升级并开放这块田地。',
       actions: [{ label: '解锁田地', target: 'farm', tone: 'secondary' }],
     };
   }
@@ -756,10 +871,12 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       code: field.code,
       title: '丰熟期',
       badge: field.badgeText,
+      cropName,
       tone: 'mature',
       progressRemainingSeconds: 0,
       progressTotalSeconds: 1,
-      description: `收取金额 ${formatNumber(field.currentYield)} 金币`,
+      yieldGold: field.currentYield,
+      description: '点击收取，触发爆金币并结算本轮成熟收益。',
       actions: [
         { label: '成熟收取', target: 'farm', tone: 'primary' },
       ],
@@ -772,10 +889,12 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       code: field.code,
       title: '枯萎期',
       badge: field.badgeText,
+      cropName,
       tone: 'withered',
       progressRemainingSeconds: 0,
       progressTotalSeconds: 1,
-      description: `收取金额 ${formatNumber(field.currentYield)} 金币`,
+      yieldGold: field.currentYield,
+      description: '点击收取，收益已进入衰减段，但仍能爆出金币和种子。',
       actions: [
         { label: '枯萎收取', target: 'farm', tone: 'secondary' },
       ],
@@ -788,10 +907,12 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       code: field.code,
       title: '成熟期',
       badge: field.badgeText,
+      cropName,
       tone: 'growing',
       progressRemainingSeconds: 4690,
       progressTotalSeconds: 7200,
-      description: `收取金额 ${formatNumber(field.currentYield)} 金币`,
+      yieldGold: field.currentYield,
+      description: '可抢收，点击后直接结算一轮提前收取结果。',
       actions: [
         { label: '提前收取', target: 'farm', tone: 'secondary' },
       ],
@@ -804,13 +925,13 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       code: field.code,
       title: '播种期',
       badge: field.badgeText,
+      cropName,
       tone: 'seeded',
       progressRemainingSeconds: 2535,
       progressTotalSeconds: 3600,
-      description: '播种阶段无法收取',
-      actions: [
-        { label: '查看阶段', target: 'farm', tone: 'ghost' },
-      ],
+      yieldGold: field.currentYield,
+      description: '播种刚完成，等待进入成长后再决定是否抢收。',
+      actions: [],
     };
   }
 
@@ -819,10 +940,12 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
     code: field.code,
     title: '可培育',
     badge: '空闲地块',
+    cropName: undefined,
     tone: 'empty',
     progressRemainingSeconds: 0,
     progressTotalSeconds: 1,
-    description: '收取金额 0 金币',
+    yieldGold: 0,
+    description: '点击中央入口，选择种子后立刻开始新一轮培育。',
     actions: [{ label: '开始培育', target: 'farm', tone: 'primary' }],
   };
 }
@@ -941,21 +1064,21 @@ export function buildSceneContent(): ClientSceneContentResponse {
       contribution: {
         title: '当前贡献值',
         value: formatNumber(playerState.factionContribution),
-        description: '100 金币 = 1 贡献，1 兵 = 1 贡献。捐献后会立刻反馈到贡献值与分红构成。',
+        description: '100 金币 = 1 贡献。捐献后会立刻反馈到贡献值与分红构成。',
       },
       comparison: buildFactionComparison(),
       donate: {
-        title: '捐钱捐部队',
-        description: '金币按 100 为一步，确认后会立即从当前总金币和总兵力扣除。',
+        title: '捐献金币',
+        description: '金币按 100 为一步，确认后会立即从当前总金币扣除。',
         goldStep: 100,
-        contributionRule: '100 金币 = 1 贡献，1 兵 = 1 贡献。',
+        contributionRule: '100 金币 = 1 贡献。',
       },
       rankings: buildFactionRankings(),
     },
   };
 }
 
-function buildRaidActionResponse(summary: string, target: RaidTargetState | null, goldLoot: number, casualties: number, rewards: ClientRaidRewardItem[], reportSummary: string): ClientRaidActionResponse {
+function buildRaidActionResponse(summary: string, target: RaidTargetState | null, goldLoot: number, depositedGold: number, overflowGold: number, temporaryClaimExpiresAt: string | null, casualties: number, rewards: ClientRaidRewardItem[], reportSummary: string): ClientRaidActionResponse {
   return {
     app: APP_NAME,
     summary,
@@ -965,6 +1088,9 @@ function buildRaidActionResponse(summary: string, target: RaidTargetState | null
       targetId: target?.id ?? '',
       targetName: target?.name ?? '未知目标',
       goldLoot,
+      depositedGold,
+      overflowGold,
+      temporaryClaimExpiresAt,
       casualties,
       rewards,
       protectedUntil: target?.protectionUntil ?? new Date().toISOString(),
@@ -975,25 +1101,26 @@ function buildRaidActionResponse(summary: string, target: RaidTargetState | null
 
 export function raidTarget(input: ClientRaidActionRequest): ClientRaidActionResponse {
   settleArmyTrainingQueue();
+  settleTemporaryRaidClaim();
 
   const target = playerState.raidTargets.find((item) => item.id === input.targetId);
   const defenseReportTitle = target ? `${target.faction} · ${target.name}` : '';
   const defenseReport = playerState.defenseReports.find((entry) => entry.title === defenseReportTitle);
 
   if (!target) {
-    return buildRaidActionResponse('当前目标不存在或已离开目标池。', null, 0, 0, [], '当前目标不存在或已离开目标池。');
+    return buildRaidActionResponse('当前目标不存在或已离开目标池。', null, 0, 0, 0, null, 0, [], '当前目标不存在或已离开目标池。');
   }
 
   if (input.mode === 'revenge' && !defenseReport?.revengeable) {
-    return buildRaidActionResponse(`${target.name} 的复仇机会已经用完。`, target, 0, 0, [], `${target.name} 的这条战报已经完成复仇，当前不能再次复仇。`);
+    return buildRaidActionResponse(`${target.name} 的复仇机会已经用完。`, target, 0, 0, 0, null, 0, [], `${target.name} 的这条战报已经完成复仇，当前不能再次复仇。`);
   }
 
   if (isTargetProtected(target)) {
-    return buildRaidActionResponse(`${target.name} 当前处于防护中，暂时无法再次被掠夺。`, target, 0, 0, [], `${target.name} 仍在防护期内，本次未能发起掠夺。`);
+    return buildRaidActionResponse(`${target.name} 当前处于防护中，暂时无法再次被掠夺。`, target, 0, 0, 0, null, 0, [], `${target.name} 仍在防护期内，本次未能发起掠夺。`);
   }
 
   if (playerState.armyCount <= 0) {
-    return buildRaidActionResponse('当前兵力不足，无法发起掠夺。', target, 0, 0, [], '当前兵力不足，未能发起掠夺。');
+    return buildRaidActionResponse('当前兵力不足，无法发起掠夺。', target, 0, 0, 0, null, 0, [], '当前兵力不足，未能发起掠夺。');
   }
 
   const currentArmy = Math.max(playerState.armyCount, 1);
@@ -1005,6 +1132,7 @@ export function raidTarget(input: ClientRaidActionRequest): ClientRaidActionResp
   const lootRatio = clamp(0.08 + powerRatio * 0.22 + (success ? 0.08 : 0), 0.05, 0.4);
   const rawGoldLoot = Math.max(Math.round(target.raidableGold * lootRatio), 20);
   const depositedGold = Math.min(rawGoldLoot, Math.max(playerState.ledger.vaultCapacity - playerState.ledger.vaultGold, 0));
+  const overflowGold = Math.max(rawGoldLoot - depositedGold, 0);
   const casualtyRatio = clamp(0.1 + (target.combatPower / currentArmy) * 0.04 - (success ? 0.03 : 0), 0.08, 0.42);
   const casualties = Math.min(Math.max(Math.ceil(currentArmy * casualtyRatio), 1), playerState.armyCount);
   const seedChance = clamp(target.seedDrop.chance + (powerRatio < 0.35 ? 0.08 : 0) + (success ? 0.05 : 0), 0.1, 0.55);
@@ -1014,12 +1142,14 @@ export function raidTarget(input: ClientRaidActionRequest): ClientRaidActionResp
   const now = Date.now();
   target.protectionUntil = new Date(now + 60 * 60 * 1000).toISOString();
   playerState.ledger.vaultGold += depositedGold;
+  const temporaryClaimExpiresAt = overflowGold > 0 ? addTemporaryRaidClaim(overflowGold) : null;
   playerState.armyCount = Math.max(playerState.armyCount - casualties, 0);
   playerState.raidTicketsUsed += 1;
   applySeedRewards(rewards);
 
   const rewardSummary = rewards.length > 0 ? `，额外获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : '';
-  const reportSummary = `你对${target.name}发起黑盒掠夺，带回 ${formatNumber(depositedGold)} 金币，战损 ${formatNumber(casualties)} 兵${rewardSummary}。`;
+  const overflowSummary = overflowGold > 0 ? `，另有 ${formatNumber(overflowGold)} 金币已转入待领取` : '';
+  const reportSummary = `你对${target.name}发起黑盒掠夺，带回 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库${overflowSummary}，战损 ${formatNumber(casualties)} 兵${rewardSummary}。`;
   playerState.attackReports.unshift({
     title: `${target.faction} · ${target.name}`,
     tag: success ? '掠夺成功' : '强袭试探',
@@ -1043,11 +1173,14 @@ export function raidTarget(input: ClientRaidActionRequest): ClientRaidActionResp
     playerState.revengeCount = Math.max(playerState.revengeCount - 1, 0);
   }
 
-  const summary = `${target.name} 已进入 1 小时防护，本次获得 ${formatNumber(depositedGold)} 金币，战损 ${formatNumber(casualties)} 兵${rewardSummary}。`;
-  return buildRaidActionResponse(summary, target, depositedGold, casualties, rewards, reportSummary);
+  const summary = overflowGold > 0
+    ? `${target.name} 已进入 1 小时防护，本次掠夺 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库，另有 ${formatNumber(overflowGold)} 转入待领取，战损 ${formatNumber(casualties)} 兵${rewardSummary}。`
+    : `${target.name} 已进入 1 小时防护，本次获得 ${formatNumber(rawGoldLoot)} 金币，战损 ${formatNumber(casualties)} 兵${rewardSummary}。`;
+  return buildRaidActionResponse(summary, target, rawGoldLoot, depositedGold, overflowGold, temporaryClaimExpiresAt, casualties, rewards, reportSummary);
 }
 
 export function claimPendingGold(input: ClientClaimPendingRequest): Omit<ClientClaimPendingResponse, 'home' | 'scenes'> {
+  settleTemporaryRaidClaim();
   const availableVaultSpace = Math.max(playerState.ledger.vaultCapacity - playerState.ledger.vaultGold, 0);
   const pendingGold = getPendingClaimAmount(input.source);
   const claimedGold = Math.min(pendingGold, availableVaultSpace);
@@ -1056,7 +1189,7 @@ export function claimPendingGold(input: ClientClaimPendingRequest): Omit<ClientC
   setPendingClaimAmount(input.source, Math.max(pendingGold - claimedGold, 0));
 
   const remainingPendingGold = getPendingClaimAmount(input.source);
-  const sourceLabel = input.source === 'tax' ? '主城税收' : '阵营分红';
+  const sourceLabel = input.source === 'tax' ? '主城税收' : input.source === 'faction' ? '阵营分红' : '临时待领取';
   const summary = claimedGold > 0
     ? `${sourceLabel}本次入账 ${formatNumber(claimedGold)} 金币，剩余待领取 ${formatNumber(remainingPendingGold)}。`
     : `金币空间不足，当前没有可入账的${sourceLabel}。`;
@@ -1073,22 +1206,18 @@ export function claimPendingGold(input: ClientClaimPendingRequest): Omit<ClientC
 
 export function donateFactionSupport(input: ClientFactionDonateRequest): ClientStateMutationResponse {
   const normalizedGoldAmount = Math.max(Math.floor(input.goldAmount / 100) * 100, 0);
-  const normalizedArmyAmount = Math.max(Math.floor(input.armyAmount), 0);
   const actualGoldAmount = Math.min(normalizedGoldAmount, Math.floor(playerState.ledger.vaultGold / 100) * 100);
-  const actualArmyAmount = Math.min(normalizedArmyAmount, playerState.armyCount);
 
-  if (actualGoldAmount <= 0 && actualArmyAmount <= 0) {
-    return buildMutationResponse('请先选择要捐出的金币或部队。');
+  if (actualGoldAmount <= 0) {
+    return buildMutationResponse('请先选择要捐出的金币。');
   }
 
-  const contributionGain = actualGoldAmount / 100 + actualArmyAmount;
+  const contributionGain = actualGoldAmount / 100;
   playerState.ledger.vaultGold -= actualGoldAmount;
-  playerState.armyCount -= actualArmyAmount;
   playerState.factionContribution += contributionGain;
   playerState.factionTreasuryGold += actualGoldAmount;
-  playerState.factionArmyPower += actualArmyAmount;
 
-  return buildMutationResponse(`已向阵营捐出 ${formatNumber(actualGoldAmount)} 金币、${formatNumber(actualArmyAmount)} 兵，贡献值 +${formatNumber(contributionGain)}。`);
+  return buildMutationResponse(`已向阵营捐出 ${formatNumber(actualGoldAmount)} 金币，贡献值 +${formatNumber(contributionGain)}。`);
 }
 
 export function collectFieldGold(input: ClientCollectFieldRequest): ClientCollectFieldResponse {

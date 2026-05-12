@@ -61,20 +61,20 @@ export function ArmyRecruitScreen(props: ArmyRecruitScreenProps): JSX.Element {
   const finalQueuedUnits = queuedUnits + actualRecruitCount;
   const finalQueueSeconds = queueRemainingSeconds + actualRecruitCount * unitTrainingSeconds;
   const nextRemainingCapacity = Math.max(armyCapacity - currentArmy - finalQueuedUnits, 0);
-  const limitedBy = affordableCount < remainingCapacity ? '金币' : '兵力上限';
+  const limitedBy = affordableCount < remainingCapacity ? '金币' : '灵宠上限';
   const ariaProps = embedded
-    ? { 'aria-label': '部队征召' }
-    : { 'aria-label': '兵营造兵', 'aria-modal': true, role: 'dialog' as const };
+    ? { 'aria-label': '灵宠培育' }
+    : { 'aria-label': '灵宠培育页', 'aria-modal': true, role: 'dialog' as const };
 
   return (
     <section className={`army-recruit-screen${embedded ? ' army-recruit-screen-embedded' : ''}`} {...ariaProps}>
       <div className="army-training-queue-card">
         <div className="army-training-queue-head">
           <div>
-            <p className="eyebrow">训练队列</p>
-            <h3>{trainingQueue ? `训练中 ${formatNumber(queuedUnits)} 兵` : '当前没有造兵队列'}</h3>
+            <p className="eyebrow">灵宠培育</p>
+            <h3>{trainingQueue ? `培育中 ${formatNumber(queuedUnits)} 只灵宠` : '当前没有灵宠培育队列'}</h3>
           </div>
-          <span className="soft-tag">1 兵 = {unitCostGold} 金币 / {unitTrainingSeconds} 秒</span>
+          <span className="soft-tag">1 只灵宠 = {unitCostGold} 金币 / {unitTrainingSeconds} 秒</span>
         </div>
         <div className="army-training-progress-track" aria-hidden="true">
           <div className="army-training-progress-fill" style={{ width: `${queueProgress * 100}%` }} />
@@ -96,7 +96,7 @@ export function ArmyRecruitScreen(props: ArmyRecruitScreenProps): JSX.Element {
               </div> */}
             </>
           ) : (
-            <p className="army-training-empty-text">金币会在点击确认时立即扣除，兵力会在倒计时结束后统一入列。</p>
+            <p className="army-training-empty-text">金币会在点击确认时立即扣除，灵宠会在倒计时结束后统一入列。</p>
           )}
         </div>
       </div>
@@ -105,11 +105,11 @@ export function ArmyRecruitScreen(props: ArmyRecruitScreenProps): JSX.Element {
         <article className="army-recruit-option-panel">
           <div className="army-recruit-slider-panel">
             <div className="army-recruit-slider-head">
-              <strong>{formatNumber(actualRecruitCount)} 兵</strong>
-              <span>最大可造 {formatNumber(maxRecruitable)} 兵</span>
+              <strong>{formatNumber(actualRecruitCount)} 只灵宠</strong>
+              <span>最大可培育 {formatNumber(maxRecruitable)} 只</span>
             </div>
             <input
-              aria-label="造兵数量"
+              aria-label="灵宠培育数量"
               className="army-recruit-slider"
               disabled={maxRecruitable <= 0 || confirming}
               max={Math.max(maxRecruitable, 0)}
@@ -133,7 +133,7 @@ export function ArmyRecruitScreen(props: ArmyRecruitScreenProps): JSX.Element {
               <div className="army-recruit-preview-card">
                 <span>追加后排队</span>
                 <strong>{formatNumber(finalQueuedUnits)}</strong>
-                <em>人</em>
+                <em>只</em>
               </div>
               <div className="army-recruit-preview-card">
                 <span>队列总耗时</span>
@@ -141,17 +141,17 @@ export function ArmyRecruitScreen(props: ArmyRecruitScreenProps): JSX.Element {
                 <em>重算后</em>
               </div>
               <div className="army-recruit-preview-card">
-                <span>剩余人口</span>
+                <span>剩余灵宠位</span>
                 <strong>{formatNumber(nextRemainingCapacity)}</strong>
                 <em>完成后</em>
               </div>
             </div>
             <p className="army-recruit-slider-note">
               {maxRecruitable > 0
-                ? `当前最大征召量由${limitedBy}限制，滑块会自动卡在可用范围内。`
+                ? `当前最大培育量由${limitedBy}限制，滑块会自动卡在可用范围内。`
                 : remainingCapacity <= 0
-                  ? '当前兵力已满，请先提升兵力上限后再继续造兵。'
-                  : '当前金币不足以征召任何士兵。'}
+                  ? '当前灵宠已满，请先提升灵宠上限后再继续培育。'
+                  : '当前金币不足以培育任何灵宠。'}
             </p>
           </div>
         </article>
@@ -159,17 +159,17 @@ export function ArmyRecruitScreen(props: ArmyRecruitScreenProps): JSX.Element {
 
       <div className="army-recruit-actionbar">
         <div className="army-recruit-summary">
-          <strong>{actualRecruitCount > 0 ? `确认训练 ${formatNumber(actualRecruitCount)} 名士兵` : '当前无法征召'}</strong>
+          <strong>{actualRecruitCount > 0 ? `确认培育 ${formatNumber(actualRecruitCount)} 只灵宠` : '当前无法培育'}</strong>
           <span>
             {actualRecruitCount > 0
-              ? `本次将立即扣除 ${formatNumber(totalCost)} 金币，并把训练队列更新为 ${formatNumber(finalQueuedUnits)} 兵，累计已花 ${formatNumber(queueCostAfterAppend)} 金币。`
+              ? `本次将立即扣除 ${formatNumber(totalCost)} 金币，并把培育队列更新为 ${formatNumber(finalQueuedUnits)} 只灵宠，累计已花 ${formatNumber(queueCostAfterAppend)} 金币。`
               : remainingCapacity <= 0
-                ? '当前兵力上限已被现有兵力和训练队列占满，请先等待训练完成或扩充上限。'
-                : '当前金币不足以支持造兵。'}
+                ? '当前灵宠上限已被现有灵宠和培育队列占满，请先等待培育完成或扩充上限。'
+                : '当前金币不足以支持灵宠培育。'}
           </span>
         </div>
         <button className="primary-button" disabled={!canConfirm} onClick={onConfirm} type="button">
-          {confirming ? '提交中...' : trainingQueue ? '追加队列' : '开始训练'}
+          {confirming ? '提交中...' : trainingQueue ? '追加培育' : '开始培育'}
         </button>
       </div>
     </section>

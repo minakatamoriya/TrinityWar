@@ -1,4 +1,14 @@
-import { APP_NAME, type ClientBootstrapResponse, type ClientRaidTargetDetailResponse, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientBootstrapResponse, type ClientFarmField, type ClientRaidTargetDetailResponse, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
+
+function createRaidDetailField(field: Partial<ClientFarmField> & Pick<ClientFarmField, 'id' | 'code' | 'title' | 'badge' | 'tone' | 'description'>): ClientFarmField {
+  return {
+    progressRemainingSeconds: 0,
+    progressTotalSeconds: 1,
+    ...field,
+    yieldGold: field.yieldGold ?? 0,
+    actions: field.actions ?? [],
+  };
+}
 
 export const mockBootstrap: ClientBootstrapResponse = {
   app: APP_NAME,
@@ -40,16 +50,17 @@ export const mockHomeSummary: HomeSummaryResponse = {
   protectedUntil: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
   resources: [
     { label: '金币', value: '4,280 / 5,000', tone: 'vault' },
-    { label: '战力', value: '40 / 100', tone: 'army' },
+    { label: '灵宠', value: '40 / 100', tone: 'army' },
   ],
   pendingClaims: [
     { source: 'tax', label: '主城税收', value: '380', description: '当前每小时产出 190 金币，领取后直接入库。' },
     { source: 'faction', label: '阵营分红', value: '540', description: '当前每小时可分到 200 金币，来自阵营结算与贡献加成。' },
   ],
+  temporaryClaim: null,
   primaryActions: [
     { key: 'building', title: '主城', description: '升级主城与金币容量' },
     { key: 'farm', title: '农场', description: '收丰熟田地' },
-    { key: 'raid', title: '部队', description: '征召兵力并查看当前战力' },
+    { key: 'raid', title: '灵宠', description: '培育灵宠并查看当前守备' },
     { key: 'report', title: '掠夺', description: '查看目标、战报与通缉令' },
     { key: 'faction', title: '阵营', description: '上缴并查看分红' },
   ],
@@ -82,10 +93,10 @@ export const mockSceneContent: ClientSceneContentResponse = {
       },
       {
         id: 'population',
-        title: '人口',
-        description: 'Lv.1 -> Lv.2，人口上限由 100 提升到 200。',
+        title: '灵宠',
+        description: 'Lv.1 -> Lv.2，灵宠上限由 100 提升到 200。',
         costText: '消耗 880 金币',
-        action: { label: '升级人口上限', target: 'building', tone: 'secondary' },
+        action: { label: '升级灵宠上限', target: 'building', tone: 'secondary' },
       },
       {
         id: 'watchtower',
@@ -115,10 +126,12 @@ export const mockSceneContent: ClientSceneContentResponse = {
         code: '田地 01',
         title: '丰熟期',
         badge: '丰熟',
+        cropName: '灵麦',
         tone: 'mature',
         progressRemainingSeconds: 0,
         progressTotalSeconds: 1,
-        description: '收取金额 1,260 金币',
+        yieldGold: 1260,
+        description: '点击收取，触发爆金币并结算本轮成熟收益。',
         actions: [
           { label: '成熟收取', target: 'farm', tone: 'primary' },
         ],
@@ -128,23 +141,25 @@ export const mockSceneContent: ClientSceneContentResponse = {
         code: '田地 02',
         title: '播种期',
         badge: '播种',
+        cropName: '灵麦',
         tone: 'seeded',
         progressRemainingSeconds: 2535,
         progressTotalSeconds: 3600,
-        description: '播种阶段无法收取',
-        actions: [
-          { label: '查看阶段', target: 'farm', tone: 'ghost' },
-        ],
+        yieldGold: 420,
+        description: '播种刚完成，等待进入成长后再决定是否抢收。',
+        actions: [],
       },
       {
         id: 'field-3',
         code: '田地 03',
         title: '成熟期',
         badge: '成熟',
+        cropName: '灵麦',
         tone: 'growing',
         progressRemainingSeconds: 4690,
         progressTotalSeconds: 7200,
-        description: '收取金额 660 金币',
+        yieldGold: 660,
+        description: '可抢收，点击后直接结算一轮提前收取结果。',
         actions: [
           { label: '提前收取', target: 'farm', tone: 'secondary' },
         ],
@@ -154,10 +169,12 @@ export const mockSceneContent: ClientSceneContentResponse = {
         code: '田地 04',
         title: '未解锁',
         badge: '待解锁',
+        cropName: undefined,
         tone: 'locked',
         progressRemainingSeconds: 0,
         progressTotalSeconds: 1,
-        description: '收取金额 0 金币',
+        yieldGold: 0,
+        description: '点击中央入口，直接升级并开放这块田地。',
         actions: [{ label: '解锁田地', target: 'farm', tone: 'secondary' }],
       },
     ],
@@ -220,10 +237,10 @@ export const mockSceneContent: ClientSceneContentResponse = {
         faction: '魔界',
         level: 5,
         combatPower: '1,240',
-        summary: '魔界 · 资源中高 · 战力偏高',
+        summary: '魔界 · 资源中高 · 守备偏强',
         loot: '360~480 金币',
         risk: '中高风险',
-        detail: '成熟田 1 块 · 可掠 460 · 驻防分散',
+        detail: '成熟田 1 块 · 可掠 460 · 守田灵宠分散',
         action: { label: '发起掠夺', target: 'raid', tone: 'secondary' },
       },
       {
@@ -240,10 +257,10 @@ export const mockSceneContent: ClientSceneContentResponse = {
       },
     ],
     detail: {
-      advice: '出征建议：派出 90~110 掠夺兵',
+      advice: '出手建议：派出 90~110 只灵宠',
       actions: [
-        { label: '更换兵力', target: 'raid', tone: 'ghost' },
-        { label: '确认出兵', target: 'raid', tone: 'primary' },
+        { label: '调整灵宠', target: 'raid', tone: 'ghost' },
+        { label: '确认派遣', target: 'raid', tone: 'primary' },
       ],
     },
   },
@@ -256,7 +273,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         createdAt: new Date(Date.now() - 37 * 60 * 1000).toISOString(),
         unread: true,
         revengeable: true,
-        summary: '37 分钟前成功掠走你田地 240 金币，击伤 8 名守备兵。',
+        summary: '37 分钟前成功掠走你田地 240 金币，击退 8 只守田灵宠。',
         actions: [
           { label: '查看详情', target: 'report', tone: 'ghost' },
           { label: '复仇', target: 'raid', tone: 'primary' },
@@ -287,7 +304,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
     contribution: {
       title: '当前贡献值',
       value: '40',
-      description: '100 金币 = 1 贡献，1 兵 = 1 贡献。捐献后会立刻反馈到贡献值与分红构成。',
+      description: '100 金币 = 1 贡献。捐献后会立刻反馈到贡献值与分红构成。',
     },
     comparison: [
       { faction: '人界', advantage: '贡献转化更稳，适合分红运营。', gold: '82,400', power: '1,260', isCurrent: true },
@@ -295,10 +312,10 @@ export const mockSceneContent: ClientSceneContentResponse = {
       { faction: '魔界', advantage: '掠夺收益增加 10%，但战损更高。', gold: '85,300', power: '1,340' },
     ],
     donate: {
-      title: '捐钱捐部队',
-      description: '金币按 100 为一步，确认后会立即从当前总金币和总兵力扣除。',
+      title: '捐献金币',
+      description: '金币按 100 为一步，确认后会立即从当前总金币扣除。',
       goldStep: 100,
-      contributionRule: '100 金币 = 1 贡献，1 兵 = 1 贡献。',
+      contributionRule: '100 金币 = 1 贡献。',
     },
     rankings: [
       { label: '1. 烬牙', value: '86', note: '魔界' },
@@ -319,17 +336,21 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     combatPower: '1,320',
     fieldPreviewTone: 'mature',
     fieldStatus: '成熟田 2 块，成长期 1 块',
+    fields: [
+      createRaidDetailField({ id: 'target-1-field-1', code: '田地 01', title: '丰熟期', badge: '丰熟', tone: 'mature', description: '预计可收 420 金币' }),
+      createRaidDetailField({ id: 'target-1-field-2', code: '田地 02', title: '丰熟期', badge: '丰熟', tone: 'mature', description: '预计可收 460 金币' }),
+      createRaidDetailField({ id: 'target-1-field-3', code: '田地 03', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 1860, progressTotalSeconds: 3600, description: '距离丰熟约半小时' }),
+    ],
     raidableGold: '520 金币',
     exposedFruit: '2 块成熟田 · 预计 880 金币',
     raidRule: '按当前金币的一部分结算，本次预计命中 520 金币',
-    defenseStatus: '防守偏弱，驻守兵少于常见同级目标',
+    defenseStatus: '防守偏弱，守田灵宠少于常见同级目标',
     protectionStatus: '当前无保护，可直接发起掠夺或通缉令',
     detail: '对手昵称烬牙，刚结束一轮农场收取，外露收益仍然较高。魔界加成偏向进攻，适合快速出手。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
       { label: '发布通缉令', target: 'raid', tone: 'secondary' },
       { label: '邀请摇人', target: 'raid', tone: 'ghost' },
-      { label: '分享目标', target: 'raid', tone: 'ghost' },
     ],
   },
   'target-2': {
@@ -341,6 +362,11 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     combatPower: '1,080',
     fieldPreviewTone: 'seeded',
     fieldStatus: '成熟田 1 块，播种田 2 块',
+    fields: [
+      createRaidDetailField({ id: 'target-2-field-1', code: '田地 01', title: '丰熟期', badge: '丰熟', tone: 'mature', description: '预计可收 420 金币' }),
+      createRaidDetailField({ id: 'target-2-field-2', code: '田地 02', title: '播种期', badge: '播种', tone: 'seeded', progressRemainingSeconds: 2280, progressTotalSeconds: 3600, description: '刚播下灵麦，尚未进入成长' }),
+      createRaidDetailField({ id: 'target-2-field-3', code: '田地 03', title: '播种期', badge: '播种', tone: 'seeded', progressRemainingSeconds: 3120, progressTotalSeconds: 3600, description: '新一轮播种刚开始' }),
+    ],
     raidableGold: '260 金币',
     exposedFruit: '1 块成熟田 · 预计 420 金币',
     raidRule: '按当前金币的一部分结算，本次预计命中 260 金币',
@@ -351,7 +377,6 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
       { label: '发布通缉令', target: 'raid', tone: 'secondary' },
       { label: '邀请摇人', target: 'raid', tone: 'ghost' },
-      { label: '分享目标', target: 'raid', tone: 'ghost' },
     ],
   },
   'target-3': {
@@ -363,6 +388,10 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     combatPower: '920',
     fieldPreviewTone: 'growing',
     fieldStatus: '成长期 1 块，空闲田 1 块',
+    fields: [
+      createRaidDetailField({ id: 'target-3-field-1', code: '田地 01', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 1440, progressTotalSeconds: 3600, description: '成长尾段，快要进入丰熟' }),
+      createRaidDetailField({ id: 'target-3-field-2', code: '田地 02', title: '空闲期', badge: '空闲', tone: 'empty', description: '当前未播种，暂无外露收益' }),
+    ],
     raidableGold: '180 金币',
     exposedFruit: '1 块成长尾段田 · 预计 260 金币',
     raidRule: '按当前金币的一部分结算，本次预计命中 180 金币',
@@ -373,7 +402,6 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
       { label: '发布通缉令', target: 'raid', tone: 'secondary' },
       { label: '邀请摇人', target: 'raid', tone: 'ghost' },
-      { label: '分享目标', target: 'raid', tone: 'ghost' },
     ],
   },
   'target-4': {
@@ -385,17 +413,21 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     combatPower: '1,240',
     fieldPreviewTone: 'mature',
     fieldStatus: '成熟田 1 块，成长期 2 块',
+    fields: [
+      createRaidDetailField({ id: 'target-4-field-1', code: '田地 01', title: '丰熟期', badge: '丰熟', tone: 'mature', description: '预计可收 510 金币' }),
+      createRaidDetailField({ id: 'target-4-field-2', code: '田地 02', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 2640, progressTotalSeconds: 7200, description: '收益尚未完全外露' }),
+      createRaidDetailField({ id: 'target-4-field-3', code: '田地 03', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 4980, progressTotalSeconds: 7200, description: '还在中段成长' }),
+    ],
     raidableGold: '460 金币',
     exposedFruit: '1 块成熟田 · 预计 510 金币',
     raidRule: '按当前金币的一部分结算，本次预计命中 460 金币',
-    defenseStatus: '中等防守，战力高但驻防分散',
+    defenseStatus: '中等防守，守备偏强但守田灵宠分散',
     protectionStatus: '当前无保护，可立即出手',
     detail: '对手昵称玄潮，主城等级高一档，收益不错，但正面强碰战损会更高。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
       { label: '发布通缉令', target: 'raid', tone: 'secondary' },
       { label: '邀请摇人', target: 'raid', tone: 'ghost' },
-      { label: '分享目标', target: 'raid', tone: 'ghost' },
     ],
   },
   'target-5': {
@@ -407,6 +439,11 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     combatPower: '760',
     fieldPreviewTone: 'mature',
     fieldStatus: '成熟田 1 块，空闲田 2 块',
+    fields: [
+      createRaidDetailField({ id: 'target-5-field-1', code: '田地 01', title: '丰熟期', badge: '丰熟', tone: 'mature', description: '预计可收 190 金币' }),
+      createRaidDetailField({ id: 'target-5-field-2', code: '田地 02', title: '空闲期', badge: '空闲', tone: 'empty', description: '暂未播种' }),
+      createRaidDetailField({ id: 'target-5-field-3', code: '田地 03', title: '空闲期', badge: '空闲', tone: 'empty', description: '暂未播种' }),
+    ],
     raidableGold: '140 金币',
     exposedFruit: '1 块成熟田 · 预计 190 金币',
     raidRule: '按当前金币的一部分结算，本次预计命中 140 金币',
@@ -417,7 +454,6 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
       { label: '发布通缉令', target: 'raid', tone: 'secondary' },
       { label: '邀请摇人', target: 'raid', tone: 'ghost' },
-      { label: '分享目标', target: 'raid', tone: 'ghost' },
     ],
   },
 };

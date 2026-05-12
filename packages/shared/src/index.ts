@@ -47,7 +47,15 @@ export interface HomeResourceSummary {
   tone: HomeResourceTone;
 }
 
-export type ClientPendingClaimSource = 'tax' | 'faction';
+export type ClientPendingClaimSource = 'tax' | 'faction' | 'raid-overflow';
+
+export interface ClientTemporaryClaimSummary {
+  source: 'raid-overflow';
+  label: string;
+  goldAmount: number;
+  expiresAt: string;
+  description: string;
+}
 
 export interface ClientPendingClaimSummary {
   source: ClientPendingClaimSource;
@@ -73,6 +81,7 @@ export interface HomeSummaryResponse {
   protectedUntil: string | null;
   resources: HomeResourceSummary[];
   pendingClaims: ClientPendingClaimSummary[];
+  temporaryClaim: ClientTemporaryClaimSummary | null;
   primaryActions: HomeActionItem[];
 }
 
@@ -159,6 +168,9 @@ export interface ClientRaidActionResponse {
     targetId: string;
     targetName: string;
     goldLoot: number;
+    depositedGold: number;
+    overflowGold: number;
+    temporaryClaimExpiresAt: string | null;
     casualties: number;
     rewards: ClientRaidRewardItem[];
     protectedUntil: string;
@@ -219,9 +231,11 @@ export interface ClientFarmField {
   code: string;
   title: string;
   badge: string;
+  cropName?: string;
   tone: 'seeded' | 'growing' | 'mature' | 'withered' | 'empty' | 'locked';
   progressRemainingSeconds: number;
   progressTotalSeconds: number;
+  yieldGold: number;
   description: string;
   actions: ClientSceneAction[];
 }
@@ -248,6 +262,7 @@ export interface ClientRaidTargetDetailResponse {
   combatPower: string;
   fieldPreviewTone: ClientFarmField['tone'];
   fieldStatus: string;
+  fields: ClientFarmField[];
   raidableGold: string;
   exposedFruit: string;
   raidRule: string;
@@ -311,7 +326,6 @@ export interface ClientFactionLeaderboardEntry {
 
 export interface ClientFactionDonateRequest {
   goldAmount: number;
-  armyAmount: number;
 }
 
 export interface ClientArmyTrainingQueue {

@@ -25,7 +25,7 @@ import { HomeScene } from './ui/scenes/HomeScene';
 import { ReportScene } from './ui/scenes/ReportScene';
 import { SeedSelectionScreen } from './ui/scenes/SeedSelectionScreen';
 
-type RaidHubTabKey = 'targets' | 'reports' | 'warrants';
+type RaidHubTabKey = 'targets' | 'follows' | 'reports' | 'warrants';
 type FactionTabKey = 'overview' | 'donate' | 'rank';
 
 interface ToastState {
@@ -80,6 +80,18 @@ interface CollectOverflowState {
   overflowGold: number;
 }
 
+interface FarmCollectPresentationState {
+  fieldId: string;
+  tier: 'harvest' | 'critical';
+  showSeeds: boolean;
+}
+
+interface FollowedRaidTargetSummary {
+  id: string;
+  name: string;
+  faction: string;
+}
+
 const homeTaskItems: HomeTaskItem[] = [
   {
     id: 'claim-tax',
@@ -115,6 +127,8 @@ const seedCatalog: SeedCatalogItem[] = [
   { id: 'xiaolian', name: '霄莲', rarity: 'legendary', description: '传说、收藏型、标准，身份价值最高。', unlockedByDefault: false },
 ];
 
+const FARM_COLLECT_PRESENTATION_MS = 1250;
+
 const seedRarityLabels: Record<SeedRarity, string> = {
   common: '普通',
   rare: '稀有',
@@ -145,7 +159,7 @@ const sceneNavLabels: Record<ClientSceneKey, string> = {
   home: '首页',
   building: '主城',
   farm: '农场',
-  raid: '部队',
+  raid: '灵宠',
   report: '掠夺',
   faction: '阵营',
 };
@@ -194,11 +208,6 @@ function formatServerTime(serverTime: string): string {
     month: 'numeric',
     day: 'numeric',
   }).format(new Date(serverTime));
-}
-
-function parseFieldYield(description: string): number {
-  const match = description.match(/收取金额\s([\d,]+)/);
-  return match ? Number(match[1].replace(/,/g, '')) : 0;
 }
 
 function getMaxRecruitable(currentGold: number, currentArmy: number, armyCapacity: number, queuedArmyCount = 0): number {
@@ -281,6 +290,14 @@ function formatProtectionCountdown(totalSeconds: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
+function formatTemporaryClaimCountdown(totalSeconds: number): string {
+  const safeSeconds = Math.max(totalSeconds, 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 function findResourceByTone(tone: HomeSummaryResponse['resources'][number]['tone'], resources: HomeSummaryResponse['resources']): HomeSummaryResponse['resources'][number] | undefined {
   return resources.find((resource) => resource.tone === tone);
 }
@@ -307,6 +324,15 @@ function getSceneBackground(scene: ClientSceneKey, factionName: string): string 
   }
 
   return sceneBackgroundMap[scene];
+}
+
+function resolveRaidTargetByContext(targets: ClientRaidTarget[], context?: string): ClientRaidTarget | null {
+  if (!context) {
+    return targets[0] ?? null;
+  }
+
+  const matchedTarget = targets.find((target) => context.includes(target.name));
+  return matchedTarget ?? targets[0] ?? null;
 }
 
 function App(): JSX.Element {
@@ -339,6 +365,16 @@ function App(): JSX.Element {
   const [selectedSeedId, setSelectedSeedId] = useState<string>('lingmai');
   const [fieldSeedAssignments, setFieldSeedAssignments] = useState<Record<string, string>>({});
   const [collectOverflowState, setCollectOverflowState] = useState<CollectOverflowState | null>(null);
+  const [farmCollectPresentation, setFarmCollectPresentation] = useState<FarmCollectPresentationState | null>(null);
+  const [followedTargetIds, setFollowedTargetIds] = useState<string[]>([]);
+  const [raidTargetDetailsById, setRaidTargetDetailsById] = useState<Record<string, ClientRaidTargetDetailResponse>>({});
+
+  const cacheRaidTargetDetail = (detail: ClientRaidTargetDetailResponse): void => {
+    setRaidTargetDetailsById((current) => ({
+      ...current,
+      [detail.targetId]: detail,
+    }));
+  };
 
   const syncSeedBackpackState = (backpack: ClientViewModel['bootstrap']['backpack']): void => {
     setSeedInventory({
@@ -434,8 +470,30 @@ function App(): JSX.Element {
   }, [seedRewardModal]);
 
   useEffect(() => {
+    if (!farmCollectPresentation) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setFarmCollectPresentation((current) => current?.fieldId === farmCollectPresentation.fieldId ? null : current);
+    }, FARM_COLLECT_PRESENTATION_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [farmCollectPresentation]);
+
+  useEffect(() => {
     if (!raidTargetModal) {
       setRaidTargetDetail(null);
+      setRaidTargetDetailError(null);
+      setRaidTargetDetailLoading(false);
+      return;
+    }
+
+    const cachedDetail = raidTargetDetailsById[raidTargetModal.targetId];
+    if (cachedDetail) {
+      setRaidTargetDetail(cachedDetail);
       setRaidTargetDetailError(null);
       setRaidTargetDetailLoading(false);
       return;
@@ -450,6 +508,7 @@ function App(): JSX.Element {
         return;
       }
 
+      cacheRaidTargetDetail(detail);
       setRaidTargetDetail(detail);
     }).catch(() => {
       if (!active) {
@@ -468,7 +527,7 @@ function App(): JSX.Element {
     return () => {
       active = false;
     };
-  }, [raidTargetModal]);
+  }, [raidTargetDetailsById, raidTargetModal]);
 
   useEffect(() => {
     const queue = viewModel?.scenes.army.queue;
@@ -541,6 +600,9 @@ function App(): JSX.Element {
   const seasonProgress = buildSeasonProgress(bootstrap.season);
   const hourlyTax = parseHourlyTax(taxPending?.description);
   const armyTrainingQueue: ClientArmyTrainingQueue | null = scenes.army.queue;
+  const temporaryClaim = home.temporaryClaim;
+  const temporaryClaimRemainingSeconds = getRemainingSeconds(temporaryClaim?.expiresAt);
+  const activeTemporaryClaim = temporaryClaim && temporaryClaim.goldAmount > 0 && temporaryClaimRemainingSeconds > 0 ? temporaryClaim : null;
   const seedCatalogMap = new Map(seedCatalog.map((seed) => [seed.id, seed]));
   const seedGroups = (['common', 'rare', 'legendary'] as const).map((rarity) => ({
     rarity,
@@ -561,10 +623,33 @@ function App(): JSX.Element {
 
     return {
       ...field,
-      badge: `${field.badge} · ${assignedSeed.name}`,
-      description: `本轮培育：${assignedSeed.name}。${field.description}`,
+      cropName: assignedSeed.name,
     };
   });
+  const raidTargetsById = new Map(scenes.raid.targets.map((target) => [target.id, target]));
+  const followedTargets = followedTargetIds
+    .map((targetId) => {
+      const target = raidTargetsById.get(targetId);
+      if (target) {
+        return {
+          id: target.id,
+          name: target.name,
+          faction: target.faction,
+        } satisfies FollowedRaidTargetSummary;
+      }
+
+      const detail = raidTargetDetailsById[targetId];
+      if (detail) {
+        return {
+          id: detail.targetId,
+          name: detail.name,
+          faction: detail.faction,
+        } satisfies FollowedRaidTargetSummary;
+      }
+
+      return null;
+    })
+    .filter((target): target is FollowedRaidTargetSummary => Boolean(target));
 
   const showToast = (message: string, tone: ToastState['tone'] = 'info'): void => {
     setToast({
@@ -605,20 +690,19 @@ function App(): JSX.Element {
       const result = await recruitArmyUnits(input);
       applyMutationResult(result);
     } catch {
-      showToast('当前无法完成造兵，请稍后重试。', 'error');
+      showToast('当前无法完成灵宠培育，请稍后重试。', 'error');
     } finally {
       setPendingActionKey(null);
     }
   };
 
-  const handleFactionDonate = async (goldAmount: number, armyAmount: number): Promise<void> => {
+  const handleFactionDonate = async (goldAmount: number): Promise<void> => {
     if (pendingActionKey === 'faction:donate') {
       return;
     }
 
     const input: ClientFactionDonateRequest = {
       goldAmount,
-      armyAmount,
     };
 
     setPendingActionKey('faction:donate');
@@ -631,6 +715,10 @@ function App(): JSX.Element {
     } finally {
       setPendingActionKey(null);
     }
+  };
+
+  const handleTransferFaction = (factionName: string): void => {
+    showToast(`转阵营到${factionName}的功能待定，当前先保留入口。`);
   };
 
   const handleClaimPending = async (source: ClientClaimPendingRequest['source']): Promise<void> => {
@@ -685,6 +773,9 @@ function App(): JSX.Element {
       setSeedSelectionState(null);
       setSelectedSeedId('lingmai');
       setFieldSeedAssignments({});
+      setFarmCollectPresentation(null);
+      setFollowedTargetIds([]);
+      setRaidTargetDetailsById({});
     } catch {
       showToast('当前无法重置实验数据，请稍后重试。', 'error');
     } finally {
@@ -721,13 +812,26 @@ function App(): JSX.Element {
     });
   };
 
-  const findRaidTargetByContext = (context?: string): ClientRaidTarget | null => {
-    if (!context) {
-      return scenes.raid.targets[0] ?? null;
-    }
+  const handleOpenFollowedRaidTarget = (target: FollowedRaidTargetSummary): void => {
+    setSelectedRaidTargetId(target.id);
+    setRaidTargetModal({
+      targetId: target.id,
+      targetName: target.name,
+      mode: 'raid',
+    });
+  };
 
-    const matchedTarget = scenes.raid.targets.find((target) => context.includes(target.name));
-    return matchedTarget ?? scenes.raid.targets[0] ?? null;
+  const handleToggleFollowTarget = (target: ClientRaidTarget): void => {
+    const isFollowing = followedTargetIds.includes(target.id);
+
+    setFollowedTargetIds((current) => isFollowing
+      ? current.filter((targetId) => targetId !== target.id)
+      : [...current, target.id]);
+    showToast(isFollowing ? `已取消关注 ${target.name}。` : `已关注 ${target.name}，可在掠夺页的关注列表持续观察田地状态。`, 'success');
+  };
+
+  const findRaidTargetByContext = (context?: string): ClientRaidTarget | null => {
+    return resolveRaidTargetByContext(scenes.raid.targets, context);
   };
 
   const applyMutationResult = (result: { home: HomeSummaryResponse; scenes: ClientViewModel['scenes']; summary: string }): void => {
@@ -814,7 +918,7 @@ function App(): JSX.Element {
     if (action.label.includes('收取')) {
       const collectMode: ClientCollectFieldRequest['collectMode'] = action.label.includes('提前') ? 'early' : 'ripe';
       const field = farmFields.find((item) => item.id === fieldId);
-      const pendingYield = field ? parseFieldYield(field.description) : 0;
+      const pendingYield = field?.yieldGold ?? 0;
       const overflowGold = Math.max(vaultProgress.current + pendingYield - vaultProgress.capacity, 0);
 
       if (pendingYield > 0 && overflowGold > 0 && !collectOverflowState) {
@@ -850,7 +954,7 @@ function App(): JSX.Element {
             return Array.from(nextIds);
           });
         }
-        setSeedRewardModal({
+        const rewardModalPayload: SeedRewardModalState = {
           title: '收取所得',
           summary: result.result.overflowGold > 0
             ? `获得 ${formatNumber(result.result.collectedGold)} 金币，另有 ${formatNumber(result.result.overflowGold)} 因金币已满未能入账。`
@@ -867,7 +971,15 @@ function App(): JSX.Element {
               label: reward.label,
             })),
           ],
+        };
+        setFarmCollectPresentation({
+          fieldId,
+          tier: result.result.rewards.length > 0 ? 'critical' : 'harvest',
+          showSeeds: result.result.rewards.length > 0,
         });
+        window.setTimeout(() => {
+          setSeedRewardModal(rewardModalPayload);
+        }, FARM_COLLECT_PRESENTATION_MS);
         setFieldSeedAssignments((current) => {
           const nextAssignments = { ...current };
           delete nextAssignments[fieldId];
@@ -926,7 +1038,9 @@ function App(): JSX.Element {
 
           setSeedRewardModal({
             title: '掠夺所得',
-            summary: `获得 ${formatNumber(response.result.goldLoot)} 金币，战损 ${formatNumber(response.result.casualties)} 兵。`,
+            summary: response.result.overflowGold > 0
+              ? `本次掠夺 ${formatNumber(response.result.goldLoot)} 金币，其中 ${formatNumber(response.result.depositedGold)} 已入库，另有 ${formatNumber(response.result.overflowGold)} 转入待领取，战损 ${formatNumber(response.result.casualties)} 兵。`
+              : `获得 ${formatNumber(response.result.goldLoot)} 金币，战损 ${formatNumber(response.result.casualties)} 兵。`,
             items: [
               {
                 seedId: 'raid-gold',
@@ -1152,9 +1266,6 @@ function App(): JSX.Element {
                 <button className="ghost-button top-action-button" onClick={() => showToast('签到得奖券，日常活动。')} type="button">
                   活动
                 </button>
-                <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留好友入口，后续可继续补好友列表。')} type="button">
-                  好友
-                </button>
                 <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留设置入口，后续可继续补音效、账号和调试开关。')} type="button">
                   设置
                 </button>
@@ -1183,7 +1294,7 @@ function App(): JSX.Element {
                       ? resourcePulse.armyToken
                       : 0;
                   const pulseToneClass = pulseTone ? ` pulse-${pulseTone}` : '';
-                  const amountLabel = isProtectedVault ? '保护期' : resource.tone === 'army' ? '驻守兵力' : '当前持有';
+                  const amountLabel = isProtectedVault ? '保护期' : resource.tone === 'army' ? '守护灵宠' : '当前持有';
                   const isArmyResource = resource.tone === 'army';
                   const footerValue = isProtectedVault
                     ? formatProtectionCountdown(protectionRemainingSeconds)
@@ -1246,6 +1357,7 @@ function App(): JSX.Element {
 
             {activeScene === 'farm' ? (
               <FarmScene
+                collectPresentation={farmCollectPresentation}
                 farmTick={farmTick}
                 fields={farmFields}
                 onAction={(action, fieldId, fieldCode) => {
@@ -1274,9 +1386,11 @@ function App(): JSX.Element {
             {activeScene === 'report' ? (
               <ReportScene
                 activeTab={raidHubTab}
+                followedTargets={followedTargets}
                 heroTitle={scenes.raid.hero.title}
                 onAction={handleSceneAction}
                 onChangeTab={setRaidHubTab}
+                onOpenFollowedTarget={handleOpenFollowedRaidTarget}
                 onOpenTarget={handleOpenRaidTargetModal}
                 onRefresh={() => {
                   void handleRefreshRaidTargets();
@@ -1291,7 +1405,6 @@ function App(): JSX.Element {
             {activeScene === 'faction' ? (
               <FactionScene
                 contribution={scenes.faction.contribution}
-                currentArmy={armyProgress.current}
                 currentGold={vaultProgress.current}
                 donate={scenes.faction.donate}
                 donating={pendingActionKey === 'faction:donate'}
@@ -1302,9 +1415,10 @@ function App(): JSX.Element {
                 onClaim={() => {
                   void handleClaimPending('faction');
                 }}
-                onDonate={(goldAmount, armyAmount) => {
-                  void handleFactionDonate(goldAmount, armyAmount);
+                onDonate={(goldAmount) => {
+                  void handleFactionDonate(goldAmount);
                 }}
+                onTransferFaction={handleTransferFaction}
                 comparison={scenes.faction.comparison}
                 rankings={scenes.faction.rankings}
               />
@@ -1323,10 +1437,18 @@ function App(): JSX.Element {
             <RaidIntelScreen
               detail={raidTargetDetail}
               error={raidTargetDetailError}
+              farmTick={farmTick}
+              followed={followedTargetIds.includes(raidTargetModal.targetId)}
               loading={raidTargetDetailLoading}
               mode={raidTargetModal.mode}
               onAction={(action) => handleSceneAction(action, raidTargetDetail?.name)}
               onClose={() => setRaidTargetModal(null)}
+              onToggleFollow={() => {
+                const target = raidTargetsById.get(raidTargetModal.targetId);
+                if (target) {
+                  handleToggleFollowTarget(target);
+                }
+              }}
               targetName={raidTargetModal.targetName}
             />
           ) : null}
@@ -1387,6 +1509,25 @@ function App(): JSX.Element {
                 </div>
               </div>
             </div>
+          ) : null}
+          {activeTemporaryClaim ? (
+            <button
+              aria-label={`待领取 ${formatNumber(activeTemporaryClaim.goldAmount)} 金币，剩余 ${formatTemporaryClaimCountdown(temporaryClaimRemainingSeconds)}`}
+              className="temporary-claim-widget"
+              disabled={claimingSource === 'raid-overflow'}
+              onClick={() => {
+                void handleClaimPending('raid-overflow');
+              }}
+              type="button"
+            >
+              <span className="temporary-claim-countdown">{claimingSource === 'raid-overflow' ? '领取中' : formatTemporaryClaimCountdown(temporaryClaimRemainingSeconds)}</span>
+              <span className="temporary-claim-icon" aria-hidden="true">
+                <span className="temporary-claim-hand short" />
+                <span className="temporary-claim-hand long" />
+              </span>
+              <span className="temporary-claim-label">待领取</span>
+              <strong className="temporary-claim-amount">{formatNumber(activeTemporaryClaim.goldAmount)}</strong>
+            </button>
           ) : null}
         </div>
       </section>

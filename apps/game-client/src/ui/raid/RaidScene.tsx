@@ -11,7 +11,14 @@ interface RaidSceneProps {
 }
 
 export function RaidScene(props: RaidSceneProps): JSX.Element {
-  const { heroTitle, refreshLabel, refreshPending, targets, onRefresh, onOpenTarget } = props;
+  const {
+    heroTitle,
+    refreshLabel,
+    refreshPending,
+    targets,
+    onRefresh,
+    onOpenTarget,
+  } = props;
 
   return (
     <div className="scene-shell raid-scene-shell">

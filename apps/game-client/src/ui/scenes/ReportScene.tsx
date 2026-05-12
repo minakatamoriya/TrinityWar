@@ -2,7 +2,13 @@ import type { ClientRaidTarget, ClientReportEntry, ClientSceneAction } from '@tr
 import { ReportCard } from '../ReportCard';
 import { RaidTargetCard } from '../raid/RaidTargetCard';
 
-type RaidHubTabKey = 'targets' | 'reports' | 'warrants';
+type RaidHubTabKey = 'targets' | 'follows' | 'reports' | 'warrants';
+
+interface FollowedRaidTargetRow {
+  id: string;
+  name: string;
+  faction: string;
+}
 
 interface ReportSceneProps {
   activeTab: RaidHubTabKey;
@@ -10,9 +16,11 @@ interface ReportSceneProps {
   refreshLabel: string;
   refreshPending: boolean;
   targets: ClientRaidTarget[];
+  followedTargets: FollowedRaidTargetRow[];
   reportEntries: ClientReportEntry[];
   onChangeTab: (tab: RaidHubTabKey) => void;
   onOpenTarget: (target: ClientRaidTarget) => void;
+  onOpenFollowedTarget: (target: FollowedRaidTargetRow) => void;
   onRefresh: () => void;
   onAction: (action: ClientSceneAction, context?: string) => void;
 }
@@ -24,9 +32,11 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
     refreshLabel,
     refreshPending,
     targets,
+    followedTargets,
     reportEntries,
     onChangeTab,
     onOpenTarget,
+    onOpenFollowedTarget,
     onRefresh,
     onAction,
   } = props;
@@ -35,6 +45,7 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
     <div className="scene-shell">
       <div className="tab-row">
         <button className={`tab-button ${activeTab === 'targets' ? 'active' : ''}`} onClick={() => onChangeTab('targets')} type="button">掠夺</button>
+        <button className={`tab-button ${activeTab === 'follows' ? 'active' : ''}`} onClick={() => onChangeTab('follows')} type="button">关注</button>
         <button className={`tab-button ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => onChangeTab('reports')} type="button">战报</button>
         <button className={`tab-button ${activeTab === 'warrants' ? 'active' : ''}`} onClick={() => onChangeTab('warrants')} type="button">通缉令</button>
       </div>
@@ -58,10 +69,36 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
         </div>
       ) : null}
 
+      {activeTab === 'follows' ? (
+        <div className="scene-scroll stack-panel compact">
+          {followedTargets.length > 0 ? (
+            <div className="followed-target-list">
+              {followedTargets.map((target) => (
+                <button className="followed-target-row" key={target.id} onClick={() => onOpenFollowedTarget(target)} type="button">
+                  <span className="followed-target-faction">{target.faction}</span>
+                  <strong>{target.name}</strong>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <article className="panel-card followed-target-empty">
+              <div className="panel-head">
+                <h4>当前还没有关注目标</h4>
+              </div>
+              <p className="panel-text">先在掠夺或复仇详情里点击关注，之后会收进这里，便于反复观察田地和金币状态。</p>
+            </article>
+          )}
+        </div>
+      ) : null}
+
       {activeTab === 'reports' ? (
         <div className="scene-scroll stack-panel compact">
           {reportEntries.map((entry, index) => (
-            <ReportCard entry={entry} key={`${entry.title}-${index}`} onAction={onAction} />
+            <ReportCard
+              entry={entry}
+              key={`${entry.title}-${index}`}
+              onAction={onAction}
+            />
           ))}
         </div>
       ) : null}

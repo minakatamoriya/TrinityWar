@@ -11,6 +11,7 @@ import {
   type ClientClaimPendingResponse,
   type ClientCollectFieldRequest,
   type ClientCollectFieldResponse,
+  type ClientFarmField,
   type ClientRaidTargetDetailResponse,
   type ClientRecruitArmyRequest,
   type ClientResetDemoStateResponse,
@@ -90,6 +91,7 @@ function normalizeHomeSummary(home: HomeSummaryResponse): HomeSummaryResponse {
     protectedUntil: home.protectedUntil ?? null,
     resources: (home.resources ?? []).map((resource) => ({ ...resource })),
     pendingClaims: (home.pendingClaims ?? []).map((claim) => ({ ...claim })),
+    temporaryClaim: home.temporaryClaim ? { ...home.temporaryClaim } : null,
     primaryActions: (home.primaryActions ?? []).map((action) => ({ ...action })),
   };
 }
@@ -100,6 +102,103 @@ function cloneHomeSummary(home: HomeSummaryResponse): HomeSummaryResponse {
 
 function cloneSceneContent(scenes: ClientSceneContentResponse): ClientSceneContentResponse {
   return structuredClone(scenes);
+}
+
+function createRaidDetailField(field: Partial<ClientFarmField> & Pick<ClientFarmField, 'id' | 'code' | 'title' | 'badge' | 'tone' | 'description'>): ClientFarmField {
+  return {
+    progressRemainingSeconds: 0,
+    progressTotalSeconds: 1,
+    yieldGold: 0,
+    actions: [],
+    ...field,
+  };
+}
+
+function buildFallbackRaidFields(detail: ClientRaidTargetDetailResponse): ClientFarmField[] {
+  const fieldTones: Array<{ label: string; tone: ClientFarmField['tone']; badge: string }> = [
+    { label: '成熟田', tone: 'mature', badge: '丰熟' },
+    { label: '成长期', tone: 'growing', badge: '成长' },
+    { label: '播种田', tone: 'seeded', badge: '播种' },
+    { label: '空闲田', tone: 'empty', badge: '空闲' },
+    { label: '枯萎田', tone: 'withered', badge: '过熟' },
+  ];
+  const fields: ClientFarmField[] = [];
+
+  fieldTones.forEach(({ label, tone, badge }) => {
+    const match = detail.fieldStatus.match(new RegExp(`${label}\s*(\\d+)\s*块`));
+    const count = match ? Number(match[1]) : 0;
+
+    for (let index = 0; index < count; index += 1) {
+      fields.push(createRaidDetailField({
+        id: `${detail.targetId}-field-${fields.length + 1}`,
+        code: `田地 ${String(fields.length + 1).padStart(2, '0')}`,
+        title: badge,
+        badge,
+        tone,
+        description: detail.exposedFruit,
+      }));
+    }
+  });
+
+  if (fields.length > 0) {
+    while (fields.length < 4) {
+      fields.push(createRaidDetailField({
+        id: `${detail.targetId}-field-${fields.length + 1}`,
+        code: `田地 ${String(fields.length + 1).padStart(2, '0')}`,
+        title: '空闲期',
+        badge: '空闲',
+        tone: 'empty',
+        description: '暂未播种，暂无外露收益',
+      }));
+    }
+
+    return fields;
+  }
+
+  return [
+    createRaidDetailField({
+      id: `${detail.targetId}-field-1`,
+      code: '田地 01',
+      title: detail.fieldStatus,
+      badge: '田地',
+      tone: detail.fieldPreviewTone,
+      description: detail.exposedFruit,
+    }),
+    createRaidDetailField({
+      id: `${detail.targetId}-field-2`,
+      code: '田地 02',
+      title: '空闲期',
+      badge: '空闲',
+      tone: 'empty',
+      description: '暂未播种，暂无外露收益',
+    }),
+    createRaidDetailField({
+      id: `${detail.targetId}-field-3`,
+      code: '田地 03',
+      title: '空闲期',
+      badge: '空闲',
+      tone: 'empty',
+      description: '暂未播种，暂无外露收益',
+    }),
+    createRaidDetailField({
+      id: `${detail.targetId}-field-4`,
+      code: '田地 04',
+      title: '空闲期',
+      badge: '空闲',
+      tone: 'empty',
+      description: '暂未播种，暂无外露收益',
+    }),
+  ];
+}
+
+function normalizeRaidTargetDetail(detail: ClientRaidTargetDetailResponse): ClientRaidTargetDetailResponse {
+  return {
+    ...detail,
+    fields: Array.isArray(detail.fields) && detail.fields.length > 0 ? detail.fields.map((field) => ({
+      ...field,
+      actions: [...field.actions],
+    })) : buildFallbackRaidFields(detail),
+  };
 }
 
 function buildApiUrl(path: string): string {
@@ -291,6 +390,16 @@ function findMockPendingClaim(source: ClientClaimPendingRequest['source']): Home
   return mockHomeSnapshot.pendingClaims.find((claim) => claim.source === source);
 }
 
+function settleMockTemporaryClaim(): void {
+  if (!mockHomeSnapshot.temporaryClaim) {
+    return;
+  }
+
+  if (Date.now() >= new Date(mockHomeSnapshot.temporaryClaim.expiresAt).getTime()) {
+    mockHomeSnapshot.temporaryClaim = null;
+  }
+}
+
 function syncMockFactionScene(): void {
   const factionClaim = findMockPendingClaim('faction');
   const baseDividend = 160;
@@ -312,7 +421,7 @@ function syncMockFactionScene(): void {
   mockSceneSnapshot.faction.contribution = {
     title: '当前贡献值',
     value: formatNumber(mockFactionContribution),
-    description: '100 金币 = 1 贡献，1 兵 = 1 贡献。捐献后会立刻反馈到贡献值与分红构成。',
+    description: '100 金币 = 1 贡献，1 只灵宠 = 1 贡献。捐献后会立刻反馈到贡献值与分红构成。',
   };
   mockSceneSnapshot.faction.comparison = [
     { faction: '人界', advantage: '贡献转化更稳，适合分红运营。', gold: formatNumber(mockFactionTreasuryGold), power: formatNumber(mockFactionArmyPower), isCurrent: true },
@@ -320,10 +429,10 @@ function syncMockFactionScene(): void {
     { faction: '魔界', advantage: '掠夺收益增加 10%，但战损更高。', gold: '85,300', power: '1,340' },
   ];
   mockSceneSnapshot.faction.donate = {
-    title: '捐钱捐部队',
-    description: '金币按 100 为一步，确认后会立即从当前总金币和总兵力扣除。',
+    title: '捐钱捐灵宠',
+    description: '金币按 100 为一步，确认后会立即从当前总金币和当前灵宠扣除。',
     goldStep: 100,
-    contributionRule: '100 金币 = 1 贡献，1 兵 = 1 贡献。',
+    contributionRule: '100 金币 = 1 贡献，1 只灵宠 = 1 贡献。',
   };
   mockSceneSnapshot.faction.rankings = [
     { label: '1. 烬牙', value: '86', note: '魔界' },
@@ -348,21 +457,33 @@ function setVaultCapacity(nextCapacity: number): void {
 
 function applyMockClaimPending(input: ClientClaimPendingRequest): ClientClaimPendingResponse {
   const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
-  const pendingClaim = findMockPendingClaim(input.source);
+  settleMockTemporaryClaim();
+  const pendingClaim = input.source === 'raid-overflow' ? undefined : findMockPendingClaim(input.source);
 
-  if (!vaultResource || !pendingClaim) {
+  if (!vaultResource || (input.source !== 'raid-overflow' && !pendingClaim)) {
     throw new Error('Mock home summary is missing required resources.');
   }
 
   const vault = parseCurrentAndCapacity(vaultResource.value);
-  const pendingClaimGold = parseNumberText(pendingClaim.value);
+  const pendingClaimGold = input.source === 'raid-overflow'
+    ? mockHomeSnapshot.temporaryClaim?.goldAmount ?? 0
+    : parseNumberText(pendingClaim?.value ?? '0');
   const claimableGold = Math.min(Math.max(vault.capacity - vault.current, 0), pendingClaimGold);
   const nextVaultGold = vault.current + claimableGold;
   const remainingPendingGold = pendingClaimGold - claimableGold;
-  const sourceLabel = input.source === 'tax' ? '主城税收' : '阵营分红';
+  const sourceLabel = input.source === 'tax' ? '主城税收' : input.source === 'faction' ? '阵营分红' : '临时待领取';
 
   vaultResource.value = `${formatNumber(nextVaultGold)} / ${formatNumber(vault.capacity)}`;
-  pendingClaim.value = formatNumber(remainingPendingGold);
+  if (input.source === 'raid-overflow') {
+    mockHomeSnapshot.temporaryClaim = remainingPendingGold > 0 && mockHomeSnapshot.temporaryClaim
+      ? {
+          ...mockHomeSnapshot.temporaryClaim,
+          goldAmount: remainingPendingGold,
+        }
+      : null;
+  } else if (pendingClaim) {
+    pendingClaim.value = formatNumber(remainingPendingGold);
+  }
   syncMockFactionScene();
 
   const summary = claimableGold > 0
@@ -555,15 +676,15 @@ function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientSt
     const armyResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'army');
 
     if (!armyResource) {
-      return buildMockMutation('当前缺少人口上限资源数据，请稍后重试。');
+      return buildMockMutation('当前缺少灵宠上限资源数据，请稍后重试。');
     }
 
     const army = parseCurrentAndCapacity(armyResource.value);
     const nextCapacity = army.capacity + 100;
     armyResource.value = `${formatNumber(army.current)} / ${formatNumber(nextCapacity)}`;
-    upgrade.description = `Lv.2 -> Lv.3，人口上限由 ${formatNumber(nextCapacity)} 提升到 ${formatNumber(nextCapacity + 100)}。`;
+    upgrade.description = `Lv.2 -> Lv.3，灵宠上限由 ${formatNumber(nextCapacity)} 提升到 ${formatNumber(nextCapacity + 100)}。`;
     upgrade.costText = '消耗 1,180 金币';
-    return buildMockMutation(`人口上限升级完成，当前人口上限已提升到 ${formatNumber(nextCapacity)}。`);
+    return buildMockMutation(`灵宠上限升级完成，当前灵宠上限已提升到 ${formatNumber(nextCapacity)}。`);
   }
 
   upgrade.description = 'Lv.2 -> Lv.3，进一步降低余额与田地被掠损失。';
@@ -577,12 +698,12 @@ function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutat
   const armyResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'army');
 
   if (!vaultResource || !armyResource) {
-    return buildMockMutation('当前缺少造兵所需资源数据，请稍后重试。');
+    return buildMockMutation('当前缺少灵宠培育所需资源数据，请稍后重试。');
   }
 
   const requestedCount = Math.max(Math.floor(input.recruitCount), 0);
   if (requestedCount <= 0) {
-    return buildMockMutation('请输入有效的造兵数量。');
+    return buildMockMutation('请输入有效的灵宠培育数量。');
   }
 
   const vault = parseCurrentAndCapacity(vaultResource.value);
@@ -591,12 +712,12 @@ function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutat
   const availableArmySpace = Math.max(army.capacity - army.current - queuedArmyCount, 0);
 
   if (availableArmySpace <= 0) {
-    return buildMockMutation('当前战力已满，请先扩充上限后再继续造兵。');
+    return buildMockMutation('当前灵宠已满，请先扩充上限后再继续培育。');
   }
 
   const affordableCount = Math.floor(vault.current / ARMY_RECRUIT_GOLD_COST_PER_UNIT);
   if (affordableCount <= 0) {
-    return buildMockMutation('金币不足，当前无法开始造兵。');
+    return buildMockMutation('金币不足，当前无法开始培育灵宠。');
   }
 
   const actualRecruitCount = Math.min(requestedCount, availableArmySpace, affordableCount);
@@ -619,10 +740,10 @@ function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutat
 
   return buildMockMutation(
     actualRecruitCount < requestedCount
-      ? `本次新增 ${formatNumber(actualRecruitCount)} 名士兵进入训练队列，已立即扣除 ${formatNumber(totalCost)} 金币；其余部分受金币或兵力上限限制。`
+      ? `本次新增 ${formatNumber(actualRecruitCount)} 只灵宠进入培育队列，已立即扣除 ${formatNumber(totalCost)} 金币；其余部分受金币或灵宠上限限制。`
       : currentQueue
-        ? `已追加 ${formatNumber(actualRecruitCount)} 名士兵到当前训练队列，金币已立即扣除，剩余训练时间已重算。`
-        : `已开始训练 ${formatNumber(actualRecruitCount)} 名士兵，金币已立即扣除，倒计时结束后才会增加战力。`,
+        ? `已追加 ${formatNumber(actualRecruitCount)} 只灵宠到当前培育队列，金币已立即扣除，剩余培育时间已重算。`
+        : `已开始培育 ${formatNumber(actualRecruitCount)} 只灵宠，金币已立即扣除，倒计时结束后才会增加守护灵宠。`,
   );
 }
 
@@ -642,6 +763,9 @@ function applyMockRaidTarget(input: ClientRaidActionRequest): ClientRaidActionRe
         targetId: input.targetId,
         targetName: '未知目标',
         goldLoot: 0,
+        depositedGold: 0,
+        overflowGold: 0,
+        temporaryClaimExpiresAt: null,
         casualties: 0,
         rewards: [],
         protectedUntil: new Date().toISOString(),
@@ -660,6 +784,7 @@ function applyMockRaidTarget(input: ClientRaidActionRequest): ClientRaidActionRe
   const lootRatio = clamp(0.08 + powerRatio * 0.22 + (success ? 0.08 : 0), 0.05, 0.4);
   const rawGoldLoot = Math.max(Math.round(raidableGold * lootRatio), 20);
   const depositedGold = Math.min(rawGoldLoot, Math.max(vault.capacity - vault.current, 0));
+  const overflowGold = Math.max(rawGoldLoot - depositedGold, 0);
   const casualtyRatio = clamp(0.1 + (combatPower / Math.max(army.current, 1)) * 0.04 - (success ? 0.03 : 0), 0.08, 0.42);
   const casualties = Math.min(Math.max(Math.ceil(army.current * casualtyRatio), 1), army.current);
   const rewardMap: Record<string, { seedId: string; label: string; quantity: number; chance: number }> = {
@@ -675,6 +800,16 @@ function applyMockRaidTarget(input: ClientRaidActionRequest): ClientRaidActionRe
     : [];
 
   applyVaultGoldDelta(depositedGold);
+  if (overflowGold > 0) {
+    settleMockTemporaryClaim();
+    mockHomeSnapshot.temporaryClaim = {
+      source: 'raid-overflow',
+      label: '待领取',
+      goldAmount: (mockHomeSnapshot.temporaryClaim?.goldAmount ?? 0) + overflowGold,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      description: '掠夺时金库已满，超出的金币会临时保留在这里，过期后消失。',
+    };
+  }
   applyMockSeedRewards(rewards);
   applyArmyCountDelta(-casualties);
   mockSceneSnapshot.raid.targets = mockSceneSnapshot.raid.targets.filter((item) => item.id !== input.targetId);
@@ -683,7 +818,7 @@ function applyMockRaidTarget(input: ClientRaidActionRequest): ClientRaidActionRe
     tag: success ? '掠夺成功' : '强袭试探',
     tone: success ? 'success' : 'neutral',
     createdAt: new Date().toISOString(),
-    summary: `你对${target.name}发起黑盒掠夺，带回 ${formatNumber(depositedGold)} 金币，战损 ${formatNumber(casualties)} 兵${rewards.length > 0 ? `，额外获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : ''}。目标已进入 1 小时防护。`,
+    summary: `你对${target.name}发起黑盒掠夺，带回 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库${overflowGold > 0 ? `，另有 ${formatNumber(overflowGold)} 已转入待领取` : ''}，折损 ${formatNumber(casualties)} 只灵宠${rewards.length > 0 ? `，额外获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : ''}。目标已进入 1 小时防护。`,
     actions: [{ label: '查看详情', target: 'report', tone: 'ghost' }],
   });
   mockSceneSnapshot.report.attack = mockSceneSnapshot.report.attack.slice(0, 6);
@@ -705,16 +840,21 @@ function applyMockRaidTarget(input: ClientRaidActionRequest): ClientRaidActionRe
   mockHomeSnapshot.protectedUntil = protectedUntil;
 
   const rewardSummary = rewards.length > 0 ? `，额外获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : '';
-  const reportSummary = `你对${target.name}发起黑盒掠夺，带回 ${formatNumber(depositedGold)} 金币，战损 ${formatNumber(casualties)} 兵${rewardSummary}。`;
+  const reportSummary = `你对${target.name}发起黑盒掠夺，带回 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库${overflowGold > 0 ? `，另有 ${formatNumber(overflowGold)} 已转入待领取` : ''}，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`;
   return {
     app: mockHomeSnapshot.app,
-    summary: `${target.name} 已进入 1 小时防护，本次获得 ${formatNumber(depositedGold)} 金币，战损 ${formatNumber(casualties)} 兵${rewardSummary}。`,
+    summary: overflowGold > 0
+      ? `${target.name} 已进入 1 小时防护，本次掠夺 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库，另有 ${formatNumber(overflowGold)} 转入待领取，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`
+      : `${target.name} 已进入 1 小时防护，本次获得 ${formatNumber(rawGoldLoot)} 金币，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`,
     home: cloneHomeSummary(mockHomeSnapshot),
     scenes: cloneSceneContent(mockSceneSnapshot),
     result: {
       targetId: input.targetId,
       targetName: target.name,
-      goldLoot: depositedGold,
+      goldLoot: rawGoldLoot,
+      depositedGold,
+      overflowGold,
+      temporaryClaimExpiresAt: mockHomeSnapshot.temporaryClaim?.expiresAt ?? null,
       casualties,
       rewards,
       protectedUntil,
@@ -725,30 +865,25 @@ function applyMockRaidTarget(input: ClientRaidActionRequest): ClientRaidActionRe
 
 function applyMockFactionDonate(input: ClientFactionDonateRequest): ClientStateMutationResponse {
   const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
-  const armyResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'army');
 
-  if (!vaultResource || !armyResource) {
+  if (!vaultResource) {
     throw new Error('Mock home summary is missing faction donate resources.');
   }
 
   const goldStep = mockSceneSnapshot.faction.donate.goldStep;
   const vault = parseCurrentAndCapacity(vaultResource.value);
-  const army = parseCurrentAndCapacity(armyResource.value);
   const actualGoldAmount = Math.min(Math.max(Math.floor(input.goldAmount / goldStep) * goldStep, 0), Math.floor(vault.current / goldStep) * goldStep);
-  const actualArmyAmount = Math.min(Math.max(Math.floor(input.armyAmount), 0), army.current);
 
-  if (actualGoldAmount <= 0 && actualArmyAmount <= 0) {
-    return buildMockMutation('请先选择要捐出的金币或部队。');
+  if (actualGoldAmount <= 0) {
+    return buildMockMutation('请先选择要捐出的金币。');
   }
 
-  const contributionGain = actualGoldAmount / goldStep + actualArmyAmount;
+  const contributionGain = actualGoldAmount / goldStep;
   applyVaultGoldDelta(-actualGoldAmount);
-  applyArmyCountDelta(-actualArmyAmount);
   mockFactionContribution += contributionGain;
   mockFactionTreasuryGold += actualGoldAmount;
-  mockFactionArmyPower += actualArmyAmount;
 
-  return buildMockMutation(`已向阵营捐出 ${formatNumber(actualGoldAmount)} 金币、${formatNumber(actualArmyAmount)} 兵，贡献值 +${formatNumber(contributionGain)}。`);
+  return buildMockMutation(`已向阵营捐出 ${formatNumber(actualGoldAmount)} 金币，贡献值 +${formatNumber(contributionGain)}。`);
 }
 
 export async function collectFieldEarnings(input: ClientCollectFieldRequest): Promise<ClientCollectFieldResponse> {
@@ -894,14 +1029,14 @@ export async function resetDemoExperimentState(): Promise<ClientResetDemoStateRe
 
 export async function loadRaidTargetDetail(targetId: string): Promise<ClientRaidTargetDetailResponse> {
   try {
-    return await fetchJson<ClientRaidTargetDetailResponse>(`${CLIENT_API_PREFIX}/raid-targets/${targetId}`);
+    return normalizeRaidTargetDetail(await fetchJson<ClientRaidTargetDetailResponse>(`${CLIENT_API_PREFIX}/raid-targets/${targetId}`));
   } catch {
     const fallback = mockRaidTargetDetails[targetId];
     if (!fallback) {
       throw new Error(`Missing mock raid target detail for ${targetId}`);
     }
 
-    return structuredClone(fallback);
+    return normalizeRaidTargetDetail(structuredClone(fallback));
   }
 }
 
