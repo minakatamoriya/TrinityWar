@@ -14,7 +14,6 @@ import type {
   ClientSceneKey,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { ARMY_RECRUIT_GOLD_COST_PER_UNIT } from '@trinitywar/shared';
 import { claimPendingEarnings, claimStarterSeedPack, collectFieldEarnings, donateFactionResources, loadClientViewModel, loadRaidTargetDetail, raidClientTarget, recruitArmyUnits, resetDemoExperimentState, startFieldCultivation, type ClientViewModel, upgradeClientBuilding } from './api';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
@@ -210,9 +209,9 @@ function formatServerTime(serverTime: string): string {
   }).format(new Date(serverTime));
 }
 
-function getMaxRecruitable(currentGold: number, currentArmy: number, armyCapacity: number, queuedArmyCount = 0): number {
+function getMaxRecruitable(currentGold: number, currentArmy: number, armyCapacity: number, unitCostGold: number, queuedArmyCount = 0): number {
   const remainingCapacity = Math.max(armyCapacity - currentArmy - queuedArmyCount, 0);
-  const affordableCount = Math.floor(currentGold / ARMY_RECRUIT_GOLD_COST_PER_UNIT);
+  const affordableCount = unitCostGold > 0 ? Math.floor(currentGold / unitCostGold) : 0;
 
   return Math.min(remainingCapacity, affordableCount);
 }
@@ -302,9 +301,9 @@ function findResourceByTone(tone: HomeSummaryResponse['resources'][number]['tone
   return resources.find((resource) => resource.tone === tone);
 }
 
-function getDefaultRecruitCount(currentGold: number, currentArmy: number, armyCapacity: number, queuedArmyCount = 0): number {
+function getDefaultRecruitCount(currentGold: number, currentArmy: number, armyCapacity: number, unitCostGold: number, queuedArmyCount = 0): number {
   const remainingCapacity = Math.max(armyCapacity - currentArmy - queuedArmyCount, 0);
-  const affordableCount = Math.floor(currentGold / ARMY_RECRUIT_GOLD_COST_PER_UNIT);
+  const affordableCount = unitCostGold > 0 ? Math.floor(currentGold / unitCostGold) : 0;
   const maxRecruitable = Math.min(remainingCapacity, affordableCount);
 
   if (maxRecruitable <= 0) {
@@ -416,7 +415,8 @@ function App(): JSX.Element {
     const nextVaultProgress = nextVaultResource ? parseCapacityResourceValue(nextVaultResource.value) : { current: 0, capacity: 0, ratio: 0 };
     const nextArmyProgress = nextArmyResource ? parseCapacityResourceValue(nextArmyResource.value) : { current: 0, capacity: 0, ratio: 0 };
     const nextQueuedArmyCount = viewModel.scenes.army.queue?.queuedUnits ?? 0;
-    const maxRecruitable = getMaxRecruitable(nextVaultProgress.current, nextArmyProgress.current, nextArmyProgress.capacity, nextQueuedArmyCount);
+    const unitCostGold = viewModel.scenes.army.unitCostGold;
+    const maxRecruitable = getMaxRecruitable(nextVaultProgress.current, nextArmyProgress.current, nextArmyProgress.capacity, unitCostGold, nextQueuedArmyCount);
 
     setArmyRecruitCount((current) => {
       if (maxRecruitable <= 0) {
@@ -424,7 +424,7 @@ function App(): JSX.Element {
       }
 
       if (current <= 0 || current > maxRecruitable) {
-        return getDefaultRecruitCount(nextVaultProgress.current, nextArmyProgress.current, nextArmyProgress.capacity, nextQueuedArmyCount);
+        return getDefaultRecruitCount(nextVaultProgress.current, nextArmyProgress.current, nextArmyProgress.capacity, unitCostGold, nextQueuedArmyCount);
       }
 
       return current;

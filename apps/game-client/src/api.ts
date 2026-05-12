@@ -1,6 +1,4 @@
 import {
-  ARMY_RECRUIT_GOLD_COST_PER_UNIT,
-  ARMY_RECRUIT_SECONDS_PER_UNIT,
   CLIENT_API_PREFIX,
   type ClientBootstrapResponse,
   type ClientArmyTrainingQueue,
@@ -710,23 +708,25 @@ function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutat
   const army = parseCurrentAndCapacity(armyResource.value);
   const queuedArmyCount = mockSceneSnapshot.army.queue?.queuedUnits ?? 0;
   const availableArmySpace = Math.max(army.capacity - army.current - queuedArmyCount, 0);
+  const unitCostGold = mockSceneSnapshot.army.unitCostGold;
+  const unitTrainingSeconds = mockSceneSnapshot.army.unitTrainingSeconds;
 
   if (availableArmySpace <= 0) {
     return buildMockMutation('当前灵宠已满，请先扩充上限后再继续培育。');
   }
 
-  const affordableCount = Math.floor(vault.current / ARMY_RECRUIT_GOLD_COST_PER_UNIT);
+  const affordableCount = unitCostGold > 0 ? Math.floor(vault.current / unitCostGold) : 0;
   if (affordableCount <= 0) {
     return buildMockMutation('金币不足，当前无法开始培育灵宠。');
   }
 
   const actualRecruitCount = Math.min(requestedCount, availableArmySpace, affordableCount);
-  const totalCost = actualRecruitCount * ARMY_RECRUIT_GOLD_COST_PER_UNIT;
+  const totalCost = actualRecruitCount * unitCostGold;
   const currentQueue = mockSceneSnapshot.army.queue;
   const remainingSeconds = currentQueue
     ? Math.max(Math.ceil((new Date(currentQueue.readyAt).getTime() - Date.now()) / 1000), 0)
     : 0;
-  const nextTotalSeconds = remainingSeconds + actualRecruitCount * ARMY_RECRUIT_SECONDS_PER_UNIT;
+  const nextTotalSeconds = remainingSeconds + actualRecruitCount * unitTrainingSeconds;
 
   applyVaultGoldDelta(-totalCost);
   mockSceneSnapshot.army.queue = {

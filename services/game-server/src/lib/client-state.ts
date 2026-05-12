@@ -1,6 +1,4 @@
 import {
-  ARMY_RECRUIT_GOLD_COST_PER_UNIT,
-  ARMY_RECRUIT_SECONDS_PER_UNIT,
   APP_NAME,
   type ClientArmyTrainingQueue,
   type ClientBootstrapResponse,
@@ -27,6 +25,14 @@ import {
   type ClientUpgradeBuildingRequest,
   type HomeSummaryResponse,
 } from '@trinitywar/shared';
+import {
+  GAME_BALANCE,
+  getBuildingUpgradeCost,
+  getFactionDividendPerHour as getConfiguredFactionDividendPerHour,
+  getPopulationCapacityGain,
+  getTaxIncomePerHour as getConfiguredTaxIncomePerHour,
+  getVaultCapacityGain,
+} from './game-balance.js';
 
 interface FieldState {
   id: string;
@@ -442,26 +448,11 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function getTaxIncomePerHour(level: number): number {
-  if (level === 4) {
-    return 190;
-  }
-
-  if (level === 5) {
-    return 260;
-  }
-
-  return level >= 6 ? 340 : 120;
+  return getConfiguredTaxIncomePerHour(level);
 }
 
 function getFactionDividendPerHour(): { base: number; bonus: number; total: number } {
-  const base = 160;
-  const bonus = playerState.factionContribution;
-
-  return {
-    base,
-    bonus,
-    total: base + bonus,
-  };
+  return getConfiguredFactionDividendPerHour(playerState.factionContribution);
 }
 
 function getFactionAdvantageText(): string {
@@ -548,7 +539,7 @@ function setPendingClaimAmount(source: ClientPendingClaimSource, value: number):
 
   playerState.temporaryRaidClaim = {
     goldAmount: value,
-    expiresAt: playerState.temporaryRaidClaim?.expiresAt ?? new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    expiresAt: playerState.temporaryRaidClaim?.expiresAt ?? new Date(Date.now() + GAME_BALANCE.raid.temporaryClaimMinutes * 60 * 1000).toISOString(),
   };
 }
 
@@ -563,7 +554,7 @@ function settleTemporaryRaidClaim(): void {
 }
 
 function addTemporaryRaidClaim(goldAmount: number): string {
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + GAME_BALANCE.raid.temporaryClaimMinutes * 60 * 1000).toISOString();
 
   if (goldAmount <= 0) {
     return expiresAt;
@@ -748,29 +739,7 @@ function buildUpgradeAction(label: string, tone: 'primary' | 'secondary' | 'ghos
 }
 
 function getUpgradeCost(buildingId: ClientBuildingUpgradeId): number | null {
-  const level = playerState.buildingLevels[buildingId];
-
-  if (buildingId === 'castle') {
-    return level === 4 ? 1800 : level === 5 ? 2400 : null;
-  }
-
-  if (buildingId === 'vault') {
-    return level === 3 ? 1150 : level === 4 ? 1580 : null;
-  }
-
-  if (buildingId === 'field-slot') {
-    return level === 1 ? 980 : null;
-  }
-
-  if (buildingId === 'population') {
-    return level === 1 ? 880 : level === 2 ? 1180 : null;
-  }
-
-  if (buildingId === 'watchtower') {
-    return level === 1 ? 760 : level === 2 ? 980 : null;
-  }
-
-  return null;
+  return getBuildingUpgradeCost(buildingId, playerState.buildingLevels[buildingId]);
 }
 
 function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrades'] {
@@ -796,7 +765,7 @@ function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrad
     {
       id: 'vault',
       title: '金库升级',
-      description: `Lv.${vaultLevel} -> Lv.${vaultLevel + 1}，容量由 ${formatNumber(playerState.ledger.vaultCapacity)} 提升到 ${formatNumber(playerState.ledger.vaultCapacity + 1600)}。`,
+      description: `Lv.${vaultLevel} -> Lv.${vaultLevel + 1}，容量由 ${formatNumber(playerState.ledger.vaultCapacity)} 提升到 ${formatNumber(playerState.ledger.vaultCapacity + getVaultCapacityGain(vaultLevel))}。`,
       costText: getUpgradeCost('vault') ? `消耗 ${formatNumber(getUpgradeCost('vault') ?? 0)} 金币` : '已达到验证上限',
       action: buildUpgradeAction(getUpgradeCost('vault') ? '升级金币上限' : '查看条件', getUpgradeCost('vault') ? 'secondary' : 'ghost'),
       locked: !getUpgradeCost('vault'),
@@ -814,7 +783,7 @@ function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrad
     {
       id: 'population',
       title: '人口',
-      description: `Lv.${populationLevel} -> Lv.${populationLevel + 1}，人口上限由 ${formatNumber(playerState.armyCapacity)} 提升到 ${formatNumber(playerState.armyCapacity + 100)}。`,
+      description: `Lv.${populationLevel} -> Lv.${populationLevel + 1}，人口上限由 ${formatNumber(playerState.armyCapacity)} 提升到 ${formatNumber(playerState.armyCapacity + getPopulationCapacityGain(populationLevel))}。`,
       costText: getUpgradeCost('population') ? `消耗 ${formatNumber(getUpgradeCost('population') ?? 0)} 金币` : '已达到验证上限',
       action: buildUpgradeAction(getUpgradeCost('population') ? '升级人口上限' : '查看条件', getUpgradeCost('population') ? 'secondary' : 'ghost'),
       locked: !getUpgradeCost('population'),
@@ -910,7 +879,7 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       cropName,
       tone: 'growing',
       progressRemainingSeconds: 4690,
-      progressTotalSeconds: 7200,
+      progressTotalSeconds: GAME_BALANCE.farm.progressSeconds.growing,
       yieldGold: field.currentYield,
       description: '可抢收，点击后直接结算一轮提前收取结果。',
       actions: [
@@ -928,7 +897,7 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       cropName,
       tone: 'seeded',
       progressRemainingSeconds: 2535,
-      progressTotalSeconds: 3600,
+      progressTotalSeconds: GAME_BALANCE.farm.progressSeconds.seeded,
       yieldGold: field.currentYield,
       description: '播种刚完成，等待进入成长后再决定是否抢收。',
       actions: [],
@@ -1004,8 +973,8 @@ export function buildSceneContent(): ClientSceneContentResponse {
       upgrades: buildBuildingUpgrades(),
     },
     army: {
-      unitCostGold: ARMY_RECRUIT_GOLD_COST_PER_UNIT,
-      unitTrainingSeconds: ARMY_RECRUIT_SECONDS_PER_UNIT,
+      unitCostGold: GAME_BALANCE.army.recruitGoldCostPerUnit,
+      unitTrainingSeconds: GAME_BALANCE.army.recruitSecondsPerUnit,
       queue: buildArmyTrainingQueue(),
     },
     farm: {
@@ -1258,7 +1227,7 @@ export function collectFieldGold(input: ClientCollectFieldRequest): ClientCollec
 
 export function startCultivation(input: ClientStartCultivationRequest): ClientStateMutationResponse {
   const field = playerState.fields.find((item) => item.id === input.fieldId);
-  const cultivationCost = 520;
+  const cultivationCost = GAME_BALANCE.farm.defaultCultivationCost;
 
   if (!field || !field.unlocked) {
     return buildMutationResponse('当前地块尚未解锁，无法开始培育。');
@@ -1285,7 +1254,7 @@ export function startCultivation(input: ClientStartCultivationRequest): ClientSt
   field.status = 'seeded';
   field.plantedSeedId = input.seedId;
   field.plantedGold = cultivationCost;
-  field.currentYield = 520;
+  field.currentYield = GAME_BALANCE.farm.defaultCultivationYield;
   field.badgeText = '播种';
 
   return buildMutationResponse(`${field.code} 已投入 ${formatNumber(cultivationCost)} 金币，播下 ${seedLabelMap[input.seedId] ?? input.seedId}，开始新一轮培育。`);
@@ -1316,19 +1285,19 @@ export function recruitArmy(input: ClientRecruitArmyRequest): ClientStateMutatio
     return buildMutationResponse('当前战力已满，请先扩充上限后再继续造兵。');
   }
 
-  const affordableCount = Math.floor(playerState.ledger.vaultGold / ARMY_RECRUIT_GOLD_COST_PER_UNIT);
+  const affordableCount = Math.floor(playerState.ledger.vaultGold / GAME_BALANCE.army.recruitGoldCostPerUnit);
   if (affordableCount <= 0) {
     return buildMutationResponse('金币不足，当前无法开始造兵。');
   }
 
   const actualRecruitCount = Math.min(requestedCount, availableArmySpace, affordableCount);
-  const totalCost = actualRecruitCount * ARMY_RECRUIT_GOLD_COST_PER_UNIT;
+  const totalCost = actualRecruitCount * GAME_BALANCE.army.recruitGoldCostPerUnit;
   const now = Date.now();
   const currentQueue = playerState.armyTrainingQueue;
   const remainingSeconds = currentQueue
     ? Math.max(Math.ceil((new Date(currentQueue.readyAt).getTime() - now) / 1000), 0)
     : 0;
-  const nextTotalSeconds = remainingSeconds + actualRecruitCount * ARMY_RECRUIT_SECONDS_PER_UNIT;
+  const nextTotalSeconds = remainingSeconds + actualRecruitCount * GAME_BALANCE.army.recruitSecondsPerUnit;
 
   playerState.ledger.vaultGold -= totalCost;
   playerState.armyTrainingQueue = {
@@ -1368,7 +1337,7 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
 
   if (input.buildingId === 'vault') {
     playerState.buildingLevels.vault += 1;
-    playerState.ledger.vaultCapacity += 1600;
+    playerState.ledger.vaultCapacity += getVaultCapacityGain(playerState.buildingLevels.vault - 1);
     return buildMutationResponse(`金库升级完成，容量已提升到 ${formatNumber(playerState.ledger.vaultCapacity)}。`);
   }
 
@@ -1385,7 +1354,7 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
 
   if (input.buildingId === 'population') {
     playerState.buildingLevels.population += 1;
-    playerState.armyCapacity += 100;
+    playerState.armyCapacity += getPopulationCapacityGain(playerState.buildingLevels.population - 1);
     return buildMutationResponse(`人口上限升级完成，当前人口上限已提升到 ${formatNumber(playerState.armyCapacity)}。`);
   }
 
