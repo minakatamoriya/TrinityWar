@@ -127,13 +127,16 @@ export interface ClientClaimPendingResponse {
 
 export interface ClientClaimDailyTaskRequest {
   taskId: string;
+  acceptOverflowLoss?: boolean;
 }
 
 export interface ClientClaimDailyTaskResponse {
   app: string;
   summary: string;
   taskId: string;
+  rewardGold: number;
   claimedGold: number;
+  overflowGold: number;
   home: HomeSummaryResponse;
   scenes: ClientSceneContentResponse;
 }

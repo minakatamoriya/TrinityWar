@@ -38,6 +38,7 @@ import {
   getBuildingUpgradeCost,
   getDailyTaskDefinition,
   getFactionDividendPerHour as getConfiguredFactionDividendPerHour,
+  getPopulationLevelConfig,
   getPopulationCapacityGain,
   getSeedStageGold,
   getSeedStageSeconds,
@@ -348,7 +349,7 @@ function buildCastleExtensions(): ClientCastleExtensionUpgrade[] {
           ? `需要主城 Lv.${nextLevelConfig.requiredCastleLevel}`
           : `消耗 ${formatNumber(nextLevelConfig.upgradeCost)} 金币`
         : '已达到验证上限',
-      action: buildUpgradeAction(nextLevelConfig && !locked ? '升级分支' : '查看条件', nextLevelConfig && !locked ? 'secondary' : 'ghost'),
+      action: buildUpgradeAction(nextLevelConfig && !locked ? '升级' : '查看条件', nextLevelConfig && !locked ? 'secondary' : 'ghost'),
       locked: !nextLevelConfig || locked,
     };
   });
@@ -1179,6 +1180,8 @@ function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrad
   const lockedFieldExists = playerState.fields.some((field) => !field.unlocked);
   const unlockedFieldCount = playerState.fields.filter((field) => field.unlocked).length;
   const nextFieldUnlockRequirement = getNextFieldUnlockRequirement(castleLevel);
+  const nextPopulationLevelConfig = getPopulationLevelConfig(populationLevel);
+  const populationLocked = Boolean(nextPopulationLevelConfig && castleLevel < nextPopulationLevelConfig.requiredCastleLevel);
   const watchtowerLocked = castleLevel < 5;
   const currentTaxIncome = getTaxIncomePerHour(castleLevel);
   const nextTaxIncome = getTaxIncomePerHour(castleLevel + 1);
@@ -1212,11 +1215,15 @@ function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrad
     },
     {
       id: 'population',
-      title: '人口',
-      description: `Lv.${populationLevel} -> Lv.${populationLevel + 1}，人口上限由 ${formatNumber(playerState.armyCapacity)} 提升到 ${formatNumber(playerState.armyCapacity + getPopulationCapacityGain(populationLevel))}。`,
-      costText: getUpgradeCost('population') ? `消耗 ${formatNumber(getUpgradeCost('population') ?? 0)} 金币` : '已达到验证上限',
-      action: buildUpgradeAction(getUpgradeCost('population') ? '升级人口上限' : '查看条件', getUpgradeCost('population') ? 'secondary' : 'ghost'),
-      locked: !getUpgradeCost('population'),
+      title: '灵宠上限',
+      description: `Lv.${populationLevel} -> Lv.${populationLevel + 1}，灵宠上限由 ${formatNumber(playerState.armyCapacity)} 提升到 ${formatNumber(playerState.armyCapacity + getPopulationCapacityGain(populationLevel))}。`,
+      costText: populationLocked
+        ? `需要主城 Lv.${nextPopulationLevelConfig?.requiredCastleLevel ?? castleLevel}`
+        : getUpgradeCost('population')
+          ? `消耗 ${formatNumber(getUpgradeCost('population') ?? 0)} 金币`
+          : '已达到验证上限',
+      action: buildUpgradeAction(populationLocked || !getUpgradeCost('population') ? '查看条件' : '升级灵宠上限', populationLocked || !getUpgradeCost('population') ? 'ghost' : 'secondary'),
+      locked: populationLocked || !getUpgradeCost('population'),
     },
     {
       id: 'watchtower',
@@ -1468,7 +1475,7 @@ export function buildSceneContent(): ClientSceneContentResponse {
         title: `${playerState.factionName}阵营`,
         description: `当前每小时分红 ${formatNumber(factionDividend.total)}，先上缴再领取会更划算。`,
         advantage: getFactionAdvantageText(),
-        breakdown: `金额构成：基础分红 ${formatNumber(factionDividend.base)} + 贡献加成 ${formatNumber(factionDividend.bonus)}`,
+        breakdown: `金额构成：基础分红 ${formatNumber(factionDividend.base)}/小时 + 贡献加成 ${formatNumber(factionDividend.bonus)}/小时`,
         action: { label: '领取分红', target: 'faction', tone: 'primary' },
       },
       contribution: {
@@ -1479,7 +1486,7 @@ export function buildSceneContent(): ClientSceneContentResponse {
       comparison: buildFactionComparison(),
       donate: {
         title: '捐献金币',
-        description: '金币按 100 为一步，确认后会立即从当前总金币扣除。',
+        description: '100 金币 = 1 贡献，确认后会立即从当前总金币扣除。',
         goldStep: 100,
         contributionRule: '100 金币 = 1 贡献。',
       },
@@ -1633,7 +1640,9 @@ export function claimDailyTask(input: ClientClaimDailyTaskRequest): Omit<ClientC
       app: APP_NAME,
       summary: '当前任务不存在或已过期。',
       taskId: input.taskId,
+      rewardGold: 0,
       claimedGold: 0,
+      overflowGold: 0,
     };
   }
 
@@ -1642,7 +1651,9 @@ export function claimDailyTask(input: ClientClaimDailyTaskRequest): Omit<ClientC
       app: APP_NAME,
       summary: '这条任务奖励已经领取过了。',
       taskId: input.taskId,
+      rewardGold: 0,
       claimedGold: 0,
+      overflowGold: 0,
     };
   }
 
@@ -1651,19 +1662,25 @@ export function claimDailyTask(input: ClientClaimDailyTaskRequest): Omit<ClientC
       app: APP_NAME,
       summary: '当前任务尚未完成，暂时不能领取。',
       taskId: input.taskId,
+      rewardGold: 0,
       claimedGold: 0,
+      overflowGold: 0,
     };
   }
 
   const rewardGold = getDailyTaskGoldReward(input.taskId);
-  const claimedGold = Math.min(rewardGold, Math.max(playerState.ledger.vaultCapacity - playerState.ledger.vaultGold, 0));
+  const availableVaultSpace = Math.max(playerState.ledger.vaultCapacity - playerState.ledger.vaultGold, 0);
+  const claimedGold = Math.min(rewardGold, availableVaultSpace);
+  const overflowGold = Math.max(rewardGold - claimedGold, 0);
 
-  if (claimedGold <= 0) {
+  if (overflowGold > 0 && !input.acceptOverflowLoss) {
     return {
       app: APP_NAME,
-      summary: '当前金库已满，请先腾出空间后再领取任务奖励。',
+      summary: `${taskDefinition.title} 奖励共 ${formatNumber(rewardGold)} 金币，其中约 ${formatNumber(overflowGold)} 会因金币已满无法入账。确认后将默认放弃溢出部分。`,
       taskId: input.taskId,
+      rewardGold,
       claimedGold: 0,
+      overflowGold,
     };
   }
 
@@ -1672,11 +1689,13 @@ export function claimDailyTask(input: ClientClaimDailyTaskRequest): Omit<ClientC
 
   return {
     app: APP_NAME,
-    summary: claimedGold > 0
-      ? `${taskDefinition.title} 已结算，入账 ${formatNumber(claimedGold)} 金币。`
-      : `${taskDefinition.title} 已结算，但当前金库已满，金币未能入账。`,
+    summary: overflowGold > 0
+      ? `${taskDefinition.title} 已结算，入账 ${formatNumber(claimedGold)} 金币，另有 ${formatNumber(overflowGold)} 已确认放弃。`
+      : `${taskDefinition.title} 已结算，入账 ${formatNumber(claimedGold)} 金币。`,
     taskId: input.taskId,
+    rewardGold,
     claimedGold,
+    overflowGold,
   };
 }
 
@@ -1882,6 +1901,14 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
     return buildMutationResponse('田地位不需要额外花钱购买，会在主城达到指定等级后自动开启。');
   }
 
+  if (input.buildingId === 'population') {
+    const nextPopulationLevelConfig = getPopulationLevelConfig(playerState.buildingLevels.population);
+
+    if (nextPopulationLevelConfig && getCastleLevel() < nextPopulationLevelConfig.requiredCastleLevel) {
+      return buildMutationResponse(`当前主城等级不足，需要主城 Lv.${nextPopulationLevelConfig.requiredCastleLevel}。`);
+    }
+  }
+
   const cost = getUpgradeCost(input.buildingId);
 
   if (!cost) {
@@ -1917,7 +1944,7 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
     playerState.armyCapacity += getPopulationCapacityGain(playerState.buildingLevels.population - 1);
     recordDailyTaskProgress('upgrade-building');
     recordDailyTaskProgress('upgrade-core-line');
-    return buildMutationResponse(`人口上限升级完成，当前人口上限已提升到 ${formatNumber(playerState.armyCapacity)}。`);
+    return buildMutationResponse(`灵宠上限升级完成，当前灵宠上限已提升到 ${formatNumber(playerState.armyCapacity)}。`);
   }
 
   playerState.buildingLevels.watchtower += 1;

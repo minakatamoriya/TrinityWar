@@ -61,7 +61,7 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
                     <strong>领取税收</strong>
                   </div>
                   <strong className="home-claim-item-amount">{taxPending?.value}</strong>
-                  <em className="home-claim-item-foot">{formatNumber(hourlyTax)} / 小时</em>
+                  {/* <em className="home-claim-item-foot">{formatNumber(hourlyTax)} / 小时</em> */}
                   <button className="secondary-button home-claim-item-button" disabled={claimingTax} onClick={onClaimTax} type="button">
                     {claimingTax ? '入库中' : '领取'}
                   </button>
@@ -71,9 +71,9 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
                 <div className="home-claim-item home-claim-item-seed">
                   <div className="home-claim-item-title">
                     <span className="home-claim-item-tag">物品</span>
-                    <strong>领取今日种子</strong>
+                    <strong>领取种子</strong>
                   </div>
-                  <strong className="home-claim-item-amount">青灵麦 x3</strong>
+                  {/* <strong className="home-claim-item-amount">青灵麦 x3</strong> */}
                   <em className="home-claim-item-foot" />
                   <button className="secondary-button home-claim-item-button" disabled={claimingStarterSeeds} onClick={onClaimStarterSeeds} type="button">
                     {claimingStarterSeeds ? '收取中' : '领取'}
@@ -84,10 +84,10 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
                 <div className="home-claim-item home-claim-item-tianji">
                   <div className="home-claim-item-title">
                     <span className="home-claim-item-tag">物品</span>
-                    <strong>领取天机符</strong>
+                    <strong>每日签到</strong>
                   </div>
                   <strong className="home-claim-item-amount">天机符 x1</strong>
-                  <em className="home-claim-item-foot">每日 1 张</em>
+                  {/* <em className="home-claim-item-foot">每日 1 张</em> */}
                   <button className="secondary-button home-claim-item-button" disabled={claimingTianjiTalisman} onClick={onClaimTianjiTalisman} type="button">
                     {claimingTianjiTalisman ? '收取中' : '领取'}
                   </button>

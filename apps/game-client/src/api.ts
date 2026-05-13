@@ -64,6 +64,9 @@ let mockSceneSnapshot: ClientSceneContentResponse = cloneSceneContent(mockSceneC
 const INITIAL_MOCK_FACTION_CONTRIBUTION = 40;
 const INITIAL_MOCK_FACTION_TREASURY_GOLD = 82400;
 const INITIAL_MOCK_FACTION_ARMY_POWER = 1260;
+const MOCK_FACTION_DIVIDEND_BASE_PER_HOUR = 8;
+const MOCK_FACTION_CONTRIBUTION_STEP = 10;
+const MOCK_FACTION_DIVIDEND_BONUS_PER_STEP_PER_HOUR = 3;
 const INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS: Record<string, string> = {
   'field-1': 'qinglingmai',
   'field-2': 'qinglingmai',
@@ -646,11 +649,20 @@ function settleMockTemporaryClaim(): void {
   }
 }
 
+function getMockFactionDividendPerHour(factionContribution: number): { base: number; bonus: number; total: number } {
+  const contributionTier = Math.floor(Math.max(Math.floor(factionContribution), 0) / MOCK_FACTION_CONTRIBUTION_STEP);
+  const base = MOCK_FACTION_DIVIDEND_BASE_PER_HOUR;
+  const bonus = contributionTier * MOCK_FACTION_DIVIDEND_BONUS_PER_STEP_PER_HOUR;
+  return {
+    base,
+    bonus,
+    total: base + bonus,
+  };
+}
+
 function syncMockFactionScene(): void {
   const factionClaim = findMockPendingClaim('faction');
-  const baseDividend = 160;
-  const bonusDividend = mockFactionContribution;
-  const totalDividend = baseDividend + bonusDividend;
+  const { base: baseDividend, bonus: bonusDividend, total: totalDividend } = getMockFactionDividendPerHour(mockFactionContribution);
 
   if (factionClaim) {
     factionClaim.description = `当前每小时可分到 ${formatNumber(totalDividend)} 金币，其中基础分红 ${formatNumber(baseDividend)}，贡献加成 ${formatNumber(bonusDividend)}。`;
@@ -661,13 +673,13 @@ function syncMockFactionScene(): void {
     title: '人界阵营',
     description: `当前每小时分红 ${formatNumber(totalDividend)}，先上缴再领取会更划算。`,
     advantage: '人界优势：更擅长把上缴资源转成贡献与分红，适合平衡运营。',
-    breakdown: `金额构成：基础分红 ${formatNumber(baseDividend)} + 贡献加成 ${formatNumber(bonusDividend)}`,
+    breakdown: `金额构成：基础分红 ${formatNumber(baseDividend)}/小时 + 贡献加成 ${formatNumber(bonusDividend)}/小时`,
     action: { label: '领取分红', target: 'faction', tone: 'primary' },
   };
   mockSceneSnapshot.faction.contribution = {
     title: '当前贡献值',
     value: formatNumber(mockFactionContribution),
-    description: '100 金币 = 1 贡献，1 只灵宠 = 1 贡献。捐献后会立刻反馈到贡献值与分红构成。',
+    description: '100 金币 = 1 贡献，捐献后会立刻反馈到贡献值与分红构成。',
   };
   mockSceneSnapshot.faction.comparison = [
     { faction: '人界', advantage: '贡献转化更稳，适合分红运营。', gold: formatNumber(mockFactionTreasuryGold), power: formatNumber(mockFactionArmyPower), isCurrent: true },
@@ -676,9 +688,9 @@ function syncMockFactionScene(): void {
   ];
   mockSceneSnapshot.faction.donate = {
     title: '捐钱捐灵宠',
-    description: '金币按 100 为一步，确认后会立即从当前总金币和当前灵宠扣除。',
+    description: '100 金币 = 1 贡献，确认后会立即从当前总金币和当前灵宠扣除。',
     goldStep: 100,
-    contributionRule: '100 金币 = 1 贡献，1 只灵宠 = 1 贡献。',
+    contributionRule: '100 金币 = 1 贡献。',
   };
   mockSceneSnapshot.faction.rankings = [
     { label: '1. 烬牙', value: '86', note: '魔界' },
@@ -779,14 +791,16 @@ export async function claimPendingEarnings(input: ClientClaimPendingRequest): Pr
 
 function applyMockClaimDailyTask(input: ClientClaimDailyTaskRequest): ClientClaimDailyTaskResponse {
   const task = mockHomeSnapshot.dailyTasks.find((item) => item.id === input.taskId);
-  const claimedGold = task?.rewardGold ?? 0;
+  const rewardGold = task?.rewardGold ?? 0;
 
   if (!task || task.status !== 'completed') {
     return {
       app: mockHomeSnapshot.app,
       summary: '当前任务尚未完成，暂时不能领取。',
       taskId: input.taskId,
+      rewardGold: 0,
       claimedGold: 0,
+      overflowGold: 0,
       home: cloneHomeSummary(mockHomeSnapshot),
       scenes: cloneSceneContent(mockSceneSnapshot),
     };
@@ -794,12 +808,18 @@ function applyMockClaimDailyTask(input: ClientClaimDailyTaskRequest): ClientClai
 
   const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
   const vault = vaultResource ? parseCurrentAndCapacity(vaultResource.value) : null;
-  if (!vault || vault.current >= vault.capacity) {
+  const availableVaultSpace = vault ? Math.max(vault.capacity - vault.current, 0) : 0;
+  const claimedGold = Math.min(rewardGold, availableVaultSpace);
+  const overflowGold = Math.max(rewardGold - claimedGold, 0);
+
+  if (overflowGold > 0 && !input.acceptOverflowLoss) {
     return {
       app: mockHomeSnapshot.app,
-      summary: '当前金库已满，请先腾出空间后再领取任务奖励。',
+      summary: `${task.title} 奖励共 ${formatNumber(rewardGold)} 金币，其中约 ${formatNumber(overflowGold)} 会因金币已满无法入账。确认后将默认放弃溢出部分。`,
       taskId: input.taskId,
+      rewardGold,
       claimedGold: 0,
+      overflowGold,
       home: cloneHomeSummary(mockHomeSnapshot),
       scenes: cloneSceneContent(mockSceneSnapshot),
     };
@@ -810,9 +830,13 @@ function applyMockClaimDailyTask(input: ClientClaimDailyTaskRequest): ClientClai
 
   return {
     app: mockHomeSnapshot.app,
-    summary: `${task.title} 已结算，入账 ${formatNumber(claimedGold)} 金币。`,
+    summary: overflowGold > 0
+      ? `${task.title} 已结算，入账 ${formatNumber(claimedGold)} 金币，另有 ${formatNumber(overflowGold)} 已确认放弃。`
+      : `${task.title} 已结算，入账 ${formatNumber(claimedGold)} 金币。`,
     taskId: input.taskId,
+    rewardGold,
     claimedGold,
+    overflowGold,
     home: cloneHomeSummary(mockHomeSnapshot),
     scenes: cloneSceneContent(mockSceneSnapshot),
   };
@@ -937,6 +961,59 @@ function applyMockClaimTianjiTalisman(): ClientStateMutationResponse {
 function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStateMutationResponse {
   const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
 
+  const getMockPopulationCapacityGain = (currentLevel: number): number => {
+    const gainTable: Record<number, number> = {
+      1: 100,
+      2: 100,
+      3: 100,
+      4: 100,
+      5: 200,
+      6: 200,
+      7: 300,
+      8: 400,
+      9: 600,
+      10: 800,
+    };
+
+    return gainTable[currentLevel] ?? 100;
+  };
+
+  const getMockPopulationUpgradeCost = (currentLevel: number): number => {
+    const costTable: Record<number, number> = {
+      1: 180,
+      2: 260,
+      3: 360,
+      4: 500,
+      5: 700,
+      6: 950,
+      7: 1250,
+      8: 1600,
+      9: 1950,
+      10: 2200,
+    };
+
+    return costTable[currentLevel] ?? 2200;
+  };
+
+  const syncMockPopulationUpgradeState = (): void => {
+    const populationUpgrade = mockSceneSnapshot.building.upgrades.find((item) => item.id === 'population');
+    const armyResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'army');
+
+    if (!populationUpgrade || !armyResource) {
+      return;
+    }
+
+    const levelMatch = populationUpgrade.description.match(/Lv\.(\d+) -> Lv\.(\d+)/);
+    const currentLevel = levelMatch ? Number(levelMatch[1]) : 1;
+    const nextRequiredCastleLevel = currentLevel * 2;
+
+    populationUpgrade.locked = mockHomeSnapshot.castleLevel < nextRequiredCastleLevel;
+    populationUpgrade.costText = populationUpgrade.locked ? `需要主城 Lv.${nextRequiredCastleLevel}` : `消耗 ${formatNumber(getMockPopulationUpgradeCost(currentLevel))} 金币`;
+    populationUpgrade.action = populationUpgrade.locked
+      ? { label: '查看条件', target: 'building', tone: 'ghost' }
+      : { label: '升级灵宠上限', target: 'building', tone: 'secondary' };
+  };
+
   if (input.targetType === 'castle-extension') {
     const extension = mockSceneSnapshot.building.extensions.find((item) => item.id === input.extensionId);
 
@@ -983,6 +1060,7 @@ function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientSt
   if (input.buildingId === 'castle') {
     mockHomeSnapshot.castleLevel += 1;
     upgrade.description = `Lv.${mockHomeSnapshot.castleLevel} -> Lv.${mockHomeSnapshot.castleLevel + 1}，解锁更高税收与建筑上限。`;
+    syncMockPopulationUpgradeState();
     const watchtowerUpgrade = mockSceneSnapshot.building.upgrades.find((item) => item.id === 'watchtower');
     if (watchtowerUpgrade) {
       watchtowerUpgrade.locked = false;
@@ -1006,10 +1084,14 @@ function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientSt
     }
 
     const army = parseCurrentAndCapacity(armyResource.value);
-    const nextCapacity = army.capacity + 100;
+    const levelMatch = upgrade.description.match(/Lv\.(\d+) -> Lv\.(\d+)/);
+    const currentLevel = levelMatch ? Number(levelMatch[1]) : 1;
+    const nextLevel = currentLevel + 1;
+    const nextCapacity = army.capacity + getMockPopulationCapacityGain(currentLevel);
     armyResource.value = `${formatNumber(army.current)} / ${formatNumber(nextCapacity)}`;
-    upgrade.description = `Lv.2 -> Lv.3，灵宠上限由 ${formatNumber(nextCapacity)} 提升到 ${formatNumber(nextCapacity + 100)}。`;
-    upgrade.costText = '消耗 1,180 金币';
+    upgrade.description = `Lv.${nextLevel} -> Lv.${nextLevel + 1}，灵宠上限由 ${formatNumber(nextCapacity)} 提升到 ${formatNumber(nextCapacity + getMockPopulationCapacityGain(nextLevel))}。`;
+    upgrade.costText = `消耗 ${formatNumber(parseNumberText(upgrade.costText) + 80)} 金币`;
+    syncMockPopulationUpgradeState();
     return buildMockMutation(`灵宠上限升级完成，当前灵宠上限已提升到 ${formatNumber(nextCapacity)}。`);
   }
 

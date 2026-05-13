@@ -1343,6 +1343,8 @@ button {
   align-items: center;
   width: 100%;
   height: 22px;
+  min-height: 22px;
+  max-height: 22px;
   border-radius: 999px;
   overflow: hidden;
   background: linear-gradient(180deg, rgba(27, 20, 15, 0.92), rgba(14, 10, 8, 0.88));
@@ -1378,6 +1380,203 @@ button {
 .global-feature-content {
   display: grid;
   gap: 10px;
+}
+
+.farm-scene-scroll {
+  display: grid;
+  gap: 10px;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+.farm-scene-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: rgba(255, 248, 234, 0.05);
+  border: 1px solid rgba(255, 248, 234, 0.08);
+}
+
+.farm-scene-toolbar .eyebrow {
+  margin: 0 0 4px;
+}
+
+.farm-scene-toolbar strong {
+  font-size: 14px;
+}
+
+.farm-codex-button {
+  min-width: 96px;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.seed-codex-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(180deg, rgba(16, 11, 9, 0.96) 0%, rgba(21, 15, 12, 0.98) 38%, rgba(12, 8, 7, 1) 100%),
+    rgba(18, 12, 9, 0.98);
+}
+
+.seed-codex-topbar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(255, 248, 234, 0.08);
+}
+
+.seed-codex-title-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.seed-codex-title-block h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.seed-codex-tip {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.seed-codex-body {
+  display: grid;
+  gap: 12px;
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+
+.seed-codex-rarity-row {
+  display: grid;
+  gap: 8px;
+}
+
+.seed-codex-rarity-head strong {
+  font-size: 13px;
+}
+
+.seed-codex-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.seed-codex-icon {
+  aspect-ratio: 1 / 1;
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 248, 234, 0.14);
+  background: rgba(255, 248, 234, 0.04);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.seed-codex-icon.is-locked,
+.seed-codex-icon:disabled {
+  color: rgba(247, 239, 225, 0.52);
+  background: rgba(255, 248, 234, 0.02);
+  cursor: not-allowed;
+}
+
+.seed-codex-icon.is-selected {
+  border-color: rgba(242, 198, 120, 0.68);
+  background: rgba(242, 198, 120, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(242, 198, 120, 0.28);
+}
+
+.seed-codex-detail-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(255, 248, 234, 0.05);
+  border: 1px solid rgba(255, 248, 234, 0.08);
+}
+
+.seed-codex-detail-card.is-undiscovered {
+  min-height: 180px;
+  place-items: center;
+}
+
+.seed-codex-undiscovered-text {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 16px;
+  text-align: center;
+}
+
+.seed-codex-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.seed-codex-detail-head h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.seed-codex-lore {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.seed-codex-stats {
+  display: grid;
+  gap: 6px;
+}
+
+.seed-codex-stat-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.seed-codex-stat-row strong {
+  min-width: 64px;
+}
+
+.seed-codex-stat-row span {
+  color: var(--text-secondary);
+  text-align: right;
+  line-height: 1.45;
+}
+
+.seed-codex-strategy {
+  display: grid;
+  gap: 4px;
+}
+
+.seed-codex-strategy strong {
+  font-size: 13px;
+}
+
+.seed-codex-strategy p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .collect-overflow-backdrop {
@@ -1453,6 +1652,8 @@ button {
 
 .farm-status-card.compact .farm-progress-track {
   height: 20px;
+  min-height: 20px;
+  max-height: 20px;
 }
 
 .farm-status-card.compact .farm-status-note,
@@ -1626,6 +1827,81 @@ button {
   gap: 12px;
 }
 
+.castle-overview-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.castle-overview-head h4 {
+  font-size: 22px;
+}
+
+.castle-overview-body {
+  display: grid;
+  gap: 10px;
+}
+
+.castle-overview-upgrade {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 246, 224, 0.08), rgba(255, 246, 224, 0.03));
+  border: 1px solid rgba(242, 198, 120, 0.18);
+}
+
+.castle-overview-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.castle-overview-copy strong {
+  font-size: 14px;
+}
+
+.castle-overview-copy span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.castle-overview-action-row {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  min-width: 126px;
+}
+
+.castle-overview-action-row .action-button {
+  min-width: 126px;
+}
+
+.castle-rule-list {
+  display: grid;
+  gap: 8px;
+}
+
+.castle-rule-row {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 248, 234, 0.04);
+}
+
+.castle-rule-row strong {
+  font-size: 13px;
+}
+
+.castle-rule-row span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .building-summary-card {
   display: grid;
   gap: 12px;
@@ -1705,6 +1981,91 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.building-six-upgrade-grid {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.building-mini-card {
+  display: grid;
+  gap: 7px;
+  min-height: 0;
+  padding: 10px 11px;
+}
+
+.building-mini-card.active {
+  border-color: rgba(242, 198, 120, 0.24);
+  background: linear-gradient(180deg, rgba(255, 248, 234, 0.08), rgba(255, 248, 234, 0.04));
+}
+
+.building-mini-card.locked {
+  opacity: 0.92;
+}
+
+.building-mini-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.building-mini-card-top h4 {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.building-mini-card-state {
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.building-mini-card-state.active {
+  color: #2f2011;
+  background: rgba(242, 198, 120, 0.92);
+}
+
+.building-mini-card-state.locked {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.building-mini-card-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.building-mini-card-copy p {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.building-mini-card-unlock {
+  color: var(--text-muted);
+}
+
+.building-mini-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.building-mini-card-footer .action-button {
+  min-width: 92px;
+  padding: 8px 12px;
+  min-height: 36px;
+}
+
+.building-mini-card-price {
+  color: var(--accent);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .building-upgrade-action-row .action-button {
@@ -1805,8 +2166,7 @@ button {
 .target-list-raid {
   grid-template-columns: 1fr;
   gap: 8px;
-  grid-template-rows: repeat(5, minmax(0, 1fr));
-  height: 100%;
+  grid-auto-rows: minmax(0, auto);
 }
 
 .target-card {
@@ -1910,11 +2270,16 @@ button {
   display: grid;
   min-height: 0;
   flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
 }
 
 .raid-scene-shell,
 .raid-scene-scroll {
-  overflow: hidden;
+  min-height: 0;
 }
 
 .followed-target-list {
@@ -1955,14 +2320,16 @@ button {
 
 .raid-scene-scroll {
   gap: 8px;
+  overflow: hidden;
 }
 
-.raid-scene-scroll::-webkit-scrollbar {
-  display: none;
+.raid-list-shell::-webkit-scrollbar {
+  width: 6px;
 }
 
-.raid-scene-scroll {
-  scrollbar-width: none;
+.raid-list-shell::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(243, 181, 111, 0.25);
 }
 
 .raid-detail-modal {
@@ -3303,5 +3670,45 @@ button {
 
   .nav-item {
     font-size: 11px;
+  }
+}
+
+@media (max-width: 720px) {
+  .seed-codex-icon-grid {
+    gap: 6px;
+  }
+
+  .seed-codex-icon {
+    min-height: 36px;
+    font-size: 10px;
+  }
+
+  .seed-codex-stat-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .seed-codex-stat-row span {
+    text-align: left;
+  }
+
+  .castle-overview-upgrade {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .castle-overview-action-row {
+    width: 100%;
+    min-width: 0;
+    justify-items: stretch;
+  }
+
+  .castle-overview-action-row .action-button {
+    width: 100%;
+  }
+
+  .building-six-upgrade-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -30,25 +30,25 @@ function findLevelConfig(levelConfigs, level) {
 
 const CASTLE_LEVEL_CONFIG = [
   { level: 1, upgradeCost: 100, cumulativeCost: 100, taxPerHour: 8, unlocks: ['初始主城，默认开田 1'] },
-  { level: 2, upgradeCost: 150, cumulativeCost: 250, taxPerHour: 10, unlocks: ['开放基础建筑升级引导'] },
+  { level: 2, upgradeCost: 150, cumulativeCost: 250, taxPerHour: 10, unlocks: ['开放基础建筑升级引导', '开放灵宠上限第 1 档'] },
   { level: 3, upgradeCost: 200, cumulativeCost: 450, taxPerHour: 13, unlocks: ['开放基础灵宠培育引导'] },
-  { level: 4, upgradeCost: 250, cumulativeCost: 700, taxPerHour: 18, unlocks: ['开放基础掠夺指引'] },
+  { level: 4, upgradeCost: 250, cumulativeCost: 700, taxPerHour: 18, unlocks: ['开放基础掠夺指引', '开放灵宠上限第 2 档'] },
   { level: 5, upgradeCost: 300, cumulativeCost: 1000, taxPerHour: 24, unlocks: ['开田 2', '解锁护山结界', '解锁灵脉灌溉'] },
-  { level: 6, upgradeCost: 400, cumulativeCost: 1400, taxPerHour: 30, unlocks: ['开放灵宠扩编 2 阶'] },
+  { level: 6, upgradeCost: 400, cumulativeCost: 1400, taxPerHour: 30, unlocks: ['开放灵宠上限第 3 档'] },
   { level: 7, upgradeCost: 500, cumulativeCost: 1900, taxPerHour: 36, unlocks: ['开放防守强化 2'] },
-  { level: 8, upgradeCost: 650, cumulativeCost: 2550, taxPerHour: 42, unlocks: ['解锁时序观象台', '解锁庶务司'] },
+  { level: 8, upgradeCost: 650, cumulativeCost: 2550, taxPerHour: 42, unlocks: ['解锁时序观象台', '解锁庶务司', '开放灵宠上限第 4 档'] },
   { level: 9, upgradeCost: 800, cumulativeCost: 3350, taxPerHour: 48, unlocks: ['为 10 级送稀有种做预热'] },
-  { level: 10, upgradeCost: 1000, cumulativeCost: 4350, taxPerHour: 56, unlocks: ['开田 3', '赠送稀有种'] },
-  { level: 11, upgradeCost: 1150, cumulativeCost: 5500, taxPerHour: 64, unlocks: ['开放灵宠扩编 3 阶'] },
-  { level: 12, upgradeCost: 1300, cumulativeCost: 6800, taxPerHour: 72, unlocks: ['开放中段防守强化'] },
+  { level: 10, upgradeCost: 1000, cumulativeCost: 4350, taxPerHour: 56, unlocks: ['开田 3', '赠送稀有种', '开放灵宠上限第 5 档'] },
+  { level: 11, upgradeCost: 1150, cumulativeCost: 5500, taxPerHour: 64, unlocks: [] },
+  { level: 12, upgradeCost: 1300, cumulativeCost: 6800, taxPerHour: 72, unlocks: ['开放中段防守强化', '开放灵宠上限第 6 档'] },
   { level: 13, upgradeCost: 1500, cumulativeCost: 8300, taxPerHour: 80, unlocks: ['开放中段阵营上缴效率加成'] },
-  { level: 14, upgradeCost: 1700, cumulativeCost: 10000, taxPerHour: 88, unlocks: ['为 15 级开田 4 做预热'] },
+  { level: 14, upgradeCost: 1700, cumulativeCost: 10000, taxPerHour: 88, unlocks: ['为 15 级开田 4 做预热', '开放灵宠上限第 7 档'] },
   { level: 15, upgradeCost: 1900, cumulativeCost: 11900, taxPerHour: 98, unlocks: ['开田 4', '进入四田成型阶段'] },
-  { level: 16, upgradeCost: 2100, cumulativeCost: 14000, taxPerHour: 108, unlocks: ['开放灵宠扩编 4 阶'] },
+  { level: 16, upgradeCost: 2100, cumulativeCost: 14000, taxPerHour: 108, unlocks: ['开放灵宠上限第 8 档'] },
   { level: 17, upgradeCost: 2300, cumulativeCost: 16300, taxPerHour: 118, unlocks: ['开放高段恢复效率'] },
-  { level: 18, upgradeCost: 2600, cumulativeCost: 18900, taxPerHour: 128, unlocks: ['开放高段防守强化'] },
+  { level: 18, upgradeCost: 2600, cumulativeCost: 18900, taxPerHour: 128, unlocks: ['开放高段防守强化', '开放灵宠上限第 9 档'] },
   { level: 19, upgradeCost: 2900, cumulativeCost: 21800, taxPerHour: 138, unlocks: ['为 20 级送传说种做预热'] },
-  { level: 20, upgradeCost: 3200, cumulativeCost: 25000, taxPerHour: 150, unlocks: ['赠送传说种', '开启称号成长线'] },
+  { level: 20, upgradeCost: 3200, cumulativeCost: 25000, taxPerHour: 150, unlocks: ['赠送传说种', '开启称号成长线', '开放灵宠上限第 10 档'] },
 ];
 
 const VAULT_LEVEL_CONFIG = [
@@ -65,16 +65,16 @@ const VAULT_LEVEL_CONFIG = [
 ];
 
 const POPULATION_LEVEL_CONFIG = [
-  { level: 1, upgradeCost: 180, capacityGain: 100 },
-  { level: 2, upgradeCost: 260, capacityGain: 100 },
-  { level: 3, upgradeCost: 360, capacityGain: 100 },
-  { level: 4, upgradeCost: 500, capacityGain: 100 },
-  { level: 5, upgradeCost: 700, capacityGain: 200 },
-  { level: 6, upgradeCost: 950, capacityGain: 200 },
-  { level: 7, upgradeCost: 1250, capacityGain: 300 },
-  { level: 8, upgradeCost: 1600, capacityGain: 400 },
-  { level: 9, upgradeCost: 1950, capacityGain: 600 },
-  { level: 10, upgradeCost: 2200, capacityGain: 800 },
+  { level: 1, requiredCastleLevel: 2, upgradeCost: 180, capacityGain: 100 },
+  { level: 2, requiredCastleLevel: 4, upgradeCost: 260, capacityGain: 100 },
+  { level: 3, requiredCastleLevel: 6, upgradeCost: 360, capacityGain: 100 },
+  { level: 4, requiredCastleLevel: 8, upgradeCost: 500, capacityGain: 100 },
+  { level: 5, requiredCastleLevel: 10, upgradeCost: 700, capacityGain: 200 },
+  { level: 6, requiredCastleLevel: 12, upgradeCost: 950, capacityGain: 200 },
+  { level: 7, requiredCastleLevel: 14, upgradeCost: 1250, capacityGain: 300 },
+  { level: 8, requiredCastleLevel: 16, upgradeCost: 1600, capacityGain: 400 },
+  { level: 9, requiredCastleLevel: 18, upgradeCost: 1950, capacityGain: 600 },
+  { level: 10, requiredCastleLevel: 20, upgradeCost: 2200, capacityGain: 800 },
 ];
 
 const WATCHTOWER_LEVEL_CONFIG = [
@@ -499,6 +499,10 @@ export function getFactionDividendPerHour(factionContribution) {
 
 export function getCastleLevelConfig(level) {
   return findLevelConfig(CASTLE_LEVEL_CONFIG, level);
+}
+
+export function getPopulationLevelConfig(level) {
+  return findLevelConfig(POPULATION_LEVEL_CONFIG, level);
 }
 
 export function getCastleExtensionTrack(trackId) {

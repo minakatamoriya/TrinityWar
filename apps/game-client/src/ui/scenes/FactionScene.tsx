@@ -59,7 +59,7 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
       <div className="tab-row">
         <button className={`tab-button ${factionTab === 'overview' ? 'active' : ''}`} onClick={() => onChangeTab('overview')} type="button">阵营对比</button>
         <button className={`tab-button ${factionTab === 'donate' ? 'active' : ''}`} onClick={() => onChangeTab('donate')} type="button">增加贡献</button>
-        <button className={`tab-button ${factionTab === 'rank' ? 'active' : ''}`} onClick={() => onChangeTab('rank')} type="button">排行榜</button>
+        <button className={`tab-button ${factionTab === 'rank' ? 'active' : ''}`} onClick={() => onChangeTab('rank')} type="button">战力排行</button>
       </div>
 
       <div className="scene-scroll">
@@ -86,7 +86,6 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
           <article className="panel-card faction-donate-card">
             <div className="faction-donate-copy">
               <p className="eyebrow">{donate.title}</p>
-              <h4>当前资源直接上缴</h4>
               <p className="muted">{donate.description}</p>
             </div>
 
@@ -100,8 +99,7 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
 
             <div className="faction-donate-footer">
               <div className="faction-donate-summary">
-                <strong>本次贡献 +{contributionGain}</strong>
-                <span>{donate.contributionRule}</span>
+                <strong>本次贡献值 +{contributionGain}</strong>
               </div>
               <button className="secondary-button" disabled={donating || contributionGain <= 0} onClick={() => onDonate(donateGoldAmount)} type="button">
                 {donating ? '上缴中...' : '确认上缴'}

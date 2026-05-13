@@ -137,9 +137,9 @@ export const mockSceneContent: ClientSceneContentResponse = {
       },
       {
         id: 'population',
-        title: '灵宠',
+        title: '灵宠上限',
         description: 'Lv.1 -> Lv.2，灵宠上限由 100 提升到 200。',
-        costText: '消耗 880 金币',
+        costText: '消耗 180 金币',
         action: { label: '升级灵宠上限', target: 'building', tone: 'secondary' },
       },
       {
@@ -382,15 +382,15 @@ export const mockSceneContent: ClientSceneContentResponse = {
     hero: {
       eyebrow: '阵营面板',
       title: '人界阵营',
-      description: '当前每小时分红 200，先上缴再领取会更划算。',
+      description: '当前每小时分红 20，先上缴再领取会更划算。',
       advantage: '人界优势：更擅长把上缴资源转成贡献与分红，适合平衡运营。',
-      breakdown: '金额构成：基础分红 160 + 贡献加成 40',
+      breakdown: '金额构成：基础分红 8/小时 + 贡献加成 12/小时',
       action: { label: '领取分红', target: 'faction', tone: 'primary' },
     },
     contribution: {
       title: '当前贡献值',
       value: '40',
-      description: '100 金币 = 1 贡献。捐献后会立刻反馈到贡献值与分红构成。',
+      description: '100 金币 = 1 贡献，捐献后会立刻反馈到贡献值与分红构成。',
     },
     comparison: [
       { faction: '人界', advantage: '贡献转化更稳，适合分红运营。', gold: '82,400', power: '1,260', isCurrent: true },
@@ -399,7 +399,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
     ],
     donate: {
       title: '捐献金币',
-      description: '金币按 100 为一步，确认后会立即从当前总金币扣除。',
+      description: '100 金币 = 1 贡献，确认后会立即从当前总金币扣除。',
       goldStep: 100,
       contributionRule: '100 金币 = 1 贡献。',
     },
