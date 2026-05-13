@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type {
   ClientArmyTrainingQueue,
+  ClientCastleExtensionUpgradeId,
   ClientCollectFieldRequest,
   ClientCollectFieldResponse,
   ClientRaidActionRequest,
@@ -863,9 +864,9 @@ function App(): JSX.Element {
     }
   };
 
-  const handleBuildingAction = async (action: ClientSceneAction, buildingId: ClientBuildingUpgradeId, context: string): Promise<void> => {
+  const handleBuildingAction = async (action: ClientSceneAction, upgradeId: ClientBuildingUpgradeId | ClientCastleExtensionUpgradeId, context: string, targetType: 'building' | 'castle-extension'): Promise<void> => {
     if (action.label.includes('升级')) {
-      const actionKey = `building:${buildingId}`;
+      const actionKey = `${targetType}:${upgradeId}`;
       if (pendingActionKey === actionKey) {
         return;
       }
@@ -873,7 +874,9 @@ function App(): JSX.Element {
       setPendingActionKey(actionKey);
 
       try {
-        const result = await upgradeClientBuilding({ buildingId });
+        const result = await upgradeClientBuilding(targetType === 'building'
+          ? { targetType, buildingId: upgradeId as ClientBuildingUpgradeId }
+          : { targetType, extensionId: upgradeId as ClientCastleExtensionUpgradeId });
         applyMutationResult(result);
       } catch {
         showToast(`${context} 当前升级失败，请稍后重试。`, 'error');
@@ -889,20 +892,6 @@ function App(): JSX.Element {
   const handleFarmAction = async (action: ClientSceneAction, fieldId: string, context: string): Promise<void> => {
     const actionKey = `farm:${fieldId}:${action.label}`;
     if (pendingActionKey === actionKey) {
-      return;
-    }
-
-    if (action.label.includes('解锁')) {
-      setPendingActionKey(actionKey);
-
-      try {
-        const result = await upgradeClientBuilding({ buildingId: 'field-slot' });
-        applyMutationResult(result);
-      } catch {
-        showToast(`${context} 当前无法完成解锁，请稍后重试。`, 'error');
-      } finally {
-        setPendingActionKey(null);
-      }
       return;
     }
 
@@ -1348,9 +1337,10 @@ function App(): JSX.Element {
             {activeScene === 'building' ? (
               <BuildingScene
                 castleLevel={home.castleLevel}
-                onUpgradeAction={(action, buildingId, context) => {
-                  void handleBuildingAction(action, buildingId, context);
+                onUpgradeAction={(action, upgradeId, context, targetType) => {
+                  void handleBuildingAction(action, upgradeId, context, targetType);
                 }}
+                extensions={scenes.building.extensions}
                 upgrades={scenes.building.upgrades}
               />
             ) : null}

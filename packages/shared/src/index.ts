@@ -108,6 +108,8 @@ export interface ClientClaimPendingResponse {
 }
 
 export type ClientBuildingUpgradeId = 'castle' | 'vault' | 'field-slot' | 'population' | 'watchtower';
+export type ClientCastleExtensionUpgradeId = 'protectionTech' | 'farmYieldTech' | 'ripeWindowTech' | 'pendingClaimTech';
+export type ClientUpgradeTargetType = 'building' | 'castle-extension';
 
 export interface ClientStateMutationResponse {
   app: string;
@@ -179,7 +181,9 @@ export interface ClientRaidActionResponse {
 }
 
 export interface ClientUpgradeBuildingRequest {
-  buildingId: ClientBuildingUpgradeId;
+  targetType: ClientUpgradeTargetType;
+  buildingId?: ClientBuildingUpgradeId;
+  extensionId?: ClientCastleExtensionUpgradeId;
 }
 
 export interface ClientResetDemoStateResponse {
@@ -208,6 +212,17 @@ export interface ClientBuildingUpgrade {
   id: ClientBuildingUpgradeId;
   title: string;
   description: string;
+  costText: string;
+  action: ClientSceneAction;
+  locked?: boolean;
+}
+
+export interface ClientCastleExtensionUpgrade {
+  id: ClientCastleExtensionUpgradeId;
+  title: string;
+  levelText: string;
+  description: string;
+  effectText: string;
   costText: string;
   action: ClientSceneAction;
   locked?: boolean;
@@ -347,6 +362,7 @@ export interface ClientSceneContentResponse {
   app: string;
   building: {
     upgrades: ClientBuildingUpgrade[];
+    extensions: ClientCastleExtensionUpgrade[];
   };
   army: ClientArmySceneContent;
   farm: {

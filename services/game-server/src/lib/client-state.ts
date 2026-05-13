@@ -2,6 +2,8 @@ import {
   APP_NAME,
   type ClientArmyTrainingQueue,
   type ClientBootstrapResponse,
+  type ClientCastleExtensionUpgrade,
+  type ClientCastleExtensionUpgradeId,
   type ClientRaidActionRequest,
   type ClientRaidActionResponse,
   type ClientFactionDonateRequest,
@@ -27,6 +29,8 @@ import {
 } from '@trinitywar/shared';
 import {
   GAME_BALANCE,
+  getCastleExtensionLevelConfig,
+  getCastleExtensionTrack,
   getBuildingUpgradeCost,
   getFactionDividendPerHour as getConfiguredFactionDividendPerHour,
   getPopulationCapacityGain,
@@ -90,6 +94,7 @@ interface InMemoryPlayerState {
   unlockedSeedIds: string[];
   starterSeedClaimed: boolean;
   buildingLevels: Record<ClientBuildingUpgradeId, number>;
+  castleExtensionLevels: Record<ClientCastleExtensionUpgradeId, number>;
   armyCount: number;
   armyCapacity: number;
   armyTrainingQueue: Omit<ClientArmyTrainingQueue, 'remainingSeconds'> | null;
@@ -120,6 +125,98 @@ function buildSeedBackpack(): ClientBootstrapResponse['backpack'] {
     unlockedSeedIds: [...playerState.unlockedSeedIds],
     starterSeedClaimed: playerState.starterSeedClaimed,
   };
+}
+
+const CASTLE_FIELD_UNLOCK_MILESTONES = [1, 5, 10, 15];
+
+function getUnlockedFieldCountByCastleLevel(castleLevel: number): number {
+  return CASTLE_FIELD_UNLOCK_MILESTONES.filter((requiredLevel) => castleLevel >= requiredLevel).length;
+}
+
+function getNextFieldUnlockRequirement(castleLevel: number): number | null {
+  return CASTLE_FIELD_UNLOCK_MILESTONES.find((requiredLevel) => castleLevel < requiredLevel) ?? null;
+}
+
+function syncUnlockedFieldsWithCastleLevel(): void {
+  const targetUnlockedCount = getUnlockedFieldCountByCastleLevel(getCastleLevel());
+
+  playerState.fields.forEach((field, index) => {
+    if (index < targetUnlockedCount) {
+      field.unlocked = true;
+      if (field.status === 'empty' && field.badgeText === '待解锁') {
+        field.badgeText = '空闲地块';
+      }
+    }
+  });
+}
+
+function getCastleExtensionLevel(extensionId: ClientCastleExtensionUpgradeId): number {
+  return playerState.castleExtensionLevels[extensionId] ?? 0;
+}
+
+function getCastleExtensionEffectValue(extensionId: ClientCastleExtensionUpgradeId): number {
+  const currentLevel = getCastleExtensionLevel(extensionId);
+
+  if (currentLevel <= 0) {
+    return 0;
+  }
+
+  return getCastleExtensionLevelConfig(extensionId, currentLevel)?.effectValue ?? 0;
+}
+
+function formatCastleExtensionEffect(extensionId: ClientCastleExtensionUpgradeId, effectValue: number): string {
+  if (extensionId === 'protectionTech') {
+    return `被掠保护期 +${formatNumber(effectValue)} 分钟`;
+  }
+
+  if (extensionId === 'farmYieldTech') {
+    return `田地收益 +${formatNumber(effectValue)}%`;
+  }
+
+  if (extensionId === 'ripeWindowTech') {
+    return `成熟操作窗口 +${formatNumber(effectValue)} 分钟`;
+  }
+
+  return `待领取保留时长 ${formatNumber(effectValue)} 小时`;
+}
+
+function buildCastleExtensions(): ClientCastleExtensionUpgrade[] {
+  const extensionIds: ClientCastleExtensionUpgradeId[] = ['protectionTech', 'farmYieldTech', 'ripeWindowTech', 'pendingClaimTech'];
+  const castleLevel = getCastleLevel();
+
+  return extensionIds.map((extensionId) => {
+    const track = getCastleExtensionTrack(extensionId);
+    const currentLevel = getCastleExtensionLevel(extensionId);
+    const nextLevelConfig = getCastleExtensionLevelConfig(extensionId, currentLevel + 1);
+    const currentEffect = getCastleExtensionEffectValue(extensionId);
+    const nextEffect = nextLevelConfig?.effectValue ?? currentEffect;
+    const locked = Boolean(nextLevelConfig && castleLevel < nextLevelConfig.requiredCastleLevel);
+
+    return {
+      id: extensionId,
+      title: track?.title ?? extensionId,
+      levelText: nextLevelConfig ? `Lv.${currentLevel} -> Lv.${currentLevel + 1}` : `Lv.${currentLevel}（已满级）`,
+      description: track?.description ?? '当前未配置说明。',
+      effectText: nextLevelConfig
+        ? `当前 ${formatCastleExtensionEffect(extensionId, currentEffect)}，升级后 ${formatCastleExtensionEffect(extensionId, nextEffect)}。`
+        : `当前已满级：${formatCastleExtensionEffect(extensionId, currentEffect)}。`,
+      costText: nextLevelConfig
+        ? locked
+          ? `需要主城 Lv.${nextLevelConfig.requiredCastleLevel}`
+          : `消耗 ${formatNumber(nextLevelConfig.upgradeCost)} 金币`
+        : '已达到验证上限',
+      action: buildUpgradeAction(nextLevelConfig && !locked ? '升级分支' : '查看条件', nextLevelConfig && !locked ? 'secondary' : 'ghost'),
+      locked: !nextLevelConfig || locked,
+    };
+  });
+}
+
+function getPlayerProtectionDurationMinutes(): number {
+  return GAME_BALANCE.raid.protectionHoursAfterRaid * 60 + getCastleExtensionEffectValue('protectionTech');
+}
+
+function getFarmYieldMultiplier(): number {
+  return 1 + getCastleExtensionEffectValue('farmYieldTech') / 100;
 }
 
 export function buildClientBootstrap(): ClientBootstrapResponse {
@@ -315,6 +412,12 @@ const initialPlayerState: InMemoryPlayerState = {
     population: 1,
     watchtower: 1,
   },
+  castleExtensionLevels: {
+    protectionTech: 0,
+    farmYieldTech: 0,
+    ripeWindowTech: 0,
+    pendingClaimTech: 0,
+  },
   armyCount: 40,
   armyCapacity: 100,
   armyTrainingQueue: null,
@@ -327,8 +430,8 @@ const initialPlayerState: InMemoryPlayerState = {
   ledger: {
     vaultGold: 4280,
     vaultCapacity: 5000,
-    taxPendingGold: 380,
-    factionDividendGold: 540,
+    taxPendingGold: 72,
+    factionDividendGold: 80,
   },
   temporaryRaidClaim: null,
   fields: [
@@ -743,12 +846,15 @@ function getUpgradeCost(buildingId: ClientBuildingUpgradeId): number | null {
 }
 
 function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrades'] {
+  syncUnlockedFieldsWithCastleLevel();
   const castleLevel = playerState.buildingLevels.castle;
   const vaultLevel = playerState.buildingLevels.vault;
   const fieldSlotLevel = playerState.buildingLevels['field-slot'];
   const populationLevel = playerState.buildingLevels.population;
   const watchtowerLevel = playerState.buildingLevels.watchtower;
   const lockedFieldExists = playerState.fields.some((field) => !field.unlocked);
+  const unlockedFieldCount = playerState.fields.filter((field) => field.unlocked).length;
+  const nextFieldUnlockRequirement = getNextFieldUnlockRequirement(castleLevel);
   const watchtowerLocked = castleLevel < 5;
   const currentTaxIncome = getTaxIncomePerHour(castleLevel);
   const nextTaxIncome = getTaxIncomePerHour(castleLevel + 1);
@@ -774,11 +880,11 @@ function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrad
       id: 'field-slot',
       title: '田地',
       description: lockedFieldExists
-        ? `Lv.${fieldSlotLevel} -> Lv.${fieldSlotLevel + 1}，新增第 3 个培育位。`
-        : `Lv.${fieldSlotLevel}，当前验证版田地位已全部解锁。`,
-      costText: lockedFieldExists && getUpgradeCost('field-slot') ? `消耗 ${formatNumber(getUpgradeCost('field-slot') ?? 0)} 金币` : '当前已全部解锁',
-      action: buildUpgradeAction(lockedFieldExists && getUpgradeCost('field-slot') ? '升级田地位' : '查看条件', lockedFieldExists && getUpgradeCost('field-slot') ? 'secondary' : 'ghost'),
-      locked: !lockedFieldExists || !getUpgradeCost('field-slot'),
+        ? `当前田地位不单独收费，已随主城赠送开启 ${unlockedFieldCount} / ${playerState.fields.length} 块；下一块会在主城达到 Lv.${nextFieldUnlockRequirement ?? castleLevel} 时自动开启。`
+        : `当前已随主城里程碑赠送开启全部 ${playerState.fields.length} 块田地。`,
+      costText: lockedFieldExists && nextFieldUnlockRequirement ? `需要主城 Lv.${nextFieldUnlockRequirement}` : '当前已全部解锁',
+      action: buildUpgradeAction('查看条件', 'ghost'),
+      locked: true,
     },
     {
       id: 'population',
@@ -800,25 +906,31 @@ function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrad
 }
 
 function buildFarmHero(): ClientSceneContentResponse['farm']['hero'] {
+  syncUnlockedFieldsWithCastleLevel();
   const counts = getFieldCounts();
   const emptyUnlockedField = playerState.fields.find((field) => field.unlocked && field.status === 'empty');
+  const lockedFieldExists = playerState.fields.some((field) => !field.unlocked);
 
   return {
     eyebrow: '田地经营',
     title: `丰熟 ${counts.mature} 块 · 成熟中 ${counts.growing} 块`,
     description: emptyUnlockedField
       ? '农场以田地为主，点击空地即可继续播种，进入丰熟后直接收取。'
-      : '农场地块已排满，可直接收取丰熟地块或解锁新田位。',
+      : lockedFieldExists
+        ? '农场地块已排满，剩余田地会随主城等级里程碑自动开启。'
+        : '农场地块已排满，可直接收取丰熟地块后继续播种。',
     action: emptyUnlockedField
       ? { label: '开始培育', target: 'farm', tone: 'primary' }
-      : { label: '解锁田地', target: 'farm', tone: 'secondary' },
+      : { label: lockedFieldExists ? '查看主城条件' : '返回主城', target: 'building', tone: 'secondary' },
   };
 }
 
 function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['fields'][number] {
+  syncUnlockedFieldsWithCastleLevel();
   const cropName = field.plantedSeedId ? (seedLabelMap[field.plantedSeedId] ?? field.plantedSeedId) : undefined;
 
   if (!field.unlocked) {
+    const nextFieldUnlockRequirement = getNextFieldUnlockRequirement(getCastleLevel());
     return {
       id: field.id,
       code: field.code,
@@ -829,8 +941,8 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       progressRemainingSeconds: 0,
       progressTotalSeconds: 1,
       yieldGold: 0,
-      description: '点击中央入口，直接升级并开放这块田地。',
-      actions: [{ label: '解锁田地', target: 'farm', tone: 'secondary' }],
+      description: nextFieldUnlockRequirement ? `这块田地会在主城达到 Lv.${nextFieldUnlockRequirement} 时自动赠送开启。` : '这块田地会随主城里程碑自动开启。',
+      actions: [{ label: '查看主城条件', target: 'building', tone: 'secondary' }],
     };
   }
 
@@ -963,6 +1075,7 @@ function buildFieldRewards(field: FieldState, collectMode: ClientCollectFieldReq
 
 export function buildSceneContent(): ClientSceneContentResponse {
   settleArmyTrainingQueue();
+  syncUnlockedFieldsWithCastleLevel();
 
   const factionDividend = getFactionDividendPerHour();
   const visibleRaidTargets = playerState.raidTargets.filter((target) => !isTargetProtected(target));
@@ -971,6 +1084,7 @@ export function buildSceneContent(): ClientSceneContentResponse {
     app: APP_NAME,
     building: {
       upgrades: buildBuildingUpgrades(),
+      extensions: buildCastleExtensions(),
     },
     army: {
       unitCostGold: GAME_BALANCE.army.recruitGoldCostPerUnit,
@@ -1109,7 +1223,7 @@ export function raidTarget(input: ClientRaidActionRequest): ClientRaidActionResp
     ? [{ seedId: target.seedDrop.seedId, label: target.seedDrop.label, quantity: target.seedDrop.quantity }]
     : [];
   const now = Date.now();
-  target.protectionUntil = new Date(now + 60 * 60 * 1000).toISOString();
+  target.protectionUntil = new Date(now + getPlayerProtectionDurationMinutes() * 60 * 1000).toISOString();
   playerState.ledger.vaultGold += depositedGold;
   const temporaryClaimExpiresAt = overflowGold > 0 ? addTemporaryRaidClaim(overflowGold) : null;
   playerState.armyCount = Math.max(playerState.armyCount - casualties, 0);
@@ -1254,7 +1368,7 @@ export function startCultivation(input: ClientStartCultivationRequest): ClientSt
   field.status = 'seeded';
   field.plantedSeedId = input.seedId;
   field.plantedGold = cultivationCost;
-  field.currentYield = GAME_BALANCE.farm.defaultCultivationYield;
+  field.currentYield = Math.round(GAME_BALANCE.farm.defaultCultivationYield * getFarmYieldMultiplier());
   field.badgeText = '播种';
 
   return buildMutationResponse(`${field.code} 已投入 ${formatNumber(cultivationCost)} 金币，播下 ${seedLabelMap[input.seedId] ?? input.seedId}，开始新一轮培育。`);
@@ -1318,6 +1432,38 @@ export function recruitArmy(input: ClientRecruitArmyRequest): ClientStateMutatio
 }
 
 export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStateMutationResponse {
+  const targetType = input.targetType ?? 'building';
+
+  if (targetType === 'castle-extension') {
+    if (!input.extensionId) {
+      return buildMutationResponse('当前升级请求缺少扩展分支标识。');
+    }
+
+    const currentLevel = getCastleExtensionLevel(input.extensionId);
+    const nextLevelConfig = getCastleExtensionLevelConfig(input.extensionId, currentLevel + 1);
+
+    if (!nextLevelConfig) {
+      return buildMutationResponse('当前主城扩展分支已达到验证上限。');
+    }
+
+    if (getCastleLevel() < nextLevelConfig.requiredCastleLevel) {
+      return buildMutationResponse(`当前主城等级不足，需要主城 Lv.${nextLevelConfig.requiredCastleLevel}。`);
+    }
+
+    if (playerState.ledger.vaultGold < nextLevelConfig.upgradeCost) {
+      return buildMutationResponse('金币不足，当前无法完成升级。');
+    }
+
+    playerState.ledger.vaultGold -= nextLevelConfig.upgradeCost;
+    playerState.castleExtensionLevels[input.extensionId] = currentLevel + 1;
+
+    return buildMutationResponse(`${getCastleExtensionTrack(input.extensionId)?.title ?? '主城扩展'}升级完成，当前已升至 Lv.${currentLevel + 1}。`);
+  }
+
+  if (!input.buildingId) {
+    return buildMutationResponse('当前升级请求缺少建筑标识。');
+  }
+
   const cost = getUpgradeCost(input.buildingId);
 
   if (!cost) {
@@ -1330,8 +1476,13 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
 
   playerState.ledger.vaultGold -= cost;
 
+  if (input.buildingId === 'field-slot') {
+    return buildMutationResponse('田地位不需要额外花钱购买，会在主城达到指定等级后自动开启。');
+  }
+
   if (input.buildingId === 'castle') {
     playerState.buildingLevels.castle += 1;
+    syncUnlockedFieldsWithCastleLevel();
     return buildMutationResponse(`主城升级完成，当前已升至 Lv.${playerState.buildingLevels.castle}。`);
   }
 
@@ -1339,17 +1490,6 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
     playerState.buildingLevels.vault += 1;
     playerState.ledger.vaultCapacity += getVaultCapacityGain(playerState.buildingLevels.vault - 1);
     return buildMutationResponse(`金库升级完成，容量已提升到 ${formatNumber(playerState.ledger.vaultCapacity)}。`);
-  }
-
-  if (input.buildingId === 'field-slot') {
-    playerState.buildingLevels['field-slot'] += 1;
-    const lockedField = playerState.fields.find((field) => !field.unlocked);
-    if (lockedField) {
-      lockedField.unlocked = true;
-      lockedField.status = 'empty';
-      lockedField.badgeText = '空闲地块';
-    }
-    return buildMutationResponse('田地位升级完成，新地块已经开放，可直接开始培育。');
   }
 
   if (input.buildingId === 'population') {
@@ -1371,6 +1511,7 @@ export function resetDemoState(): ClientResetDemoStateResponse {
   playerState.unlockedSeedIds = nextState.unlockedSeedIds;
   playerState.starterSeedClaimed = nextState.starterSeedClaimed;
   playerState.buildingLevels = nextState.buildingLevels;
+  playerState.castleExtensionLevels = nextState.castleExtensionLevels;
   playerState.armyCount = nextState.armyCount;
   playerState.armyCapacity = nextState.armyCapacity;
   playerState.raidTicketsUsed = nextState.raidTicketsUsed;

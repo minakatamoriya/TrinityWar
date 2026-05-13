@@ -620,8 +620,31 @@ function applyMockClaimStarterSeeds(): ClientStateMutationResponse {
 }
 
 function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStateMutationResponse {
-  const upgrade = mockSceneSnapshot.building.upgrades.find((item) => item.id === input.buildingId);
   const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
+
+  if (input.targetType === 'castle-extension') {
+    const extension = mockSceneSnapshot.building.extensions.find((item) => item.id === input.extensionId);
+
+    if (!extension || !vaultResource || extension.locked) {
+      return buildMockMutation('当前主城扩展分支不满足升级条件，或已达到验证上限。');
+    }
+
+    const vault = parseCurrentAndCapacity(vaultResource.value);
+    const cost = parseNumberText(extension.costText.replace('消耗', '').replace('金币', ''));
+
+    if (vault.current < cost) {
+      return buildMockMutation('金币不足，当前无法完成升级。');
+    }
+
+    applyVaultGoldDelta(-cost);
+    extension.levelText = extension.levelText.replace(/Lv\.(\d+) -> Lv\.(\d+)/, (_, current, next) => `Lv.${next} -> Lv.${Number(next) + 1}`);
+    extension.costText = '已达到验证上限';
+    extension.action = { label: '查看条件', target: 'building', tone: 'ghost' };
+    extension.locked = true;
+    return buildMockMutation(`${extension.title}升级完成，当前已完成一轮验证内升级。`);
+  }
+
+  const upgrade = mockSceneSnapshot.building.upgrades.find((item) => item.id === input.buildingId);
 
   if (!upgrade || !vaultResource || upgrade.locked) {
     return buildMockMutation('当前建筑不满足升级条件，或已达到验证上限。');
@@ -655,19 +678,7 @@ function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientSt
   }
 
   if (input.buildingId === 'field-slot') {
-    const lockedField = mockSceneSnapshot.farm.fields.find((field) => field.tone === 'locked');
-    if (lockedField) {
-      lockedField.title = '可培育';
-      lockedField.badge = '空闲地块';
-      lockedField.tone = 'empty';
-      lockedField.description = '收取金额 0 金币';
-      lockedField.actions = [{ label: '开始培育', target: 'farm', tone: 'primary' }];
-    }
-    upgrade.locked = true;
-    upgrade.costText = '当前已全部解锁';
-    upgrade.action = { label: '查看条件', target: 'building', tone: 'ghost' };
-    upgrade.description = 'Lv.2，当前验证版田地位已全部解锁。';
-    return buildMockMutation('田地位升级完成，新地块已经开放，可直接开始培育。');
+    return buildMockMutation('田地位不需要额外花钱购买，会在主城达到指定等级后自动开启。');
   }
 
   if (input.buildingId === 'population') {
