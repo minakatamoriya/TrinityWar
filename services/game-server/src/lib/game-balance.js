@@ -90,6 +90,7 @@ const WATCHTOWER_LEVEL_CONFIG = [
   { level: 10, upgradeCost: 2400 },
 ];
 
+// 田地位不作为独立付费升级线处理，而是随主城里程碑自动赠送开启。
 const FIELD_SLOT_UNLOCK_CONFIG = [
   { level: 1, requiredCastleLevel: 1, unlockFieldIndex: 1 },
   { level: 2, requiredCastleLevel: 5, unlockFieldIndex: 2 },
