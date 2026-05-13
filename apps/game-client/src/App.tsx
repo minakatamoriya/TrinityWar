@@ -102,17 +102,19 @@ interface GlobalFeatureModalState {
 }
 
 const seedCatalog: SeedCatalogItem[] = [
-  { id: 'lingmai', name: '灵麦', rarity: 'common', description: '普通、金币型、短线，初始唯一可培育种子。', unlockedByDefault: true },
-  { id: 'yingdou', name: '影豆', rarity: 'common', description: '普通、速熟型、短线，适合高频上线。', unlockedByDefault: false },
-  { id: 'chihu', name: '赤葫', rarity: 'common', description: '普通、金币型、标准，收益稳。', unlockedByDefault: false },
-  { id: 'yuzhe', name: '玉蔗', rarity: 'common', description: '普通、爆发型、标准，丰熟收益高。', unlockedByDefault: false },
-  { id: 'xuanSu', name: '玄粟', rarity: 'common', description: '普通、金币型、长线，适合低频上线。', unlockedByDefault: false },
-  { id: 'yaokui', name: '曜葵', rarity: 'rare', description: '稀有、金币型、标准，中期主力。', unlockedByDefault: false },
-  { id: 'hanmei', name: '寒莓', rarity: 'rare', description: '稀有、速熟型、短线，循环效率高。', unlockedByDefault: false },
-  { id: 'chijiao', name: '炽椒', rarity: 'rare', description: '稀有、爆发型、标准，容易成为目标。', unlockedByDefault: false },
-  { id: 'yuelan', name: '月兰', rarity: 'rare', description: '稀有、收藏型、长线，图鉴价值高。', unlockedByDefault: false },
-  { id: 'longteng', name: '龙藤', rarity: 'legendary', description: '传说、爆发型、长线，全服热度目标。', unlockedByDefault: false },
-  { id: 'xiaolian', name: '霄莲', rarity: 'legendary', description: '传说、收藏型、标准，身份价值最高。', unlockedByDefault: false },
+  { id: 'qinglingmai', name: '青灵麦', rarity: 'common', description: '普通、标准稳收基准种，初始默认可培育。', unlockedByDefault: true },
+  { id: 'ninglucao', name: '凝露草', rarity: 'common', description: '普通、短线抢收种，适合高频上线卡成熟。', unlockedByDefault: false },
+  { id: 'suixinhua', name: '碎心花', rarity: 'common', description: '普通、高折损高回报种，丰熟收益波动很强。', unlockedByDefault: false },
+  { id: 'baiyulian', name: '白玉莲', rarity: 'common', description: '普通、低频保值种，错过窗口也不容易血亏。', unlockedByDefault: false },
+  { id: 'yingyuezhu', name: '影月竹', rarity: 'common', description: '普通、稳健中速种，适合平衡型经营。', unlockedByDefault: false },
+  { id: 'qianjiteng', name: '牵机藤', rarity: 'common', description: '普通、丰熟爆发种，适合做等还是收的选择题。', unlockedByDefault: false },
+  { id: 'huichuncao', name: '回春草', rarity: 'rare', description: '稀有、回种保值种，上线不稳时更稳。', unlockedByDefault: false },
+  { id: 'xueyuehua', name: '雪月花', rarity: 'rare', description: '稀有、高丰熟倍率种，卡点收益很高。', unlockedByDefault: false },
+  { id: 'jingdaosong', name: '劲道松', rarity: 'rare', description: '稀有、长周期高保值种，适合重仓慢收。', unlockedByDefault: false },
+  { id: 'hundunguo', name: '混沌果', rarity: 'rare', description: '稀有、后期抽水种，中后段高价值诱盗目标。', unlockedByDefault: false },
+  { id: 'zhanqingsi', name: '斩情丝', rarity: 'legendary', description: '传说、高风险斩杀种，高收益也高失败代价。', unlockedByDefault: false },
+  { id: 'wangchuanying', name: '忘川影', rarity: 'legendary', description: '传说、长周期隐性暴利种，后段重投入慢兑现。', unlockedByDefault: false },
+  { id: 'zhaoyouming', name: '照幽冥', rarity: 'legendary', description: '传说、极限丰熟回种种，终局上限最高之一。', unlockedByDefault: false },
 ];
 
 const FARM_COLLECT_PRESENTATION_MS = 1250;
@@ -356,7 +358,7 @@ function App(): JSX.Element {
   const [seedSelectionState, setSeedSelectionState] = useState<SeedSelectionState | null>(null);
   const [armyRecruitCount, setArmyRecruitCount] = useState(0);
   const [armyQueueRefreshReadyAt, setArmyQueueRefreshReadyAt] = useState<string | null>(null);
-  const [selectedSeedId, setSelectedSeedId] = useState<string>('lingmai');
+  const [selectedSeedId, setSelectedSeedId] = useState<string>('qinglingmai');
   const [fieldSeedAssignments, setFieldSeedAssignments] = useState<Record<string, string>>({});
   const [collectOverflowState, setCollectOverflowState] = useState<CollectOverflowState | null>(null);
   const [pendingClaimOverflowState, setPendingClaimOverflowState] = useState<PendingClaimOverflowState | null>(null);
@@ -385,7 +387,7 @@ function App(): JSX.Element {
     setStarterSeedClaimed(backpack.starterSeedClaimed);
     setTianjiTalismanClaimed(backpack.tianjiTalismanClaimed);
     if (!backpack.unlockedSeedIds.includes(selectedSeedId)) {
-      setSelectedSeedId(backpack.unlockedSeedIds[0] ?? 'lingmai');
+      setSelectedSeedId(backpack.unlockedSeedIds[0] ?? 'qinglingmai');
     }
   };
 
@@ -743,9 +745,9 @@ function App(): JSX.Element {
       applyMutationResult(result);
       setSeedInventory((current) => ({
         ...current,
-        lingmai: (current.lingmai ?? 0) + 3,
+        qinglingmai: (current.qinglingmai ?? 0) + 3,
       }));
-      setUnlockedSeedIds((current) => current.includes('lingmai') ? current : [...current, 'lingmai']);
+      setUnlockedSeedIds((current) => current.includes('qinglingmai') ? current : [...current, 'qinglingmai']);
       setStarterSeedClaimed(true);
       setSeedRewardModal(null);
     } catch {
@@ -835,7 +837,7 @@ function App(): JSX.Element {
       setArmyRecruitCount(0);
       setArmyQueueRefreshReadyAt(null);
       setSeedSelectionState(null);
-      setSelectedSeedId('lingmai');
+      setSelectedSeedId('qinglingmai');
       setFieldSeedAssignments({});
       setFarmCollectPresentation(null);
       setFollowedTargetIds([]);
@@ -959,7 +961,7 @@ function App(): JSX.Element {
     }
 
     if (action.label === '开始培育') {
-      setSelectedSeedId('lingmai');
+      setSelectedSeedId('qinglingmai');
       setSeedSelectionState({
         fieldId,
         fieldCode: context,
@@ -1169,9 +1171,9 @@ function App(): JSX.Element {
 
     setSeedRewardModal({
       title: '领取今日种子',
-      summary: '确认后会把 灵麦 x3 收进背包。',
+      summary: '确认后会把 青灵麦 x3 收进背包。',
       confirmAction: 'claim-starter-seeds',
-      items: [{ seedId: 'lingmai', quantity: 3 }],
+      items: [{ seedId: 'qinglingmai', quantity: 3 }],
     });
   };
 

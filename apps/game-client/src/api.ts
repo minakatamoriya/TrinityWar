@@ -65,9 +65,9 @@ const INITIAL_MOCK_FACTION_CONTRIBUTION = 40;
 const INITIAL_MOCK_FACTION_TREASURY_GOLD = 82400;
 const INITIAL_MOCK_FACTION_ARMY_POWER = 1260;
 const INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS: Record<string, string> = {
-  'field-1': 'lingmai',
-  'field-2': 'lingmai',
-  'field-3': 'lingmai',
+  'field-1': 'qinglingmai',
+  'field-2': 'qinglingmai',
+  'field-3': 'qinglingmai',
 };
 const MOCK_RIPE_WINDOW_SECONDS = 30 * 60;
 let mockFactionContribution = INITIAL_MOCK_FACTION_CONTRIBUTION;
@@ -80,45 +80,51 @@ interface MockFieldTimingState {
 }
 
 const seedLabelMap: Record<string, string> = {
-  lingmai: '灵麦',
-  yingdou: '影豆',
-  chihu: '赤葫',
-  yuzhe: '玉蔗',
-  xuanSu: '玄粟',
-  yaokui: '曜葵',
-  hanmei: '寒莓',
-  chijiao: '炽椒',
-  yuelan: '月兰',
-  longteng: '龙藤',
-  xiaolian: '霄莲',
+  qinglingmai: '青灵麦',
+  ninglucao: '凝露草',
+  suixinhua: '碎心花',
+  baiyulian: '白玉莲',
+  yingyuezhu: '影月竹',
+  qianjiteng: '牵机藤',
+  huichuncao: '回春草',
+  xueyuehua: '雪月花',
+  jingdaosong: '劲道松',
+  hundunguo: '混沌果',
+  zhanqingsi: '斩情丝',
+  wangchuanying: '忘川影',
+  zhaoyouming: '照幽冥',
 };
 
 const mockSeedStageGold: Record<string, { seeded: number; growing: number; mature: number; withered: number }> = {
-  lingmai: { seeded: 100, growing: 100, mature: 200, withered: 100 },
-  yingdou: { seeded: 100, growing: 100, mature: 140, withered: 40 },
-  chihu: { seeded: 120, growing: 120, mature: 300, withered: 50 },
-  yuzhe: { seeded: 160, growing: 160, mature: 220, withered: 180 },
-  xuanSu: { seeded: 150, growing: 150, mature: 230, withered: 140 },
-  yaokui: { seeded: 320, growing: 320, mature: 480, withered: 380 },
-  hanmei: { seeded: 300, growing: 300, mature: 760, withered: 180 },
-  chijiao: { seeded: 450, growing: 450, mature: 620, withered: 520 },
-  yuelan: { seeded: 420, growing: 420, mature: 880, withered: 260 },
-  longteng: { seeded: 520, growing: 520, mature: 1200, withered: 200 },
-  xiaolian: { seeded: 700, growing: 700, mature: 1600, withered: 680 },
+  qinglingmai: { seeded: 100, growing: 100, mature: 200, withered: 100 },
+  ninglucao: { seeded: 100, growing: 100, mature: 140, withered: 40 },
+  suixinhua: { seeded: 120, growing: 120, mature: 300, withered: 50 },
+  baiyulian: { seeded: 160, growing: 160, mature: 220, withered: 180 },
+  yingyuezhu: { seeded: 150, growing: 150, mature: 230, withered: 140 },
+  qianjiteng: { seeded: 170, growing: 170, mature: 360, withered: 120 },
+  huichuncao: { seeded: 320, growing: 320, mature: 480, withered: 380 },
+  xueyuehua: { seeded: 300, growing: 300, mature: 760, withered: 180 },
+  jingdaosong: { seeded: 450, growing: 450, mature: 620, withered: 520 },
+  hundunguo: { seeded: 420, growing: 420, mature: 880, withered: 260 },
+  zhanqingsi: { seeded: 520, growing: 520, mature: 1200, withered: 200 },
+  wangchuanying: { seeded: 760, growing: 760, mature: 1200, withered: 960 },
+  zhaoyouming: { seeded: 700, growing: 700, mature: 1600, withered: 680 },
 };
 
 const mockSeedStageSeconds: Record<string, { seeded: number; growing: number }> = {
-  lingmai: { seeded: 7200, growing: 3600 },
-  yingdou: { seeded: 5400, growing: 1800 },
-  chihu: { seeded: 7200, growing: 3600 },
-  yuzhe: { seeded: 10800, growing: 5400 },
-  xuanSu: { seeded: 9000, growing: 3600 },
-  yaokui: { seeded: 10800, growing: 3600 },
-  hanmei: { seeded: 9000, growing: 3600 },
-  chijiao: { seeded: 14400, growing: 3600 },
-  yuelan: { seeded: 14400, growing: 5400 },
-  longteng: { seeded: 10800, growing: 3600 },
-  xiaolian: { seeded: 14400, growing: 3600 },
+  qinglingmai: { seeded: 7200, growing: 3600 },
+  ninglucao: { seeded: 5400, growing: 1800 },
+  suixinhua: { seeded: 7200, growing: 3600 },
+  baiyulian: { seeded: 10800, growing: 5400 },
+  yingyuezhu: { seeded: 9000, growing: 3600 },
+  qianjiteng: { seeded: 9000, growing: 3600 },
+  huichuncao: { seeded: 10800, growing: 3600 },
+  xueyuehua: { seeded: 9000, growing: 3600 },
+  jingdaosong: { seeded: 14400, growing: 3600 },
+  hundunguo: { seeded: 14400, growing: 5400 },
+  zhanqingsi: { seeded: 10800, growing: 3600 },
+  wangchuanying: { seeded: 18000, growing: 3600 },
+  zhaoyouming: { seeded: 14400, growing: 3600 },
 };
 
 function getMockSeedStageSeconds(seedId: string, stage: 'seeded' | 'growing'): number {
@@ -912,9 +918,9 @@ function applyMockClaimStarterSeeds(): ClientStateMutationResponse {
   }
 
   mockBootstrapSnapshot.backpack.starterSeedClaimed = true;
-  applyMockSeedRewards([{ seedId: 'lingmai', quantity: 3 }]);
+  applyMockSeedRewards([{ seedId: 'qinglingmai', quantity: 3 }]);
 
-  return buildMockMutation('今日种子已领取，获得 灵麦 x3。');
+  return buildMockMutation('今日种子已领取，获得 青灵麦 x3。');
 }
 
 function applyMockClaimTianjiTalisman(): ClientStateMutationResponse {
@@ -1111,11 +1117,11 @@ function applyMockRaidTarget(input: ClientRaidActionRequest): ClientRaidActionRe
   const casualtyRatio = clamp(0.1 + (combatPower / Math.max(army.current, 1)) * 0.04 - (success ? 0.03 : 0), 0.08, 0.42);
   const casualties = Math.min(Math.max(Math.ceil(army.current * casualtyRatio), 1), army.current);
   const rewardMap: Record<string, { seedId: string; label: string; quantity: number; chance: number }> = {
-    'target-1': { seedId: 'longteng', label: '龙藤', quantity: 1, chance: 0.18 },
-    'target-2': { seedId: 'yuelan', label: '月兰', quantity: 1, chance: 0.14 },
-    'target-3': { seedId: 'hanmei', label: '寒莓', quantity: 1, chance: 0.12 },
-    'target-4': { seedId: 'chijiao', label: '炽椒', quantity: 1, chance: 0.16 },
-    'target-5': { seedId: 'yaokui', label: '曜葵', quantity: 1, chance: 0.1 },
+    'target-1': { seedId: 'zhanqingsi', label: '斩情丝', quantity: 1, chance: 0.18 },
+    'target-2': { seedId: 'hundunguo', label: '混沌果', quantity: 1, chance: 0.14 },
+    'target-3': { seedId: 'xueyuehua', label: '雪月花', quantity: 1, chance: 0.12 },
+    'target-4': { seedId: 'jingdaosong', label: '劲道松', quantity: 1, chance: 0.16 },
+    'target-5': { seedId: 'huichuncao', label: '回春草', quantity: 1, chance: 0.1 },
   };
   const rewardConfig = rewardMap[input.targetId];
   const rewards = rewardConfig && Math.random() < clamp(rewardConfig.chance + (powerRatio < 0.35 ? 0.08 : 0) + (success ? 0.05 : 0), 0.1, 0.55)

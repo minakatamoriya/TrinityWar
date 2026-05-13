@@ -73,7 +73,7 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
                     <span className="home-claim-item-tag">物品</span>
                     <strong>领取今日种子</strong>
                   </div>
-                  <strong className="home-claim-item-amount">灵麦 x3</strong>
+                  <strong className="home-claim-item-amount">青灵麦 x3</strong>
                   <em className="home-claim-item-foot" />
                   <button className="secondary-button home-claim-item-button" disabled={claimingStarterSeeds} onClick={onClaimStarterSeeds} type="button">
                     {claimingStarterSeeds ? '收取中' : '领取'}

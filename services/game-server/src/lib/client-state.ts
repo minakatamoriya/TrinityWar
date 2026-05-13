@@ -58,17 +58,19 @@ interface FieldState {
 }
 
 const seedLabelMap: Record<string, string> = {
-  lingmai: '灵麦',
-  yingdou: '影豆',
-  chihu: '赤葫',
-  yuzhe: '玉蔗',
-  xuanSu: '玄粟',
-  yaokui: '曜葵',
-  hanmei: '寒莓',
-  chijiao: '炽椒',
-  yuelan: '月兰',
-  longteng: '龙藤',
-  xiaolian: '霄莲',
+  qinglingmai: '青灵麦',
+  ninglucao: '凝露草',
+  suixinhua: '碎心花',
+  baiyulian: '白玉莲',
+  yingyuezhu: '影月竹',
+  qianjiteng: '牵机藤',
+  huichuncao: '回春草',
+  xueyuehua: '雪月花',
+  jingdaosong: '劲道松',
+  hundunguo: '混沌果',
+  zhanqingsi: '斩情丝',
+  wangchuanying: '忘川影',
+  zhaoyouming: '照幽冥',
 };
 
 interface RaidTargetState {
@@ -598,15 +600,15 @@ const initialRaidTargets: RaidTargetState[] = [
     fieldPreviewTone: 'mature',
     fieldStatus: '成熟田 2 块，成长期 1 块',
     fields: [
-      { id: 'target-1-field-1', code: '田地 01', unlocked: true, status: 'mature', plantedSeedId: 'longteng', plantedGold: 260, currentYield: 420, badgeText: '丰熟' },
-      { id: 'target-1-field-2', code: '田地 02', unlocked: true, status: 'mature', plantedSeedId: 'chijiao', plantedGold: 280, currentYield: 460, badgeText: '丰熟' },
-      { id: 'target-1-field-3', code: '田地 03', unlocked: true, status: 'growing', plantedSeedId: 'yaokui', plantedGold: 210, currentYield: 320, badgeText: '成长' },
+      { id: 'target-1-field-1', code: '田地 01', unlocked: true, status: 'mature', plantedSeedId: 'zhanqingsi', plantedGold: 260, currentYield: 420, badgeText: '丰熟' },
+      { id: 'target-1-field-2', code: '田地 02', unlocked: true, status: 'mature', plantedSeedId: 'jingdaosong', plantedGold: 280, currentYield: 460, badgeText: '丰熟' },
+      { id: 'target-1-field-3', code: '田地 03', unlocked: true, status: 'growing', plantedSeedId: 'huichuncao', plantedGold: 210, currentYield: 320, badgeText: '成长' },
       { id: 'target-1-field-4', code: '田地 04', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
     ],
     raidableGold: 520,
     exposedFruit: '2 块成熟田 · 预计 880 金币',
     defenseStatus: '防守偏弱，驻守兵少于常见同级目标',
-    seedDrop: { seedId: 'longteng', label: '龙藤', quantity: 1, chance: 0.18 },
+    seedDrop: { seedId: 'zhanqingsi', label: '斩情丝', quantity: 1, chance: 0.18 },
   },
   {
     id: 'target-2',
@@ -620,15 +622,15 @@ const initialRaidTargets: RaidTargetState[] = [
     fieldPreviewTone: 'seeded',
     fieldStatus: '成熟田 1 块，播种田 2 块',
     fields: [
-      { id: 'target-2-field-1', code: '田地 01', unlocked: true, status: 'mature', plantedSeedId: 'yuelan', plantedGold: 200, currentYield: 420, badgeText: '丰熟' },
-      { id: 'target-2-field-2', code: '田地 02', unlocked: true, status: 'seeded', plantedSeedId: 'lingmai', plantedGold: 120, currentYield: 180, badgeText: '播种' },
-      { id: 'target-2-field-3', code: '田地 03', unlocked: true, status: 'seeded', plantedSeedId: 'hanmei', plantedGold: 160, currentYield: 210, badgeText: '播种' },
+      { id: 'target-2-field-1', code: '田地 01', unlocked: true, status: 'mature', plantedSeedId: 'hundunguo', plantedGold: 200, currentYield: 420, badgeText: '丰熟' },
+      { id: 'target-2-field-2', code: '田地 02', unlocked: true, status: 'seeded', plantedSeedId: 'qinglingmai', plantedGold: 120, currentYield: 180, badgeText: '播种' },
+      { id: 'target-2-field-3', code: '田地 03', unlocked: true, status: 'seeded', plantedSeedId: 'xueyuehua', plantedGold: 160, currentYield: 210, badgeText: '播种' },
       { id: 'target-2-field-4', code: '田地 04', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
     ],
     raidableGold: 260,
     exposedFruit: '1 块成熟田 · 预计 420 金币',
     defenseStatus: '防守偏稳，仙界被掠损失减免明显',
-    seedDrop: { seedId: 'yuelan', label: '月兰', quantity: 1, chance: 0.14 },
+    seedDrop: { seedId: 'hundunguo', label: '混沌果', quantity: 1, chance: 0.14 },
   },
   {
     id: 'target-3',
@@ -642,7 +644,7 @@ const initialRaidTargets: RaidTargetState[] = [
     fieldPreviewTone: 'growing',
     fieldStatus: '成长期 1 块，空闲田 1 块',
     fields: [
-      { id: 'target-3-field-1', code: '田地 01', unlocked: true, status: 'growing', plantedSeedId: 'hanmei', plantedGold: 140, currentYield: 260, badgeText: '成长' },
+      { id: 'target-3-field-1', code: '田地 01', unlocked: true, status: 'growing', plantedSeedId: 'xueyuehua', plantedGold: 140, currentYield: 260, badgeText: '成长' },
       { id: 'target-3-field-2', code: '田地 02', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
       { id: 'target-3-field-3', code: '田地 03', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
       { id: 'target-3-field-4', code: '田地 04', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
@@ -650,7 +652,7 @@ const initialRaidTargets: RaidTargetState[] = [
     raidableGold: 180,
     exposedFruit: '1 块成长尾段田 · 预计 260 金币',
     defenseStatus: '人界经营向，防守一般，但暴露收益偏低',
-    seedDrop: { seedId: 'hanmei', label: '寒莓', quantity: 1, chance: 0.12 },
+    seedDrop: { seedId: 'xueyuehua', label: '雪月花', quantity: 1, chance: 0.12 },
   },
   {
     id: 'target-4',
@@ -664,15 +666,15 @@ const initialRaidTargets: RaidTargetState[] = [
     fieldPreviewTone: 'mature',
     fieldStatus: '成熟田 1 块，成长期 2 块',
     fields: [
-      { id: 'target-4-field-1', code: '田地 01', unlocked: true, status: 'mature', plantedSeedId: 'chijiao', plantedGold: 250, currentYield: 510, badgeText: '丰熟' },
-      { id: 'target-4-field-2', code: '田地 02', unlocked: true, status: 'growing', plantedSeedId: 'yaokui', plantedGold: 220, currentYield: 300, badgeText: '成长' },
-      { id: 'target-4-field-3', code: '田地 03', unlocked: true, status: 'growing', plantedSeedId: 'longteng', plantedGold: 240, currentYield: 340, badgeText: '成长' },
+      { id: 'target-4-field-1', code: '田地 01', unlocked: true, status: 'mature', plantedSeedId: 'jingdaosong', plantedGold: 250, currentYield: 510, badgeText: '丰熟' },
+      { id: 'target-4-field-2', code: '田地 02', unlocked: true, status: 'growing', plantedSeedId: 'huichuncao', plantedGold: 220, currentYield: 300, badgeText: '成长' },
+      { id: 'target-4-field-3', code: '田地 03', unlocked: true, status: 'growing', plantedSeedId: 'zhanqingsi', plantedGold: 240, currentYield: 340, badgeText: '成长' },
       { id: 'target-4-field-4', code: '田地 04', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
     ],
     raidableGold: 460,
     exposedFruit: '1 块成熟田 · 预计 510 金币',
     defenseStatus: '中等防守，战力高但驻防分散',
-    seedDrop: { seedId: 'chijiao', label: '炽椒', quantity: 1, chance: 0.16 },
+    seedDrop: { seedId: 'jingdaosong', label: '劲道松', quantity: 1, chance: 0.16 },
   },
   {
     id: 'target-5',
@@ -686,7 +688,7 @@ const initialRaidTargets: RaidTargetState[] = [
     fieldPreviewTone: 'mature',
     fieldStatus: '成熟田 1 块，空闲田 2 块',
     fields: [
-      { id: 'target-5-field-1', code: '田地 01', unlocked: true, status: 'mature', plantedSeedId: 'yaokui', plantedGold: 120, currentYield: 190, badgeText: '丰熟' },
+      { id: 'target-5-field-1', code: '田地 01', unlocked: true, status: 'mature', plantedSeedId: 'huichuncao', plantedGold: 120, currentYield: 190, badgeText: '丰熟' },
       { id: 'target-5-field-2', code: '田地 02', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
       { id: 'target-5-field-3', code: '田地 03', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
       { id: 'target-5-field-4', code: '田地 04', unlocked: true, status: 'empty', plantedGold: 0, currentYield: 0, badgeText: '空闲' },
@@ -694,7 +696,7 @@ const initialRaidTargets: RaidTargetState[] = [
     raidableGold: 140,
     exposedFruit: '1 块成熟田 · 预计 190 金币',
     defenseStatus: '防守偏弱，适合低损验证',
-    seedDrop: { seedId: 'yaokui', label: '曜葵', quantity: 1, chance: 0.1 },
+    seedDrop: { seedId: 'huichuncao', label: '回春草', quantity: 1, chance: 0.1 },
   },
 ];
 
@@ -702,22 +704,24 @@ const initialPlayerState: InMemoryPlayerState = {
   playerName: '人界领主·临川',
   factionName: '人界',
   seedInventory: {
-    lingmai: 0,
-    yingdou: 0,
-    chihu: 0,
-    yuzhe: 0,
-    xuanSu: 0,
-    yaokui: 0,
-    hanmei: 0,
-    chijiao: 0,
-    yuelan: 0,
-    longteng: 0,
-    xiaolian: 0,
+    qinglingmai: 0,
+    ninglucao: 0,
+    suixinhua: 0,
+    baiyulian: 0,
+    yingyuezhu: 0,
+    qianjiteng: 0,
+    huichuncao: 0,
+    xueyuehua: 0,
+    jingdaosong: 0,
+    hundunguo: 0,
+    zhanqingsi: 0,
+    wangchuanying: 0,
+    zhaoyouming: 0,
   },
   globalItemInventory: {
     tianjiTalisman: 0,
   },
-  unlockedSeedIds: ['lingmai'],
+  unlockedSeedIds: ['qinglingmai'],
   starterSeedClaimed: false,
   tianjiTalismanClaimed: false,
   buildingLevels: {
@@ -759,7 +763,7 @@ const initialPlayerState: InMemoryPlayerState = {
       code: '田地 01',
       unlocked: true,
       status: 'mature',
-      plantedSeedId: 'lingmai',
+      plantedSeedId: 'qinglingmai',
       plantedGold: 600,
       currentYield: 1260,
       badgeText: '丰熟',
@@ -769,7 +773,7 @@ const initialPlayerState: InMemoryPlayerState = {
       code: '田地 02',
       unlocked: true,
       status: 'seeded',
-      plantedSeedId: 'lingmai',
+      plantedSeedId: 'qinglingmai',
       plantedGold: 420,
       currentYield: 520,
       badgeText: '播种',
@@ -779,7 +783,7 @@ const initialPlayerState: InMemoryPlayerState = {
       code: '田地 03',
       unlocked: true,
       status: 'growing',
-      plantedSeedId: 'lingmai',
+      plantedSeedId: 'qinglingmai',
       plantedGold: 520,
       currentYield: 660,
       badgeText: '成熟',
@@ -1312,7 +1316,7 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       cropName,
       tone: 'growing',
       progressRemainingSeconds: getFieldStageRemainingSeconds(field),
-      progressTotalSeconds: getSeedStageSeconds(field.plantedSeedId ?? 'lingmai', 'growing'),
+      progressTotalSeconds: getSeedStageSeconds(field.plantedSeedId ?? 'qinglingmai', 'growing'),
       yieldGold: getResolvedFieldYield(field),
       description: '可抢收，点击后直接结算一轮提前收取结果。',
       actions: [
@@ -1330,7 +1334,7 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       cropName,
       tone: 'seeded',
       progressRemainingSeconds: getFieldStageRemainingSeconds(field),
-      progressTotalSeconds: getSeedStageSeconds(field.plantedSeedId ?? 'lingmai', 'seeded'),
+      progressTotalSeconds: getSeedStageSeconds(field.plantedSeedId ?? 'qinglingmai', 'seeded'),
       yieldGold: getResolvedFieldYield(field),
       description: '播种刚完成，等待进入成长后再决定是否抢收。',
       actions: [],
@@ -1776,9 +1780,9 @@ export function claimStarterSeeds(): ClientStateMutationResponse {
   }
 
   playerState.starterSeedClaimed = true;
-  applySeedRewards([{ seedId: 'lingmai', quantity: 3 }]);
+  applySeedRewards([{ seedId: 'qinglingmai', quantity: 3 }]);
 
-  return buildMutationResponse('今日种子已领取，获得 灵麦 x3。');
+  return buildMutationResponse('今日种子已领取，获得 青灵麦 x3。');
 }
 
 export function claimTianjiTalisman(): ClientStateMutationResponse {
