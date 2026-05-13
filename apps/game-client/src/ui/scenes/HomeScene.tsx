@@ -1,40 +1,19 @@
-import type { ClientPendingClaimSummary, ClientSceneKey } from '@trinitywar/shared';
-
-interface HomeTaskItem {
-  id: string;
-  title: string;
-  description: string;
-  scene: ClientSceneKey;
-}
-
-const homeTaskItems: HomeTaskItem[] = [
-  {
-    id: 'claim-tax',
-    title: '领取主城税收',
-    description: '先把待领取税收入库，保证后续升级和播种不断档。',
-    scene: 'home',
-  },
-  {
-    id: 'collect-farm',
-    title: '收取成熟田地',
-    description: '直接前往农场收菜，成熟地块收回后可继续播种。',
-    scene: 'farm',
-  },
-  {
-    id: 'raid-target',
-    title: '发起一次掠夺',
-    description: '跳转到新的掠夺页，在目标列表里直接挑选匿名目标。',
-    scene: 'report',
-  },
-];
+import type { ClientDailyTaskSummary, ClientPendingClaimSummary, ClientSceneKey } from '@trinitywar/shared';
 
 interface HomeSceneProps {
   hourlyTax: number;
   taxPending: ClientPendingClaimSummary | undefined;
   claimingTax: boolean;
+  claimingStarterSeeds: boolean;
+  claimingTianjiTalisman: boolean;
+  claimingTaskId: string | null;
+  dailyTasks: ClientDailyTaskSummary[];
   onClaimTax: () => void;
+  onClaimTask: (taskId: string) => void;
   starterSeedClaimed: boolean;
   onClaimStarterSeeds: () => void;
+  tianjiTalismanClaimed: boolean;
+  onClaimTianjiTalisman: () => void;
   onNavigate: (scene: ClientSceneKey) => void;
 }
 
@@ -51,15 +30,23 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
     hourlyTax,
     taxPending,
     claimingTax,
+    claimingStarterSeeds,
+    claimingTianjiTalisman,
+    claimingTaskId,
+    dailyTasks,
     onClaimTax,
+    onClaimTask,
     starterSeedClaimed,
     onClaimStarterSeeds,
+    tianjiTalismanClaimed,
+    onClaimTianjiTalisman,
     onNavigate,
   } = props;
   const taxPendingAmount = parseClaimValue(taxPending?.value);
   const canClaimTax = taxPendingAmount > 0;
   const canClaimStarterSeed = !starterSeedClaimed;
-  const hasClaimableRewards = canClaimTax || canClaimStarterSeed;
+  const canClaimTianjiTalisman = !tianjiTalismanClaimed;
+  const hasClaimableRewards = canClaimTax || canClaimStarterSeed || canClaimTianjiTalisman;
 
   return (
     <div className="scene-shell scene-shell-home">
@@ -68,36 +55,49 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
           {hasClaimableRewards ? (
             <div className="home-claim-list">
               {canClaimTax ? (
-                <button className="home-claim-item home-claim-item-tax" disabled={claimingTax} onClick={onClaimTax} type="button">
-                  <div className="home-claim-item-head">
+                <div className="home-claim-item home-claim-item-tax">
+                  <div className="home-claim-item-title">
                     <span className="home-claim-item-tag">金币</span>
                     <strong>领取税收</strong>
                   </div>
-                  <div className="home-claim-item-body">
-                    <strong className="home-claim-item-amount">{taxPending?.value}</strong>
-                    <span className="home-claim-item-meta">{claimingTax ? '入库中...' : `当前可领 ${taxPending?.value}`}</span>
-                  </div>
-                  <em className="home-claim-item-foot">{formatNumber(hourlyTax)} / 小时，金库未满时会持续累积</em>
-                </button>
+                  <strong className="home-claim-item-amount">{taxPending?.value}</strong>
+                  <em className="home-claim-item-foot">{formatNumber(hourlyTax)} / 小时</em>
+                  <button className="secondary-button home-claim-item-button" disabled={claimingTax} onClick={onClaimTax} type="button">
+                    {claimingTax ? '入库中' : '领取'}
+                  </button>
+                </div>
               ) : null}
               {canClaimStarterSeed ? (
-                <button className="home-claim-item home-claim-item-seed" onClick={onClaimStarterSeeds} type="button">
-                  <div className="home-claim-item-head">
+                <div className="home-claim-item home-claim-item-seed">
+                  <div className="home-claim-item-title">
                     <span className="home-claim-item-tag">物品</span>
                     <strong>领取今日种子</strong>
                   </div>
-                  <div className="home-claim-item-body">
-                    <strong className="home-claim-item-amount">今日可领</strong>
-                    <span className="home-claim-item-meta">点击后展示本次获得物品</span>
+                  <strong className="home-claim-item-amount">灵麦 x3</strong>
+                  <em className="home-claim-item-foot" />
+                  <button className="secondary-button home-claim-item-button" disabled={claimingStarterSeeds} onClick={onClaimStarterSeeds} type="button">
+                    {claimingStarterSeeds ? '收取中' : '领取'}
+                  </button>
+                </div>
+              ) : null}
+              {canClaimTianjiTalisman ? (
+                <div className="home-claim-item home-claim-item-tianji">
+                  <div className="home-claim-item-title">
+                    <span className="home-claim-item-tag">物品</span>
+                    <strong>领取天机符</strong>
                   </div>
-                  <em className="home-claim-item-foot">领取完成后入口自动隐藏</em>
-                </button>
+                  <strong className="home-claim-item-amount">天机符 x1</strong>
+                  <em className="home-claim-item-foot">每日 1 张</em>
+                  <button className="secondary-button home-claim-item-button" disabled={claimingTianjiTalisman} onClick={onClaimTianjiTalisman} type="button">
+                    {claimingTianjiTalisman ? '收取中' : '领取'}
+                  </button>
+                </div>
               ) : null}
             </div>
           ) : (
             <div className="home-claim-empty">
               <strong>当前没有可领取内容</strong>
-              <p>税收、种子或后续补充的主城奖励会在可领取时显示在这里。</p>
+              <p>税收、种子、天机符或后续补充的主城奖励会在可领取时显示在这里。</p>
             </div>
           )}
         </article>
@@ -107,15 +107,24 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
             <h4>任务列表</h4>
           </div>
           <div className="task-list">
-            {homeTaskItems.map((item, index) => (
-              <div className="task-row" key={item.id}>
+            {dailyTasks.map((item, index) => (
+              <div className={`task-row task-row-${item.status}`} key={item.id}>
                 <span className="task-index">0{index + 1}</span>
                 <div>
                   <div className="task-row-head">
                     <strong>{item.title}</strong>
-                    <button className="text-link task-link" onClick={() => onNavigate(item.scene)} type="button">前往</button>
+                    {item.status === 'completed' ? (
+                      <button className="text-link task-link task-link-claim" disabled={claimingTaskId === item.id} onClick={() => onClaimTask(item.id)} type="button">
+                        {claimingTaskId === item.id ? '领取中' : '领取'}
+                      </button>
+                    ) : (
+                      <button className="text-link task-link" disabled={item.status === 'claimed'} onClick={() => onNavigate(item.actionScene)} type="button">
+                        {item.status === 'claimed' ? '已领取' : '前往'}
+                      </button>
+                    )}
                   </div>
                   <p>{item.description}</p>
+                  <p className="task-progress-line">进度 {item.progressText} · 奖励 {formatNumber(item.rewardGold)} 金币</p>
                 </div>
               </div>
             ))}

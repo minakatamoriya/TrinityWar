@@ -23,8 +23,10 @@ export interface ClientBootstrapResponse {
 
 export interface ClientSeedBackpack {
   seedInventory: Record<string, number>;
+  globalItemInventory: Record<string, number>;
   unlockedSeedIds: string[];
   starterSeedClaimed: boolean;
+  tianjiTalismanClaimed: boolean;
 }
 
 export interface ClientSeasonStatus {
@@ -70,6 +72,20 @@ export interface HomeActionItem {
   description: string;
 }
 
+export type ClientDailyTaskStatus = 'in-progress' | 'completed' | 'claimed';
+
+export interface ClientDailyTaskSummary {
+  id: string;
+  title: string;
+  description: string;
+  progressCurrent: number;
+  progressTarget: number;
+  progressText: string;
+  rewardGold: number;
+  status: ClientDailyTaskStatus;
+  actionScene: ClientSceneKey;
+}
+
 export interface HomeSummaryResponse {
   app: string;
   playerName: string;
@@ -82,6 +98,7 @@ export interface HomeSummaryResponse {
   resources: HomeResourceSummary[];
   pendingClaims: ClientPendingClaimSummary[];
   temporaryClaim: ClientTemporaryClaimSummary | null;
+  dailyTasks: ClientDailyTaskSummary[];
   primaryActions: HomeActionItem[];
 }
 
@@ -94,6 +111,7 @@ export interface ClientResourceLedger {
 
 export interface ClientClaimPendingRequest {
   source: ClientPendingClaimSource;
+  acceptOverflowLoss?: boolean;
 }
 
 export interface ClientClaimPendingResponse {
@@ -103,6 +121,19 @@ export interface ClientClaimPendingResponse {
   claimedGold: number;
   remainingPendingGold: number;
   ledger: ClientResourceLedger;
+  home: HomeSummaryResponse;
+  scenes: ClientSceneContentResponse;
+}
+
+export interface ClientClaimDailyTaskRequest {
+  taskId: string;
+}
+
+export interface ClientClaimDailyTaskResponse {
+  app: string;
+  summary: string;
+  taskId: string;
+  claimedGold: number;
   home: HomeSummaryResponse;
   scenes: ClientSceneContentResponse;
 }

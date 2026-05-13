@@ -4,6 +4,8 @@ import {
   type ClientBootstrapResponse,
   type ClientCastleExtensionUpgrade,
   type ClientCastleExtensionUpgradeId,
+  type ClientClaimDailyTaskRequest,
+  type ClientClaimDailyTaskResponse,
   type ClientRaidActionRequest,
   type ClientRaidActionResponse,
   type ClientFactionDonateRequest,
@@ -19,6 +21,7 @@ import {
   type ClientRecruitArmyRequest,
   type ClientResetDemoStateResponse,
   type ClientReportEntry,
+  type ClientSceneKey,
   type ClientSceneAction,
   type ClientSceneContentResponse,
   type ClientResourceLedger,
@@ -28,12 +31,16 @@ import {
   type HomeSummaryResponse,
 } from '@trinitywar/shared';
 import {
+  DAILY_TASK_CONFIG,
   GAME_BALANCE,
   getCastleExtensionLevelConfig,
   getCastleExtensionTrack,
   getBuildingUpgradeCost,
+  getDailyTaskDefinition,
   getFactionDividendPerHour as getConfiguredFactionDividendPerHour,
   getPopulationCapacityGain,
+  getSeedStageGold,
+  getSeedStageSeconds,
   getTaxIncomePerHour as getConfiguredTaxIncomePerHour,
   getVaultCapacityGain,
 } from './game-balance.js';
@@ -43,6 +50,7 @@ interface FieldState {
   code: string;
   unlocked: boolean;
   status: 'empty' | 'seeded' | 'growing' | 'mature' | 'withered';
+  statusStartedAt?: string;
   plantedSeedId?: string;
   plantedGold: number;
   currentYield: number;
@@ -87,12 +95,20 @@ interface RaidTargetState {
   };
 }
 
+interface DailyTaskProgressState {
+  taskId: string;
+  progress: number;
+  claimed: boolean;
+}
+
 interface InMemoryPlayerState {
   playerName: string;
   factionName: string;
   seedInventory: Record<string, number>;
+  globalItemInventory: Record<string, number>;
   unlockedSeedIds: string[];
   starterSeedClaimed: boolean;
+  tianjiTalismanClaimed: boolean;
   buildingLevels: Record<ClientBuildingUpgradeId, number>;
   castleExtensionLevels: Record<ClientCastleExtensionUpgradeId, number>;
   armyCount: number;
@@ -109,6 +125,10 @@ interface InMemoryPlayerState {
     goldAmount: number;
     expiresAt: string;
   } | null;
+  dailyTaskState: {
+    dateKey: string;
+    tasks: DailyTaskProgressState[];
+  };
   fields: FieldState[];
   raidTargets: RaidTargetState[];
   defenseReports: ClientReportEntry[];
@@ -122,12 +142,25 @@ function clonePlayerState(state: InMemoryPlayerState): InMemoryPlayerState {
 function buildSeedBackpack(): ClientBootstrapResponse['backpack'] {
   return {
     seedInventory: { ...playerState.seedInventory },
+    globalItemInventory: { ...playerState.globalItemInventory },
     unlockedSeedIds: [...playerState.unlockedSeedIds],
     starterSeedClaimed: playerState.starterSeedClaimed,
+    tianjiTalismanClaimed: playerState.tianjiTalismanClaimed,
   };
 }
 
 const CASTLE_FIELD_UNLOCK_MILESTONES = [1, 5, 10, 15];
+const DAILY_TASK_SCENE_MAP: Record<string, ClientSceneKey> = {
+  'collect-field': 'farm',
+  'start-cultivation': 'farm',
+  'faction-interaction': 'faction',
+  'faction-donate': 'faction',
+  'recruit-army': 'raid',
+  'upgrade-building': 'building',
+  'upgrade-core-line': 'building',
+  'upgrade-core-building': 'building',
+  'farm-cycle': 'farm',
+};
 
 function getUnlockedFieldCountByCastleLevel(castleLevel: number): number {
   return CASTLE_FIELD_UNLOCK_MILESTONES.filter((requiredLevel) => castleLevel >= requiredLevel).length;
@@ -135,6 +168,114 @@ function getUnlockedFieldCountByCastleLevel(castleLevel: number): number {
 
 function getNextFieldUnlockRequirement(castleLevel: number): number | null {
   return CASTLE_FIELD_UNLOCK_MILESTONES.find((requiredLevel) => castleLevel < requiredLevel) ?? null;
+}
+
+function getFieldUnlockRequirement(fieldId: string): number | null {
+  const fieldIndex = playerState.fields.findIndex((field) => field.id === fieldId);
+  if (fieldIndex < 0) {
+    return null;
+  }
+
+  return CASTLE_FIELD_UNLOCK_MILESTONES[fieldIndex] ?? null;
+}
+
+function getCurrentDateKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getDailyTaskGoldReward(taskId: string): number {
+  const task = getDailyTaskDefinition(taskId);
+  const goldReward = task?.rewards?.find((reward: { type?: string; amount?: number }) => reward.type === 'gold');
+  return typeof goldReward?.amount === 'number' ? goldReward.amount : 0;
+}
+
+function buildDailyTaskProgressText(current: number, target: number, claimed: boolean): string {
+  if (claimed) {
+    return '已领取';
+  }
+
+  if (current >= target) {
+    return '可领取';
+  }
+
+  return `${current}/${target}`;
+}
+
+function buildDailyTaskSelection(dateKey: string): string[] {
+  const fixedTaskIds = DAILY_TASK_CONFIG.fixedTasks
+    .slice(0, DAILY_TASK_CONFIG.structure.fixedTaskCount)
+    .map((task) => task.id);
+  const randomTaskCount = Math.max(DAILY_TASK_CONFIG.structure.randomTaskCount, 0);
+
+  if (randomTaskCount <= 0 || DAILY_TASK_CONFIG.randomTasks.length <= 0) {
+    return fixedTaskIds;
+  }
+
+  const seed = Array.from(dateKey).reduce((total, char) => total + char.charCodeAt(0), 0);
+  const randomTaskIds = Array.from({ length: Math.min(randomTaskCount, DAILY_TASK_CONFIG.randomTasks.length) }, (_, index) => {
+    const randomTask = DAILY_TASK_CONFIG.randomTasks[(seed + index) % DAILY_TASK_CONFIG.randomTasks.length];
+    return randomTask.id;
+  });
+
+  return [...fixedTaskIds, ...randomTaskIds];
+}
+
+function ensureDailyTasks(): void {
+  const dateKey = getCurrentDateKey();
+
+  if (playerState.dailyTaskState.dateKey === dateKey && playerState.dailyTaskState.tasks.length > 0) {
+    return;
+  }
+
+  playerState.dailyTaskState = {
+    dateKey,
+    tasks: buildDailyTaskSelection(dateKey).map((taskId) => ({
+      taskId,
+      progress: 0,
+      claimed: false,
+    })),
+  };
+}
+
+function recordDailyTaskProgress(objectiveType: string, amount = 1): void {
+  ensureDailyTasks();
+
+  playerState.dailyTaskState.tasks.forEach((taskState) => {
+    const taskDefinition = getDailyTaskDefinition(taskState.taskId);
+    if (!taskDefinition || taskState.claimed || taskDefinition.objective.type !== objectiveType) {
+      return;
+    }
+
+    taskState.progress = Math.min(taskState.progress + amount, taskDefinition.objective.count);
+  });
+}
+
+function buildDailyTaskSummaries(): HomeSummaryResponse['dailyTasks'] {
+  ensureDailyTasks();
+
+  return playerState.dailyTaskState.tasks.map((taskState) => {
+    const taskDefinition = getDailyTaskDefinition(taskState.taskId);
+    const progressTarget = taskDefinition?.objective.count ?? 1;
+    const progressCurrent = Math.min(taskState.progress, progressTarget);
+    const status = taskState.claimed
+      ? 'claimed'
+      : progressCurrent >= progressTarget
+        ? 'completed'
+        : 'in-progress';
+    const actionScene: HomeSummaryResponse['dailyTasks'][number]['actionScene'] = DAILY_TASK_SCENE_MAP[taskDefinition?.objective.type ?? 'collect-field'] ?? 'home';
+
+    return {
+      id: taskState.taskId,
+      title: taskDefinition?.title ?? taskState.taskId,
+      description: `${taskDefinition?.category ?? '日常'}任务，完成后可领取 ${formatNumber(getDailyTaskGoldReward(taskState.taskId))} 金币。`,
+      progressCurrent,
+      progressTarget,
+      progressText: buildDailyTaskProgressText(progressCurrent, progressTarget, taskState.claimed),
+      rewardGold: getDailyTaskGoldReward(taskState.taskId),
+      status,
+      actionScene,
+    };
+  });
 }
 
 function syncUnlockedFieldsWithCastleLevel(): void {
@@ -217,6 +358,176 @@ function getPlayerProtectionDurationMinutes(): number {
 
 function getFarmYieldMultiplier(): number {
   return 1 + getCastleExtensionEffectValue('farmYieldTech') / 100;
+}
+
+function getFarmRipeWindowSeconds(): number {
+  return 30 * 60 + getCastleExtensionEffectValue('ripeWindowTech') * 60;
+}
+
+function getFieldBadgeText(status: FieldState['status']): string {
+  if (status === 'seeded') {
+    return '播种';
+  }
+
+  if (status === 'growing') {
+    return '成长';
+  }
+
+  if (status === 'mature') {
+    return '丰熟';
+  }
+
+  if (status === 'withered') {
+    return '枯萎';
+  }
+
+  return '空闲地块';
+}
+
+function getFieldStageTotalSeconds(field: FieldState, status: FieldState['status'] = field.status): number {
+  if (!field.plantedSeedId) {
+    return 1;
+  }
+
+  if (status === 'seeded' || status === 'growing') {
+    return getSeedStageSeconds(field.plantedSeedId, status);
+  }
+
+  if (status === 'mature') {
+    return getFarmRipeWindowSeconds();
+  }
+
+  return 1;
+}
+
+function getFallbackFieldRemainingSeconds(field: FieldState): number {
+  if (field.status === 'seeded') {
+    return 2535;
+  }
+
+  if (field.status === 'growing') {
+    return 4690;
+  }
+
+  if (field.status === 'mature') {
+    return Math.min(getFarmRipeWindowSeconds(), 20 * 60);
+  }
+
+  return 0;
+}
+
+function getFieldStageStartedAtMs(field: FieldState, nowMs: number): number {
+  const parsedStartedAt = field.statusStartedAt ? new Date(field.statusStartedAt).getTime() : Number.NaN;
+
+  if (Number.isFinite(parsedStartedAt)) {
+    return parsedStartedAt;
+  }
+
+  const totalSeconds = getFieldStageTotalSeconds(field);
+  const fallbackRemainingSeconds = Math.min(getFallbackFieldRemainingSeconds(field), totalSeconds);
+  return nowMs - Math.max(totalSeconds - fallbackRemainingSeconds, 0) * 1000;
+}
+
+function setFieldStage(field: FieldState, status: FieldState['status'], startedAtMs: number): void {
+  field.status = status;
+  field.statusStartedAt = new Date(startedAtMs).toISOString();
+  field.badgeText = getFieldBadgeText(status);
+
+  if (!field.plantedSeedId || status === 'empty') {
+    field.currentYield = 0;
+    return;
+  }
+
+  field.currentYield = Math.round(getSeedStageGold(field.plantedSeedId, status) * getFarmYieldMultiplier());
+}
+
+function settleFieldLifecycle(field: FieldState, nowMs: number): void {
+  if (!field.unlocked || field.status === 'empty' || !field.plantedSeedId) {
+    return;
+  }
+
+  let startedAtMs = getFieldStageStartedAtMs(field, nowMs);
+  field.statusStartedAt = new Date(startedAtMs).toISOString();
+
+  while (true) {
+    if (field.status === 'seeded') {
+      const seededSeconds = getFieldStageTotalSeconds(field, 'seeded');
+      const elapsedSeconds = Math.floor((nowMs - startedAtMs) / 1000);
+
+      if (elapsedSeconds < seededSeconds) {
+        field.currentYield = Math.round(getSeedStageGold(field.plantedSeedId, 'seeded') * getFarmYieldMultiplier());
+        field.badgeText = getFieldBadgeText('seeded');
+        return;
+      }
+
+      startedAtMs += seededSeconds * 1000;
+      setFieldStage(field, 'growing', startedAtMs);
+      continue;
+    }
+
+    if (field.status === 'growing') {
+      const growingSeconds = getFieldStageTotalSeconds(field, 'growing');
+      const elapsedSeconds = Math.floor((nowMs - startedAtMs) / 1000);
+
+      if (elapsedSeconds < growingSeconds) {
+        field.currentYield = Math.round(getSeedStageGold(field.plantedSeedId, 'growing') * getFarmYieldMultiplier());
+        field.badgeText = getFieldBadgeText('growing');
+        return;
+      }
+
+      startedAtMs += growingSeconds * 1000;
+      setFieldStage(field, 'mature', startedAtMs);
+      continue;
+    }
+
+    if (field.status === 'mature') {
+      const ripeWindowSeconds = getFieldStageTotalSeconds(field, 'mature');
+      const elapsedSeconds = Math.floor((nowMs - startedAtMs) / 1000);
+
+      if (elapsedSeconds < ripeWindowSeconds) {
+        field.currentYield = Math.round(getSeedStageGold(field.plantedSeedId, 'mature') * getFarmYieldMultiplier());
+        field.badgeText = getFieldBadgeText('mature');
+        return;
+      }
+
+      startedAtMs += ripeWindowSeconds * 1000;
+      setFieldStage(field, 'withered', startedAtMs);
+      return;
+    }
+
+    field.currentYield = Math.round(getSeedStageGold(field.plantedSeedId, 'withered') * getFarmYieldMultiplier());
+    field.badgeText = getFieldBadgeText('withered');
+    return;
+  }
+}
+
+function settleAllFieldLifecycles(): void {
+  const nowMs = Date.now();
+  playerState.fields.forEach((field) => settleFieldLifecycle(field, nowMs));
+}
+
+function getFieldStageRemainingSeconds(field: FieldState): number {
+  if (field.status !== 'seeded' && field.status !== 'growing' && field.status !== 'mature') {
+    return 0;
+  }
+
+  const nowMs = Date.now();
+  const startedAtMs = getFieldStageStartedAtMs(field, nowMs);
+  const totalSeconds = getFieldStageTotalSeconds(field);
+  const elapsedSeconds = Math.max(Math.floor((nowMs - startedAtMs) / 1000), 0);
+  return Math.max(totalSeconds - elapsedSeconds, 0);
+}
+
+function getResolvedFieldYield(field: FieldState): number {
+  if (!field.plantedSeedId) {
+    return field.currentYield;
+  }
+
+  if (field.status === 'empty') {
+    return 0;
+  }
+
+  return Math.round(getSeedStageGold(field.plantedSeedId, field.status) * getFarmYieldMultiplier());
 }
 
 export function buildClientBootstrap(): ClientBootstrapResponse {
@@ -403,8 +714,12 @@ const initialPlayerState: InMemoryPlayerState = {
     longteng: 0,
     xiaolian: 0,
   },
+  globalItemInventory: {
+    tianjiTalisman: 0,
+  },
   unlockedSeedIds: ['lingmai'],
   starterSeedClaimed: false,
+  tianjiTalismanClaimed: false,
   buildingLevels: {
     castle: 4,
     vault: 3,
@@ -428,12 +743,16 @@ const initialPlayerState: InMemoryPlayerState = {
   factionTreasuryGold: 82400,
   factionArmyPower: 1260,
   ledger: {
-    vaultGold: 4280,
+    vaultGold: 4990,
     vaultCapacity: 5000,
     taxPendingGold: 72,
     factionDividendGold: 80,
   },
   temporaryRaidClaim: null,
+  dailyTaskState: {
+    dateKey: '',
+    tasks: [],
+  },
   fields: [
     {
       id: 'field-1',
@@ -707,6 +1026,7 @@ function buildArmyTrainingQueue(): ClientArmyTrainingQueue | null {
 export function buildHomeSummary(): HomeSummaryResponse {
   settleArmyTrainingQueue();
   settleTemporaryRaidClaim();
+  ensureDailyTasks();
 
   const { ledger } = playerState;
   const castleLevel = getCastleLevel();
@@ -757,6 +1077,7 @@ export function buildHomeSummary(): HomeSummaryResponse {
           description: '掠夺时金库已满，超出的金币会临时保留在这里，过期后消失。',
         }
       : null,
+    dailyTasks: buildDailyTaskSummaries(),
     primaryActions: [
       { key: 'building', title: '主城', description: '升级主城与金币容量' },
       { key: 'farm', title: '农场', description: '收成熟田地' },
@@ -849,7 +1170,6 @@ function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrad
   syncUnlockedFieldsWithCastleLevel();
   const castleLevel = playerState.buildingLevels.castle;
   const vaultLevel = playerState.buildingLevels.vault;
-  const fieldSlotLevel = playerState.buildingLevels['field-slot'];
   const populationLevel = playerState.buildingLevels.population;
   const watchtowerLevel = playerState.buildingLevels.watchtower;
   const lockedFieldExists = playerState.fields.some((field) => !field.unlocked);
@@ -906,6 +1226,7 @@ function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrad
 }
 
 function buildFarmHero(): ClientSceneContentResponse['farm']['hero'] {
+  settleAllFieldLifecycles();
   syncUnlockedFieldsWithCastleLevel();
   const counts = getFieldCounts();
   const emptyUnlockedField = playerState.fields.find((field) => field.unlocked && field.status === 'empty');
@@ -930,7 +1251,7 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
   const cropName = field.plantedSeedId ? (seedLabelMap[field.plantedSeedId] ?? field.plantedSeedId) : undefined;
 
   if (!field.unlocked) {
-    const nextFieldUnlockRequirement = getNextFieldUnlockRequirement(getCastleLevel());
+    const nextFieldUnlockRequirement = getFieldUnlockRequirement(field.id);
     return {
       id: field.id,
       code: field.code,
@@ -941,8 +1262,8 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       progressRemainingSeconds: 0,
       progressTotalSeconds: 1,
       yieldGold: 0,
-      description: nextFieldUnlockRequirement ? `这块田地会在主城达到 Lv.${nextFieldUnlockRequirement} 时自动赠送开启。` : '这块田地会随主城里程碑自动开启。',
-      actions: [{ label: '查看主城条件', target: 'building', tone: 'secondary' }],
+      description: nextFieldUnlockRequirement ? `主城Lv.${nextFieldUnlockRequirement} 自动解锁` : '随主城里程碑自动解锁',
+      actions: [],
     };
   }
 
@@ -954,9 +1275,9 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       badge: field.badgeText,
       cropName,
       tone: 'mature',
-      progressRemainingSeconds: 0,
-      progressTotalSeconds: 1,
-      yieldGold: field.currentYield,
+      progressRemainingSeconds: getFieldStageRemainingSeconds(field),
+      progressTotalSeconds: getFieldStageTotalSeconds(field),
+      yieldGold: getResolvedFieldYield(field),
       description: '点击收取，触发爆金币并结算本轮成熟收益。',
       actions: [
         { label: '成熟收取', target: 'farm', tone: 'primary' },
@@ -974,7 +1295,7 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       tone: 'withered',
       progressRemainingSeconds: 0,
       progressTotalSeconds: 1,
-      yieldGold: field.currentYield,
+      yieldGold: getResolvedFieldYield(field),
       description: '点击收取，收益已进入衰减段，但仍能爆出金币和种子。',
       actions: [
         { label: '枯萎收取', target: 'farm', tone: 'secondary' },
@@ -990,9 +1311,9 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       badge: field.badgeText,
       cropName,
       tone: 'growing',
-      progressRemainingSeconds: 4690,
-      progressTotalSeconds: GAME_BALANCE.farm.progressSeconds.growing,
-      yieldGold: field.currentYield,
+      progressRemainingSeconds: getFieldStageRemainingSeconds(field),
+      progressTotalSeconds: getSeedStageSeconds(field.plantedSeedId ?? 'lingmai', 'growing'),
+      yieldGold: getResolvedFieldYield(field),
       description: '可抢收，点击后直接结算一轮提前收取结果。',
       actions: [
         { label: '提前收取', target: 'farm', tone: 'secondary' },
@@ -1008,9 +1329,9 @@ function buildFarmField(field: FieldState): ClientSceneContentResponse['farm']['
       badge: field.badgeText,
       cropName,
       tone: 'seeded',
-      progressRemainingSeconds: 2535,
-      progressTotalSeconds: GAME_BALANCE.farm.progressSeconds.seeded,
-      yieldGold: field.currentYield,
+      progressRemainingSeconds: getFieldStageRemainingSeconds(field),
+      progressTotalSeconds: getSeedStageSeconds(field.plantedSeedId ?? 'lingmai', 'seeded'),
+      yieldGold: getResolvedFieldYield(field),
       description: '播种刚完成，等待进入成长后再决定是否抢收。',
       actions: [],
     };
@@ -1075,7 +1396,9 @@ function buildFieldRewards(field: FieldState, collectMode: ClientCollectFieldReq
 
 export function buildSceneContent(): ClientSceneContentResponse {
   settleArmyTrainingQueue();
+  settleAllFieldLifecycles();
   syncUnlockedFieldsWithCastleLevel();
+  ensureDailyTasks();
 
   const factionDividend = getFactionDividendPerHour();
   const visibleRaidTargets = playerState.raidTargets.filter((target) => !isTargetProtected(target));
@@ -1267,15 +1590,23 @@ export function claimPendingGold(input: ClientClaimPendingRequest): Omit<ClientC
   const availableVaultSpace = Math.max(playerState.ledger.vaultCapacity - playerState.ledger.vaultGold, 0);
   const pendingGold = getPendingClaimAmount(input.source);
   const claimedGold = Math.min(pendingGold, availableVaultSpace);
+  const overflowGold = Math.max(pendingGold - claimedGold, 0);
+  const acceptOverflowLoss = Boolean(input.acceptOverflowLoss);
 
   playerState.ledger.vaultGold += claimedGold;
-  setPendingClaimAmount(input.source, Math.max(pendingGold - claimedGold, 0));
+  setPendingClaimAmount(input.source, acceptOverflowLoss ? 0 : overflowGold);
 
   const remainingPendingGold = getPendingClaimAmount(input.source);
   const sourceLabel = input.source === 'tax' ? '主城税收' : input.source === 'faction' ? '阵营分红' : '临时待领取';
-  const summary = claimedGold > 0
-    ? `${sourceLabel}本次入账 ${formatNumber(claimedGold)} 金币，剩余待领取 ${formatNumber(remainingPendingGold)}。`
-    : `金币空间不足，当前没有可入账的${sourceLabel}。`;
+  const summary = acceptOverflowLoss && overflowGold > 0
+    ? `${sourceLabel}本次入账 ${formatNumber(claimedGold)} 金币，另有 ${formatNumber(overflowGold)} 已确认放弃。`
+    : claimedGold > 0
+      ? `${sourceLabel}本次入账 ${formatNumber(claimedGold)} 金币，剩余待领取 ${formatNumber(remainingPendingGold)}。`
+      : `金币空间不足，当前没有可入账的${sourceLabel}。`;
+
+  if (input.source === 'faction' && claimedGold > 0) {
+    recordDailyTaskProgress('faction-interaction');
+  }
 
   return {
     app: APP_NAME,
@@ -1284,6 +1615,64 @@ export function claimPendingGold(input: ClientClaimPendingRequest): Omit<ClientC
     claimedGold,
     remainingPendingGold,
     ledger: { ...playerState.ledger },
+  };
+}
+
+export function claimDailyTask(input: ClientClaimDailyTaskRequest): Omit<ClientClaimDailyTaskResponse, 'home' | 'scenes'> {
+  ensureDailyTasks();
+
+  const taskState = playerState.dailyTaskState.tasks.find((item) => item.taskId === input.taskId);
+  const taskDefinition = getDailyTaskDefinition(input.taskId);
+
+  if (!taskState || !taskDefinition) {
+    return {
+      app: APP_NAME,
+      summary: '当前任务不存在或已过期。',
+      taskId: input.taskId,
+      claimedGold: 0,
+    };
+  }
+
+  if (taskState.claimed) {
+    return {
+      app: APP_NAME,
+      summary: '这条任务奖励已经领取过了。',
+      taskId: input.taskId,
+      claimedGold: 0,
+    };
+  }
+
+  if (taskState.progress < taskDefinition.objective.count) {
+    return {
+      app: APP_NAME,
+      summary: '当前任务尚未完成，暂时不能领取。',
+      taskId: input.taskId,
+      claimedGold: 0,
+    };
+  }
+
+  const rewardGold = getDailyTaskGoldReward(input.taskId);
+  const claimedGold = Math.min(rewardGold, Math.max(playerState.ledger.vaultCapacity - playerState.ledger.vaultGold, 0));
+
+  if (claimedGold <= 0) {
+    return {
+      app: APP_NAME,
+      summary: '当前金库已满，请先腾出空间后再领取任务奖励。',
+      taskId: input.taskId,
+      claimedGold: 0,
+    };
+  }
+
+  playerState.ledger.vaultGold += claimedGold;
+  taskState.claimed = true;
+
+  return {
+    app: APP_NAME,
+    summary: claimedGold > 0
+      ? `${taskDefinition.title} 已结算，入账 ${formatNumber(claimedGold)} 金币。`
+      : `${taskDefinition.title} 已结算，但当前金库已满，金币未能入账。`,
+    taskId: input.taskId,
+    claimedGold,
   };
 }
 
@@ -1299,11 +1688,14 @@ export function donateFactionSupport(input: ClientFactionDonateRequest): ClientS
   playerState.ledger.vaultGold -= actualGoldAmount;
   playerState.factionContribution += contributionGain;
   playerState.factionTreasuryGold += actualGoldAmount;
+  recordDailyTaskProgress('faction-interaction');
+  recordDailyTaskProgress('faction-donate');
 
   return buildMutationResponse(`已向阵营捐出 ${formatNumber(actualGoldAmount)} 金币，贡献值 +${formatNumber(contributionGain)}。`);
 }
 
 export function collectFieldGold(input: ClientCollectFieldRequest): ClientCollectFieldResponse {
+  settleAllFieldLifecycles();
   const field = playerState.fields.find((item) => item.id === input.fieldId);
 
   if (!field || !field.unlocked) {
@@ -1319,17 +1711,23 @@ export function collectFieldGold(input: ClientCollectFieldRequest): ClientCollec
   }
 
   const availableVaultSpace = Math.max(playerState.ledger.vaultCapacity - playerState.ledger.vaultGold, 0);
-  const depositedGold = Math.min(field.currentYield, availableVaultSpace);
-  const overflowGold = Math.max(field.currentYield - depositedGold, 0);
+  const resolvedYield = getResolvedFieldYield(field);
+  const depositedGold = Math.min(resolvedYield, availableVaultSpace);
+  const overflowGold = Math.max(resolvedYield - depositedGold, 0);
   const rewards = buildFieldRewards(field, input.collectMode);
 
   playerState.ledger.vaultGold += depositedGold;
   applySeedRewards(rewards);
   field.status = 'empty';
+  field.statusStartedAt = undefined;
   field.plantedSeedId = undefined;
   field.plantedGold = 0;
   field.currentYield = 0;
   field.badgeText = '空闲地块';
+  if (input.collectMode === 'ripe') {
+    recordDailyTaskProgress('collect-field');
+  }
+  recordDailyTaskProgress('farm-cycle');
 
   const rewardSummary = rewards.length > 0 ? `，并获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : '';
   const summary = overflowGold > 0
@@ -1340,8 +1738,8 @@ export function collectFieldGold(input: ClientCollectFieldRequest): ClientCollec
 }
 
 export function startCultivation(input: ClientStartCultivationRequest): ClientStateMutationResponse {
+  settleAllFieldLifecycles();
   const field = playerState.fields.find((item) => item.id === input.fieldId);
-  const cultivationCost = GAME_BALANCE.farm.defaultCultivationCost;
 
   if (!field || !field.unlocked) {
     return buildMutationResponse('当前地块尚未解锁，无法开始培育。');
@@ -1349,10 +1747,6 @@ export function startCultivation(input: ClientStartCultivationRequest): ClientSt
 
   if (field.status !== 'empty') {
     return buildMutationResponse('当前地块已经在培育中或可直接收取。');
-  }
-
-  if (playerState.ledger.vaultGold < cultivationCost) {
-    return buildMutationResponse('金币不足，无法开始本轮培育。');
   }
 
   if (!playerState.unlockedSeedIds.includes(input.seedId)) {
@@ -1363,15 +1757,17 @@ export function startCultivation(input: ClientStartCultivationRequest): ClientSt
     return buildMutationResponse('当前种子库存不足，无法开始本轮培育。');
   }
 
-  playerState.ledger.vaultGold -= cultivationCost;
   playerState.seedInventory[input.seedId] = Math.max((playerState.seedInventory[input.seedId] ?? 0) - 1, 0);
   field.status = 'seeded';
+  field.statusStartedAt = new Date().toISOString();
   field.plantedSeedId = input.seedId;
-  field.plantedGold = cultivationCost;
-  field.currentYield = Math.round(GAME_BALANCE.farm.defaultCultivationYield * getFarmYieldMultiplier());
+  field.plantedGold = 0;
+  field.currentYield = Math.round(getSeedStageGold(input.seedId, 'seeded') * getFarmYieldMultiplier());
   field.badgeText = '播种';
+  recordDailyTaskProgress('start-cultivation');
+  recordDailyTaskProgress('farm-cycle');
 
-  return buildMutationResponse(`${field.code} 已投入 ${formatNumber(cultivationCost)} 金币，播下 ${seedLabelMap[input.seedId] ?? input.seedId}，开始新一轮培育。`);
+  return buildMutationResponse(`${field.code} 已播下 ${seedLabelMap[input.seedId] ?? input.seedId}，开始新一轮培育。`);
 }
 
 export function claimStarterSeeds(): ClientStateMutationResponse {
@@ -1383,6 +1779,17 @@ export function claimStarterSeeds(): ClientStateMutationResponse {
   applySeedRewards([{ seedId: 'lingmai', quantity: 3 }]);
 
   return buildMutationResponse('今日种子已领取，获得 灵麦 x3。');
+}
+
+export function claimTianjiTalisman(): ClientStateMutationResponse {
+  if (playerState.tianjiTalismanClaimed) {
+    return buildMutationResponse('今天天机符已经领取过了。');
+  }
+
+  playerState.tianjiTalismanClaimed = true;
+  playerState.globalItemInventory.tianjiTalisman = (playerState.globalItemInventory.tianjiTalisman ?? 0) + 1;
+
+  return buildMutationResponse('今天天机符已领取，获得 天机符 x1。');
 }
 
 export function recruitArmy(input: ClientRecruitArmyRequest): ClientStateMutationResponse {
@@ -1428,6 +1835,8 @@ export function recruitArmy(input: ClientRecruitArmyRequest): ClientStateMutatio
       ? `已追加 ${formatNumber(actualRecruitCount)} 名士兵到当前训练队列，金币已立即扣除，剩余训练时间已重算。`
       : `已开始训练 ${formatNumber(actualRecruitCount)} 名士兵，金币已立即扣除，倒计时结束后才会增加战力。`;
 
+  recordDailyTaskProgress('recruit-army', actualRecruitCount);
+
   return buildMutationResponse(summary);
 }
 
@@ -1456,12 +1865,17 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
 
     playerState.ledger.vaultGold -= nextLevelConfig.upgradeCost;
     playerState.castleExtensionLevels[input.extensionId] = currentLevel + 1;
+    recordDailyTaskProgress('upgrade-building');
 
     return buildMutationResponse(`${getCastleExtensionTrack(input.extensionId)?.title ?? '主城扩展'}升级完成，当前已升至 Lv.${currentLevel + 1}。`);
   }
 
   if (!input.buildingId) {
     return buildMutationResponse('当前升级请求缺少建筑标识。');
+  }
+
+  if (input.buildingId === 'field-slot') {
+    return buildMutationResponse('田地位不需要额外花钱购买，会在主城达到指定等级后自动开启。');
   }
 
   const cost = getUpgradeCost(input.buildingId);
@@ -1476,29 +1890,35 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
 
   playerState.ledger.vaultGold -= cost;
 
-  if (input.buildingId === 'field-slot') {
-    return buildMutationResponse('田地位不需要额外花钱购买，会在主城达到指定等级后自动开启。');
-  }
-
   if (input.buildingId === 'castle') {
     playerState.buildingLevels.castle += 1;
     syncUnlockedFieldsWithCastleLevel();
+    recordDailyTaskProgress('upgrade-building');
+    recordDailyTaskProgress('upgrade-core-line');
+    recordDailyTaskProgress('upgrade-core-building');
     return buildMutationResponse(`主城升级完成，当前已升至 Lv.${playerState.buildingLevels.castle}。`);
   }
 
   if (input.buildingId === 'vault') {
     playerState.buildingLevels.vault += 1;
     playerState.ledger.vaultCapacity += getVaultCapacityGain(playerState.buildingLevels.vault - 1);
+    recordDailyTaskProgress('upgrade-building');
+    recordDailyTaskProgress('upgrade-core-line');
+    recordDailyTaskProgress('upgrade-core-building');
     return buildMutationResponse(`金库升级完成，容量已提升到 ${formatNumber(playerState.ledger.vaultCapacity)}。`);
   }
 
   if (input.buildingId === 'population') {
     playerState.buildingLevels.population += 1;
     playerState.armyCapacity += getPopulationCapacityGain(playerState.buildingLevels.population - 1);
+    recordDailyTaskProgress('upgrade-building');
+    recordDailyTaskProgress('upgrade-core-line');
     return buildMutationResponse(`人口上限升级完成，当前人口上限已提升到 ${formatNumber(playerState.armyCapacity)}。`);
   }
 
   playerState.buildingLevels.watchtower += 1;
+  recordDailyTaskProgress('upgrade-building');
+  recordDailyTaskProgress('upgrade-core-line');
   return buildMutationResponse(`防守建筑升级完成，当前已升至 Lv.${playerState.buildingLevels.watchtower}。`);
 }
 
@@ -1508,8 +1928,10 @@ export function resetDemoState(): ClientResetDemoStateResponse {
   playerState.playerName = nextState.playerName;
   playerState.factionName = nextState.factionName;
   playerState.seedInventory = nextState.seedInventory;
+  playerState.globalItemInventory = nextState.globalItemInventory;
   playerState.unlockedSeedIds = nextState.unlockedSeedIds;
   playerState.starterSeedClaimed = nextState.starterSeedClaimed;
+  playerState.tianjiTalismanClaimed = nextState.tianjiTalismanClaimed;
   playerState.buildingLevels = nextState.buildingLevels;
   playerState.castleExtensionLevels = nextState.castleExtensionLevels;
   playerState.armyCount = nextState.armyCount;
@@ -1522,6 +1944,8 @@ export function resetDemoState(): ClientResetDemoStateResponse {
   playerState.factionArmyPower = nextState.factionArmyPower;
   playerState.armyTrainingQueue = nextState.armyTrainingQueue;
   playerState.ledger = nextState.ledger;
+  playerState.temporaryRaidClaim = nextState.temporaryRaidClaim;
+  playerState.dailyTaskState = nextState.dailyTaskState;
   playerState.fields = nextState.fields;
   playerState.raidTargets = nextState.raidTargets;
   playerState.defenseReports = nextState.defenseReports;

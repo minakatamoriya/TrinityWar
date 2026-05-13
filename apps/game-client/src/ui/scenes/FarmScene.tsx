@@ -41,7 +41,7 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
                 return;
               }
 
-              if (field.tone === 'empty' || field.tone === 'locked' || primaryAction.label.includes('收取')) {
+              if (field.tone === 'empty' || primaryAction.label.includes('收取')) {
                 onAction(primaryAction, field.id, field.code);
               }
             }}
@@ -51,13 +51,13 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
                 return;
               }
 
-              if ((field.tone === 'empty' || field.tone === 'locked' || primaryAction.label.includes('收取')) && (event.key === 'Enter' || event.key === ' ')) {
+              if ((field.tone === 'empty' || primaryAction.label.includes('收取')) && (event.key === 'Enter' || event.key === ' ')) {
                 event.preventDefault();
                 onAction(primaryAction, field.id, field.code);
               }
             }}
-            role={field.tone === 'empty' || field.tone === 'locked' || Boolean(getFarmCardAction(field)?.label.includes('收取')) ? 'button' : undefined}
-            tabIndex={field.tone === 'empty' || field.tone === 'locked' || Boolean(getFarmCardAction(field)?.label.includes('收取')) ? 0 : undefined}
+            role={field.tone === 'empty' || Boolean(getFarmCardAction(field)?.label.includes('收取')) ? 'button' : undefined}
+            tabIndex={field.tone === 'empty' || Boolean(getFarmCardAction(field)?.label.includes('收取')) ? 0 : undefined}
             view={buildFarmFieldStatusView(field)}
           />
         ))}

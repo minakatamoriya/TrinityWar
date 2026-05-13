@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import {
   CLIENT_API_PREFIX,
+  type ClientClaimDailyTaskRequest,
+  type ClientClaimDailyTaskResponse,
   type ClientRaidActionRequest,
   type ClientRaidActionResponse,
   type ClientFactionDonateRequest,
@@ -17,7 +19,7 @@ import {
   type ClientUpgradeBuildingRequest,
   type HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { buildHomeSummary, buildRaidTargetDetail, buildSceneContent, claimPendingGold, claimStarterSeeds, collectFieldGold, donateFactionSupport, raidTarget, recruitArmy, resetDemoState, startCultivation, upgradeBuilding } from '../lib/client-state.js';
+import { buildHomeSummary, buildRaidTargetDetail, buildSceneContent, claimDailyTask, claimPendingGold, claimStarterSeeds, claimTianjiTalisman, collectFieldGold, donateFactionSupport, raidTarget, recruitArmy, resetDemoState, startCultivation, upgradeBuilding } from '../lib/client-state.js';
 
 export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
   server.get<{ Reply: HomeSummaryResponse }>(`${CLIENT_API_PREFIX}/home-summary`, {
@@ -61,6 +63,24 @@ export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
                 required: ['source', 'label', 'value', 'description'],
               },
             },
+            dailyTasks: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  progressCurrent: { type: 'number' },
+                  progressTarget: { type: 'number' },
+                  progressText: { type: 'string' },
+                  rewardGold: { type: 'number' },
+                  status: { type: 'string', enum: ['in-progress', 'completed', 'claimed'] },
+                  actionScene: { type: 'string', enum: ['home', 'building', 'farm', 'raid', 'report', 'faction'] },
+                },
+                required: ['id', 'title', 'description', 'progressCurrent', 'progressTarget', 'progressText', 'rewardGold', 'status', 'actionScene'],
+              },
+            },
             primaryActions: {
               type: 'array',
               items: {
@@ -74,7 +94,7 @@ export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
               },
             },
           },
-          required: ['app', 'playerName', 'factionName', 'castleLevel', 'staminaStatus', 'fieldStatus', 'reportStatus', 'resources', 'pendingClaims', 'primaryActions'],
+          required: ['app', 'playerName', 'factionName', 'castleLevel', 'staminaStatus', 'fieldStatus', 'reportStatus', 'resources', 'pendingClaims', 'dailyTasks', 'primaryActions'],
         },
       },
     },
@@ -118,6 +138,22 @@ export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
     };
   });
 
+  server.post<{ Body: ClientClaimDailyTaskRequest; Reply: ClientClaimDailyTaskResponse }>(`${CLIENT_API_PREFIX}/actions/claim-daily-task`, {
+    schema: {
+      tags: ['client'],
+      summary: 'Claim completed daily task reward',
+      description: 'Settles one completed daily task into the vault and returns the refreshed home and scene state.',
+    },
+  }, async (request) => {
+    const result = claimDailyTask(request.body);
+
+    return {
+      ...result,
+      home: buildHomeSummary(),
+      scenes: buildSceneContent(),
+    };
+  });
+
   server.post<{ Reply: ClientStateMutationResponse }>(`${CLIENT_API_PREFIX}/actions/claim-starter-seeds`, {
     schema: {
       tags: ['client'],
@@ -126,6 +162,16 @@ export const clientHomeRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async () => {
     return claimStarterSeeds();
+  });
+
+  server.post<{ Reply: ClientStateMutationResponse }>(`${CLIENT_API_PREFIX}/actions/claim-tianji-talisman`, {
+    schema: {
+      tags: ['client'],
+      summary: 'Claim daily Tianji talisman',
+      description: 'Claims one daily Tianji talisman and writes it into the in-memory global item inventory.',
+    },
+  }, async () => {
+    return claimTianjiTalisman();
   });
 
   server.post<{ Body: ClientCollectFieldRequest; Reply: ClientCollectFieldResponse }>(`${CLIENT_API_PREFIX}/actions/collect-field`, {

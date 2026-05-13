@@ -1,4 +1,40 @@
-import { APP_NAME, type ClientBootstrapResponse, type ClientFarmField, type ClientRaidTargetDetailResponse, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientBootstrapResponse, type ClientDailyTaskSummary, type ClientFarmField, type ClientRaidTargetDetailResponse, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
+
+const mockDailyTasks: ClientDailyTaskSummary[] = [
+  {
+    id: 'daily-harvest-once',
+    title: '收取 1 次成熟田地',
+    description: '经营任务，完成后可领取 18 金币。',
+    progressCurrent: 0,
+    progressTarget: 1,
+    progressText: '0/1',
+    rewardGold: 18,
+    status: 'in-progress',
+    actionScene: 'farm',
+  },
+  {
+    id: 'daily-start-cultivation',
+    title: '完成 1 次播种',
+    description: '经营任务，完成后可领取 16 金币。',
+    progressCurrent: 0,
+    progressTarget: 1,
+    progressText: '0/1',
+    rewardGold: 16,
+    status: 'in-progress',
+    actionScene: 'farm',
+  },
+  {
+    id: 'daily-recruit-army',
+    title: '培育 10 只灵宠',
+    description: '经营任务，完成后可领取 20 金币。',
+    progressCurrent: 0,
+    progressTarget: 10,
+    progressText: '0/10',
+    rewardGold: 20,
+    status: 'in-progress',
+    actionScene: 'raid',
+  },
+];
 
 function createRaidDetailField(field: Partial<ClientFarmField> & Pick<ClientFarmField, 'id' | 'code' | 'title' | 'badge' | 'tone' | 'description'>): ClientFarmField {
   return {
@@ -34,8 +70,12 @@ export const mockBootstrap: ClientBootstrapResponse = {
       longteng: 0,
       xiaolian: 0,
     },
+    globalItemInventory: {
+      tianjiTalisman: 0,
+    },
     unlockedSeedIds: ['lingmai'],
     starterSeedClaimed: false,
+    tianjiTalismanClaimed: false,
   },
 };
 
@@ -49,7 +89,7 @@ export const mockHomeSummary: HomeSummaryResponse = {
   reportStatus: '掠夺动态 2，免费复仇 1',
   protectedUntil: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
   resources: [
-    { label: '金币', value: '4,280 / 5,000', tone: 'vault' },
+    { label: '金币', value: '4,990 / 5,000', tone: 'vault' },
     { label: '灵宠', value: '40 / 100', tone: 'army' },
   ],
   pendingClaims: [
@@ -57,6 +97,7 @@ export const mockHomeSummary: HomeSummaryResponse = {
     { source: 'faction', label: '阵营分红', value: '80', description: '当前每小时可分到 20 金币，来自阵营结算与贡献分档加成。' },
   ],
   temporaryClaim: null,
+  dailyTasks: mockDailyTasks,
   primaryActions: [
     { key: 'building', title: '主城', description: '升级主城与金币容量' },
     { key: 'farm', title: '农场', description: '收丰熟田地' },
@@ -217,8 +258,8 @@ export const mockSceneContent: ClientSceneContentResponse = {
         progressRemainingSeconds: 0,
         progressTotalSeconds: 1,
         yieldGold: 0,
-        description: '点击中央入口，直接升级并开放这块田地。',
-        actions: [{ label: '解锁田地', target: 'farm', tone: 'secondary' }],
+        description: '主城Lv.15 自动解锁',
+        actions: [],
       },
     ],
     guide: {

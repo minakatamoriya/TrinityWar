@@ -90,11 +90,81 @@ const WATCHTOWER_LEVEL_CONFIG = [
   { level: 10, upgradeCost: 2400 },
 ];
 
-const FIELD_SLOT_DEMO_CONFIG = [
-  { level: 1, upgradeCost: 980, unlockFieldIndex: 3 },
-  { level: 2, upgradeCost: 1480, unlockFieldIndex: 4 },
-  { level: 3, upgradeCost: 1980, unlockFieldIndex: null },
+const FIELD_SLOT_UNLOCK_CONFIG = [
+  { level: 1, requiredCastleLevel: 1, unlockFieldIndex: 1 },
+  { level: 2, requiredCastleLevel: 5, unlockFieldIndex: 2 },
+  { level: 3, requiredCastleLevel: 10, unlockFieldIndex: 3 },
+  { level: 4, requiredCastleLevel: 15, unlockFieldIndex: 4 },
 ];
+
+const SEED_LEVEL_CONFIG = {
+  lingmai: {
+    label: '灵麦',
+    rarity: 'common',
+    stageGold: { growing: 100, mature: 200, withered: 100 },
+    stageSeconds: { seeded: 7200, growing: 3600 },
+  },
+  yingdou: {
+    label: '影豆',
+    rarity: 'common',
+    stageGold: { growing: 100, mature: 140, withered: 40 },
+    stageSeconds: { seeded: 5400, growing: 1800 },
+  },
+  chihu: {
+    label: '赤葫',
+    rarity: 'common',
+    stageGold: { growing: 120, mature: 300, withered: 50 },
+    stageSeconds: { seeded: 7200, growing: 3600 },
+  },
+  yuzhe: {
+    label: '玉蔗',
+    rarity: 'common',
+    stageGold: { growing: 160, mature: 220, withered: 180 },
+    stageSeconds: { seeded: 10800, growing: 5400 },
+  },
+  xuanSu: {
+    label: '玄粟',
+    rarity: 'common',
+    stageGold: { growing: 150, mature: 230, withered: 140 },
+    stageSeconds: { seeded: 9000, growing: 3600 },
+  },
+  yaokui: {
+    label: '曜葵',
+    rarity: 'rare',
+    stageGold: { growing: 320, mature: 480, withered: 380 },
+    stageSeconds: { seeded: 10800, growing: 3600 },
+  },
+  hanmei: {
+    label: '寒莓',
+    rarity: 'rare',
+    stageGold: { growing: 300, mature: 760, withered: 180 },
+    stageSeconds: { seeded: 9000, growing: 3600 },
+  },
+  chijiao: {
+    label: '炽椒',
+    rarity: 'rare',
+    stageGold: { growing: 450, mature: 620, withered: 520 },
+    stageSeconds: { seeded: 14400, growing: 3600 },
+  },
+  yuelan: {
+    label: '月兰',
+    rarity: 'rare',
+    stageGold: { growing: 420, mature: 880, withered: 260 },
+    stageSeconds: { seeded: 14400, growing: 5400 },
+  },
+  longteng: {
+    label: '龙藤',
+    rarity: 'legendary',
+    stageGold: { growing: 520, mature: 1200, withered: 200 },
+    stageSeconds: { seeded: 10800, growing: 3600 },
+  },
+  xiaolian: {
+    label: '霄莲',
+    rarity: 'legendary',
+    stageGold: { growing: 700, mature: 1600, withered: 680 },
+    stageSeconds: { seeded: 14400, growing: 3600 },
+  },
+};
 
 export const CASTLE_EXTENSION_TRACKS = {
   protectionTech: {
@@ -167,21 +237,21 @@ export const CASTLE_EXTENSION_TRACKS = {
 
 export const DAILY_TASK_CONFIG = {
   structure: {
-    fixedTaskCount: 3,
-    randomTaskCount: 2,
-    freeRefreshesPerDay: 1,
-    milestoneThresholds: [2, 4, 5],
+    fixedTaskCount: 2,
+    randomTaskCount: 1,
+    freeRefreshesPerDay: 0,
+    milestoneThresholds: [1, 2, 3],
   },
   rewardBudgetByWeek: {
-    1: { directGoldMin: 120, directGoldMax: 180, totalEquivalentMin: 150, totalEquivalentMax: 240 },
-    2: { directGoldMin: 150, directGoldMax: 220, totalEquivalentMin: 200, totalEquivalentMax: 320 },
-    3: { directGoldMin: 180, directGoldMax: 260, totalEquivalentMin: 260, totalEquivalentMax: 380 },
-    4: { directGoldMin: 180, directGoldMax: 260, totalEquivalentMin: 280, totalEquivalentMax: 400 },
+    1: { directGoldMin: 70, directGoldMax: 110, totalEquivalentMin: 90, totalEquivalentMax: 150 },
+    2: { directGoldMin: 90, directGoldMax: 130, totalEquivalentMin: 120, totalEquivalentMax: 190 },
+    3: { directGoldMin: 110, directGoldMax: 150, totalEquivalentMin: 150, totalEquivalentMax: 220 },
+    4: { directGoldMin: 120, directGoldMax: 170, totalEquivalentMin: 160, totalEquivalentMax: 240 },
   },
   milestoneRewards: [
-    { completedCount: 2, rewards: [{ type: 'gold', amount: 20 }, { type: 'seed-pack', packId: 'common-choice', amount: 1 }] },
-    { completedCount: 4, rewards: [{ type: 'gold', amount: 30 }, { type: 'faction-contribution', amount: 2 }] },
-    { completedCount: 5, rewards: [{ type: 'gold', amount: 50 }, { type: 'refresh-ticket', amount: 1 }] },
+    { completedCount: 2, rewards: [{ type: 'gold', amount: 10 }, { type: 'seed-pack', packId: 'common-choice', amount: 1 }] },
+    { completedCount: 4, rewards: [{ type: 'gold', amount: 15 }, { type: 'faction-contribution', amount: 2 }] },
+    { completedCount: 5, rewards: [{ type: 'gold', amount: 20 }, { type: 'seed-pack', packId: 'common-random', amount: 1 }] },
   ],
   fixedTasks: [
     {
@@ -189,21 +259,21 @@ export const DAILY_TASK_CONFIG = {
       title: '收取 1 次成熟田地',
       category: '经营',
       objective: { type: 'collect-field', count: 1 },
-      rewards: [{ type: 'gold', amount: 30 }, { type: 'seed', seedId: 'lingmai', amount: 1 }],
+      rewards: [{ type: 'gold', amount: 18 }],
     },
     {
       id: 'daily-start-cultivation',
       title: '完成 1 次播种',
       category: '经营',
       objective: { type: 'start-cultivation', count: 1 },
-      rewards: [{ type: 'gold', amount: 25 }, { type: 'seed-pack', packId: 'common-random', amount: 1 }],
+      rewards: [{ type: 'gold', amount: 16 }],
     },
     {
       id: 'daily-faction-touch',
       title: '领取 1 次分红或完成 1 次上缴',
       category: '阵营',
       objective: { type: 'faction-interaction', count: 1 },
-      rewards: [{ type: 'gold', amount: 30 }, { type: 'faction-contribution', amount: 2 }],
+      rewards: [{ type: 'gold', amount: 18 }],
     },
   ],
   randomTasks: [
@@ -212,42 +282,28 @@ export const DAILY_TASK_CONFIG = {
       title: '完成 1 次建筑升级',
       category: '经营',
       objective: { type: 'upgrade-building', count: 1 },
-      rewards: [{ type: 'gold', amount: 40 }, { type: 'seed-pack', packId: 'common-choice', amount: 1 }],
-    },
-    {
-      id: 'daily-raid-once',
-      title: '发起 1 次匿名掠夺',
-      category: '战斗',
-      objective: { type: 'raid', count: 1 },
-      rewards: [{ type: 'gold', amount: 35 }, { type: 'scout-ticket', amount: 1 }],
-    },
-    {
-      id: 'daily-revenge-or-report',
-      title: '查看 1 次战报或完成 1 次复仇',
-      category: '战斗',
-      objective: { type: 'report-or-revenge', count: 1 },
-      rewards: [{ type: 'gold', amount: 25 }, { type: 'refresh-ticket', amount: 1 }],
+      rewards: [{ type: 'gold', amount: 22 }],
     },
     {
       id: 'daily-recruit-army',
-      title: '训练 10 只灵宠',
-      category: '风险处理',
-      objective: { type: 'recruit-army', count: 10 },
-      rewards: [{ type: 'gold', amount: 30 }, { type: 'army-recovery-discount', amount: 1 }],
-    },
-    {
-      id: 'daily-defense-check',
-      title: '完成 1 次防守调整或升级',
-      category: '风险处理',
-      objective: { type: 'defense-action', count: 1 },
-      rewards: [{ type: 'gold', amount: 35 }, { type: 'watchtower-part', amount: 1 }],
-    },
-    {
-      id: 'daily-transfer-risk',
-      title: '完成 1 次金币调度',
+      title: '培育 10 只灵宠',
       category: '经营',
-      objective: { type: 'gold-dispatch', count: 1 },
-      rewards: [{ type: 'gold', amount: 20 }, { type: 'seed', seedId: 'lingmai', amount: 1 }],
+      objective: { type: 'recruit-army', count: 10 },
+      rewards: [{ type: 'gold', amount: 20 }],
+    },
+    {
+      id: 'daily-donate-gold',
+      title: '完成 1 次金币上缴',
+      category: '阵营',
+      objective: { type: 'faction-donate', count: 1 },
+      rewards: [{ type: 'gold', amount: 18 }],
+    },
+    {
+      id: 'daily-upgrade-core-line',
+      title: '升级 1 次主城、金库、灵宠上限或防守',
+      category: '经营',
+      objective: { type: 'upgrade-core-line', count: 1 },
+      rewards: [{ type: 'gold', amount: 22 }],
     },
   ],
   catchupTasks: [
@@ -256,21 +312,21 @@ export const DAILY_TASK_CONFIG = {
       title: '完成 1 次主城或金库升级',
       category: '追赶',
       objective: { type: 'upgrade-core-building', count: 1 },
-      rewards: [{ type: 'gold', amount: 80 }, { type: 'seed-pack', packId: 'starter-common', amount: 1 }],
+      rewards: [{ type: 'gold', amount: 45 }, { type: 'seed-pack', packId: 'starter-common', amount: 1 }],
     },
     {
-      id: 'catchup-first-raid',
-      title: '完成 1 次匿名掠夺',
+      id: 'catchup-first-cultivation',
+      title: '完成 2 次播种或收取',
       category: '追赶',
-      objective: { type: 'raid', count: 1 },
-      rewards: [{ type: 'gold', amount: 100 }, { type: 'scout-ticket', amount: 2 }],
+      objective: { type: 'farm-cycle', count: 2 },
+      rewards: [{ type: 'gold', amount: 40 }, { type: 'seed-pack', packId: 'common-choice', amount: 1 }],
     },
     {
       id: 'catchup-first-donate',
       title: '完成 1 次金币上缴',
       category: '追赶',
       objective: { type: 'faction-donate', count: 1 },
-      rewards: [{ type: 'gold', amount: 80 }, { type: 'faction-contribution', amount: 5 }],
+      rewards: [{ type: 'gold', amount: 40 }, { type: 'faction-contribution', amount: 5 }],
     },
   ],
 };
@@ -280,7 +336,8 @@ export const GAME_DESIGN_CONFIG = {
   vaultLevels: VAULT_LEVEL_CONFIG,
   populationLevels: POPULATION_LEVEL_CONFIG,
   watchtowerLevels: WATCHTOWER_LEVEL_CONFIG,
-  fieldSlotDemoLevels: FIELD_SLOT_DEMO_CONFIG,
+  fieldSlotUnlockLevels: FIELD_SLOT_UNLOCK_CONFIG,
+  seedLevels: SEED_LEVEL_CONFIG,
   castleExtensions: CASTLE_EXTENSION_TRACKS,
   dailyTasks: DAILY_TASK_CONFIG,
 };
@@ -343,12 +400,13 @@ export const GAME_BALANCE = {
     protectionHoursAfterRaid: 1,
   },
   farm: {
-    defaultCultivationCost: 520,
+    defaultCultivationCost: 0,
     defaultCultivationYield: 520,
     progressSeconds: {
       seeded: 3600,
       growing: 7200,
     },
+    seeds: SEED_LEVEL_CONFIG,
   },
   army: {
     recruitGoldCostPerUnit: 100,
@@ -359,7 +417,7 @@ export const GAME_BALANCE = {
     upgradeCosts: {
       castle: buildUpgradeCostTable(CASTLE_LEVEL_CONFIG),
       vault: buildUpgradeCostTable(VAULT_LEVEL_CONFIG),
-      'field-slot': buildUpgradeCostTable(FIELD_SLOT_DEMO_CONFIG),
+      'field-slot': {},
       population: buildUpgradeCostTable(POPULATION_LEVEL_CONFIG),
       watchtower: buildUpgradeCostTable(WATCHTOWER_LEVEL_CONFIG),
     },
@@ -379,7 +437,7 @@ export const GAME_BALANCE_DRAFT = {
   buildingCurves: {
     castleUpgradeGoldByLevel: buildUpgradeCostTable(CASTLE_LEVEL_CONFIG),
     vaultUpgradeGoldByLevel: buildUpgradeCostTable(VAULT_LEVEL_CONFIG),
-    fieldSlotUpgradeGoldByLevel: buildUpgradeCostTable(FIELD_SLOT_DEMO_CONFIG),
+    fieldSlotUpgradeGoldByLevel: {},
     petUpgradeGoldByLevel: buildUpgradeCostTable(POPULATION_LEVEL_CONFIG),
   },
   castleExtensions: CASTLE_EXTENSION_TRACKS,
@@ -456,6 +514,50 @@ export function getDailyTaskDefinition(taskId) {
   ];
 
   return allTasks.find((task) => task.id === taskId) ?? null;
+}
+
+export function getSeedLevelConfig(seedId) {
+  return SEED_LEVEL_CONFIG[seedId] ?? null;
+}
+
+export function getSeedStageGold(seedId, fieldStatus) {
+  const seedConfig = getSeedLevelConfig(seedId);
+
+  if (!seedConfig) {
+    return GAME_BALANCE.farm.defaultCultivationYield;
+  }
+
+  if (fieldStatus === 'mature') {
+    return seedConfig.stageGold.mature;
+  }
+
+  if (fieldStatus === 'withered') {
+    return seedConfig.stageGold.withered;
+  }
+
+  if (fieldStatus === 'growing') {
+    return seedConfig.stageGold.growing;
+  }
+
+  return seedConfig.stageGold.growing;
+}
+
+export function getSeedStageSeconds(seedId, fieldStatus) {
+  const seedConfig = getSeedLevelConfig(seedId);
+
+  if (!seedConfig) {
+    return fieldStatus === 'seeded' ? GAME_BALANCE.farm.progressSeconds.seeded : GAME_BALANCE.farm.progressSeconds.growing;
+  }
+
+  if (fieldStatus === 'seeded') {
+    return seedConfig.stageSeconds.seeded;
+  }
+
+  if (fieldStatus === 'growing') {
+    return seedConfig.stageSeconds.growing;
+  }
+
+  return 1;
 }
 
 /**

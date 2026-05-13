@@ -126,24 +126,20 @@ export function ArmyRecruitScreen(props: ArmyRecruitScreenProps): JSX.Element {
             </div>
             <div className="army-recruit-preview-grid">
               <div className="army-recruit-preview-card">
-                <span>本次消耗</span>
+                <span>本次消耗金币</span>
                 <strong>{formatNumber(totalCost)}</strong>
-                <em>金币</em>
               </div>
               <div className="army-recruit-preview-card">
                 <span>追加后排队</span>
                 <strong>{formatNumber(finalQueuedUnits)}</strong>
-                <em>只</em>
               </div>
               <div className="army-recruit-preview-card">
                 <span>队列总耗时</span>
                 <strong>{formatDuration(finalQueueSeconds)}</strong>
-                <em>重算后</em>
               </div>
               <div className="army-recruit-preview-card">
-                <span>剩余灵宠位</span>
+                <span>完成后剩余灵宠位</span>
                 <strong>{formatNumber(nextRemainingCapacity)}</strong>
-                <em>完成后</em>
               </div>
             </div>
             <p className="army-recruit-slider-note">
@@ -168,10 +164,10 @@ export function ArmyRecruitScreen(props: ArmyRecruitScreenProps): JSX.Element {
                 : '当前金币不足以支持灵宠培育。'}
           </span>
         </div>
-        <button className="primary-button" disabled={!canConfirm} onClick={onConfirm} type="button">
-          {confirming ? '提交中...' : trainingQueue ? '追加培育' : '开始培育'}
-        </button>
       </div>
+      <button className="primary-button" disabled={!canConfirm} onClick={onConfirm} type="button">
+        {confirming ? '提交中...' : trainingQueue ? '追加培育' : '开始培育'}
+      </button>
     </section>
   );
 }

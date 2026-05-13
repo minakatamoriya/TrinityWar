@@ -2,6 +2,8 @@ import {
   CLIENT_API_PREFIX,
   type ClientBootstrapResponse,
   type ClientArmyTrainingQueue,
+  type ClientClaimDailyTaskRequest,
+  type ClientClaimDailyTaskResponse,
   type ClientRaidActionRequest,
   type ClientRaidActionResponse,
   type ClientFactionDonateRequest,
@@ -9,6 +11,7 @@ import {
   type ClientClaimPendingResponse,
   type ClientCollectFieldRequest,
   type ClientCollectFieldResponse,
+  type ClientDailyTaskSummary,
   type ClientFarmField,
   type ClientRaidTargetDetailResponse,
   type ClientRecruitArmyRequest,
@@ -43,8 +46,10 @@ function normalizeBootstrap(bootstrap: ClientBootstrapResponse): ClientBootstrap
     season: { ...bootstrap.season },
     backpack: {
       seedInventory: { ...bootstrap.backpack.seedInventory },
+      globalItemInventory: { ...bootstrap.backpack.globalItemInventory },
       unlockedSeedIds: [...bootstrap.backpack.unlockedSeedIds],
       starterSeedClaimed: bootstrap.backpack.starterSeedClaimed,
+      tianjiTalismanClaimed: bootstrap.backpack.tianjiTalismanClaimed,
     },
   };
 }
@@ -64,10 +69,15 @@ const INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS: Record<string, string> = {
   'field-2': 'lingmai',
   'field-3': 'lingmai',
 };
+const MOCK_RIPE_WINDOW_SECONDS = 30 * 60;
 let mockFactionContribution = INITIAL_MOCK_FACTION_CONTRIBUTION;
 let mockFactionTreasuryGold = INITIAL_MOCK_FACTION_TREASURY_GOLD;
 let mockFactionArmyPower = INITIAL_MOCK_FACTION_ARMY_POWER;
 let mockFieldSeedAssignments: Record<string, string> = { ...INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS };
+
+interface MockFieldTimingState {
+  statusStartedAt: string;
+}
 
 const seedLabelMap: Record<string, string> = {
   lingmai: '灵麦',
@@ -83,6 +93,68 @@ const seedLabelMap: Record<string, string> = {
   xiaolian: '霄莲',
 };
 
+const mockSeedStageGold: Record<string, { seeded: number; growing: number; mature: number; withered: number }> = {
+  lingmai: { seeded: 100, growing: 100, mature: 200, withered: 100 },
+  yingdou: { seeded: 100, growing: 100, mature: 140, withered: 40 },
+  chihu: { seeded: 120, growing: 120, mature: 300, withered: 50 },
+  yuzhe: { seeded: 160, growing: 160, mature: 220, withered: 180 },
+  xuanSu: { seeded: 150, growing: 150, mature: 230, withered: 140 },
+  yaokui: { seeded: 320, growing: 320, mature: 480, withered: 380 },
+  hanmei: { seeded: 300, growing: 300, mature: 760, withered: 180 },
+  chijiao: { seeded: 450, growing: 450, mature: 620, withered: 520 },
+  yuelan: { seeded: 420, growing: 420, mature: 880, withered: 260 },
+  longteng: { seeded: 520, growing: 520, mature: 1200, withered: 200 },
+  xiaolian: { seeded: 700, growing: 700, mature: 1600, withered: 680 },
+};
+
+const mockSeedStageSeconds: Record<string, { seeded: number; growing: number }> = {
+  lingmai: { seeded: 7200, growing: 3600 },
+  yingdou: { seeded: 5400, growing: 1800 },
+  chihu: { seeded: 7200, growing: 3600 },
+  yuzhe: { seeded: 10800, growing: 5400 },
+  xuanSu: { seeded: 9000, growing: 3600 },
+  yaokui: { seeded: 10800, growing: 3600 },
+  hanmei: { seeded: 9000, growing: 3600 },
+  chijiao: { seeded: 14400, growing: 3600 },
+  yuelan: { seeded: 14400, growing: 5400 },
+  longteng: { seeded: 10800, growing: 3600 },
+  xiaolian: { seeded: 14400, growing: 3600 },
+};
+
+function getMockSeedStageSeconds(seedId: string, stage: 'seeded' | 'growing'): number {
+  return mockSeedStageSeconds[seedId]?.[stage] ?? (stage === 'seeded' ? 7200 : 3600);
+}
+
+function buildInitialMockFieldTimingStates(): Record<string, MockFieldTimingState> {
+  const nowMs = Date.now();
+  return mockSceneContent.farm.fields.reduce<Record<string, MockFieldTimingState>>((table, field) => {
+    const seedId = INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS[field.id];
+
+    if (!seedId || (field.tone !== 'seeded' && field.tone !== 'growing' && field.tone !== 'mature')) {
+      return table;
+    }
+
+    const totalSeconds = field.tone === 'mature'
+      ? MOCK_RIPE_WINDOW_SECONDS
+      : getMockSeedStageSeconds(seedId, field.tone);
+    const fallbackRemainingSeconds = field.tone === 'mature'
+      ? Math.min(totalSeconds, 20 * 60)
+      : Math.min(field.progressRemainingSeconds, totalSeconds);
+
+    table[field.id] = {
+      statusStartedAt: new Date(nowMs - Math.max(totalSeconds - fallbackRemainingSeconds, 0) * 1000).toISOString(),
+    };
+
+    return table;
+  }, {});
+}
+
+let mockFieldTimingState: Record<string, MockFieldTimingState> = buildInitialMockFieldTimingStates();
+
+function getMockSeedStageGold(seedId: string, stage: 'seeded' | 'growing' | 'mature' | 'withered'): number {
+  return mockSeedStageGold[seedId]?.[stage] ?? 520;
+}
+
 function normalizeHomeSummary(home: HomeSummaryResponse): HomeSummaryResponse {
   return {
     ...home,
@@ -90,8 +162,31 @@ function normalizeHomeSummary(home: HomeSummaryResponse): HomeSummaryResponse {
     resources: (home.resources ?? []).map((resource) => ({ ...resource })),
     pendingClaims: (home.pendingClaims ?? []).map((claim) => ({ ...claim })),
     temporaryClaim: home.temporaryClaim ? { ...home.temporaryClaim } : null,
+    dailyTasks: (home.dailyTasks ?? []).map((task) => ({ ...task })),
     primaryActions: (home.primaryActions ?? []).map((action) => ({ ...action })),
   };
+}
+
+function updateMockDailyTask(taskId: string, amount = 1): void {
+  const task = mockHomeSnapshot.dailyTasks.find((item) => item.id === taskId);
+  if (!task || task.status === 'claimed') {
+    return;
+  }
+
+  task.progressCurrent = Math.min(task.progressCurrent + amount, task.progressTarget);
+  task.status = task.progressCurrent >= task.progressTarget ? 'completed' : 'in-progress';
+  task.progressText = task.status === 'completed' ? '可领取' : `${task.progressCurrent}/${task.progressTarget}`;
+}
+
+function claimMockDailyTask(taskId: string): ClientDailyTaskSummary | null {
+  const task = mockHomeSnapshot.dailyTasks.find((item) => item.id === taskId);
+  if (!task || task.status !== 'completed') {
+    return null;
+  }
+
+  task.status = 'claimed';
+  task.progressText = '已领取';
+  return task;
 }
 
 function cloneHomeSummary(home: HomeSummaryResponse): HomeSummaryResponse {
@@ -241,6 +336,7 @@ async function fetchWithFallback<T>(path: string, fallback: T): Promise<DataEnve
 
 export async function loadClientViewModel(): Promise<ClientViewModel> {
   syncMockArmyTrainingQueue();
+  syncMockFieldLifecycle();
 
   const [bootstrap, home, scenes] = await Promise.all([
     fetchWithFallback<ClientBootstrapResponse>(`${CLIENT_API_PREFIX}/bootstrap`, mockBootstrapSnapshot),
@@ -283,6 +379,150 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+function getMockFieldStageStartedAtMs(fieldId: string, totalSeconds: number, fallbackRemainingSeconds: number): number {
+  const startedAt = mockFieldTimingState[fieldId]?.statusStartedAt;
+  const parsedStartedAt = startedAt ? new Date(startedAt).getTime() : Number.NaN;
+
+  if (Number.isFinite(parsedStartedAt)) {
+    return parsedStartedAt;
+  }
+
+  return Date.now() - Math.max(totalSeconds - fallbackRemainingSeconds, 0) * 1000;
+}
+
+function setMockFieldTiming(fieldId: string, startedAtMs: number): void {
+  mockFieldTimingState[fieldId] = {
+    statusStartedAt: new Date(startedAtMs).toISOString(),
+  };
+}
+
+function clearMockFieldTiming(fieldId: string): void {
+  delete mockFieldTimingState[fieldId];
+}
+
+function setMockFieldPresentation(field: ClientFarmField, tone: ClientFarmField['tone'], seedId?: string, remainingSeconds = 0): void {
+  field.cropName = seedId ? (seedLabelMap[seedId] ?? seedId) : undefined;
+
+  if (tone === 'seeded' && seedId) {
+    field.title = '播种期';
+    field.badge = '播种';
+    field.tone = 'seeded';
+    field.progressTotalSeconds = getMockSeedStageSeconds(seedId, 'seeded');
+    field.progressRemainingSeconds = remainingSeconds;
+    field.yieldGold = getMockSeedStageGold(seedId, 'seeded');
+    field.description = '播种刚完成，等待进入成长后再决定是否抢收。';
+    field.actions = [];
+    return;
+  }
+
+  if (tone === 'growing' && seedId) {
+    field.title = '成熟期';
+    field.badge = '成长';
+    field.tone = 'growing';
+    field.progressTotalSeconds = getMockSeedStageSeconds(seedId, 'growing');
+    field.progressRemainingSeconds = remainingSeconds;
+    field.yieldGold = getMockSeedStageGold(seedId, 'growing');
+    field.description = '可抢收，点击后直接结算一轮提前收取结果。';
+    field.actions = [{ label: '提前收取', target: 'farm', tone: 'secondary' }];
+    return;
+  }
+
+  if (tone === 'mature' && seedId) {
+    field.title = '丰熟期';
+    field.badge = '丰熟';
+    field.tone = 'mature';
+    field.progressTotalSeconds = MOCK_RIPE_WINDOW_SECONDS;
+    field.progressRemainingSeconds = remainingSeconds;
+    field.yieldGold = getMockSeedStageGold(seedId, 'mature');
+    field.description = '点击收取，触发爆金币并结算本轮成熟收益。';
+    field.actions = [{ label: '成熟收取', target: 'farm', tone: 'primary' }];
+    return;
+  }
+
+  if (tone === 'withered' && seedId) {
+    field.title = '枯萎期';
+    field.badge = '枯萎';
+    field.tone = 'withered';
+    field.progressTotalSeconds = 1;
+    field.progressRemainingSeconds = 0;
+    field.yieldGold = getMockSeedStageGold(seedId, 'withered');
+    field.description = '点击收取，收益已进入衰减段，但仍能爆出金币和种子。';
+    field.actions = [{ label: '枯萎收取', target: 'farm', tone: 'secondary' }];
+    return;
+  }
+
+  field.title = '可培育';
+  field.badge = '空闲地块';
+  field.cropName = undefined;
+  field.tone = 'empty';
+  field.progressTotalSeconds = 1;
+  field.progressRemainingSeconds = 0;
+  field.yieldGold = 0;
+  field.description = '点击中央入口，选择种子后立刻开始新一轮培育。';
+  field.actions = [{ label: '开始培育', target: 'farm', tone: 'primary' }];
+}
+
+function syncMockFieldLifecycle(): void {
+  const nowMs = Date.now();
+
+  mockSceneSnapshot.farm.fields.forEach((field) => {
+    const seedId = mockFieldSeedAssignments[field.id];
+
+    if (!seedId || field.tone === 'empty' || field.tone === 'locked' || field.tone === 'withered') {
+      if (field.tone === 'withered' && seedId) {
+        setMockFieldPresentation(field, 'withered', seedId, 0);
+      }
+      return;
+    }
+
+    if (field.tone === 'seeded') {
+      const totalSeconds = getMockSeedStageSeconds(seedId, 'seeded');
+      const startedAtMs = getMockFieldStageStartedAtMs(field.id, totalSeconds, Math.min(field.progressRemainingSeconds, totalSeconds));
+      const elapsedSeconds = Math.max(Math.floor((nowMs - startedAtMs) / 1000), 0);
+
+      if (elapsedSeconds < totalSeconds) {
+        setMockFieldTiming(field.id, startedAtMs);
+        setMockFieldPresentation(field, 'seeded', seedId, totalSeconds - elapsedSeconds);
+        return;
+      }
+
+      const nextStartedAtMs = startedAtMs + totalSeconds * 1000;
+      setMockFieldTiming(field.id, nextStartedAtMs);
+      setMockFieldPresentation(field, 'growing', seedId, getMockSeedStageSeconds(seedId, 'growing'));
+    }
+
+    if (field.tone === 'growing') {
+      const totalSeconds = getMockSeedStageSeconds(seedId, 'growing');
+      const startedAtMs = getMockFieldStageStartedAtMs(field.id, totalSeconds, Math.min(field.progressRemainingSeconds, totalSeconds));
+      const elapsedSeconds = Math.max(Math.floor((nowMs - startedAtMs) / 1000), 0);
+
+      if (elapsedSeconds < totalSeconds) {
+        setMockFieldTiming(field.id, startedAtMs);
+        setMockFieldPresentation(field, 'growing', seedId, totalSeconds - elapsedSeconds);
+        return;
+      }
+
+      const nextStartedAtMs = startedAtMs + totalSeconds * 1000;
+      setMockFieldTiming(field.id, nextStartedAtMs);
+      setMockFieldPresentation(field, 'mature', seedId, MOCK_RIPE_WINDOW_SECONDS);
+    }
+
+    if (field.tone === 'mature') {
+      const startedAtMs = getMockFieldStageStartedAtMs(field.id, MOCK_RIPE_WINDOW_SECONDS, Math.min(field.progressRemainingSeconds || 20 * 60, MOCK_RIPE_WINDOW_SECONDS));
+      const elapsedSeconds = Math.max(Math.floor((nowMs - startedAtMs) / 1000), 0);
+
+      if (elapsedSeconds < MOCK_RIPE_WINDOW_SECONDS) {
+        setMockFieldTiming(field.id, startedAtMs);
+        setMockFieldPresentation(field, 'mature', seedId, MOCK_RIPE_WINDOW_SECONDS - elapsedSeconds);
+        return;
+      }
+
+      clearMockFieldTiming(field.id);
+      setMockFieldPresentation(field, 'withered', seedId, 0);
+    }
+  });
+}
+
 function updateMockFieldStatus(): void {
   const matureCount = mockSceneSnapshot.farm.fields.filter((field) => field.tone === 'mature' || field.tone === 'withered').length;
   const growingCount = mockSceneSnapshot.farm.fields.filter((field) => field.tone === 'seeded' || field.tone === 'growing').length;
@@ -308,6 +548,7 @@ function applyMockSeedRewards(rewards: Array<{ seedId: string; quantity: number 
 
 function buildMockMutation(summary: string): ClientStateMutationResponse {
   syncMockArmyTrainingQueue();
+  syncMockFieldLifecycle();
   updateMockFieldStatus();
   syncMockFactionScene();
 
@@ -321,6 +562,7 @@ function buildMockMutation(summary: string): ClientStateMutationResponse {
 
 function buildMockCollectResponse(summary: string, collectedGold: number, overflowGold: number, rewards: ClientCollectFieldResponse['result']['rewards']): ClientCollectFieldResponse {
   syncMockArmyTrainingQueue();
+  syncMockFieldLifecycle();
   updateMockFieldStatus();
   syncMockFactionScene();
 
@@ -468,7 +710,8 @@ function applyMockClaimPending(input: ClientClaimPendingRequest): ClientClaimPen
     : parseNumberText(pendingClaim?.value ?? '0');
   const claimableGold = Math.min(Math.max(vault.capacity - vault.current, 0), pendingClaimGold);
   const nextVaultGold = vault.current + claimableGold;
-  const remainingPendingGold = pendingClaimGold - claimableGold;
+  const overflowGold = Math.max(pendingClaimGold - claimableGold, 0);
+  const remainingPendingGold = input.acceptOverflowLoss ? 0 : overflowGold;
   const sourceLabel = input.source === 'tax' ? '主城税收' : input.source === 'faction' ? '阵营分红' : '临时待领取';
 
   vaultResource.value = `${formatNumber(nextVaultGold)} / ${formatNumber(vault.capacity)}`;
@@ -483,10 +726,15 @@ function applyMockClaimPending(input: ClientClaimPendingRequest): ClientClaimPen
     pendingClaim.value = formatNumber(remainingPendingGold);
   }
   syncMockFactionScene();
+  if (input.source === 'faction' && claimableGold > 0) {
+    updateMockDailyTask('daily-faction-touch');
+  }
 
-  const summary = claimableGold > 0
-    ? `${sourceLabel}本次入库 ${formatNumber(claimableGold)} 金币，剩余待领取 ${formatNumber(remainingPendingGold)}。`
-    : `金币空间不足，当前没有可入账的${sourceLabel}。`;
+  const summary = input.acceptOverflowLoss && overflowGold > 0
+    ? `${sourceLabel}本次入库 ${formatNumber(claimableGold)} 金币，另有 ${formatNumber(overflowGold)} 已确认放弃。`
+    : claimableGold > 0
+      ? `${sourceLabel}本次入库 ${formatNumber(claimableGold)} 金币，剩余待领取 ${formatNumber(remainingPendingGold)}。`
+      : `金币空间不足，当前没有可入账的${sourceLabel}。`;
 
   return {
     app: mockHomeSnapshot.app,
@@ -523,7 +771,67 @@ export async function claimPendingEarnings(input: ClientClaimPendingRequest): Pr
   }
 }
 
+function applyMockClaimDailyTask(input: ClientClaimDailyTaskRequest): ClientClaimDailyTaskResponse {
+  const task = mockHomeSnapshot.dailyTasks.find((item) => item.id === input.taskId);
+  const claimedGold = task?.rewardGold ?? 0;
+
+  if (!task || task.status !== 'completed') {
+    return {
+      app: mockHomeSnapshot.app,
+      summary: '当前任务尚未完成，暂时不能领取。',
+      taskId: input.taskId,
+      claimedGold: 0,
+      home: cloneHomeSummary(mockHomeSnapshot),
+      scenes: cloneSceneContent(mockSceneSnapshot),
+    };
+  }
+
+  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
+  const vault = vaultResource ? parseCurrentAndCapacity(vaultResource.value) : null;
+  if (!vault || vault.current >= vault.capacity) {
+    return {
+      app: mockHomeSnapshot.app,
+      summary: '当前金库已满，请先腾出空间后再领取任务奖励。',
+      taskId: input.taskId,
+      claimedGold: 0,
+      home: cloneHomeSummary(mockHomeSnapshot),
+      scenes: cloneSceneContent(mockSceneSnapshot),
+    };
+  }
+
+  claimMockDailyTask(input.taskId);
+  applyVaultGoldDelta(claimedGold);
+
+  return {
+    app: mockHomeSnapshot.app,
+    summary: `${task.title} 已结算，入账 ${formatNumber(claimedGold)} 金币。`,
+    taskId: input.taskId,
+    claimedGold,
+    home: cloneHomeSummary(mockHomeSnapshot),
+    scenes: cloneSceneContent(mockSceneSnapshot),
+  };
+}
+
+export async function claimDailyTaskReward(input: ClientClaimDailyTaskRequest): Promise<ClientClaimDailyTaskResponse> {
+  try {
+    const response = await fetchJson<ClientClaimDailyTaskResponse>(`${CLIENT_API_PREFIX}/actions/claim-daily-task`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    });
+
+    mockHomeSnapshot = cloneHomeSummary(response.home);
+    mockSceneSnapshot = cloneSceneContent(response.scenes);
+    return response;
+  } catch {
+    return applyMockClaimDailyTask(input);
+  }
+}
+
 function applyMockCollectField(input: ClientCollectFieldRequest): ClientCollectFieldResponse {
+  syncMockFieldLifecycle();
   const field = mockSceneSnapshot.farm.fields.find((item) => item.id === input.fieldId);
   const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
 
@@ -540,7 +848,7 @@ function applyMockCollectField(input: ClientCollectFieldRequest): ClientCollectF
   }
 
   const vault = parseCurrentAndCapacity(vaultResource.value);
-  const fieldYield = parseFieldYield(field.description);
+  const fieldYield = field.yieldGold > 0 ? field.yieldGold : parseFieldYield(field.description);
   const depositedGold = Math.min(fieldYield, Math.max(vault.capacity - vault.current, 0));
   const overflowGold = Math.max(fieldYield - depositedGold, 0);
   const plantedSeedId = mockFieldSeedAssignments[input.fieldId];
@@ -550,12 +858,12 @@ function applyMockCollectField(input: ClientCollectFieldRequest): ClientCollectF
 
   applyVaultGoldDelta(depositedGold);
   applyMockSeedRewards(rewards);
-  field.title = '可培育';
-  field.badge = '空闲地块';
-  field.tone = 'empty';
-  field.description = '收取金额 0 金币';
-  field.actions = [{ label: '开始培育', target: 'farm', tone: 'primary' }];
+  setMockFieldPresentation(field, 'empty');
+  clearMockFieldTiming(input.fieldId);
   delete mockFieldSeedAssignments[input.fieldId];
+  if (input.collectMode === 'ripe') {
+    updateMockDailyTask('daily-harvest-once');
+  }
 
   const rewardSummary = rewards.length > 0 ? `，并获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : '';
   return buildMockCollectResponse(
@@ -569,8 +877,8 @@ function applyMockCollectField(input: ClientCollectFieldRequest): ClientCollectF
 }
 
 function applyMockStartCultivation(input: ClientStartCultivationRequest): ClientStateMutationResponse {
+  syncMockFieldLifecycle();
   const field = mockSceneSnapshot.farm.fields.find((item) => item.id === input.fieldId);
-  const cultivationCost = 520;
   const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
 
   if (!field || !vaultResource || field.tone === 'locked') {
@@ -581,11 +889,6 @@ function applyMockStartCultivation(input: ClientStartCultivationRequest): Client
     return buildMockMutation('当前地块已经在培育中或可直接收取。');
   }
 
-  const vault = parseCurrentAndCapacity(vaultResource.value);
-  if (vault.current < cultivationCost) {
-    return buildMockMutation('金币不足，无法开始本轮培育。');
-  }
-
   if (!mockBootstrapSnapshot.backpack.unlockedSeedIds.includes(input.seedId)) {
     return buildMockMutation('当前种子尚未解锁，无法开始本轮培育。');
   }
@@ -594,18 +897,13 @@ function applyMockStartCultivation(input: ClientStartCultivationRequest): Client
     return buildMockMutation('当前种子库存不足，无法开始本轮培育。');
   }
 
-  applyVaultGoldDelta(-cultivationCost);
   mockBootstrapSnapshot.backpack.seedInventory[input.seedId] = Math.max((mockBootstrapSnapshot.backpack.seedInventory[input.seedId] ?? 0) - 1, 0);
-  field.title = '播种期';
-  field.badge = '播种';
-  field.tone = 'seeded';
-  field.description = '收取金额 520 金币';
+  setMockFieldTiming(input.fieldId, Date.now());
+  setMockFieldPresentation(field, 'seeded', input.seedId, getMockSeedStageSeconds(input.seedId, 'seeded'));
   mockFieldSeedAssignments[input.fieldId] = input.seedId;
-  field.actions = [
-    { label: '查看阶段', target: 'farm', tone: 'ghost' },
-  ];
+  updateMockDailyTask('daily-start-cultivation');
 
-  return buildMockMutation(`${field.code} 已投入 ${formatNumber(cultivationCost)} 金币，播下 ${seedLabelMap[input.seedId] ?? input.seedId}，开始新一轮培育。`);
+  return buildMockMutation(`${field.code} 已播下 ${seedLabelMap[input.seedId] ?? input.seedId}，开始新一轮培育。`);
 }
 
 function applyMockClaimStarterSeeds(): ClientStateMutationResponse {
@@ -617,6 +915,17 @@ function applyMockClaimStarterSeeds(): ClientStateMutationResponse {
   applyMockSeedRewards([{ seedId: 'lingmai', quantity: 3 }]);
 
   return buildMockMutation('今日种子已领取，获得 灵麦 x3。');
+}
+
+function applyMockClaimTianjiTalisman(): ClientStateMutationResponse {
+  if (mockBootstrapSnapshot.backpack.tianjiTalismanClaimed) {
+    return buildMockMutation('今天天机符已经领取过了。');
+  }
+
+  mockBootstrapSnapshot.backpack.tianjiTalismanClaimed = true;
+  mockBootstrapSnapshot.backpack.globalItemInventory.tianjiTalisman = (mockBootstrapSnapshot.backpack.globalItemInventory.tianjiTalisman ?? 0) + 1;
+
+  return buildMockMutation('今天天机符已领取，获得 天机符 x1。');
 }
 
 function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStateMutationResponse {
@@ -637,14 +946,19 @@ function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientSt
     }
 
     applyVaultGoldDelta(-cost);
-    extension.levelText = extension.levelText.replace(/Lv\.(\d+) -> Lv\.(\d+)/, (_, current, next) => `Lv.${next} -> Lv.${Number(next) + 1}`);
+    extension.levelText = extension.levelText.replace(/Lv\.(\d+) -> Lv\.(\d+)/, (_, __current, next) => `Lv.${next} -> Lv.${Number(next) + 1}`);
     extension.costText = '已达到验证上限';
     extension.action = { label: '查看条件', target: 'building', tone: 'ghost' };
     extension.locked = true;
+    updateMockDailyTask('daily-upgrade-building');
     return buildMockMutation(`${extension.title}升级完成，当前已完成一轮验证内升级。`);
   }
 
   const upgrade = mockSceneSnapshot.building.upgrades.find((item) => item.id === input.buildingId);
+
+  if (input.buildingId === 'field-slot') {
+    return buildMockMutation('田地位不需要额外花钱购买，会在主城达到指定等级后自动开启。');
+  }
 
   if (!upgrade || !vaultResource || upgrade.locked) {
     return buildMockMutation('当前建筑不满足升级条件，或已达到验证上限。');
@@ -658,6 +972,7 @@ function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientSt
   }
 
   applyVaultGoldDelta(-cost);
+  updateMockDailyTask('daily-upgrade-building');
 
   if (input.buildingId === 'castle') {
     mockHomeSnapshot.castleLevel += 1;
@@ -675,10 +990,6 @@ function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientSt
     setVaultCapacity(vault.capacity + 1600);
     upgrade.description = `Lv.4 -> Lv.5，容量由 ${formatNumber(vault.capacity + 1600)} 提升到 ${formatNumber(vault.capacity + 3200)}。`;
     return buildMockMutation(`金库升级完成，容量已提升到 ${formatNumber(vault.capacity + 1600)}。`);
-  }
-
-  if (input.buildingId === 'field-slot') {
-    return buildMockMutation('田地位不需要额外花钱购买，会在主城达到指定等级后自动开启。');
   }
 
   if (input.buildingId === 'population') {
@@ -748,6 +1059,7 @@ function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutat
     totalSeconds: nextTotalSeconds,
     remainingSeconds: nextTotalSeconds,
   };
+  updateMockDailyTask('daily-recruit-army', actualRecruitCount);
 
   return buildMockMutation(
     actualRecruitCount < requestedCount
@@ -893,6 +1205,7 @@ function applyMockFactionDonate(input: ClientFactionDonateRequest): ClientStateM
   applyVaultGoldDelta(-actualGoldAmount);
   mockFactionContribution += contributionGain;
   mockFactionTreasuryGold += actualGoldAmount;
+  updateMockDailyTask('daily-faction-touch');
 
   return buildMockMutation(`已向阵营捐出 ${formatNumber(actualGoldAmount)} 金币，贡献值 +${formatNumber(contributionGain)}。`);
 }
@@ -1001,6 +1314,20 @@ export async function claimStarterSeedPack(): Promise<ClientStateMutationRespons
   }
 }
 
+export async function claimTianjiTalismanItem(): Promise<ClientStateMutationResponse> {
+  try {
+    return await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/claim-tianji-talisman`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    });
+  } catch {
+    return applyMockClaimTianjiTalisman();
+  }
+}
+
 export async function resetDemoExperimentState(): Promise<ClientResetDemoStateResponse> {
   const resetMockState = (): ClientResetDemoStateResponse => {
     mockBootstrapSnapshot = cloneBootstrap(mockBootstrap);
@@ -1010,7 +1337,9 @@ export async function resetDemoExperimentState(): Promise<ClientResetDemoStateRe
     mockFactionTreasuryGold = INITIAL_MOCK_FACTION_TREASURY_GOLD;
     mockFactionArmyPower = INITIAL_MOCK_FACTION_ARMY_POWER;
     mockFieldSeedAssignments = { ...INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS };
+    mockFieldTimingState = buildInitialMockFieldTimingStates();
     syncMockFactionScene();
+    syncMockFieldLifecycle();
 
     return {
       app: mockHomeSnapshot.app,
@@ -1032,6 +1361,7 @@ export async function resetDemoExperimentState(): Promise<ClientResetDemoStateRe
     mockBootstrapSnapshot = cloneBootstrap(mockBootstrap);
     mockHomeSnapshot = cloneHomeSummary(response.home);
     mockSceneSnapshot = cloneSceneContent(response.scenes);
+    mockFieldTimingState = buildInitialMockFieldTimingStates();
     return response;
   } catch {
     return resetMockState();

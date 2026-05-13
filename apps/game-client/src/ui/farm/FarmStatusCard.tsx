@@ -13,6 +13,7 @@ export interface FarmStatusViewModel {
   description: string;
   emphasis?: string;
   note?: string;
+  lockedHint?: string;
   centerActionLabel?: string;
   harvestable?: boolean;
 }
@@ -68,7 +69,7 @@ function getFarmProgressLabel(view: FarmStatusViewModel, remainingSeconds: numbe
   }
 
   if (view.tone === 'locked') {
-    return '待解锁';
+    return view.lockedHint ?? '待解锁';
   }
 
   return '空闲中';
@@ -87,7 +88,13 @@ export function buildFarmFieldStatusView(field: ClientFarmField): FarmStatusView
     progressTotalSeconds: field.progressTotalSeconds,
     yieldGold: field.yieldGold,
     description: field.description,
-    centerActionLabel: field.tone === 'empty' || field.tone === 'locked' ? primaryAction?.label : undefined,
+    lockedHint: field.tone === 'locked'
+      ? field.description
+        .replace('这块田地会在主城达到 ', '')
+        .replace(' 时自动赠送开启。', ' 自动解锁')
+        .replace('这块田地会随主城里程碑自动开启。', '随主城里程碑自动解锁')
+      : undefined,
+    centerActionLabel: field.tone === 'empty' ? primaryAction?.label : undefined,
     harvestable: Boolean(primaryAction?.label?.includes('收取')),
   };
 }
