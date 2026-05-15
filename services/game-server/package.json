@@ -9,7 +9,11 @@
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prisma:validate": "node ./scripts/prisma-validate.mjs",
-    "prisma:generate": "prisma generate --schema prisma/schema.prisma"
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

@@ -31,4 +31,18 @@ export class AppConfigService {
   get logLevel(): string {
     return process.env.LOG_LEVEL ?? 'info';
   }
+
+  get authTokenSecret(): string {
+    return process.env.AUTH_TOKEN_SECRET ?? 'trinitywar-local-dev-secret';
+  }
+
+  get authTokenTtlSeconds(): number {
+    const parsedTtl = Number(process.env.AUTH_TOKEN_TTL_SECONDS ?? 60 * 60 * 24);
+
+    if (!Number.isInteger(parsedTtl) || parsedTtl <= 0) {
+      throw new Error(`Invalid AUTH_TOKEN_TTL_SECONDS value: ${process.env.AUTH_TOKEN_TTL_SECONDS}`);
+    }
+
+    return parsedTtl;
+  }
 }

@@ -1,5 +1,10 @@
 # 任务开发日志
 
+- 2026-05-15 TW-BE-007 已落地 bootstrap 真实读接口：新增 Nest ClientReadModule/ClientReadController/ClientReadService，并在 AppModule 注册 `GET /api/client/bootstrap`；接口通过 Bearer token 读取当前玩家，从数据库聚合 SeedDefinition 与 PlayerSeedInventory，返回共享 ClientBootstrapResponse 契约。已通过 typecheck、build、本地服务启动、dev-login 后请求 bootstrap、未带 token 返回 401 验证；当前 `starterSeedClaimed` 与 `tianjiTalismanClaimed` 仍按现有 schema 默认 false，等待人工验收。
+- 2026-05-15 TW-BE-006 已按自动验收规则通过：开发登录、首次建档、重复登录不重复建档、Bearer token 和 `GET /api/client/me` 均已由本地接口与数据库查询验证，排期状态更新为 `[x]`。
+- 2026-05-15 TW-BE-006 已落地开发环境登录、建档与当前玩家接口：新增 Nest AuthController/AuthService/AuthTokenService、Bearer token guard、PlayerController/PlayerService 和 `GET /api/client/me`；复用 PlayerInitializationService 完成首次 dev-login 建档。已通过 typecheck、build、health、连续 dev-login 同账号不重复建档、Bearer token 请求 `/api/client/me`、新 dev 账号首次登录生成 wallet/building/army/field/inventory/task 状态验证，并确认 Swagger JSON 包含 dev-login 与 me 路径，等待人工验收。
+- 2026-05-15 TW-BE-005 已完成人工验收：已在 pgAdmin4 中执行验证 SQL 并确认 faction、seed definition、DEV_FAKE 测试账号和玩家初始状态数据可查询，排期状态更新为 `[x]`。
+- 2026-05-15 TW-BE-005 已落地可重复执行的 Prisma seed 与开发测试账号初始化：新增 faction/13 个 SeedDefinition 主数据、PlayerInitializationService、4 类 DEV_FAKE 测试账号和 `db:seed` 命令；已执行 prisma generate、prisma validate、typecheck、build、seed 连续两次和数据库查询验证，确认 faction=3、seed_definition=13、DEV_FAKE identity=4、field=16、inventory=52、task=12，等待人工验收。
 - 2026-05-15 TW-BE-004 已完成人工验收：已在 pgAdmin 的 trinitywar/public/Tables 下确认新增核心当前状态、农场、种子和任务表可见，排期状态更新为 `[x]`。
 - 2026-05-15 TW-BE-004 已落地 Prisma Migration 003/004：新增 PlayerWallet、PlayerBuilding、PlayerArmy、ArmyTrainingQueue、SeedDefinition、PlayerSeedInventory、PlayerFieldSlot、PlayerDailyTaskState 及必要枚举、版本字段、唯一约束、外键和高频读取索引；已执行 prisma format、validate、generate、typecheck、build、migrate deploy 和 migrate diff，确认本地数据库与 schema 对齐，等待人工验收。
 - 2026-05-15 已新增赛季完整规则文档，统一赛季重置保留、资产继承比例、结算奖励、种子处理和追赶反滥用边界。
