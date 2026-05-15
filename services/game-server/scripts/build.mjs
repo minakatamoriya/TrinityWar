@@ -10,10 +10,20 @@ const distDir = path.join(serviceRoot, 'dist');
 const packageJsonPath = path.join(serviceRoot, 'package.json');
 
 const runtimeDependencies = [
+  '@nestjs/common',
+  '@nestjs/core',
+  '@nestjs/platform-express',
+  '@nestjs/swagger',
+  '@prisma/client',
   '@fastify/cors',
   '@fastify/swagger',
   '@fastify/swagger-ui',
+  'bullmq',
   'fastify',
+  'ioredis',
+  'pino',
+  'reflect-metadata',
+  'rxjs',
 ];
 
 const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
@@ -34,7 +44,7 @@ await rm(distDir, { recursive: true, force: true });
 await mkdir(distDir, { recursive: true });
 
 await build({
-  entryPoints: [path.join(serviceRoot, 'src/index.ts')],
+  entryPoints: [path.join(serviceRoot, 'src/main.ts')],
   outfile: path.join(distDir, 'index.js'),
   bundle: true,
   platform: 'node',

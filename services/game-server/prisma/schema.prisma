@@ -1,0 +1,284 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AuthProvider {
+  WECHAT
+  DEV_FAKE
+}
+
+enum ArmyTrainingStatus {
+  QUEUED
+  FINISHED
+  CLAIMED
+  CANCELLED
+}
+
+enum FieldStatus {
+  LOCKED
+  EMPTY
+  SEEDED
+  GROWING
+  MATURE
+  WITHERED
+}
+
+enum TaskStatus {
+  IN_PROGRESS
+  COMPLETED
+  CLAIMED
+}
+
+model Player {
+  id               String    @id @default(cuid())
+  nickname         String
+  avatarUrl        String?   @map("avatar_url")
+  factionId        String?   @map("faction_id")
+  castleLevelCache Int       @default(1) @map("castle_level_cache")
+  lastLoginAt      DateTime? @map("last_login_at")
+  stateVersion     Int       @default(1) @map("state_version")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  authIdentities PlayerAuthIdentity[]
+  army           PlayerArmy?
+  buildings      PlayerBuilding?
+  faction        Faction?               @relation("PlayerFaction", fields: [factionId], references: [id], onDelete: SetNull)
+  factionMembers FactionMember[]
+  fieldSlots     PlayerFieldSlot[]
+  seedInventory  PlayerSeedInventory[]
+  taskStates     PlayerDailyTaskState[]
+  trainingQueues ArmyTrainingQueue[]
+  wallet         PlayerWallet?
+
+  @@index([factionId])
+  @@index([lastLoginAt])
+  @@map("player")
+}
+
+model PlayerAuthIdentity {
+  id             String       @id @default(cuid())
+  playerId       String       @map("player_id")
+  provider       AuthProvider
+  providerUserId String       @map("provider_user_id")
+  unionId        String?      @map("union_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([playerId])
+  @@map("player_auth_identity")
+}
+
+model Faction {
+  id                               String   @id @default(cuid())
+  code                             String
+  name                             String
+  treasuryGold                     Int      @default(0) @map("treasury_gold")
+  hourlyBaseDividend               Int      @default(0) @map("hourly_base_dividend")
+  hourlyContributionDividendPerTen Int      @default(0) @map("hourly_contribution_dividend_per_ten")
+  contributionScore                Int      @default(0) @map("contribution_score")
+  createdAt                        DateTime @default(now()) @map("created_at")
+  updatedAt                        DateTime @updatedAt @map("updated_at")
+
+  players Player[]        @relation("PlayerFaction")
+  members FactionMember[]
+
+  @@unique([code])
+  @@unique([name])
+  @@map("faction")
+}
+
+model FactionMember {
+  id                String   @id @default(cuid())
+  factionId         String   @map("faction_id")
+  playerId          String   @map("player_id")
+  contributionScore Int      @default(0) @map("contribution_score")
+  joinedAt          DateTime @default(now()) @map("joined_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  faction Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  player  Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([factionId, playerId])
+  @@index([playerId])
+  @@map("faction_member")
+}
+
+model PlayerWallet {
+  playerId                     String    @id @map("player_id")
+  vaultGold                    Int       @default(0) @map("vault_gold")
+  vaultCapacity                Int       @default(0) @map("vault_capacity")
+  walletGold                   Int       @default(0) @map("wallet_gold")
+  walletCapacity               Int       @default(0) @map("wallet_capacity")
+  walletProtectedRatio         Int       @default(0) @map("wallet_protected_ratio")
+  pendingTaxGold               Int       @default(0) @map("pending_tax_gold")
+  pendingDividendGold          Int       @default(0) @map("pending_dividend_gold")
+  pendingRaidOverflowGold      Int       @default(0) @map("pending_raid_overflow_gold")
+  pendingRaidOverflowExpiresAt DateTime? @map("pending_raid_overflow_expires_at")
+  balanceVersion               Int       @default(1) @map("balance_version")
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  updatedAt                    DateTime  @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([pendingRaidOverflowExpiresAt])
+  @@map("player_wallet")
+}
+
+model PlayerBuilding {
+  playerId              String   @id @map("player_id")
+  castleLevel           Int      @default(1) @map("castle_level")
+  vaultLevel            Int      @default(1) @map("vault_level")
+  fieldSlotLevel        Int      @default(1) @map("field_slot_level")
+  populationLevel       Int      @default(1) @map("population_level")
+  watchtowerLevel       Int      @default(1) @map("watchtower_level")
+  protectionTechLevel   Int      @default(0) @map("protection_tech_level")
+  farmYieldTechLevel    Int      @default(0) @map("farm_yield_tech_level")
+  ripeWindowTechLevel   Int      @default(0) @map("ripe_window_tech_level")
+  pendingClaimTechLevel Int      @default(0) @map("pending_claim_tech_level")
+  buildingVersion       Int      @default(1) @map("building_version")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("player_building")
+}
+
+model PlayerArmy {
+  playerId       String   @id @map("player_id")
+  totalCount     Int      @default(0) @map("total_count")
+  availableCount Int      @default(0) @map("available_count")
+  frozenCount    Int      @default(0) @map("frozen_count")
+  woundedCount   Int      @default(0) @map("wounded_count")
+  capacity       Int      @default(0)
+  armyVersion    Int      @default(1) @map("army_version")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("player_army")
+}
+
+model ArmyTrainingQueue {
+  id            String             @id @default(cuid())
+  playerId      String             @map("player_id")
+  queuedCount   Int                @map("queued_count")
+  unitCostGold  Int                @map("unit_cost_gold")
+  totalCostGold Int                @map("total_cost_gold")
+  startedAt     DateTime           @map("started_at")
+  finishAt      DateTime           @map("finish_at")
+  status        ArmyTrainingStatus @default(QUEUED)
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, status])
+  @@index([finishAt])
+  @@map("army_training_queue")
+}
+
+model SeedDefinition {
+  id                String   @id @default(cuid())
+  seedId            String   @map("seed_id")
+  label             String
+  rarity            String
+  seedSeconds       Int      @map("seed_seconds")
+  growSeconds       Int      @map("grow_seconds")
+  matureSeconds     Int      @map("mature_seconds")
+  ripeWindowSeconds Int      @map("ripe_window_seconds")
+  baseYieldGold     Int      @map("base_yield_gold")
+  harvestSeedReturn Int      @default(0) @map("harvest_seed_return")
+  strategyNote      String?  @map("strategy_note")
+  lore              String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  fieldSlots      PlayerFieldSlot[]
+  playerInventory PlayerSeedInventory[]
+
+  @@unique([seedId])
+  @@map("seed_definition")
+}
+
+model PlayerSeedInventory {
+  id               String    @id @default(cuid())
+  playerId         String    @map("player_id")
+  seedDefinitionId String    @map("seed_definition_id")
+  quantity         Int       @default(0)
+  inventoryVersion Int       @default(1) @map("inventory_version")
+  unlockedAt       DateTime? @map("unlocked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  player         Player         @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  seedDefinition SeedDefinition @relation(fields: [seedDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, seedDefinitionId])
+  @@index([playerId])
+  @@map("player_seed_inventory")
+}
+
+model PlayerFieldSlot {
+  id                   String      @id @default(cuid())
+  playerId             String      @map("player_id")
+  slotIndex            Int         @map("slot_index")
+  isUnlocked           Boolean     @default(false) @map("is_unlocked")
+  unlockCastleLevel    Int         @map("unlock_castle_level")
+  status               FieldStatus @default(LOCKED)
+  seedDefinitionId     String?     @map("seed_definition_id")
+  investedGold         Int         @default(0) @map("invested_gold")
+  currentClaimableGold Int         @default(0) @map("current_claimable_gold")
+  harvestedGoldTotal   Int         @default(0) @map("harvested_gold_total")
+  raidedGoldTotal      Int         @default(0) @map("raided_gold_total")
+  seedAt               DateTime?   @map("seed_at")
+  matureAt             DateTime?   @map("mature_at")
+  fullMatureAt         DateTime?   @map("full_mature_at")
+  overripeAt           DateTime?   @map("overripe_at")
+  lastCalculatedAt     DateTime?   @map("last_calculated_at")
+  statusVersion        Int         @default(1) @map("status_version")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+
+  player         Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  seedDefinition SeedDefinition? @relation(fields: [seedDefinitionId], references: [id], onDelete: SetNull)
+
+  @@unique([playerId, slotIndex])
+  @@index([playerId, status])
+  @@index([matureAt])
+  @@index([fullMatureAt])
+  @@index([overripeAt])
+  @@map("player_field_slot")
+}
+
+model PlayerDailyTaskState {
+  id          String     @id @default(cuid())
+  playerId    String     @map("player_id")
+  dateKey     String     @map("date_key")
+  taskId      String     @map("task_id")
+  progress    Int        @default(0)
+  target      Int
+  status      TaskStatus @default(IN_PROGRESS)
+  rewardGold  Int        @map("reward_gold")
+  actionScene String     @map("action_scene")
+  claimedAt   DateTime?  @map("claimed_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, dateKey, taskId])
+  @@index([playerId, dateKey])
+  @@index([dateKey, status])
+  @@map("player_daily_task_state")
+}

@@ -1,5 +1,13 @@
 # 任务开发日志
 
+- 2026-05-15 TW-BE-004 已完成人工验收：已在 pgAdmin 的 trinitywar/public/Tables 下确认新增核心当前状态、农场、种子和任务表可见，排期状态更新为 `[x]`。
+- 2026-05-15 TW-BE-004 已落地 Prisma Migration 003/004：新增 PlayerWallet、PlayerBuilding、PlayerArmy、ArmyTrainingQueue、SeedDefinition、PlayerSeedInventory、PlayerFieldSlot、PlayerDailyTaskState 及必要枚举、版本字段、唯一约束、外键和高频读取索引；已执行 prisma format、validate、generate、typecheck、build、migrate deploy 和 migrate diff，确认本地数据库与 schema 对齐，等待人工验收。
+- 2026-05-15 已新增赛季完整规则文档，统一赛季重置保留、资产继承比例、结算奖励、种子处理和追赶反滥用边界。
+- 2026-05-15 TW-BE-003 已完成本地 PostgreSQL 验证：已创建 trinitywar 开发用户与数据库，成功执行 prisma migrate deploy，确认 `_prisma_migrations` 记录 001/002 已完成，且 public schema 下存在 player、player_auth_identity、faction、faction_member 表；排期状态更新为 `[x]`。
+- 2026-05-15 TW-BE-003 已落地 Prisma Migration 001/002：新增 AuthProvider、Player、PlayerAuthIdentity、Faction、FactionMember schema 与两批 migration SQL，并补充 migration lock；已通过 prisma format、prisma validate、prisma generate、migrate diff、typecheck 与 build。真实 migrate deploy 未完成，原因是本地未提供可连接的 PostgreSQL/DATABASE_URL 环境。
+- 2026-05-15 TW-BE-001 与 TW-BE-002 已完成人工验收：后端健康检查、Swagger、统一日志、异常结构、构建与类型检查均已由人工确认通过，排期状态更新为 `[x]`。
+- 2026-05-15 TW-BE-002 已建立共享基础设施模块：新增 config、logging、common error handling、PrismaService 懒初始化注入点、auth 占位 guard/decorator/context，并在 AppModule 与 main.ts 注册全局异常过滤器和 Pino 日志；已通过 prisma:validate、typecheck、build、健康检查和 Swagger JSON smoke 验证，等待人工验收。
+- 2026-05-15 TW-BE-001 已建立正式 NestJS 后端应用骨架：新增 game-server NestJS 入口、App/System 模块、健康检查、Swagger 初始化、Prisma 基础 schema、环境变量样例和构建/校验脚本；已通过 prisma:validate、typecheck、build、健康检查和 Swagger JSON smoke 验证，等待人工验收。
 - 2026-05-14 已新增纯 AI 后端连续执行排期表，按阶段拆分后端骨架、迁移、读接口、写链路、掠夺异步、mock 退场与后台排查任务，并为每项补齐前置文档、验收清单和固定 AI 执行提示模板。
 - 2026-05-13 已新增建筑页升级与未解锁能力展示规范，明确当前可升级区、即将解锁区、中程预告区三层信息结构，并整理主城 1 到 20 级的建筑页预告口径。
 - 2026-05-13 已将前后端种子体系完整迁移为新版 13 种命名与 ID，并删除旧版种子键、默认值、掉落池与展示文案。

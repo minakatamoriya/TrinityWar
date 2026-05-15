@@ -8,7 +8,9 @@
     "allowJs": true,
     "lib": ["ES2020"],
     "types": ["node"],
-    "noEmit": false
+    "noEmit": false,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
-  "include": ["src"]
+  "include": ["src", "prisma"]
 }
