@@ -30,6 +30,10 @@ export class HomeSummaryAssembler {
       playerName: readModel.player.nickname,
       factionName: readModel.player.faction?.name ?? '未加入阵营',
       castleLevel,
+      stateVersions: {
+        buildingVersion: readModel.buildings?.buildingVersion ?? 1,
+        walletVersion: readModel.wallet?.balanceVersion ?? 1,
+      },
       staminaStatus: this.buildStaminaStatus(armyCount, armyCapacity, activeTrainingQueue?.finishAt ?? null, now),
       fieldStatus: this.buildFieldStatus(readModel),
       reportStatus: '暂无新战报',

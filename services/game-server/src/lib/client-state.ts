@@ -114,6 +114,8 @@ interface InMemoryPlayerState {
   tianjiTalismanClaimed: boolean;
   buildingLevels: Record<ClientBuildingUpgradeId, number>;
   castleExtensionLevels: Record<ClientCastleExtensionUpgradeId, number>;
+  buildingVersion: number;
+  walletVersion: number;
   armyCount: number;
   armyCapacity: number;
   armyTrainingQueue: Omit<ClientArmyTrainingQueue, 'remainingSeconds'> | null;
@@ -738,6 +740,8 @@ const initialPlayerState: InMemoryPlayerState = {
     ripeWindowTech: 0,
     pendingClaimTech: 0,
   },
+  buildingVersion: 1,
+  walletVersion: 1,
   armyCount: 40,
   armyCapacity: 100,
   armyTrainingQueue: null,
@@ -1043,6 +1047,10 @@ export function buildHomeSummary(): HomeSummaryResponse {
     playerName: playerState.playerName,
     factionName: playerState.factionName,
     castleLevel,
+    stateVersions: {
+      buildingVersion: playerState.buildingVersion,
+      walletVersion: playerState.walletVersion,
+    },
     staminaStatus: buildStaminaStatus(),
     fieldStatus: buildFieldStatus(),
     reportStatus: buildReportStatus(),

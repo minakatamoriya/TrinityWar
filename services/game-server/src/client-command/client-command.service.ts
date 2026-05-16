@@ -21,19 +21,6 @@ interface UpgradeBuildingCommandInput {
   idempotencyKey?: string;
 }
 
-interface UpgradeBuildingTransactionResult {
-  replay: false;
-  summary: string;
-  idempotencyRecordId: string | null;
-  businessEntityType: string;
-  businessEntityId: string;
-}
-
-interface UpgradeBuildingReplayResult {
-  replay: true;
-  response: ClientStateMutationResponse;
-}
-
 @Injectable()
 export class ClientCommandService {
   constructor(
@@ -49,16 +36,13 @@ export class ClientCommandService {
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashRequest(input.request);
 
-    const transactionResult = await this.prisma.transaction<UpgradeBuildingTransactionResult | UpgradeBuildingReplayResult>(async (client) => {
+    return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
       const idempotencyRecord = idempotencyKey
         ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
         : null;
 
       if (idempotencyRecord?.status === 'completed') {
-        return {
-          replay: true,
-          response: idempotencyRecord.responseSnapshotJson as unknown as ClientStateMutationResponse,
-        };
+        return idempotencyRecord.responseSnapshotJson as unknown as ClientStateMutationResponse;
       }
 
       const playerState = await client.player.findUnique({
@@ -153,39 +137,24 @@ export class ClientCommandService {
         requestIdempotencyKey: idempotencyKey,
       });
 
-      return {
-        replay: false,
+      const responseSnapshot: ClientStateMutationResponse = {
+        app: APP_NAME,
         summary: `已升级 ${target.key}：Lv.${target.currentLevel} -> Lv.${target.nextLevel}`,
-        idempotencyRecordId: idempotencyRecord?.id ?? null,
-        businessEntityType: target.isExtension ? 'castle-extension' : 'building',
-        businessEntityId: target.key,
+        home: await this.clientReadService.getHomeSummary(input.playerId, client),
+        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
       };
-    });
 
-    if (transactionResult.replay) {
-      return transactionResult.response;
-    }
-
-    const responseSnapshot: ClientStateMutationResponse = {
-      app: APP_NAME,
-      summary: transactionResult.summary,
-      home: await this.clientReadService.getHomeSummary(input.playerId),
-      scenes: await this.clientReadService.getSceneContent(input.playerId),
-    };
-
-    if (transactionResult.idempotencyRecordId) {
-      const idempotencyRecordId = transactionResult.idempotencyRecordId;
-      await this.prisma.transaction(async (client) => {
+      if (idempotencyRecord?.id) {
         await this.idempotencyService.markCompleted(client, {
-          id: idempotencyRecordId,
+          id: idempotencyRecord.id,
           responseSnapshotJson: responseSnapshot as unknown as Prisma.InputJsonValue,
-          businessEntityType: transactionResult.businessEntityType,
-          businessEntityId: transactionResult.businessEntityId,
+          businessEntityType: target.isExtension ? 'castle-extension' : 'building',
+          businessEntityId: target.key,
         });
-      });
-    }
+      }
 
-    return responseSnapshot;
+      return responseSnapshot;
+    });
   }
 
   private async prepareIdempotencyRecord(

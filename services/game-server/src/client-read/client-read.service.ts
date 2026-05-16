@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { APP_NAME, type ClientBootstrapResponse, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
@@ -81,8 +82,11 @@ export class ClientReadService {
     };
   }
 
-  async getHomeSummary(playerId: string): Promise<HomeSummaryResponse> {
-    const readModel = await this.clientReadRepository.findHomeSummary(playerId, getLocalDateKey());
+  async getHomeSummary(
+    playerId: string,
+    client?: Prisma.TransactionClient | PrismaClient,
+  ): Promise<HomeSummaryResponse> {
+    const readModel = await this.clientReadRepository.findHomeSummary(playerId, getLocalDateKey(), client);
 
     if (!readModel) {
       throw new BusinessError({
@@ -95,8 +99,11 @@ export class ClientReadService {
     return this.homeSummaryAssembler.assemble(readModel);
   }
 
-  async getSceneContent(playerId: string): Promise<ClientSceneContentResponse> {
-    const readModel = await this.clientReadRepository.findSceneContent(playerId);
+  async getSceneContent(
+    playerId: string,
+    client?: Prisma.TransactionClient | PrismaClient,
+  ): Promise<ClientSceneContentResponse> {
+    const readModel = await this.clientReadRepository.findSceneContent(playerId, client);
 
     if (!readModel) {
       throw new BusinessError({

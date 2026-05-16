@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ArmyTrainingStatus, FieldStatus, TaskStatus } from '@prisma/client';
+import type { ArmyTrainingStatus, FieldStatus, Prisma, PrismaClient, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 export interface HomeSummaryReadModel {
@@ -21,9 +21,11 @@ export interface HomeSummaryReadModel {
     pendingDividendGold: number;
     pendingRaidOverflowGold: number;
     pendingRaidOverflowExpiresAt: Date | null;
+    balanceVersion: number;
   } | null;
   buildings: {
     castleLevel: number;
+    buildingVersion: number;
   } | null;
   army: {
     totalCount: number;
@@ -127,8 +129,12 @@ export interface SceneContentReadModel {
 export class ClientReadRepository {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async findHomeSummary(playerId: string, dateKey: string): Promise<HomeSummaryReadModel | null> {
-    const player = await this.prisma.db.player.findUnique({
+  async findHomeSummary(
+    playerId: string,
+    dateKey: string,
+    client: Prisma.TransactionClient | PrismaClient = this.prisma.db,
+  ): Promise<HomeSummaryReadModel | null> {
+    const player = await client.player.findUnique({
       where: { id: playerId },
       select: {
         id: true,
@@ -153,11 +159,13 @@ export class ClientReadRepository {
             pendingDividendGold: true,
             pendingRaidOverflowGold: true,
             pendingRaidOverflowExpiresAt: true,
+            balanceVersion: true,
           },
         },
         buildings: {
           select: {
             castleLevel: true,
+            buildingVersion: true,
           },
         },
         army: {
@@ -220,8 +228,11 @@ export class ClientReadRepository {
     };
   }
 
-  async findSceneContent(playerId: string): Promise<SceneContentReadModel | null> {
-    const player = await this.prisma.db.player.findUnique({
+  async findSceneContent(
+    playerId: string,
+    client: Prisma.TransactionClient | PrismaClient = this.prisma.db,
+  ): Promise<SceneContentReadModel | null> {
+    const player = await client.player.findUnique({
       where: { id: playerId },
       select: {
         id: true,
@@ -317,7 +328,7 @@ export class ClientReadRepository {
       return null;
     }
 
-    const factions = await this.prisma.db.faction.findMany({
+    const factions = await client.faction.findMany({
       orderBy: [{ contributionScore: 'desc' }, { treasuryGold: 'desc' }, { name: 'asc' }],
       select: {
         id: true,

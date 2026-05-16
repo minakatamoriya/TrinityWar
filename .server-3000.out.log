@@ -77,3 +77,90 @@
 {"level":30,"time":1778940815344,"pid":21012,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/health, GET} route"}
 {"level":30,"time":1778940815344,"pid":21012,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestApplication","msg":"Nest application successfully started"}
 {"level":30,"time":1778940815344,"pid":21012,"hostname":"DESKTOP-IMD5ASL","name":"game-server","host":"0.0.0.0","port":3000,"msg":"game server started"}
+23:13:05 [tsx] restarting
+c23:13:05 [tsx] restarting
+c23:13:06 [tsx] restarting
+c{"level":30,"time":1778944388065,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestFactory","msg":"Starting Nest application..."}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AppModule dependencies initialized"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ConfigModule dependencies initialized"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PrismaModule dependencies initialized"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuditModule dependencies initialized"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SystemModule dependencies initialized"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"LoggingModule dependencies initialized"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"IdempotencyModule dependencies initialized"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"CommonModule dependencies initialized"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuthModule dependencies initialized"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PlayerModule dependencies initialized"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientReadModule dependencies initialized"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientCommandModule dependencies initialized"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"AuthController {/api/client/auth}:"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/auth/dev-login, POST} route"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"PlayerController {/api/client}:"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/me, GET} route"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientReadController {/api/client}:"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/bootstrap, GET} route"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/home-summary, GET} route"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/scene-content, GET} route"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientCommandController {/api/client/actions}:"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/upgrade-building, POST} route"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"SystemController {/api/health}:"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/health, GET} route"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestApplication","msg":"Nest application successfully started"}
+{"level":30,"time":1778944388066,"pid":27896,"hostname":"DESKTOP-IMD5ASL","name":"game-server","host":"0.0.0.0","port":3000,"msg":"game server started"}
+23:26:07 [tsx] restarting
+c{"level":30,"time":1778945168769,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestFactory","msg":"Starting Nest application..."}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AppModule dependencies initialized"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ConfigModule dependencies initialized"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PrismaModule dependencies initialized"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuditModule dependencies initialized"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SystemModule dependencies initialized"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"LoggingModule dependencies initialized"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"IdempotencyModule dependencies initialized"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"CommonModule dependencies initialized"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuthModule dependencies initialized"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PlayerModule dependencies initialized"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientReadModule dependencies initialized"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientCommandModule dependencies initialized"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"AuthController {/api/client/auth}:"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/auth/dev-login, POST} route"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"PlayerController {/api/client}:"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/me, GET} route"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientReadController {/api/client}:"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/bootstrap, GET} route"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/home-summary, GET} route"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/scene-content, GET} route"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientCommandController {/api/client/actions}:"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/upgrade-building, POST} route"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"SystemController {/api/health}:"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/health, GET} route"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestApplication","msg":"Nest application successfully started"}
+{"level":30,"time":1778945168770,"pid":25320,"hostname":"DESKTOP-IMD5ASL","name":"game-server","host":"0.0.0.0","port":3000,"msg":"game server started"}
+23:26:28 [tsx] restarting
+c23:26:52 [tsx] rerunning
+c{"level":30,"time":1778945214409,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestFactory","msg":"Starting Nest application..."}
+{"level":30,"time":1778945214409,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AppModule dependencies initialized"}
+{"level":30,"time":1778945214409,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ConfigModule dependencies initialized"}
+{"level":30,"time":1778945214409,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PrismaModule dependencies initialized"}
+{"level":30,"time":1778945214409,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuditModule dependencies initialized"}
+{"level":30,"time":1778945214409,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SystemModule dependencies initialized"}
+{"level":30,"time":1778945214409,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"LoggingModule dependencies initialized"}
+{"level":30,"time":1778945214409,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"IdempotencyModule dependencies initialized"}
+{"level":30,"time":1778945214409,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"CommonModule dependencies initialized"}
+{"level":30,"time":1778945214409,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuthModule dependencies initialized"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PlayerModule dependencies initialized"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientReadModule dependencies initialized"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientCommandModule dependencies initialized"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"AuthController {/api/client/auth}:"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/auth/dev-login, POST} route"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"PlayerController {/api/client}:"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/me, GET} route"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientReadController {/api/client}:"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/bootstrap, GET} route"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/home-summary, GET} route"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/scene-content, GET} route"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientCommandController {/api/client/actions}:"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/upgrade-building, POST} route"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"SystemController {/api/health}:"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/health, GET} route"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestApplication","msg":"Nest application successfully started"}
+{"level":30,"time":1778945214410,"pid":33168,"hostname":"DESKTOP-IMD5ASL","name":"game-server","host":"0.0.0.0","port":3000,"msg":"game server started"}

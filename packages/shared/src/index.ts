@@ -91,6 +91,7 @@ export interface HomeSummaryResponse {
   playerName: string;
   factionName: string;
   castleLevel: number;
+  stateVersions: ClientStateVersions;
   staminaStatus: string;
   fieldStatus: string;
   reportStatus: string;
@@ -100,6 +101,11 @@ export interface HomeSummaryResponse {
   temporaryClaim: ClientTemporaryClaimSummary | null;
   dailyTasks: ClientDailyTaskSummary[];
   primaryActions: HomeActionItem[];
+}
+
+export interface ClientStateVersions {
+  buildingVersion: number;
+  walletVersion: number;
 }
 
 export interface ClientResourceLedger {

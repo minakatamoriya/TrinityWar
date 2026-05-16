@@ -1063,8 +1063,18 @@ function App(): JSX.Element {
 
       try {
         const result = await upgradeClientBuilding(targetType === 'building'
-          ? { targetType, buildingId: upgradeId as ClientBuildingUpgradeId }
-          : { targetType, extensionId: upgradeId as ClientCastleExtensionUpgradeId });
+          ? {
+            targetType,
+            buildingId: upgradeId as ClientBuildingUpgradeId,
+            buildingVersion: home.stateVersions.buildingVersion,
+            walletVersion: home.stateVersions.walletVersion,
+          }
+          : {
+            targetType,
+            extensionId: upgradeId as ClientCastleExtensionUpgradeId,
+            buildingVersion: home.stateVersions.buildingVersion,
+            walletVersion: home.stateVersions.walletVersion,
+          });
         applyMutationResult(result);
       } catch {
         showToast(`${context} 当前升级失败，请稍后重试。`, 'error');

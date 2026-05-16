@@ -207,6 +207,10 @@ function getMockSeedStageGold(seedId: string, stage: 'seeded' | 'growing' | 'mat
 function normalizeHomeSummary(home: HomeSummaryResponse): HomeSummaryResponse {
   return {
     ...home,
+    stateVersions: {
+      buildingVersion: home.stateVersions?.buildingVersion ?? 1,
+      walletVersion: home.stateVersions?.walletVersion ?? 1,
+    },
     protectedUntil: home.protectedUntil ?? null,
     resources: (home.resources ?? []).map((resource) => ({ ...resource })),
     pendingClaims: (home.pendingClaims ?? []).map((claim) => ({ ...claim })),
@@ -425,6 +429,14 @@ function buildSourceStatus<T>(envelope: DataEnvelope<T>): ClientReadSourceStatus
     source: envelope.source,
     fallbackReason: envelope.fallbackReason,
   };
+}
+
+function buildIdempotencyKey(prefix: string): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function parseNumberText(value: string): number {
@@ -769,16 +781,6 @@ function syncMockFactionScene(): void {
   }));
 }
 
-function setVaultCapacity(nextCapacity: number): void {
-  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
-  if (!vaultResource) {
-    return;
-  }
-
-  const vault = parseCurrentAndCapacity(vaultResource.value);
-  vaultResource.value = `${formatNumber(vault.current)} / ${formatNumber(nextCapacity)}`;
-}
-
 function applyMockClaimPending(input: ClientClaimPendingRequest): ClientClaimPendingResponse {
   const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
   settleMockTemporaryClaim();
@@ -1022,147 +1024,6 @@ function applyMockClaimTianjiTalisman(): ClientStateMutationResponse {
   mockBootstrapSnapshot.backpack.globalItemInventory.tianjiTalisman = (mockBootstrapSnapshot.backpack.globalItemInventory.tianjiTalisman ?? 0) + 1;
 
   return buildMockMutation('今天天机符已领取，获得 天机符 x1。');
-}
-
-function applyMockUpgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStateMutationResponse {
-  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
-
-  const getMockPopulationCapacityGain = (currentLevel: number): number => {
-    const gainTable: Record<number, number> = {
-      1: 100,
-      2: 100,
-      3: 100,
-      4: 100,
-      5: 200,
-      6: 200,
-      7: 300,
-      8: 400,
-      9: 600,
-      10: 800,
-    };
-
-    return gainTable[currentLevel] ?? 100;
-  };
-
-  const getMockPopulationUpgradeCost = (currentLevel: number): number => {
-    const costTable: Record<number, number> = {
-      1: 180,
-      2: 260,
-      3: 360,
-      4: 500,
-      5: 700,
-      6: 950,
-      7: 1250,
-      8: 1600,
-      9: 1950,
-      10: 2200,
-    };
-
-    return costTable[currentLevel] ?? 2200;
-  };
-
-  const syncMockPopulationUpgradeState = (): void => {
-    const populationUpgrade = mockSceneSnapshot.building.upgrades.find((item) => item.id === 'population');
-    const armyResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'army');
-
-    if (!populationUpgrade || !armyResource) {
-      return;
-    }
-
-    const levelMatch = populationUpgrade.description.match(/Lv\.(\d+) -> Lv\.(\d+)/);
-    const currentLevel = levelMatch ? Number(levelMatch[1]) : 1;
-    const nextRequiredCastleLevel = currentLevel * 2;
-
-    populationUpgrade.locked = mockHomeSnapshot.castleLevel < nextRequiredCastleLevel;
-    populationUpgrade.costText = populationUpgrade.locked ? `需要主城 Lv.${nextRequiredCastleLevel}` : `消耗 ${formatNumber(getMockPopulationUpgradeCost(currentLevel))} 金币`;
-    populationUpgrade.action = populationUpgrade.locked
-      ? { label: '查看条件', target: 'building', tone: 'ghost' }
-      : { label: '升级灵宠上限', target: 'building', tone: 'secondary' };
-  };
-
-  if (input.targetType === 'castle-extension') {
-    const extension = mockSceneSnapshot.building.extensions.find((item) => item.id === input.extensionId);
-
-    if (!extension || !vaultResource || extension.locked) {
-      return buildMockMutation('当前主城扩展分支不满足升级条件，或已达到验证上限。');
-    }
-
-    const vault = parseCurrentAndCapacity(vaultResource.value);
-    const cost = parseNumberText(extension.costText.replace('消耗', '').replace('金币', ''));
-
-    if (vault.current < cost) {
-      return buildMockMutation('金币不足，当前无法完成升级。');
-    }
-
-    applyVaultGoldDelta(-cost);
-    extension.levelText = extension.levelText.replace(/Lv\.(\d+) -> Lv\.(\d+)/, (_, __current, next) => `Lv.${next} -> Lv.${Number(next) + 1}`);
-    extension.costText = '已达到验证上限';
-    extension.action = { label: '查看条件', target: 'building', tone: 'ghost' };
-    extension.locked = true;
-    updateMockDailyTask('daily-upgrade-building');
-    return buildMockMutation(`${extension.title}升级完成，当前已完成一轮验证内升级。`);
-  }
-
-  const upgrade = mockSceneSnapshot.building.upgrades.find((item) => item.id === input.buildingId);
-
-  if (input.buildingId === 'field-slot') {
-    return buildMockMutation('田地位不需要额外花钱购买，会在主城达到指定等级后自动开启。');
-  }
-
-  if (!upgrade || !vaultResource || upgrade.locked) {
-    return buildMockMutation('当前建筑不满足升级条件，或已达到验证上限。');
-  }
-
-  const vault = parseCurrentAndCapacity(vaultResource.value);
-  const cost = parseNumberText(upgrade.costText.replace('消耗', '').replace('金币', ''));
-
-  if (vault.current < cost) {
-    return buildMockMutation('金币不足，当前无法完成升级。');
-  }
-
-  applyVaultGoldDelta(-cost);
-  updateMockDailyTask('daily-upgrade-building');
-
-  if (input.buildingId === 'castle') {
-    mockHomeSnapshot.castleLevel += 1;
-    upgrade.description = `Lv.${mockHomeSnapshot.castleLevel} -> Lv.${mockHomeSnapshot.castleLevel + 1}，解锁更高税收与建筑上限。`;
-    syncMockPopulationUpgradeState();
-    const watchtowerUpgrade = mockSceneSnapshot.building.upgrades.find((item) => item.id === 'watchtower');
-    if (watchtowerUpgrade) {
-      watchtowerUpgrade.locked = false;
-      watchtowerUpgrade.costText = '消耗 760 金币';
-      watchtowerUpgrade.action = { label: '升级防守建筑', target: 'building', tone: 'secondary' };
-    }
-    return buildMockMutation(`主城升级完成，当前已升至 Lv.${mockHomeSnapshot.castleLevel}。`);
-  }
-
-  if (input.buildingId === 'vault') {
-    setVaultCapacity(vault.capacity + 1600);
-    upgrade.description = `Lv.4 -> Lv.5，容量由 ${formatNumber(vault.capacity + 1600)} 提升到 ${formatNumber(vault.capacity + 3200)}。`;
-    return buildMockMutation(`金库升级完成，容量已提升到 ${formatNumber(vault.capacity + 1600)}。`);
-  }
-
-  if (input.buildingId === 'population') {
-    const armyResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'army');
-
-    if (!armyResource) {
-      return buildMockMutation('当前缺少灵宠上限资源数据，请稍后重试。');
-    }
-
-    const army = parseCurrentAndCapacity(armyResource.value);
-    const levelMatch = upgrade.description.match(/Lv\.(\d+) -> Lv\.(\d+)/);
-    const currentLevel = levelMatch ? Number(levelMatch[1]) : 1;
-    const nextLevel = currentLevel + 1;
-    const nextCapacity = army.capacity + getMockPopulationCapacityGain(currentLevel);
-    armyResource.value = `${formatNumber(army.current)} / ${formatNumber(nextCapacity)}`;
-    upgrade.description = `Lv.${nextLevel} -> Lv.${nextLevel + 1}，灵宠上限由 ${formatNumber(nextCapacity)} 提升到 ${formatNumber(nextCapacity + getMockPopulationCapacityGain(nextLevel))}。`;
-    upgrade.costText = `消耗 ${formatNumber(parseNumberText(upgrade.costText) + 80)} 金币`;
-    syncMockPopulationUpgradeState();
-    return buildMockMutation(`灵宠上限升级完成，当前灵宠上限已提升到 ${formatNumber(nextCapacity)}。`);
-  }
-
-  upgrade.description = 'Lv.2 -> Lv.3，进一步降低余额与田地被掠损失。';
-  return buildMockMutation('防守建筑升级完成，当前已完成一轮验证内升级。');
 }
 
 function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutationResponse {
@@ -1419,21 +1280,22 @@ export async function recruitArmyUnits(input: ClientRecruitArmyRequest): Promise
 }
 
 export async function upgradeClientBuilding(input: ClientUpgradeBuildingRequest): Promise<ClientStateMutationResponse> {
-  try {
-    const response = await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/upgrade-building`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    });
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('upgrade-building');
+  const response = await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/upgrade-building`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
 
-    mockHomeSnapshot = cloneHomeSummary(response.home);
-    mockSceneSnapshot = cloneSceneContent(response.scenes);
-    return response;
-  } catch {
-    return applyMockUpgradeBuilding(input);
-  }
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return response;
 }
 
 export async function donateFactionResources(input: ClientFactionDonateRequest): Promise<ClientStateMutationResponse> {

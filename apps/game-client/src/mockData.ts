@@ -86,6 +86,10 @@ export const mockHomeSummary: HomeSummaryResponse = {
   playerName: '人界领主·临川',
   factionName: '人界',
   castleLevel: 4,
+  stateVersions: {
+    buildingVersion: 1,
+    walletVersion: 1,
+  },
   staminaStatus: '免费掠夺 2/3',
   fieldStatus: '丰熟田地 1 块，成熟中 1 块',
   reportStatus: '掠夺动态 2，免费复仇 1',
