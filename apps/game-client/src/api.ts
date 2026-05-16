@@ -28,6 +28,7 @@ const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+
 const AUTH_STORAGE_KEY = 'trinitywar.devAuth';
 
 type DataSource = 'api' | 'mock';
+type ClientReadEndpoint = 'bootstrap' | 'home' | 'scenes';
 export type DevLoginMode = 'new-user' | 'existing-user';
 
 export interface DevLoginSession {
@@ -54,6 +55,20 @@ interface DevLoginResponse {
 interface DataEnvelope<T> {
   data: T;
   source: DataSource;
+  fallbackReason?: string;
+}
+
+export interface ClientReadSourceStatus {
+  source: DataSource;
+  fallbackReason?: string;
+}
+
+export type ClientReadSources = Record<ClientReadEndpoint, ClientReadSourceStatus>;
+
+export interface ClientReadSourceLabels {
+  bootstrap: string;
+  home: string;
+  scenes: string;
 }
 
 export interface ClientViewModel {
@@ -61,6 +76,7 @@ export interface ClientViewModel {
   home: HomeSummaryResponse;
   scenes: ClientSceneContentResponse;
   usingMock: boolean;
+  sources: ClientReadSources;
 }
 
 function normalizeBootstrap(bootstrap: ClientBootstrapResponse): ClientBootstrapResponse {
@@ -362,33 +378,52 @@ async function fetchWithFallback<T>(path: string, fallback: T): Promise<DataEnve
       data: await fetchJson<T>(path),
       source: 'api',
     };
-  } catch {
+  } catch (error) {
     return {
       data: fallback,
       source: 'mock',
+      fallbackReason: getFallbackReason(error),
     };
   }
+}
+
+function getFallbackReason(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return 'request failed';
 }
 
 export async function loadClientViewModel(): Promise<ClientViewModel> {
   syncMockArmyTrainingQueue();
   syncMockFieldLifecycle();
 
-  const [bootstrap, home] = await Promise.all([
+  const [bootstrap, home, scenes] = await Promise.all([
     fetchWithFallback<ClientBootstrapResponse>(`${CLIENT_API_PREFIX}/bootstrap`, mockBootstrapSnapshot),
     fetchWithFallback<HomeSummaryResponse>(`${CLIENT_API_PREFIX}/home-summary`, mockHomeSnapshot),
+    fetchWithFallback<ClientSceneContentResponse>(`${CLIENT_API_PREFIX}/scene-content`, mockSceneSnapshot),
   ]);
 
-  const scenes: DataEnvelope<ClientSceneContentResponse> = {
-    data: mockSceneSnapshot,
-    source: 'mock',
+  const sources: ClientReadSources = {
+    bootstrap: buildSourceStatus(bootstrap),
+    home: buildSourceStatus(home),
+    scenes: buildSourceStatus(scenes),
   };
 
   return {
     bootstrap: normalizeBootstrap(bootstrap.data),
     home: normalizeHomeSummary(home.data),
-    scenes: scenes.data,
-    usingMock: bootstrap.source === 'mock' || home.source === 'mock',
+    scenes: cloneSceneContent(scenes.data),
+    usingMock: Object.values(sources).some((status) => status.source === 'mock'),
+    sources,
+  };
+}
+
+function buildSourceStatus<T>(envelope: DataEnvelope<T>): ClientReadSourceStatus {
+  return {
+    source: envelope.source,
+    fallbackReason: envelope.fallbackReason,
   };
 }
 

@@ -50,9 +50,15 @@ model Player {
   buildings      PlayerBuilding?
   faction        Faction?               @relation("PlayerFaction", fields: [factionId], references: [id], onDelete: SetNull)
   factionMembers FactionMember[]
+  factionContributionLogs FactionContributionLog[]
+  walletChangeLogs WalletChangeLog[]
+  buildingUpgradeLogs BuildingUpgradeLog[]
+  fieldHarvestLogs FieldHarvestLog[]
   fieldSlots     PlayerFieldSlot[]
   seedInventory  PlayerSeedInventory[]
   taskStates     PlayerDailyTaskState[]
+  taskRewardLogs  TaskRewardLog[]
+  idempotencyRecords IdempotencyRecord[]
   trainingQueues ArmyTrainingQueue[]
   wallet         PlayerWallet?
 
@@ -90,6 +96,7 @@ model Faction {
 
   players Player[]        @relation("PlayerFaction")
   members FactionMember[]
+  factionContributionLogs FactionContributionLog[]
 
   @@unique([code])
   @@unique([name])
@@ -252,6 +259,7 @@ model PlayerFieldSlot {
 
   player         Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
   seedDefinition SeedDefinition? @relation(fields: [seedDefinitionId], references: [id], onDelete: SetNull)
+  harvestLogs    FieldHarvestLog[]
 
   @@unique([playerId, slotIndex])
   @@index([playerId, status])
@@ -276,9 +284,122 @@ model PlayerDailyTaskState {
   updatedAt   DateTime   @updatedAt @map("updated_at")
 
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  taskRewardLogs TaskRewardLog[]
 
   @@unique([playerId, dateKey, taskId])
   @@index([playerId, dateKey])
   @@index([dateKey, status])
   @@map("player_daily_task_state")
+}
+
+model WalletChangeLog {
+  id                     String   @id @default(cuid())
+  playerId               String   @map("player_id")
+  walletBucket           String   @map("wallet_bucket")
+  changeType             String   @map("change_type")
+  deltaGold              Int      @map("delta_gold")
+  beforeGold             Int      @map("before_gold")
+  afterGold              Int      @map("after_gold")
+  relatedEntityType      String?  @map("related_entity_type")
+  relatedEntityId        String?  @map("related_entity_id")
+  requestIdempotencyKey  String?  @map("request_idempotency_key")
+  note                   String?
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([requestIdempotencyKey])
+  @@index([changeType, createdAt])
+  @@map("wallet_change_log")
+}
+
+model BuildingUpgradeLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  buildingKey           String   @map("building_key")
+  oldLevel              Int      @map("old_level")
+  newLevel              Int      @map("new_level")
+  costGold              Int      @map("cost_gold")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([requestIdempotencyKey])
+  @@map("building_upgrade_log")
+}
+
+model FieldHarvestLog {
+  id               String   @id @default(cuid())
+  playerId         String   @map("player_id")
+  fieldSlotId      String   @map("field_slot_id")
+  collectMode      String   @map("collect_mode")
+  collectedGold    Int      @map("collected_gold")
+  overflowGold     Int      @map("overflow_gold")
+  rewardItemsJson  Json?    @map("reward_items_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  player    Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  fieldSlot PlayerFieldSlot @relation(fields: [fieldSlotId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([fieldSlotId])
+  @@map("field_harvest_log")
+}
+
+model FactionContributionLog {
+  id                String   @id @default(cuid())
+  factionId         String   @map("faction_id")
+  playerId          String   @map("player_id")
+  donatedGold       Int      @map("donated_gold")
+  contributionDelta Int      @map("contribution_delta")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  faction Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  player  Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([factionId, createdAt])
+  @@index([playerId, createdAt])
+  @@map("faction_contribution_log")
+}
+
+model TaskRewardLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  taskStateId           String?  @map("task_state_id")
+  taskId                String   @map("task_id")
+  rewardGold            Int      @map("reward_gold")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player     Player               @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  taskState  PlayerDailyTaskState? @relation(fields: [taskStateId], references: [id], onDelete: SetNull)
+
+  @@index([playerId, createdAt])
+  @@index([requestIdempotencyKey])
+  @@map("task_reward_log")
+}
+
+model IdempotencyRecord {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  endpointKey           String   @map("endpoint_key")
+  idempotencyKey        String   @map("idempotency_key")
+  requestHash           String   @map("request_hash")
+  status                String
+  responseSnapshotJson   Json?    @map("response_snapshot_json")
+  businessEntityType    String?  @map("business_entity_type")
+  businessEntityId      String?  @map("business_entity_id")
+  expiresAt             DateTime? @map("expires_at")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, endpointKey, idempotencyKey])
+  @@index([expiresAt])
+  @@index([status, updatedAt])
+  @@map("idempotency_record")
 }

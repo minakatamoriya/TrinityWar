@@ -218,6 +218,9 @@ export interface ClientUpgradeBuildingRequest {
   targetType: ClientUpgradeTargetType;
   buildingId?: ClientBuildingUpgradeId;
   extensionId?: ClientCastleExtensionUpgradeId;
+  buildingVersion?: number;
+  walletVersion?: number;
+  requestIdempotencyKey?: string;
 }
 
 export interface ClientResetDemoStateResponse {

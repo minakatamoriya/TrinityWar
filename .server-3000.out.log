@@ -1,0 +1,51 @@
+
+> @trinitywar/game-server@0.1.0 dev
+> tsx watch src/main.ts
+
+18:32:15 [tsx] rerunning
+c21:46:55 [tsx] rerunning
+c21:48:47 [tsx] rerunning
+c{"level":30,"time":1778939328703,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestFactory","msg":"Starting Nest application..."}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AppModule dependencies initialized"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ConfigModule dependencies initialized"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PrismaModule dependencies initialized"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SystemModule dependencies initialized"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"LoggingModule dependencies initialized"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuditModule dependencies initialized"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"IdempotencyModule dependencies initialized"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"CommonModule dependencies initialized"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuthModule dependencies initialized"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PlayerModule dependencies initialized"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientReadModule dependencies initialized"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"AuthController {/api/client/auth}:"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/auth/dev-login, POST} route"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"PlayerController {/api/client}:"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/me, GET} route"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientReadController {/api/client}:"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/bootstrap, GET} route"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/home-summary, GET} route"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/scene-content, GET} route"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"SystemController {/api/health}:"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/health, GET} route"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestApplication","msg":"Nest application successfully started"}
+{"level":30,"time":1778939328704,"pid":33160,"hostname":"DESKTOP-IMD5ASL","name":"game-server","host":"0.0.0.0","port":3000,"msg":"game server started"}
+21:49:17 [tsx] restarting
+c22:00:10 [tsx] rerunning
+c22:03:03 [tsx] rerunning
+c[32m[Nest] 32816  - [39m2026/05/16 22:03:05 [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 32816  - [39m2026/05/16 22:03:05 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 32816  - [39m2026/05/16 22:03:05 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mConfigModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 32816  - [39m2026/05/16 22:03:05 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPrismaModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 32816  - [39m2026/05/16 22:03:05 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAuditModule dependencies initialized[39m[38;5;3m +0ms[39m
+22:09:32 [tsx] rerunning
+c[32m[Nest] 35836  - [39m2026/05/16 22:09:33 [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 35836  - [39m2026/05/16 22:09:33 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 35836  - [39m2026/05/16 22:09:33 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mConfigModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 35836  - [39m2026/05/16 22:09:33 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPrismaModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 35836  - [39m2026/05/16 22:09:33 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAuditModule dependencies initialized[39m[38;5;3m +0ms[39m
+22:11:56 [tsx] rerunning
+c[32m[Nest] 33672  - [39m2026/05/16 22:11:57 [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 33672  - [39m2026/05/16 22:11:57 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 33672  - [39m2026/05/16 22:11:57 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mConfigModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 33672  - [39m2026/05/16 22:11:57 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPrismaModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 33672  - [39m2026/05/16 22:11:57 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAuditModule dependencies initialized[39m[38;5;3m +0ms[39m

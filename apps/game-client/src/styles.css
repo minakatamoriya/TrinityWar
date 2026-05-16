@@ -739,6 +739,23 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+.source-row {
+  align-items: flex-start;
+}
+
+.source-row span {
+  flex: 0 0 auto;
+}
+
+.source-row strong {
+  min-width: 0;
+  max-width: 180px;
+  overflow-wrap: anywhere;
+  text-align: right;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .resource-chip.vault {
   background: linear-gradient(180deg, rgba(118, 92, 58, 0.46), rgba(73, 55, 39, 0.42));
 }

@@ -1,0 +1,4 @@
+npm error Lifecycle script `dev` failed with error:
+npm error code 4294967295
+npm error path D:\TrinityWar\apps\game-client
+npm error workspace @trinitywar/game-client@0.1.0

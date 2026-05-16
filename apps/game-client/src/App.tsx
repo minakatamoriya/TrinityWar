@@ -15,7 +15,7 @@ import type {
   ClientSceneKey,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { claimDailyTaskReward, claimPendingEarnings, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, devLogin, donateFactionResources, getStoredDevLoginSession, loadClientViewModel, loadRaidTargetDetail, raidClientTarget, recruitArmyUnits, resetDemoExperimentState, startFieldCultivation, type ClientViewModel, type DevLoginMode, type DevLoginSession, upgradeClientBuilding } from './api';
+import { claimDailyTaskReward, claimPendingEarnings, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, devLogin, donateFactionResources, getStoredDevLoginSession, loadClientViewModel, loadRaidTargetDetail, raidClientTarget, recruitArmyUnits, resetDemoExperimentState, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, upgradeClientBuilding } from './api';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
 import { BuildingScene } from './ui/scenes/BuildingScene';
@@ -315,6 +315,10 @@ function formatTemporaryClaimCountdown(totalSeconds: number): string {
 
 function findResourceByTone(tone: HomeSummaryResponse['resources'][number]['tone'], resources: HomeSummaryResponse['resources']): HomeSummaryResponse['resources'][number] | undefined {
   return resources.find((resource) => resource.tone === tone);
+}
+
+function formatReadSource(status: ClientReadSourceStatus): string {
+  return status.source === 'api' ? '实时接口' : `本地演示数据${status.fallbackReason ? `（${status.fallbackReason}）` : ''}`;
 }
 
 function getDefaultRecruitCount(currentGold: number, currentArmy: number, armyCapacity: number, unitCostGold: number, queuedArmyCount = 0): number {
@@ -671,7 +675,7 @@ function App(): JSX.Element {
     );
   }
 
-  const { bootstrap, home, scenes, usingMock } = viewModel;
+  const { bootstrap, home, scenes, usingMock, sources } = viewModel;
   const selectedRaidTarget = scenes.raid.targets.find((target) => target.id === selectedRaidTargetId) ?? scenes.raid.targets[0];
   const mergedReportEntries = [...scenes.report.attack, ...scenes.report.defense]
     .filter((entry) => entry.title !== '系统结算')
@@ -1412,6 +1416,9 @@ function App(): JSX.Element {
           <div className="meta-row"><span>版本</span><strong>{bootstrap.version}</strong></div>
           <div className="meta-row"><span>时间</span><strong>{formatServerTime(bootstrap.serverTime)}</strong></div>
           <div className="meta-row"><span>数据源</span><strong>{usingMock ? '本地演示数据' : '实时接口'}</strong></div>
+          <div className="meta-row source-row"><span>bootstrap</span><strong>{formatReadSource(sources.bootstrap)}</strong></div>
+          <div className="meta-row source-row"><span>home</span><strong>{formatReadSource(sources.home)}</strong></div>
+          <div className="meta-row source-row"><span>scene</span><strong>{formatReadSource(sources.scenes)}</strong></div>
           <div className="meta-row"><span>测试账号</span><strong>{loginSession?.mode === 'new-user' ? '新用户' : '已注册用户'}</strong></div>
           <button className="ghost-button" onClick={handleSwitchDevUser} type="button">
             切换测试账号

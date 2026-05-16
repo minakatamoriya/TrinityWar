@@ -1,10 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { APP_NAME, type ClientBootstrapResponse, type HomeSummaryResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientBootstrapResponse, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ClientReadRepository } from './client-read.repository.js';
 import { HomeSummaryAssembler } from './home-summary.assembler.js';
+import { SceneContentAssembler } from './scene-content.assembler.js';
 
 @Injectable()
 export class ClientReadService {
@@ -12,6 +13,7 @@ export class ClientReadService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ClientReadRepository) private readonly clientReadRepository: ClientReadRepository,
     @Inject(HomeSummaryAssembler) private readonly homeSummaryAssembler: HomeSummaryAssembler,
+    @Inject(SceneContentAssembler) private readonly sceneContentAssembler: SceneContentAssembler,
   ) {}
 
   async getBootstrap(playerId: string): Promise<ClientBootstrapResponse> {
@@ -91,5 +93,19 @@ export class ClientReadService {
     }
 
     return this.homeSummaryAssembler.assemble(readModel);
+  }
+
+  async getSceneContent(playerId: string): Promise<ClientSceneContentResponse> {
+    const readModel = await this.clientReadRepository.findSceneContent(playerId);
+
+    if (!readModel) {
+      throw new BusinessError({
+        code: ErrorCode.NotFound,
+        message: 'Player not found.',
+        statusCode: 404,
+      });
+    }
+
+    return this.sceneContentAssembler.assemble(readModel);
   }
 }

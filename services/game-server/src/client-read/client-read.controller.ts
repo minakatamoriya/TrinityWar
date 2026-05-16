@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import type { ClientBootstrapResponse, HomeSummaryResponse } from '@trinitywar/shared';
+import type { ClientBootstrapResponse, ClientSceneContentResponse, HomeSummaryResponse } from '@trinitywar/shared';
 import { AuthPlaceholderGuard } from '../auth/auth-placeholder.guard.js';
 import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
@@ -35,10 +35,23 @@ export class ClientReadController {
 
     return this.clientReadService.getHomeSummary(currentPlayer.playerId);
   }
+
+  @Get('scene-content')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Client scene content payload.' })
+  async getSceneContent(@CurrentPlayer() currentPlayer: CurrentPlayerContext | null): Promise<ClientSceneContentResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientReadService.getSceneContent(currentPlayer.playerId);
+  }
 }
 
 defineRouteParamTypes(ClientReadController.prototype, 'getBootstrap', [Object]);
 defineRouteParamTypes(ClientReadController.prototype, 'getHomeSummary', [Object]);
+defineRouteParamTypes(ClientReadController.prototype, 'getSceneContent', [Object]);
 
 function defineRouteParamTypes(target: object, methodName: string, paramTypes: unknown[]): void {
   const defineMetadata = Reflect.defineMetadata as

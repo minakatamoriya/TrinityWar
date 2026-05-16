@@ -48,6 +48,81 @@ export interface HomeSummaryReadModel {
   }>;
 }
 
+export interface SceneContentReadModel {
+  player: {
+    id: string;
+    nickname: string;
+    castleLevelCache: number;
+    faction: {
+      id: string;
+      name: string;
+      treasuryGold: number;
+      contributionScore: number;
+    } | null;
+    factionMembers: Array<{
+      contributionScore: number;
+    }>;
+  };
+  wallet: {
+    vaultGold: number;
+    vaultCapacity: number;
+  } | null;
+  buildings: {
+    castleLevel: number;
+    vaultLevel: number;
+    fieldSlotLevel: number;
+    populationLevel: number;
+    watchtowerLevel: number;
+    protectionTechLevel: number;
+    farmYieldTechLevel: number;
+    ripeWindowTechLevel: number;
+    pendingClaimTechLevel: number;
+  } | null;
+  army: {
+    totalCount: number;
+    availableCount: number;
+    frozenCount: number;
+    woundedCount: number;
+    capacity: number;
+  } | null;
+  trainingQueues: Array<{
+    queuedCount: number;
+    unitCostGold: number;
+    totalCostGold: number;
+    startedAt: Date;
+    finishAt: Date;
+    status: ArmyTrainingStatus;
+  }>;
+  fieldSlots: Array<{
+    id: string;
+    slotIndex: number;
+    isUnlocked: boolean;
+    unlockCastleLevel: number;
+    status: FieldStatus;
+    investedGold: number;
+    currentClaimableGold: number;
+    seedAt: Date | null;
+    matureAt: Date | null;
+    fullMatureAt: Date | null;
+    overripeAt: Date | null;
+    seedDefinition: {
+      seedId: string;
+      label: string;
+      seedSeconds: number;
+      growSeconds: number;
+      matureSeconds: number;
+      ripeWindowSeconds: number;
+      baseYieldGold: number;
+    } | null;
+  }>;
+  factions: Array<{
+    id: string;
+    name: string;
+    treasuryGold: number;
+    contributionScore: number;
+  }>;
+}
+
 @Injectable()
 export class ClientReadRepository {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
@@ -142,6 +217,130 @@ export class ClientReadRepository {
       fieldSlots: player.fieldSlots,
       taskStates: player.taskStates,
       trainingQueues: player.trainingQueues,
+    };
+  }
+
+  async findSceneContent(playerId: string): Promise<SceneContentReadModel | null> {
+    const player = await this.prisma.db.player.findUnique({
+      where: { id: playerId },
+      select: {
+        id: true,
+        nickname: true,
+        castleLevelCache: true,
+        faction: {
+          select: {
+            id: true,
+            name: true,
+            treasuryGold: true,
+            contributionScore: true,
+          },
+        },
+        factionMembers: {
+          take: 1,
+          select: {
+            contributionScore: true,
+          },
+        },
+        wallet: {
+          select: {
+            vaultGold: true,
+            vaultCapacity: true,
+          },
+        },
+        buildings: {
+          select: {
+            castleLevel: true,
+            vaultLevel: true,
+            fieldSlotLevel: true,
+            populationLevel: true,
+            watchtowerLevel: true,
+            protectionTechLevel: true,
+            farmYieldTechLevel: true,
+            ripeWindowTechLevel: true,
+            pendingClaimTechLevel: true,
+          },
+        },
+        army: {
+          select: {
+            totalCount: true,
+            availableCount: true,
+            frozenCount: true,
+            woundedCount: true,
+            capacity: true,
+          },
+        },
+        trainingQueues: {
+          where: {
+            status: { in: ['QUEUED', 'FINISHED'] },
+          },
+          orderBy: { finishAt: 'asc' },
+          select: {
+            queuedCount: true,
+            unitCostGold: true,
+            totalCostGold: true,
+            startedAt: true,
+            finishAt: true,
+            status: true,
+          },
+        },
+        fieldSlots: {
+          orderBy: { slotIndex: 'asc' },
+          select: {
+            id: true,
+            slotIndex: true,
+            isUnlocked: true,
+            unlockCastleLevel: true,
+            status: true,
+            investedGold: true,
+            currentClaimableGold: true,
+            seedAt: true,
+            matureAt: true,
+            fullMatureAt: true,
+            overripeAt: true,
+            seedDefinition: {
+              select: {
+                seedId: true,
+                label: true,
+                seedSeconds: true,
+                growSeconds: true,
+                matureSeconds: true,
+                ripeWindowSeconds: true,
+                baseYieldGold: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!player) {
+      return null;
+    }
+
+    const factions = await this.prisma.db.faction.findMany({
+      orderBy: [{ contributionScore: 'desc' }, { treasuryGold: 'desc' }, { name: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        treasuryGold: true,
+        contributionScore: true,
+      },
+    });
+
+    return {
+      player: {
+        id: player.id,
+        nickname: player.nickname,
+        castleLevelCache: player.castleLevelCache,
+        faction: player.faction,
+        factionMembers: player.factionMembers,
+      },
+      wallet: player.wallet,
+      buildings: player.buildings,
+      army: player.army,
+      trainingQueues: player.trainingQueues,
+      fieldSlots: player.fieldSlots,
+      factions,
     };
   }
 }
