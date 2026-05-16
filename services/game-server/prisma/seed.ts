@@ -1,3 +1,4 @@
+import '../src/config/load-env.js';
 import { runSeed } from '../src/seed/run-seed.js';
 
 runSeed()

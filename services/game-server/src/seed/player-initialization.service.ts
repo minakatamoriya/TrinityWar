@@ -1,5 +1,6 @@
 import type { FieldStatus, Prisma } from '@prisma/client';
 import { DAILY_TASK_CONFIG } from '../lib/game-balance.js';
+import { getLocalDateKey } from '../lib/date-key.js';
 
 export interface PlayerInitializationInput {
   playerId: string;
@@ -259,7 +260,7 @@ export class PlayerInitializationService {
     taskOverrides: PlayerInitializationInput['taskOverrides'],
     resetExisting: boolean,
   ): Promise<void> {
-    const dateKey = new Date().toISOString().slice(0, 10);
+    const dateKey = getLocalDateKey();
     const taskIds = buildDailyTaskSelection(dateKey);
     const overrideByTaskId = new Map(taskOverrides?.map((override) => [override.taskId, override]) ?? []);
 

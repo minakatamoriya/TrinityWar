@@ -1,11 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { APP_NAME, type ClientBootstrapResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientBootstrapResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
+import { getLocalDateKey } from '../lib/date-key.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ClientReadRepository } from './client-read.repository.js';
+import { HomeSummaryAssembler } from './home-summary.assembler.js';
 
 @Injectable()
 export class ClientReadService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(ClientReadRepository) private readonly clientReadRepository: ClientReadRepository,
+    @Inject(HomeSummaryAssembler) private readonly homeSummaryAssembler: HomeSummaryAssembler,
+  ) {}
 
   async getBootstrap(playerId: string): Promise<ClientBootstrapResponse> {
     const player = await this.prisma.db.player.findUnique({
@@ -70,5 +77,19 @@ export class ClientReadService {
         tianjiTalismanClaimed: false,
       },
     };
+  }
+
+  async getHomeSummary(playerId: string): Promise<HomeSummaryResponse> {
+    const readModel = await this.clientReadRepository.findHomeSummary(playerId, getLocalDateKey());
+
+    if (!readModel) {
+      throw new BusinessError({
+        code: ErrorCode.NotFound,
+        message: 'Player not found.',
+        statusCode: 404,
+      });
+    }
+
+    return this.homeSummaryAssembler.assemble(readModel);
   }
 }

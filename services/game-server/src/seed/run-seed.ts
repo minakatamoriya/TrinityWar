@@ -96,6 +96,15 @@ async function seedDevAccounts(
         },
       });
 
+    await client.factionMember.deleteMany({
+      where: {
+        playerId: player.id,
+        factionId: {
+          not: faction.id,
+        },
+      },
+    });
+
     await client.factionMember.upsert({
       where: {
         factionId_playerId: {

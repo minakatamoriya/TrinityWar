@@ -101,6 +101,62 @@ button {
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
 }
 
+.auth-panel {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.auth-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.auth-choice-button {
+  min-height: 112px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(244, 209, 158, 0.22);
+  background: rgba(21, 29, 34, 0.72);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.auth-choice-button.primary-choice {
+  background: linear-gradient(180deg, rgba(96, 53, 31, 0.88), rgba(42, 31, 26, 0.94));
+  border-color: rgba(243, 181, 111, 0.46);
+}
+
+.auth-choice-button span {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.auth-choice-button strong {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.auth-choice-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.auth-error {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(180, 52, 52, 0.18);
+  color: #ffd6d6;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .app-shell {
   min-height: 100dvh;
   display: grid;
@@ -3480,6 +3536,27 @@ button {
 
 .modal-card {
   width: min(520px, 100%);
+}
+
+.settings-panel {
+  gap: 16px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(20, 15, 13, 0.72);
+  border: 1px solid rgba(243, 181, 111, 0.12);
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .transfer-card {

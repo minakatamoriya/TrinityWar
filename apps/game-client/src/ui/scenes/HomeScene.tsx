@@ -61,6 +61,7 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
                     <strong>领取税收</strong>
                   </div>
                   <strong className="home-claim-item-amount">{taxPending?.value}</strong>
+                  <em className="home-claim-item-foot">{formatNumber(hourlyTax)} / 小时</em>
                   {/* <em className="home-claim-item-foot">{formatNumber(hourlyTax)} / 小时</em> */}
                   <button className="secondary-button home-claim-item-button" disabled={claimingTax} onClick={onClaimTax} type="button">
                     {claimingTax ? '入库中' : '领取'}

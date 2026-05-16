@@ -15,7 +15,7 @@ import type {
   ClientSceneKey,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { claimDailyTaskReward, claimPendingEarnings, claimStarterSeedPack, claimTianjiTalismanItem, collectFieldEarnings, donateFactionResources, loadClientViewModel, loadRaidTargetDetail, raidClientTarget, recruitArmyUnits, resetDemoExperimentState, startFieldCultivation, type ClientViewModel, upgradeClientBuilding } from './api';
+import { claimDailyTaskReward, claimPendingEarnings, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, devLogin, donateFactionResources, getStoredDevLoginSession, loadClientViewModel, loadRaidTargetDetail, raidClientTarget, recruitArmyUnits, resetDemoExperimentState, startFieldCultivation, type ClientViewModel, type DevLoginMode, type DevLoginSession, upgradeClientBuilding } from './api';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
 import { BuildingScene } from './ui/scenes/BuildingScene';
@@ -352,10 +352,14 @@ function resolveRaidTargetByContext(targets: ClientRaidTarget[], context?: strin
 
 function App(): JSX.Element {
   const [viewModel, setViewModel] = useState<ClientViewModel | null>(null);
+  const [loginSession, setLoginSession] = useState<DevLoginSession | null>(() => getStoredDevLoginSession());
+  const [loginLoadingMode, setLoginLoadingMode] = useState<DevLoginMode | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [activeScene, setActiveScene] = useState<ClientSceneKey>('home');
   const [raidHubTab, setRaidHubTab] = useState<RaidHubTabKey>('targets');
   const [factionTab, setFactionTab] = useState<FactionTabKey>('overview');
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedRaidTargetId, setSelectedRaidTargetId] = useState<string>('');
   const [raidTargetModal, setRaidTargetModal] = useState<RaidTargetModalState | null>(null);
   const [raidTargetDetail, setRaidTargetDetail] = useState<ClientRaidTargetDetailResponse | null>(null);
@@ -414,7 +418,41 @@ function App(): JSX.Element {
     }
   };
 
+  const applyClientViewModel = (data: ClientViewModel): void => {
+    setViewModel(data);
+    setSelectedRaidTargetId(data.scenes.raid.targets[0]?.id ?? '');
+    syncSeedBackpackState(data.bootstrap.backpack);
+  };
+
+  const handleDevLogin = async (mode: DevLoginMode): Promise<void> => {
+    setLoginLoadingMode(mode);
+    setLoginError(null);
+
+    try {
+      const session = await devLogin(mode);
+      const data = await loadClientViewModel();
+      setLoginSession(session);
+      applyClientViewModel(data);
+    } catch {
+      setLoginError('无法连接开发登录接口，请确认后端已启动，并且 VITE_API_BASE_URL 指向正确地址。');
+    } finally {
+      setLoginLoadingMode(null);
+    }
+  };
+
+  const handleSwitchDevUser = (): void => {
+    setSettingsOpen(false);
+    clearDevLoginSession();
+    setLoginSession(null);
+    setViewModel(null);
+    setLoginError(null);
+  };
+
   useEffect(() => {
+    if (!loginSession) {
+      return;
+    }
+
     let active = true;
 
     void loadClientViewModel().then((data) => {
@@ -422,15 +460,21 @@ function App(): JSX.Element {
         return;
       }
 
-      setViewModel(data);
-      setSelectedRaidTargetId(data.scenes.raid.targets[0]?.id ?? '');
-      syncSeedBackpackState(data.bootstrap.backpack);
+      applyClientViewModel(data);
+    }).catch(() => {
+      if (!active) {
+        return;
+      }
+
+      clearDevLoginSession();
+      setLoginSession(null);
+      setLoginError('登录已失效或真实接口不可用，请重新选择测试账号。');
     });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [loginSession]);
 
   useEffect(() => {
     if (!viewModel) {
@@ -579,6 +623,43 @@ function App(): JSX.Element {
   }, [armyQueueRefreshReadyAt, farmTick, viewModel]);
 
   if (!viewModel) {
+    if (!loginSession) {
+      return (
+        <main className="loading-shell auth-shell">
+          <section className="loading-panel auth-panel">
+            <p className="eyebrow">TRINITY WAR</p>
+            <h1>选择测试账号</h1>
+            <p className="panel-text">用于验证登录、建档和真实读接口。新用户会创建一个全新的开发账号，已注册用户会复用固定测试账号。</p>
+            <div className="auth-choice-grid">
+              <button
+                className="auth-choice-button primary-choice"
+                disabled={loginLoadingMode !== null}
+                onClick={() => {
+                  void handleDevLogin('new-user');
+                }}
+                type="button"
+              >
+                <span>我是新用户</span>
+                <strong>{loginLoadingMode === 'new-user' ? '创建中...' : '创建新档案'}</strong>
+              </button>
+              <button
+                className="auth-choice-button"
+                disabled={loginLoadingMode !== null}
+                onClick={() => {
+                  void handleDevLogin('existing-user');
+                }}
+                type="button"
+              >
+                <span>我是已注册用户</span>
+                <strong>{loginLoadingMode === 'existing-user' ? '登录中...' : '进入已有档案'}</strong>
+              </button>
+            </div>
+            {loginError ? <p className="auth-error">{loginError}</p> : null}
+          </section>
+        </main>
+      );
+    }
+
     return (
       <main className="loading-shell">
         <section className="loading-panel">
@@ -1331,6 +1412,10 @@ function App(): JSX.Element {
           <div className="meta-row"><span>版本</span><strong>{bootstrap.version}</strong></div>
           <div className="meta-row"><span>时间</span><strong>{formatServerTime(bootstrap.serverTime)}</strong></div>
           <div className="meta-row"><span>数据源</span><strong>{usingMock ? '本地演示数据' : '实时接口'}</strong></div>
+          <div className="meta-row"><span>测试账号</span><strong>{loginSession?.mode === 'new-user' ? '新用户' : '已注册用户'}</strong></div>
+          <button className="ghost-button" onClick={handleSwitchDevUser} type="button">
+            切换测试账号
+          </button>
           <button className="secondary-button" onClick={() => {
             void handleResetDemoState();
           }} type="button">
@@ -1382,11 +1467,37 @@ function App(): JSX.Element {
                 <button className="ghost-button top-action-button" onClick={() => showToast('签到得奖券，日常活动。')} type="button">
                   活动
                 </button>
-                <button className="ghost-button top-action-button" onClick={() => showToast('验证版先预留设置入口，后续可继续补音效、账号和调试开关。')} type="button">
+                <button className="ghost-button top-action-button" onClick={() => setSettingsOpen(true)} type="button">
                   设置
                 </button>
               </div>
             </header>
+
+          {settingsOpen ? (
+            <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}>
+              <div className="modal-card transfer-card settings-panel" onClick={(event) => event.stopPropagation()}>
+                <p className="eyebrow">设置</p>
+                <h2>测试登录</h2>
+                <div className="settings-row">
+                  <span>当前账号</span>
+                  <strong>{loginSession?.mode === 'new-user' ? '新用户' : '已注册用户'}</strong>
+                </div>
+                <div className="settings-row">
+                  <span>登录方式</span>
+                  <strong>开发测试登录</strong>
+                </div>
+                <p className="panel-text">当前阶段退出登录只清理本地 token 并返回测试账号选择页，不调用后端注销接口。</p>
+                <div className="settings-actions">
+                  <button className="ghost-button" onClick={() => setSettingsOpen(false)} type="button">
+                    关闭
+                  </button>
+                  <button className="secondary-button" onClick={handleSwitchDevUser} type="button">
+                    退出测试登录
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {toast ? (
             <div className={`top-toast top-toast-${toast.tone}`}>

@@ -1,3 +1,4 @@
+import './config/load-env.js';
 import Fastify from 'fastify';
 import { registerCors } from './plugins/cors.js';
 import { registerSwagger } from './plugins/swagger.js';

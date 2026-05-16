@@ -25,8 +25,31 @@ import {
 import { mockBootstrap, mockHomeSummary, mockRaidTargetDetails, mockSceneContent } from './mockData';
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
+const AUTH_STORAGE_KEY = 'trinitywar.devAuth';
 
 type DataSource = 'api' | 'mock';
+export type DevLoginMode = 'new-user' | 'existing-user';
+
+export interface DevLoginSession {
+  accessToken: string;
+  expiresAt: string;
+  player: {
+    id: string;
+    nickname: string;
+    castleLevel: number;
+  };
+  mode: DevLoginMode;
+}
+
+interface DevLoginResponse {
+  accessToken: string;
+  expiresAt: string;
+  player: {
+    id: string;
+    nickname: string;
+    castleLevel: number;
+  };
+}
 
 interface DataEnvelope<T> {
   data: T;
@@ -61,6 +84,7 @@ function cloneBootstrap(bootstrap: ClientBootstrapResponse): ClientBootstrapResp
 let mockBootstrapSnapshot: ClientBootstrapResponse = cloneBootstrap(mockBootstrap);
 let mockHomeSnapshot: HomeSummaryResponse = cloneHomeSummary(mockHomeSummary);
 let mockSceneSnapshot: ClientSceneContentResponse = cloneSceneContent(mockSceneContent);
+let devLoginSession: DevLoginSession | null = readStoredDevLoginSession();
 const INITIAL_MOCK_FACTION_CONTRIBUTION = 40;
 const INITIAL_MOCK_FACTION_TREASURY_GOLD = 82400;
 const INITIAL_MOCK_FACTION_ARMY_POWER = 1260;
@@ -316,6 +340,9 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   if (!headers.has('Accept')) {
     headers.set('Accept', 'application/json');
   }
+  if (devLoginSession?.accessToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${devLoginSession.accessToken}`);
+  }
 
   const response = await fetch(buildApiUrl(path), {
     ...init,
@@ -347,17 +374,21 @@ export async function loadClientViewModel(): Promise<ClientViewModel> {
   syncMockArmyTrainingQueue();
   syncMockFieldLifecycle();
 
-  const [bootstrap, home, scenes] = await Promise.all([
+  const [bootstrap, home] = await Promise.all([
     fetchWithFallback<ClientBootstrapResponse>(`${CLIENT_API_PREFIX}/bootstrap`, mockBootstrapSnapshot),
     fetchWithFallback<HomeSummaryResponse>(`${CLIENT_API_PREFIX}/home-summary`, mockHomeSnapshot),
-    fetchWithFallback<ClientSceneContentResponse>(`${CLIENT_API_PREFIX}/scene-content`, mockSceneSnapshot),
   ]);
+
+  const scenes: DataEnvelope<ClientSceneContentResponse> = {
+    data: mockSceneSnapshot,
+    source: 'mock',
+  };
 
   return {
     bootstrap: normalizeBootstrap(bootstrap.data),
     home: normalizeHomeSummary(home.data),
     scenes: scenes.data,
-    usingMock: bootstrap.source === 'mock' || home.source === 'mock' || scenes.source === 'mock',
+    usingMock: bootstrap.source === 'mock' || home.source === 'mock',
   };
 }
 
@@ -1485,4 +1516,64 @@ export async function raidClientTarget(input: ClientRaidActionRequest): Promise<
   } catch {
     return applyMockRaidTarget(input);
   }
+}
+
+function readStoredDevLoginSession(): DevLoginSession | null {
+  try {
+    const rawValue = window.localStorage.getItem(AUTH_STORAGE_KEY);
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as DevLoginSession;
+
+    if (!parsed.accessToken || !parsed.expiresAt || new Date(parsed.expiresAt).getTime() <= Date.now()) {
+      window.localStorage.removeItem(AUTH_STORAGE_KEY);
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredDevLoginSession(session: DevLoginSession): void {
+  devLoginSession = session;
+  window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+}
+
+export function getStoredDevLoginSession(): DevLoginSession | null {
+  return devLoginSession;
+}
+
+export function clearDevLoginSession(): void {
+  devLoginSession = null;
+  window.localStorage.removeItem(AUTH_STORAGE_KEY);
+}
+
+export async function devLogin(mode: DevLoginMode): Promise<DevLoginSession> {
+  const isNewUser = mode === 'new-user';
+  const response = await fetchJson<DevLoginResponse>(`${CLIENT_API_PREFIX}/auth/dev-login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      providerUserId: isNewUser ? `dev-ui-${Date.now()}` : 'dev-main-loop',
+      nickname: isNewUser ? '新测试玩家' : '主循环测试号',
+      factionCode: isNewUser ? 'human' : 'immortal',
+    }),
+  });
+
+  const session: DevLoginSession = {
+    accessToken: response.accessToken,
+    expiresAt: response.expiresAt,
+    player: response.player,
+    mode,
+  };
+
+  writeStoredDevLoginSession(session);
+  return session;
 }

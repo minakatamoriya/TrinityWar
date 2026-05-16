@@ -1,4 +1,6 @@
 # 任务开发日志
+- 2026-05-16 TW-BE-007 与 TW-BE-008 已完成收尾并按当前阶段口径通过：补齐 game-server `.env` 运行时加载与 `db:seed` 入口环境加载，修复 dev 账号 seed 在重复执行时可能残留旧 faction_member 的幂等问题，统一每日任务 dateKey 为 Asia/Shanghai 本地日期口径，并把 `GET /api/client/home-summary` 的任务标题改成用户可读文案；已重新通过后端构建、`db:seed`、主循环测试号 `bootstrap`/`home-summary` 真实接口验证，排期状态更新为 `[x]`。`bootstrap` 中 `starterSeedClaimed`、`tianjiTalismanClaimed` 与全局物品仍沿当前 schema 占位默认值返回，等待后续命令持久化阶段接管，不影响 1 到 8 阶段收尾。
+- 2026-05-16 TW-BE-008 已实现并等待人工验收：新增 Nest `GET /api/client/home-summary` 真实数据库读链路，按 player wallet、building、army、field、daily task 聚合返回 `HomeSummaryResponse`；已通过后端类型检查、构建，并使用开发登录 token 手动请求接口验证响应字段可返回，排期状态更新为 `[~]`。
 
 - 2026-05-15 TW-BE-007 已落地 bootstrap 真实读接口：新增 Nest ClientReadModule/ClientReadController/ClientReadService，并在 AppModule 注册 `GET /api/client/bootstrap`；接口通过 Bearer token 读取当前玩家，从数据库聚合 SeedDefinition 与 PlayerSeedInventory，返回共享 ClientBootstrapResponse 契约。已通过 typecheck、build、本地服务启动、dev-login 后请求 bootstrap、未带 token 返回 401 验证；当前 `starterSeedClaimed` 与 `tianjiTalismanClaimed` 仍按现有 schema 默认 false，等待人工验收。
 - 2026-05-15 TW-BE-006 已按自动验收规则通过：开发登录、首次建档、重复登录不重复建档、Bearer token 和 `GET /api/client/me` 均已由本地接口与数据库查询验证，排期状态更新为 `[x]`。
