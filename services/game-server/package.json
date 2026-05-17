@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/main.ts",
+    "worker:raid-settlement": "tsx src/raid-settlement.worker.ts",
+    "worker:raid-settlement:sweep": "tsx src/raid-settlement-sweep.ts",
     "build": "node ./scripts/build.mjs",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

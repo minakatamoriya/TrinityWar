@@ -205,6 +205,8 @@ export interface ClientRecruitArmyRequest {
 export interface ClientRaidActionRequest {
   targetId: string;
   mode?: 'raid' | 'revenge';
+  armyVersion?: number;
+  requestIdempotencyKey?: string;
 }
 
 export interface ClientRaidRewardItem {
@@ -219,6 +221,9 @@ export interface ClientRaidActionResponse {
   home: HomeSummaryResponse;
   scenes: ClientSceneContentResponse;
   result: {
+    orderId?: string;
+    settlementStatus?: 'queued' | 'settling' | 'settled' | 'failed';
+    settleAt?: string;
     targetId: string;
     targetName: string;
     goldLoot: number;

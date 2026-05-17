@@ -125,6 +125,22 @@ export interface SceneContentReadModel {
     treasuryGold: number;
     contributionScore: number;
   }>;
+  raidTargetPools: Array<{
+    id: string;
+    targetSnapshotJson: Prisma.JsonValue;
+    expiresAt: Date;
+    targetPlayer: {
+      nickname: string;
+      castleLevelCache: number;
+      faction: {
+        name: string;
+      } | null;
+      army: {
+        totalCount: number;
+        availableCount: number;
+      } | null;
+    };
+  }>;
 }
 
 @Injectable()
@@ -342,6 +358,33 @@ export class ClientReadRepository {
       },
     });
 
+    const raidTargetPools = await client.raidTargetPool.findMany({
+      where: {
+        ownerPlayerId: playerId,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: [{ refreshBatchNo: 'desc' }, { slotIndex: 'asc' }],
+      take: 6,
+      select: {
+        id: true,
+        targetSnapshotJson: true,
+        expiresAt: true,
+        targetPlayer: {
+          select: {
+            nickname: true,
+            castleLevelCache: true,
+            faction: { select: { name: true } },
+            army: {
+              select: {
+                totalCount: true,
+                availableCount: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
     return {
       player: {
         id: player.id,
@@ -356,6 +399,7 @@ export class ClientReadRepository {
       trainingQueues: player.trainingQueues,
       fieldSlots: player.fieldSlots,
       factions,
+      raidTargetPools,
     };
   }
 }

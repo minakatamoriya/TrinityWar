@@ -743,6 +743,7 @@ const initialPlayerState: InMemoryPlayerState = {
   },
   buildingVersion: 1,
   walletVersion: 1,
+  armyVersion: 1,
   armyCount: 40,
   armyCapacity: 100,
   armyTrainingQueue: null,
@@ -1975,6 +1976,9 @@ export function resetDemoState(): ClientResetDemoStateResponse {
   playerState.tianjiTalismanClaimed = nextState.tianjiTalismanClaimed;
   playerState.buildingLevels = nextState.buildingLevels;
   playerState.castleExtensionLevels = nextState.castleExtensionLevels;
+  playerState.buildingVersion = nextState.buildingVersion;
+  playerState.walletVersion = nextState.walletVersion;
+  playerState.armyVersion = nextState.armyVersion;
   playerState.armyCount = nextState.armyCount;
   playerState.armyCapacity = nextState.armyCapacity;
   playerState.raidTicketsUsed = nextState.raidTicketsUsed;

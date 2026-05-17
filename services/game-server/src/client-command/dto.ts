@@ -5,6 +5,7 @@ import type {
   ClientBuildingUpgradeId,
   ClientCastleExtensionUpgradeId,
   ClientRecruitArmyRequest,
+  ClientRaidActionRequest,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
 
@@ -44,5 +45,12 @@ export class RecruitArmyRequestDto implements ClientRecruitArmyRequest {
   recruitCount!: number;
   armyVersion?: number;
   walletVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export class RaidTargetRequestDto implements ClientRaidActionRequest {
+  targetId!: string;
+  mode?: 'raid' | 'revenge';
+  armyVersion?: number;
   requestIdempotencyKey?: string;
 }

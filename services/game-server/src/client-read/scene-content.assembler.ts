@@ -48,16 +48,13 @@ export class SceneContentAssembler {
         },
       },
       raid: {
-        hero: {
-          eyebrow: '可掠夺目标',
-          title: '掠夺目标暂未接通',
-          description: 'raid/report 依赖后续 Migration 006，本阶段不伪造可掠夺目标。',
-          action: { label: '等待后续接入', target: 'raid', tone: 'ghost' },
-        },
-        targets: [],
+        hero: this.buildRaidHero(readModel),
+        targets: this.buildRaidTargets(readModel),
         detail: {
-          advice: '当前阶段仅接通建筑、农场、部队和阵营真实读模型。',
-          actions: [],
+          advice: readModel.raidTargetPools.length > 0
+            ? '目标来自 raid_target_pool，发起掠夺会先创建订单并等待异步结算。'
+            : '当前没有可用目标池记录，执行 seed 后会生成开发联调目标。',
+          actions: [{ label: '刷新目标', target: 'raid', tone: 'secondary' }],
         },
       },
       report: {
@@ -69,6 +66,50 @@ export class SceneContentAssembler {
       },
       faction: this.buildFaction(readModel),
     };
+  }
+
+  private buildRaidHero(readModel: SceneContentReadModel): ClientSceneContentResponse['raid']['hero'] {
+    const availableCount = readModel.army?.availableCount ?? 0;
+    const targetCount = readModel.raidTargetPools.length;
+
+    return {
+      eyebrow: '可掠夺目标',
+      title: targetCount > 0 ? `可出征目标 ${targetCount} 个` : '暂无可出征目标',
+      description: `当前可用战力 ${formatNumber(availableCount)}，第 16 步只创建订单并进入异步结算链路。`,
+      action: { label: targetCount > 0 ? '查看目标' : '等待目标', target: 'raid', tone: targetCount > 0 ? 'primary' : 'ghost' },
+    };
+  }
+
+  private buildRaidTargets(readModel: SceneContentReadModel): ClientSceneContentResponse['raid']['targets'] {
+    return readModel.raidTargetPools.map((targetPool) => {
+      const snapshot = targetPool.targetSnapshotJson as {
+        name?: string;
+        faction?: string;
+        level?: number;
+        combatPower?: number;
+        raidableGold?: number;
+        risk?: string;
+        detail?: string;
+      };
+
+      const targetName = snapshot.name ?? targetPool.targetPlayer.nickname;
+      const factionName = snapshot.faction ?? targetPool.targetPlayer.faction?.name ?? '未知阵营';
+      const combatPower = snapshot.combatPower ?? targetPool.targetPlayer.army?.totalCount ?? 0;
+      const raidableGold = snapshot.raidableGold ?? 0;
+
+      return {
+        id: targetPool.id,
+        name: targetName,
+        faction: factionName,
+        level: snapshot.level ?? targetPool.targetPlayer.castleLevelCache,
+        combatPower: formatNumber(combatPower),
+        summary: `${factionName} Lv.${snapshot.level ?? targetPool.targetPlayer.castleLevelCache}`,
+        loot: `${formatNumber(Math.max(Math.floor(raidableGold * 0.35), 0))}~${formatNumber(raidableGold)} 金币`,
+        risk: snapshot.risk ?? '异步结算',
+        detail: snapshot.detail ?? `目标池有效至 ${targetPool.expiresAt.toISOString()}`,
+        action: { label: '发起掠夺', target: 'raid', tone: 'primary' },
+      };
+    });
   }
 
   private buildBuildingUpgrades(readModel: SceneContentReadModel): ClientSceneContentResponse['building']['upgrades'] {

@@ -34,6 +34,8 @@ const distPackageJson = {
   type: 'module',
   scripts: {
     start: 'node index.js',
+    'worker:raid-settlement': 'node raid-settlement.worker.js',
+    'worker:raid-settlement:sweep': 'node raid-settlement-sweep.js',
   },
   dependencies: Object.fromEntries(
     runtimeDependencies.map((dependencyName) => [dependencyName, packageJson.dependencies[dependencyName]]),
@@ -44,8 +46,12 @@ await rm(distDir, { recursive: true, force: true });
 await mkdir(distDir, { recursive: true });
 
 await build({
-  entryPoints: [path.join(serviceRoot, 'src/main.ts')],
-  outfile: path.join(distDir, 'index.js'),
+  entryPoints: {
+    index: path.join(serviceRoot, 'src/main.ts'),
+    'raid-settlement.worker': path.join(serviceRoot, 'src/raid-settlement.worker.ts'),
+    'raid-settlement-sweep': path.join(serviceRoot, 'src/raid-settlement-sweep.ts'),
+  },
+  outdir: distDir,
   bundle: true,
   platform: 'node',
   format: 'esm',

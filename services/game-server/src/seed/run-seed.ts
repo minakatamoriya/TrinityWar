@@ -141,6 +141,125 @@ async function seedDevAccounts(
       taskOverrides: account.taskOverrides,
     });
   }
+
+  await seedDevRaidTargetPools(client);
+}
+
+async function seedDevRaidTargetPools(client: TransactionClient): Promise<void> {
+  const ownerIdentity = await client.playerAuthIdentity.findUnique({
+    where: {
+      provider_providerUserId: {
+        provider: 'DEV_FAKE',
+        providerUserId: 'dev-main-loop',
+      },
+    },
+    select: { playerId: true },
+  });
+  const targetIdentity = await client.playerAuthIdentity.findUnique({
+    where: {
+      provider_providerUserId: {
+        provider: 'DEV_FAKE',
+        providerUserId: 'dev-raid-target-a',
+      },
+    },
+    select: { playerId: true },
+  });
+
+  if (!ownerIdentity || !targetIdentity) {
+    return;
+  }
+
+  const target = await client.player.findUnique({
+    where: { id: targetIdentity.playerId },
+    select: {
+      nickname: true,
+      castleLevelCache: true,
+      faction: { select: { name: true } },
+      wallet: { select: { vaultGold: true, walletGold: true } },
+      army: { select: { totalCount: true, availableCount: true } },
+      fieldSlots: {
+        orderBy: { slotIndex: 'asc' },
+        select: {
+          id: true,
+          slotIndex: true,
+          status: true,
+          currentClaimableGold: true,
+          seedDefinition: { select: { label: true } },
+        },
+      },
+    },
+  });
+
+  if (!target) {
+    return;
+  }
+
+  const refreshBatchNo = 1;
+  const fields = target.fieldSlots.map((field) => ({
+    id: field.id,
+    slotIndex: field.slotIndex,
+    status: field.status,
+    cropName: field.seedDefinition?.label ?? null,
+    currentClaimableGold: field.currentClaimableGold,
+  }));
+  const raidableGold = Math.max(...target.fieldSlots.map((field) => field.currentClaimableGold), 0);
+
+  await client.raidTargetPool.upsert({
+    where: {
+      ownerPlayerId_targetPlayerId_slotIndex_refreshBatchNo: {
+        ownerPlayerId: ownerIdentity.playerId,
+        targetPlayerId: targetIdentity.playerId,
+        slotIndex: 1,
+        refreshBatchNo,
+      },
+    },
+    create: {
+      ownerPlayerId: ownerIdentity.playerId,
+      targetPlayerId: targetIdentity.playerId,
+      slotIndex: 1,
+      refreshBatchNo,
+      targetSnapshotJson: {
+        name: target.nickname,
+        faction: target.faction?.name ?? '未知阵营',
+        level: target.castleLevelCache,
+        combatPower: target.army?.totalCount ?? 0,
+        raidableGold,
+        exposedFruit: fields.length > 0 ? '成熟田地暴露收益' : '暂无暴露田地',
+        raidRule: '第 16 步仅创建订单并进入异步结算。',
+        defenseStatus: `可用战力 ${target.army?.availableCount ?? 0}`,
+        protectionStatus: '可发起掠夺',
+        detail: '开发联调用真实 raid_target_pool 目标。',
+      },
+      fieldSnapshotJson: fields,
+      riskSnapshotJson: {
+        risk: '中',
+        targetVaultGold: target.wallet?.vaultGold ?? 0,
+        targetWalletGold: target.wallet?.walletGold ?? 0,
+      },
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+    update: {
+      targetSnapshotJson: {
+        name: target.nickname,
+        faction: target.faction?.name ?? '未知阵营',
+        level: target.castleLevelCache,
+        combatPower: target.army?.totalCount ?? 0,
+        raidableGold,
+        exposedFruit: fields.length > 0 ? '成熟田地暴露收益' : '暂无暴露田地',
+        raidRule: '第 16 步仅创建订单并进入异步结算。',
+        defenseStatus: `可用战力 ${target.army?.availableCount ?? 0}`,
+        protectionStatus: '可发起掠夺',
+        detail: '开发联调用真实 raid_target_pool 目标。',
+      },
+      fieldSnapshotJson: fields,
+      riskSnapshotJson: {
+        risk: '中',
+        targetVaultGold: target.wallet?.vaultGold ?? 0,
+        targetWalletGold: target.wallet?.walletGold ?? 0,
+      },
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+  });
 }
 
 function shouldSeedDevAccounts(): boolean {

@@ -34,6 +34,49 @@ enum TaskStatus {
   CLAIMED
 }
 
+enum RaidOrderMode {
+  SINGLE
+  BOUNTY
+}
+
+enum RaidOrderStatus {
+  CREATED
+  LOCKED
+  SETTLING
+  SETTLED
+  SETTLEMENT_FAILED
+  CANCELLED
+  BOUNTY_CREATED
+  BOUNTY_WAITING_PARTNER
+  BOUNTY_ACCEPTED
+  BOUNTY_EXPIRED
+}
+
+enum RaidAssetLockMode {
+  SOFT
+  HARD
+}
+
+enum RaidAssetLockStatus {
+  ACTIVE
+  RELEASED
+  CONSUMED
+  EXPIRED
+}
+
+enum RaidSettlementResult {
+  WIN
+  LOSS
+  DRAW
+  CANCELLED
+}
+
+enum BattleReportType {
+  ATTACK
+  DEFENSE
+  BOUNTY
+}
+
 model Player {
   id               String    @id @default(cuid())
   nickname         String
@@ -45,22 +88,29 @@ model Player {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  authIdentities PlayerAuthIdentity[]
-  army           PlayerArmy?
-  buildings      PlayerBuilding?
-  faction        Faction?               @relation("PlayerFaction", fields: [factionId], references: [id], onDelete: SetNull)
-  factionMembers FactionMember[]
+  authIdentities          PlayerAuthIdentity[]
+  army                    PlayerArmy?
+  buildings               PlayerBuilding?
+  faction                 Faction?                 @relation("PlayerFaction", fields: [factionId], references: [id], onDelete: SetNull)
+  factionMembers          FactionMember[]
   factionContributionLogs FactionContributionLog[]
-  walletChangeLogs WalletChangeLog[]
-  buildingUpgradeLogs BuildingUpgradeLog[]
-  fieldHarvestLogs FieldHarvestLog[]
-  fieldSlots     PlayerFieldSlot[]
-  seedInventory  PlayerSeedInventory[]
-  taskStates     PlayerDailyTaskState[]
-  taskRewardLogs  TaskRewardLog[]
-  idempotencyRecords IdempotencyRecord[]
-  trainingQueues ArmyTrainingQueue[]
-  wallet         PlayerWallet?
+  walletChangeLogs        WalletChangeLog[]
+  buildingUpgradeLogs     BuildingUpgradeLog[]
+  fieldHarvestLogs        FieldHarvestLog[]
+  fieldSlots              PlayerFieldSlot[]
+  seedInventory           PlayerSeedInventory[]
+  taskStates              PlayerDailyTaskState[]
+  taskRewardLogs          TaskRewardLog[]
+  idempotencyRecords      IdempotencyRecord[]
+  trainingQueues          ArmyTrainingQueue[]
+  wallet                  PlayerWallet?
+  ownedRaidTargetPools    RaidTargetPool[]         @relation("RaidTargetPoolOwner")
+  targetRaidTargetPools   RaidTargetPool[]         @relation("RaidTargetPoolTarget")
+  attackRaidOrders        RaidOrder[]              @relation("RaidOrderAttacker")
+  defendRaidOrders        RaidOrder[]              @relation("RaidOrderDefender")
+  raidAssetLocks          RaidAssetLock[]          @relation("RaidAssetLockDefender")
+  ownedBattleReports      BattleReport[]           @relation("BattleReportOwner")
+  opponentBattleReports   BattleReport[]           @relation("BattleReportOpponent")
 
   @@index([factionId])
   @@index([lastLoginAt])
@@ -94,8 +144,8 @@ model Faction {
   createdAt                        DateTime @default(now()) @map("created_at")
   updatedAt                        DateTime @updatedAt @map("updated_at")
 
-  players Player[]        @relation("PlayerFaction")
-  members FactionMember[]
+  players                 Player[]                 @relation("PlayerFaction")
+  members                 FactionMember[]
   factionContributionLogs FactionContributionLog[]
 
   @@unique([code])
@@ -257,9 +307,11 @@ model PlayerFieldSlot {
   createdAt            DateTime    @default(now()) @map("created_at")
   updatedAt            DateTime    @updatedAt @map("updated_at")
 
-  player         Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  seedDefinition SeedDefinition? @relation(fields: [seedDefinitionId], references: [id], onDelete: SetNull)
+  player         Player            @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  seedDefinition SeedDefinition?   @relation(fields: [seedDefinitionId], references: [id], onDelete: SetNull)
   harvestLogs    FieldHarvestLog[]
+  raidOrders     RaidOrder[]
+  raidAssetLocks RaidAssetLock[]
 
   @@unique([playerId, slotIndex])
   @@index([playerId, status])
@@ -283,7 +335,7 @@ model PlayerDailyTaskState {
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
 
-  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  player         Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
   taskRewardLogs TaskRewardLog[]
 
   @@unique([playerId, dateKey, taskId])
@@ -293,18 +345,18 @@ model PlayerDailyTaskState {
 }
 
 model WalletChangeLog {
-  id                     String   @id @default(cuid())
-  playerId               String   @map("player_id")
-  walletBucket           String   @map("wallet_bucket")
-  changeType             String   @map("change_type")
-  deltaGold              Int      @map("delta_gold")
-  beforeGold             Int      @map("before_gold")
-  afterGold              Int      @map("after_gold")
-  relatedEntityType      String?  @map("related_entity_type")
-  relatedEntityId        String?  @map("related_entity_id")
-  requestIdempotencyKey  String?  @map("request_idempotency_key")
-  note                   String?
-  createdAt              DateTime @default(now()) @map("created_at")
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  walletBucket          String   @map("wallet_bucket")
+  changeType            String   @map("change_type")
+  deltaGold             Int      @map("delta_gold")
+  beforeGold            Int      @map("before_gold")
+  afterGold             Int      @map("after_gold")
+  relatedEntityType     String?  @map("related_entity_type")
+  relatedEntityId       String?  @map("related_entity_id")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  note                  String?
+  createdAt             DateTime @default(now()) @map("created_at")
 
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
@@ -332,14 +384,14 @@ model BuildingUpgradeLog {
 }
 
 model FieldHarvestLog {
-  id               String   @id @default(cuid())
-  playerId         String   @map("player_id")
-  fieldSlotId      String   @map("field_slot_id")
-  collectMode      String   @map("collect_mode")
-  collectedGold    Int      @map("collected_gold")
-  overflowGold     Int      @map("overflow_gold")
-  rewardItemsJson  Json?    @map("reward_items_json")
-  createdAt        DateTime @default(now()) @map("created_at")
+  id              String   @id @default(cuid())
+  playerId        String   @map("player_id")
+  fieldSlotId     String   @map("field_slot_id")
+  collectMode     String   @map("collect_mode")
+  collectedGold   Int      @map("collected_gold")
+  overflowGold    Int      @map("overflow_gold")
+  rewardItemsJson Json?    @map("reward_items_json")
+  createdAt       DateTime @default(now()) @map("created_at")
 
   player    Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
   fieldSlot PlayerFieldSlot @relation(fields: [fieldSlotId], references: [id], onDelete: Cascade)
@@ -374,8 +426,8 @@ model TaskRewardLog {
   requestIdempotencyKey String?  @map("request_idempotency_key")
   createdAt             DateTime @default(now()) @map("created_at")
 
-  player     Player               @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  taskState  PlayerDailyTaskState? @relation(fields: [taskStateId], references: [id], onDelete: SetNull)
+  player    Player                @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  taskState PlayerDailyTaskState? @relation(fields: [taskStateId], references: [id], onDelete: SetNull)
 
   @@index([playerId, createdAt])
   @@index([requestIdempotencyKey])
@@ -383,18 +435,18 @@ model TaskRewardLog {
 }
 
 model IdempotencyRecord {
-  id                    String   @id @default(cuid())
-  playerId              String   @map("player_id")
-  endpointKey           String   @map("endpoint_key")
-  idempotencyKey        String   @map("idempotency_key")
-  requestHash           String   @map("request_hash")
-  status                String
-  responseSnapshotJson   Json?    @map("response_snapshot_json")
-  businessEntityType    String?  @map("business_entity_type")
-  businessEntityId      String?  @map("business_entity_id")
-  expiresAt             DateTime? @map("expires_at")
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
+  id                   String    @id @default(cuid())
+  playerId             String    @map("player_id")
+  endpointKey          String    @map("endpoint_key")
+  idempotencyKey       String    @map("idempotency_key")
+  requestHash          String    @map("request_hash")
+  status               String
+  responseSnapshotJson Json?     @map("response_snapshot_json")
+  businessEntityType   String?   @map("business_entity_type")
+  businessEntityId     String?   @map("business_entity_id")
+  expiresAt            DateTime? @map("expires_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
@@ -402,4 +454,129 @@ model IdempotencyRecord {
   @@index([expiresAt])
   @@index([status, updatedAt])
   @@map("idempotency_record")
+}
+
+model RaidTargetPool {
+  id                 String   @id @default(cuid())
+  ownerPlayerId      String   @map("owner_player_id")
+  targetPlayerId     String   @map("target_player_id")
+  slotIndex          Int      @map("slot_index")
+  targetSnapshotJson Json     @map("target_snapshot_json")
+  fieldSnapshotJson  Json?    @map("field_snapshot_json")
+  riskSnapshotJson   Json?    @map("risk_snapshot_json")
+  refreshBatchNo     Int      @map("refresh_batch_no")
+  expiresAt          DateTime @map("expires_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  ownerPlayer  Player      @relation("RaidTargetPoolOwner", fields: [ownerPlayerId], references: [id], onDelete: Cascade)
+  targetPlayer Player      @relation("RaidTargetPoolTarget", fields: [targetPlayerId], references: [id], onDelete: Cascade)
+  raidOrders   RaidOrder[]
+
+  @@unique([ownerPlayerId, targetPlayerId, slotIndex, refreshBatchNo])
+  @@index([ownerPlayerId, expiresAt])
+  @@index([ownerPlayerId, refreshBatchNo])
+  @@map("raid_target_pool")
+}
+
+model RaidOrder {
+  id                        String          @id @default(cuid())
+  attackerPlayerId          String          @map("attacker_player_id")
+  defenderPlayerId          String          @map("defender_player_id")
+  defenderFieldSlotId       String?         @map("defender_field_slot_id")
+  sourceTargetPoolId        String?         @map("source_target_pool_id")
+  mode                      RaidOrderMode
+  status                    RaidOrderStatus @default(CREATED)
+  dispatchedUnitCount       Int             @map("dispatched_unit_count")
+  frozenUnitSnapshot        Json            @map("frozen_unit_snapshot")
+  transportCapacitySnapshot Int             @map("transport_capacity_snapshot")
+  attackerSnapshotJson      Json            @map("attacker_snapshot_json")
+  defenderSnapshotJson      Json            @map("defender_snapshot_json")
+  dispatchedAt              DateTime        @map("dispatched_at")
+  settleAt                  DateTime        @map("settle_at")
+  settledAt                 DateTime?       @map("settled_at")
+  requestIdempotencyKey     String          @map("request_idempotency_key")
+  settlementVersion         Int             @default(1) @map("settlement_version")
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  attacker          Player           @relation("RaidOrderAttacker", fields: [attackerPlayerId], references: [id], onDelete: Cascade)
+  defender          Player           @relation("RaidOrderDefender", fields: [defenderPlayerId], references: [id], onDelete: Cascade)
+  defenderFieldSlot PlayerFieldSlot? @relation(fields: [defenderFieldSlotId], references: [id], onDelete: SetNull)
+  sourceTargetPool  RaidTargetPool?  @relation(fields: [sourceTargetPoolId], references: [id], onDelete: SetNull)
+  assetLocks        RaidAssetLock[]
+  settlement        RaidSettlement?
+  battleReports     BattleReport[]
+
+  @@unique([requestIdempotencyKey])
+  @@index([attackerPlayerId, status])
+  @@index([defenderPlayerId, status])
+  @@index([settleAt, status])
+  @@map("raid_order")
+}
+
+model RaidAssetLock {
+  id                String              @id @default(cuid())
+  raidOrderId       String              @map("raid_order_id")
+  defenderPlayerId  String              @map("defender_player_id")
+  assetType         String              @map("asset_type")
+  sourceEntityId    String?             @map("source_entity_id")
+  sourceFieldSlotId String?             @map("source_field_slot_id")
+  lockedGold        Int                 @default(0) @map("locked_gold")
+  lockedItemJson    Json?               @map("locked_item_json")
+  lockMode          RaidAssetLockMode   @map("lock_mode")
+  status            RaidAssetLockStatus @default(ACTIVE)
+  expiresAt         DateTime?           @map("expires_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  raidOrder       RaidOrder        @relation(fields: [raidOrderId], references: [id], onDelete: Cascade)
+  defenderPlayer  Player           @relation("RaidAssetLockDefender", fields: [defenderPlayerId], references: [id], onDelete: Cascade)
+  sourceFieldSlot PlayerFieldSlot? @relation(fields: [sourceFieldSlotId], references: [id], onDelete: SetNull)
+
+  @@index([raidOrderId])
+  @@index([defenderPlayerId, status])
+  @@index([expiresAt, status])
+  @@map("raid_asset_lock")
+}
+
+model RaidSettlement {
+  id                      String               @id @default(cuid())
+  raidOrderId             String               @unique @map("raid_order_id")
+  result                  RaidSettlementResult
+  lootGold                Int                  @default(0) @map("loot_gold")
+  depositedGold           Int                  @default(0) @map("deposited_gold")
+  overflowGold            Int                  @default(0) @map("overflow_gold")
+  temporaryClaimExpiresAt DateTime?            @map("temporary_claim_expires_at")
+  attackerLoss            Int                  @default(0) @map("attacker_loss")
+  defenderLoss            Int                  @default(0) @map("defender_loss")
+  rewardItemsJson         Json?                @map("reward_items_json")
+  reportSummary           String               @map("report_summary")
+  createdAt               DateTime             @default(now()) @map("created_at")
+
+  raidOrder RaidOrder @relation(fields: [raidOrderId], references: [id], onDelete: Cascade)
+
+  @@map("raid_settlement")
+}
+
+model BattleReport {
+  id               String               @id @default(cuid())
+  raidOrderId      String               @map("raid_order_id")
+  ownerPlayerId    String               @map("owner_player_id")
+  opponentPlayerId String               @map("opponent_player_id")
+  reportType       BattleReportType     @map("report_type")
+  result           RaidSettlementResult
+  title            String
+  summary          String
+  revengeAvailable Boolean              @default(false) @map("revenge_available")
+  revokedAt        DateTime?            @map("revoked_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+
+  raidOrder      RaidOrder @relation(fields: [raidOrderId], references: [id], onDelete: Cascade)
+  ownerPlayer    Player    @relation("BattleReportOwner", fields: [ownerPlayerId], references: [id], onDelete: Cascade)
+  opponentPlayer Player    @relation("BattleReportOpponent", fields: [opponentPlayerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerPlayerId, createdAt])
+  @@index([raidOrderId])
+  @@map("battle_report")
 }
