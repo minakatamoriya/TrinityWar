@@ -218,6 +218,7 @@ export class SceneContentAssembler {
 
     return {
       id: field.id,
+      fieldVersion: field.statusVersion,
       code: `田地 ${String(field.slotIndex).padStart(2, '0')}`,
       title: copy.title,
       badge: copy.badge,

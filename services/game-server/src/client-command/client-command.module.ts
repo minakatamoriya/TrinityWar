@@ -7,10 +7,11 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 import { BuildingUpgradeRuleService } from './building-upgrade-rule.service.js';
 import { ClientCommandController } from './client-command.controller.js';
 import { ClientCommandService } from './client-command.service.js';
+import { FieldCommandRuleService } from './field-command-rule.service.js';
 
 @Module({
   imports: [AuthModule, PrismaModule, AuditModule, IdempotencyModule, ClientReadModule],
   controllers: [ClientCommandController],
-  providers: [ClientCommandService, BuildingUpgradeRuleService],
+  providers: [ClientCommandService, BuildingUpgradeRuleService, FieldCommandRuleService],
 })
 export class ClientCommandModule {}

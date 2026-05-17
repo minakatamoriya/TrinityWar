@@ -31,6 +31,7 @@ export interface HomeSummaryReadModel {
     totalCount: number;
     availableCount: number;
     capacity: number;
+    armyVersion: number;
   } | null;
   fieldSlots: Array<{
     isUnlocked: boolean;
@@ -98,6 +99,7 @@ export interface SceneContentReadModel {
   fieldSlots: Array<{
     id: string;
     slotIndex: number;
+    statusVersion: number;
     isUnlocked: boolean;
     unlockCastleLevel: number;
     status: FieldStatus;
@@ -173,6 +175,7 @@ export class ClientReadRepository {
             totalCount: true,
             availableCount: true,
             capacity: true,
+            armyVersion: true,
           },
         },
         fieldSlots: {
@@ -299,6 +302,7 @@ export class ClientReadRepository {
           select: {
             id: true,
             slotIndex: true,
+            statusVersion: true,
             isUnlocked: true,
             unlockCastleLevel: true,
             status: true,

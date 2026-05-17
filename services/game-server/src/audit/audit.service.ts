@@ -28,4 +28,25 @@ export class AuditService {
   }) {
     return client.buildingUpgradeLog.create({ data });
   }
+
+  createFieldHarvestLog(client: Prisma.TransactionClient, data: {
+    playerId: string;
+    fieldSlotId: string;
+    collectMode: string;
+    collectedGold: number;
+    overflowGold: number;
+    rewardItemsJson?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
+  }) {
+    return client.fieldHarvestLog.create({ data });
+  }
+
+  createTaskRewardLog(client: Prisma.TransactionClient, data: {
+    playerId: string;
+    taskStateId?: string | null;
+    taskId: string;
+    rewardGold: number;
+    requestIdempotencyKey?: string | null;
+  }) {
+    return client.taskRewardLog.create({ data });
+  }
 }

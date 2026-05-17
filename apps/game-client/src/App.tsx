@@ -784,6 +784,8 @@ function App(): JSX.Element {
 
     const input: ClientRecruitArmyRequest = {
       recruitCount: armyRecruitCount,
+      armyVersion: home.stateVersions.armyVersion,
+      walletVersion: home.stateVersions.walletVersion,
     };
 
     setPendingActionKey('army:recruit');
@@ -831,7 +833,11 @@ function App(): JSX.Element {
     setClaimingSource(source);
 
     try {
-      const result = await claimPendingEarnings({ source, acceptOverflowLoss });
+      const result = await claimPendingEarnings({
+        source,
+        acceptOverflowLoss,
+        walletVersion: home.stateVersions.walletVersion,
+      });
       applyMutationResult(result);
     } catch {
       showToast('当前无法完成收益入库，请稍后重试。', 'error');
@@ -904,7 +910,11 @@ function App(): JSX.Element {
     setPendingActionKey(actionKey);
 
     try {
-      const result = await claimDailyTaskReward({ taskId, acceptOverflowLoss });
+      const result = await claimDailyTaskReward({
+        taskId,
+        acceptOverflowLoss,
+        walletVersion: home.stateVersions.walletVersion,
+      });
 
       if (result.overflowGold > 0 && !acceptOverflowLoss) {
         const task = dailyTasks.find((item: { id: string; title: string; rewardGold: number }) => item.id === taskId);
@@ -1125,6 +1135,8 @@ function App(): JSX.Element {
         const result: ClientCollectFieldResponse = await collectFieldEarnings({
           fieldId,
           collectMode,
+          fieldVersion: field?.fieldVersion ?? 1,
+          walletVersion: home.stateVersions.walletVersion,
         });
         applyMutationResult(result);
         if (result.result.rewards.length > 0) {

@@ -89,6 +89,7 @@ export const mockHomeSummary: HomeSummaryResponse = {
   stateVersions: {
     buildingVersion: 1,
     walletVersion: 1,
+    armyVersion: 1,
   },
   staminaStatus: '免费掠夺 2/3',
   fieldStatus: '丰熟田地 1 块，成熟中 1 块',

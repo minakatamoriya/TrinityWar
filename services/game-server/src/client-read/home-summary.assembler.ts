@@ -33,6 +33,7 @@ export class HomeSummaryAssembler {
       stateVersions: {
         buildingVersion: readModel.buildings?.buildingVersion ?? 1,
         walletVersion: readModel.wallet?.balanceVersion ?? 1,
+        armyVersion: readModel.army?.armyVersion ?? 1,
       },
       staminaStatus: this.buildStaminaStatus(armyCount, armyCapacity, activeTrainingQueue?.finishAt ?? null, now),
       fieldStatus: this.buildFieldStatus(readModel),

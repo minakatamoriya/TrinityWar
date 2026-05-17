@@ -4,7 +4,9 @@ import { APP_NAME, type ClientBootstrapResponse, type ClientSceneContentResponse
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ArmyTrainingLifecycleService } from './army-training-lifecycle.service.js';
 import { ClientReadRepository } from './client-read.repository.js';
+import { FieldLifecycleService } from './field-lifecycle.service.js';
 import { HomeSummaryAssembler } from './home-summary.assembler.js';
 import { SceneContentAssembler } from './scene-content.assembler.js';
 
@@ -13,6 +15,8 @@ export class ClientReadService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ClientReadRepository) private readonly clientReadRepository: ClientReadRepository,
+    @Inject(ArmyTrainingLifecycleService) private readonly armyTrainingLifecycleService: ArmyTrainingLifecycleService,
+    @Inject(FieldLifecycleService) private readonly fieldLifecycleService: FieldLifecycleService,
     @Inject(HomeSummaryAssembler) private readonly homeSummaryAssembler: HomeSummaryAssembler,
     @Inject(SceneContentAssembler) private readonly sceneContentAssembler: SceneContentAssembler,
   ) {}
@@ -86,6 +90,12 @@ export class ClientReadService {
     playerId: string,
     client?: Prisma.TransactionClient | PrismaClient,
   ): Promise<HomeSummaryResponse> {
+    if (!client) {
+      return this.prisma.transaction(async (transactionClient) => this.getHomeSummary(playerId, transactionClient));
+    }
+
+  await this.armyTrainingLifecycleService.settlePlayerTrainingQueues(client, playerId);
+    await this.fieldLifecycleService.settlePlayerFields(client, playerId);
     const readModel = await this.clientReadRepository.findHomeSummary(playerId, getLocalDateKey(), client);
 
     if (!readModel) {
@@ -103,6 +113,12 @@ export class ClientReadService {
     playerId: string,
     client?: Prisma.TransactionClient | PrismaClient,
   ): Promise<ClientSceneContentResponse> {
+    if (!client) {
+      return this.prisma.transaction(async (transactionClient) => this.getSceneContent(playerId, transactionClient));
+    }
+
+  await this.armyTrainingLifecycleService.settlePlayerTrainingQueues(client, playerId);
+    await this.fieldLifecycleService.settlePlayerFields(client, playerId);
     const readModel = await this.clientReadRepository.findSceneContent(playerId, client);
 
     if (!readModel) {

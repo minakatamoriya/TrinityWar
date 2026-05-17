@@ -116,6 +116,7 @@ interface InMemoryPlayerState {
   castleExtensionLevels: Record<ClientCastleExtensionUpgradeId, number>;
   buildingVersion: number;
   walletVersion: number;
+  armyVersion: number;
   armyCount: number;
   armyCapacity: number;
   armyTrainingQueue: Omit<ClientArmyTrainingQueue, 'remainingSeconds'> | null;
@@ -1050,6 +1051,7 @@ export function buildHomeSummary(): HomeSummaryResponse {
     stateVersions: {
       buildingVersion: playerState.buildingVersion,
       walletVersion: playerState.walletVersion,
+      armyVersion: playerState.armyVersion,
     },
     staminaStatus: buildStaminaStatus(),
     fieldStatus: buildFieldStatus(),

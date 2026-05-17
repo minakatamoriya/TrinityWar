@@ -106,6 +106,7 @@ export interface HomeSummaryResponse {
 export interface ClientStateVersions {
   buildingVersion: number;
   walletVersion: number;
+  armyVersion: number;
 }
 
 export interface ClientResourceLedger {
@@ -118,6 +119,8 @@ export interface ClientResourceLedger {
 export interface ClientClaimPendingRequest {
   source: ClientPendingClaimSource;
   acceptOverflowLoss?: boolean;
+  walletVersion?: number;
+  requestIdempotencyKey?: string;
 }
 
 export interface ClientClaimPendingResponse {
@@ -134,6 +137,9 @@ export interface ClientClaimPendingResponse {
 export interface ClientClaimDailyTaskRequest {
   taskId: string;
   acceptOverflowLoss?: boolean;
+  taskDateKey?: string;
+  walletVersion?: number;
+  requestIdempotencyKey?: string;
 }
 
 export interface ClientClaimDailyTaskResponse {
@@ -161,6 +167,9 @@ export interface ClientStateMutationResponse {
 export interface ClientCollectFieldRequest {
   fieldId: string;
   collectMode: 'ripe' | 'early';
+  fieldVersion?: number;
+  walletVersion?: number;
+  requestIdempotencyKey?: string;
 }
 
 export interface ClientCollectRewardItem {
@@ -188,6 +197,9 @@ export interface ClientStartCultivationRequest {
 
 export interface ClientRecruitArmyRequest {
   recruitCount: number;
+  armyVersion?: number;
+  walletVersion?: number;
+  requestIdempotencyKey?: string;
 }
 
 export interface ClientRaidActionRequest {
@@ -286,6 +298,7 @@ export interface ClientFarmHero {
 
 export interface ClientFarmField {
   id: string;
+  fieldVersion?: number;
   code: string;
   title: string;
   badge: string;

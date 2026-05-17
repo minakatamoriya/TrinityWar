@@ -210,6 +210,7 @@ function normalizeHomeSummary(home: HomeSummaryResponse): HomeSummaryResponse {
     stateVersions: {
       buildingVersion: home.stateVersions?.buildingVersion ?? 1,
       walletVersion: home.stateVersions?.walletVersion ?? 1,
+      armyVersion: home.stateVersions?.armyVersion ?? 1,
     },
     protectedUntil: home.protectedUntil ?? null,
     resources: (home.resources ?? []).map((resource) => ({ ...resource })),
@@ -457,11 +458,6 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value);
 }
 
-function parseFieldYield(description: string): number {
-  const match = description.match(/(?:可收|返还|收取金额)\s([\d,]+)/);
-  return match ? parseNumberText(match[1]) : 0;
-}
-
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
@@ -647,25 +643,6 @@ function buildMockMutation(summary: string): ClientStateMutationResponse {
   };
 }
 
-function buildMockCollectResponse(summary: string, collectedGold: number, overflowGold: number, rewards: ClientCollectFieldResponse['result']['rewards']): ClientCollectFieldResponse {
-  syncMockArmyTrainingQueue();
-  syncMockFieldLifecycle();
-  updateMockFieldStatus();
-  syncMockFactionScene();
-
-  return {
-    app: mockHomeSnapshot.app,
-    summary,
-    home: cloneHomeSummary(mockHomeSnapshot),
-    scenes: cloneSceneContent(mockSceneSnapshot),
-    result: {
-      collectedGold,
-      overflowGold,
-      rewards,
-    },
-  };
-}
-
 function getMockArmyQueue(): ClientArmyTrainingQueue | null {
   return mockSceneSnapshot.army.queue;
 }
@@ -840,21 +817,22 @@ function applyMockClaimPending(input: ClientClaimPendingRequest): ClientClaimPen
 }
 
 export async function claimPendingEarnings(input: ClientClaimPendingRequest): Promise<ClientClaimPendingResponse> {
-  try {
-    const response = await fetchJson<ClientClaimPendingResponse>(`${CLIENT_API_PREFIX}/actions/claim-pending`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    });
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('claim-pending');
+  const response = await fetchJson<ClientClaimPendingResponse>(`${CLIENT_API_PREFIX}/actions/claim-pending`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
 
-    mockHomeSnapshot = cloneHomeSummary(response.home);
-    mockSceneSnapshot = cloneSceneContent(response.scenes);
-    return response;
-  } catch {
-    return applyMockClaimPending(input);
-  }
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return response;
 }
 
 function applyMockClaimDailyTask(input: ClientClaimDailyTaskRequest): ClientClaimDailyTaskResponse {
@@ -911,67 +889,22 @@ function applyMockClaimDailyTask(input: ClientClaimDailyTaskRequest): ClientClai
 }
 
 export async function claimDailyTaskReward(input: ClientClaimDailyTaskRequest): Promise<ClientClaimDailyTaskResponse> {
-  try {
-    const response = await fetchJson<ClientClaimDailyTaskResponse>(`${CLIENT_API_PREFIX}/actions/claim-daily-task`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    });
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('claim-daily-task');
+  const response = await fetchJson<ClientClaimDailyTaskResponse>(`${CLIENT_API_PREFIX}/actions/claim-daily-task`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
 
-    mockHomeSnapshot = cloneHomeSummary(response.home);
-    mockSceneSnapshot = cloneSceneContent(response.scenes);
-    return response;
-  } catch {
-    return applyMockClaimDailyTask(input);
-  }
-}
-
-function applyMockCollectField(input: ClientCollectFieldRequest): ClientCollectFieldResponse {
-  syncMockFieldLifecycle();
-  const field = mockSceneSnapshot.farm.fields.find((item) => item.id === input.fieldId);
-  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
-
-  if (!field || !vaultResource || field.title === '未解锁') {
-    return buildMockCollectResponse('当前地块不可操作，请先解锁对应田地位。', 0, 0, []);
-  }
-
-  if (input.collectMode === 'ripe' && field.tone !== 'mature' && field.tone !== 'withered') {
-    return buildMockCollectResponse('这块地当前不在成熟收取阶段。', 0, 0, []);
-  }
-
-  if (input.collectMode === 'early' && field.tone !== 'growing') {
-    return buildMockCollectResponse('这块地当前不支持提前收取。', 0, 0, []);
-  }
-
-  const vault = parseCurrentAndCapacity(vaultResource.value);
-  const fieldYield = field.yieldGold > 0 ? field.yieldGold : parseFieldYield(field.description);
-  const depositedGold = Math.min(fieldYield, Math.max(vault.capacity - vault.current, 0));
-  const overflowGold = Math.max(fieldYield - depositedGold, 0);
-  const plantedSeedId = mockFieldSeedAssignments[input.fieldId];
-  const rewards = input.collectMode === 'ripe' && field.tone === 'mature' && plantedSeedId
-    ? [{ seedId: plantedSeedId, label: seedLabelMap[plantedSeedId] ?? plantedSeedId, quantity: 1 }]
-    : [];
-
-  applyVaultGoldDelta(depositedGold);
-  applyMockSeedRewards(rewards);
-  setMockFieldPresentation(field, 'empty');
-  clearMockFieldTiming(input.fieldId);
-  delete mockFieldSeedAssignments[input.fieldId];
-  if (input.collectMode === 'ripe') {
-    updateMockDailyTask('daily-harvest-once');
-  }
-
-  const rewardSummary = rewards.length > 0 ? `，并获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : '';
-  return buildMockCollectResponse(
-    overflowGold > 0
-      ? `${field.code} 已收取 ${formatNumber(depositedGold)} 金币，另有 ${formatNumber(overflowGold)} 因金币已满未能入账${rewardSummary}。`
-      : `${field.code} 已收取 ${formatNumber(depositedGold)} 金币${rewardSummary}，可以立即再投入新一轮培育。`,
-    depositedGold,
-    overflowGold,
-    rewards,
-  );
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return response;
 }
 
 function applyMockStartCultivation(input: ClientStartCultivationRequest): ClientStateMutationResponse {
@@ -1086,6 +1019,11 @@ function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutat
 }
 
 function applyMockRaidTarget(input: ClientRaidActionRequest): ClientRaidActionResponse {
+void claimMockDailyTask;
+void applyMockClaimPending;
+void applyMockClaimDailyTask;
+void applyMockRecruitArmy;
+
   const target = mockSceneSnapshot.raid.targets.find((item) => item.id === input.targetId);
   const targetDetail = mockRaidTargetDetails[input.targetId];
   const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
@@ -1226,21 +1164,22 @@ function applyMockFactionDonate(input: ClientFactionDonateRequest): ClientStateM
 }
 
 export async function collectFieldEarnings(input: ClientCollectFieldRequest): Promise<ClientCollectFieldResponse> {
-  try {
-    const response = await fetchJson<ClientCollectFieldResponse>(`${CLIENT_API_PREFIX}/actions/collect-field`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    });
+  const idempotencyKey = buildIdempotencyKey('collect-field');
+  const response = await fetchJson<ClientCollectFieldResponse>(`${CLIENT_API_PREFIX}/actions/collect-field`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
 
-    mockHomeSnapshot = cloneHomeSummary(response.home);
-    mockSceneSnapshot = cloneSceneContent(response.scenes);
-    return response;
-  } catch {
-    return applyMockCollectField(input);
-  }
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return response;
 }
 
 export async function startFieldCultivation(input: ClientStartCultivationRequest): Promise<ClientStateMutationResponse> {
@@ -1262,21 +1201,22 @@ export async function startFieldCultivation(input: ClientStartCultivationRequest
 }
 
 export async function recruitArmyUnits(input: ClientRecruitArmyRequest): Promise<ClientStateMutationResponse> {
-  try {
-    const response = await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/recruit-army`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    });
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('recruit-army');
+  const response = await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/recruit-army`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
 
-    mockHomeSnapshot = cloneHomeSummary(response.home);
-    mockSceneSnapshot = cloneSceneContent(response.scenes);
-    return response;
-  } catch {
-    return applyMockRecruitArmy(input);
-  }
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return response;
 }
 
 export async function upgradeClientBuilding(input: ClientUpgradeBuildingRequest): Promise<ClientStateMutationResponse> {

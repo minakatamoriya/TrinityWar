@@ -143,3 +143,10 @@ game server failed to start Error: listen EADDRINUSE: address already in use 0.0
   address: '0.0.0.0',
   port: 3000
 }
+npm error Lifecycle script `dev` failed with error:
+npm error code 1073807364
+npm error path D:\TrinityWar\services\game-server
+npm error workspace @trinitywar/game-server@0.1.0
+npm error location D:\TrinityWar\services\game-server
+npm error command failed
+npm error command C:\Windows\system32\cmd.exe /d /s /c tsx watch src/main.ts
