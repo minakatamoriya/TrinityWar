@@ -328,7 +328,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         faction: '魔界',
         level: 5,
         combatPower: '1,240',
-        summary: '魔界 · 资源中高 · 守备偏强',
+        summary: '魔界 · 主宠等级高 · 默认仅见品种',
         loot: '360~480 金币',
         risk: '中高风险',
         detail: '成熟田 1 块 · 可掠 460 · 守田灵宠分散',
@@ -340,7 +340,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         faction: '仙界',
         level: 3,
         combatPower: '760',
-        summary: '仙界 · 资源低 · 适合起手',
+        summary: '仙界 · 主宠等级低 · 适合试探',
         loot: '150~220 金币',
         risk: '低风险',
         detail: '成熟田 1 块 · 可掠 140 · 防守偏弱',
@@ -348,7 +348,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
       },
     ],
     detail: {
-      advice: '出手建议：派出 90~110 只灵宠',
+      advice: '默认先看等级和品种，若要决定是否越级，建议先做深度窥视。',
       actions: [
         { label: '调整灵宠', target: 'raid', tone: 'ghost' },
         { label: '确认派遣', target: 'raid', tone: 'primary' },
@@ -359,12 +359,12 @@ export const mockSceneContent: ClientSceneContentResponse = {
     defense: [
       {
         title: '魔界 · 烬牙',
-        tag: '可复仇',
+        tag: '小败 · 惜败而退',
         tone: 'danger',
         createdAt: new Date(Date.now() - 37 * 60 * 1000).toISOString(),
         unread: true,
         revengeable: true,
-        summary: '37 分钟前成功掠走你田地 240 金币，击退 8 只守田灵宠。',
+        summary: '37 分钟前对手以小胜拿走你 240 金币，并让你的主战灵宠进入明显损血状态。',
         actions: [
           { label: '查看详情', target: 'report', tone: 'ghost' },
           { label: '复仇', target: 'raid', tone: 'primary' },
@@ -374,10 +374,26 @@ export const mockSceneContent: ClientSceneContentResponse = {
     attack: [
       {
         title: '匿名目标 · 赤砂营地',
-        tag: '掠夺成功',
+        tag: '小胜 · 险取一筹',
         tone: 'success',
         createdAt: new Date(Date.now() - 58 * 60 * 1000).toISOString(),
-        summary: '08:40 你成功掠夺 436 金币，获得 18 点掠夺积分。',
+        summary: '08:40 你以小胜拿到 436 金币、1 颗种子和 6 颗兽魂，主战灵宠扣血 18%。',
+        actions: [{ label: '查看详情', target: 'report', tone: 'ghost' }],
+      },
+      {
+        title: '匿名目标 · 玄潮',
+        tag: '大胜 · 势如破竹',
+        tone: 'success',
+        createdAt: new Date(Date.now() - 132 * 60 * 1000).toISOString(),
+        summary: '07:06 你以大胜拿到 512 金币、2 颗种子和 8 颗兽魂，主战灵宠仅扣血 11%。',
+        actions: [{ label: '查看详情', target: 'report', tone: 'ghost' }],
+      },
+      {
+        title: '匿名目标 · 云栖',
+        tag: '相持 · 平分秋色',
+        tone: 'neutral',
+        createdAt: new Date(Date.now() - 205 * 60 * 1000).toISOString(),
+        summary: '05:53 双方灵宠势均力敌，你只拿到少量金币与 3 颗兽魂，主战灵宠扣血 23%。',
         actions: [{ label: '查看详情', target: 'report', tone: 'ghost' }],
       },
     ],

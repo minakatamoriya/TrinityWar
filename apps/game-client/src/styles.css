@@ -2391,6 +2391,392 @@ button {
   gap: 10px;
 }
 
+.spirit-scene-scroll {
+  gap: 12px;
+}
+
+.spirit-profile-card,
+.spirit-stable-slot,
+.spirit-codex-button-card,
+.spirit-soul-quick-card {
+  border: 1px solid rgba(255, 248, 234, 0.08);
+  border-radius: 20px;
+  background: rgba(15, 21, 13, 0.82);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.spirit-top-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.spirit-codex-button-card,
+.spirit-soul-quick-card {
+  min-height: 86px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at 80% 18%, rgba(181, 239, 136, 0.18), transparent 30%),
+    linear-gradient(180deg, rgba(47, 67, 38, 0.86), rgba(23, 30, 18, 0.92));
+}
+
+.spirit-codex-button-card {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  text-align: left;
+}
+
+.spirit-codex-button-card span,
+.spirit-soul-quick-card span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.spirit-codex-button-card strong,
+.spirit-soul-quick-card strong {
+  font-size: 18px;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.spirit-soul-quick-card .primary-button:disabled {
+  opacity: 0.52;
+}
+
+.spirit-soul-quick-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.spirit-soul-quick-card > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.spirit-soul-quick-card .primary-button {
+  min-width: 76px;
+  padding-inline: 10px;
+}
+
+.spirit-profile-card h4 {
+  margin: 0;
+}
+
+.spirit-profile-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.spirit-main-row {
+  display: grid;
+}
+
+.spirit-profile-card-horizontal {
+  grid-template-columns: auto 78px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.spirit-card-topline,
+.spirit-name-row,
+.spirit-progress-head,
+.spirit-codex-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.spirit-portrait {
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 78px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  background:
+    radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.18), transparent 20%),
+    linear-gradient(145deg, rgba(76, 126, 96, 0.46), rgba(89, 62, 31, 0.22));
+}
+
+.spirit-portrait span {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 248, 234, 0.24);
+  background: rgba(13, 18, 12, 0.48);
+  color: #f7efe1;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.spirit-profile-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.spirit-name-row strong {
+  color: #d8ffb7;
+  font-size: 26px;
+}
+
+.spirit-tag-row,
+.spirit-cycle-row,
+.spirit-element-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.spirit-rarity,
+.spirit-element-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 248, 234, 0.12);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.spirit-rarity {
+  padding: 0 10px;
+}
+
+.spirit-rarity-common {
+  background: rgba(255, 248, 234, 0.08);
+  color: #f5eddc;
+}
+
+.spirit-rarity-legend {
+  background: rgba(243, 181, 111, 0.18);
+  color: #ffe0b2;
+}
+
+.spirit-element-chip {
+  min-width: 34px;
+  padding: 0 10px;
+}
+
+button.spirit-element-chip {
+  background: rgba(255, 248, 234, 0.06);
+}
+
+.spirit-element-chip.is-selected {
+  border-color: rgba(243, 181, 111, 0.58);
+  box-shadow: 0 0 0 3px rgba(243, 181, 111, 0.12);
+}
+
+.spirit-element-metal {
+  background: rgba(221, 210, 176, 0.16);
+}
+
+.spirit-element-wood {
+  background: rgba(104, 185, 122, 0.18);
+}
+
+.spirit-element-earth {
+  background: rgba(190, 140, 78, 0.18);
+}
+
+.spirit-element-water {
+  background: rgba(97, 160, 210, 0.18);
+}
+
+.spirit-element-fire {
+  background: rgba(210, 91, 63, 0.2);
+}
+
+.spirit-progress-block {
+  display: grid;
+  gap: 8px;
+}
+
+.spirit-progress-head {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.spirit-progress-head strong {
+  color: var(--text-primary);
+}
+
+.spirit-progress-track,
+.spirit-training-progress-track {
+  width: 100%;
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 248, 234, 0.08);
+}
+
+.spirit-progress-fill,
+.spirit-training-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #d7f57f 0%, #6cb556 100%);
+}
+
+.spirit-progress-fill-health {
+  background: linear-gradient(90deg, #78d694 0%, #d3ef8b 100%);
+}
+
+.spirit-side-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.spirit-stable-card {
+  display: grid;
+  gap: 12px;
+}
+
+.spirit-cycle-row {
+  align-items: stretch;
+}
+
+.spirit-cycle-item {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+}
+
+.spirit-cycle-item small {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.spirit-stable-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.spirit-stable-slot span,
+.spirit-stable-slot small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.spirit-full-button {
+  width: 100%;
+}
+
+.spirit-stable-slot {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.spirit-stable-slot:first-child {
+  border-color: rgba(243, 181, 111, 0.34);
+  background: rgba(243, 181, 111, 0.08);
+}
+
+.spirit-stable-slot {
+  cursor: pointer;
+}
+
+.spirit-stable-slot:hover {
+  transform: translateY(-1px);
+  border-color: rgba(243, 181, 111, 0.24);
+}
+
+.spirit-stable-slot-empty {
+  opacity: 0.72;
+}
+
+.spirit-codex-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+}
+
+.spirit-pet-action-screen {
+  z-index: 6;
+}
+
+.spirit-pet-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.spirit-profile-card[role='button'] {
+  cursor: pointer;
+}
+
+.spirit-profile-card[role='button']:hover {
+  transform: translateY(-1px);
+  border-color: rgba(243, 181, 111, 0.24);
+}
+
+.spirit-empty-main-card,
+.spirit-starter-card {
+  border: 1px solid rgba(255, 248, 234, 0.08);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 80% 18%, rgba(181, 239, 136, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(43, 34, 28, 0.92), rgba(22, 17, 14, 0.96));
+  color: var(--text-primary);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.spirit-empty-main-card {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 22px 16px;
+  text-align: center;
+}
+
+.spirit-empty-main-plus {
+  font-size: 32px;
+  line-height: 1;
+  color: #d8ffb7;
+}
+
+.spirit-empty-main-card span:last-child,
+.spirit-starter-card span,
+.spirit-starter-card small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.spirit-starter-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.spirit-starter-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+}
+
+.spirit-starter-card.is-selected {
+  border-color: rgba(243, 181, 111, 0.4);
+  background:
+    radial-gradient(circle at 80% 18%, rgba(243, 181, 111, 0.18), transparent 30%),
+    linear-gradient(180deg, rgba(76, 52, 31, 0.94), rgba(30, 22, 17, 0.98));
+}
+
 .raid-scene-scroll {
   gap: 8px;
   overflow: hidden;
@@ -3192,6 +3578,45 @@ button {
   gap: 4px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.report-result-pill {
+  border-color: rgba(255, 248, 234, 0.16);
+}
+
+.report-result-complete-win {
+  background: rgba(70, 132, 78, 0.34);
+  color: #d8ffbf;
+}
+
+.report-result-big-win {
+  background: rgba(92, 145, 74, 0.28);
+  color: #dff3bc;
+}
+
+.report-result-small-win {
+  background: rgba(122, 147, 78, 0.22);
+  color: #ecf0c4;
+}
+
+.report-result-draw {
+  background: rgba(130, 114, 88, 0.22);
+  color: #f0dfbf;
+}
+
+.report-result-small-loss {
+  background: rgba(145, 101, 71, 0.24);
+  color: #ffd6b6;
+}
+
+.report-result-big-loss {
+  background: rgba(144, 78, 62, 0.3);
+  color: #ffc7b1;
+}
+
+.report-result-complete-loss {
+  background: rgba(129, 55, 48, 0.36);
+  color: #ffb8ae;
 }
 
 .tag-pill.unread {
