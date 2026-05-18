@@ -24,9 +24,9 @@
 
 本文件默认与下面文档配套使用：
 
-1. 接口契约：[dev/ai-backend-api-contract-plan.md](dev/ai-backend-api-contract-plan.md)
-2. 读接口切换计划：[dev/ai-backend-read-api-cutover-plan.md](dev/ai-backend-read-api-cutover-plan.md)
-3. 掠夺订单与异步结算：[dev/ai-backend-raid-order-async-settlement-plan.md](dev/ai-backend-raid-order-async-settlement-plan.md)
+1. 接口契约：[dev/TrinityWar 首批真实接口契约清单 v0.1.md](dev/TrinityWar 首批真实接口契约清单 v0.1.md)
+2. 读接口切换计划：[dev/TrinityWar 首批读接口联调切换计划 v0.1.md](dev/TrinityWar 首批读接口联调切换计划 v0.1.md)
+3. 掠夺订单与异步结算：[dev/TrinityWar 掠夺订单与异步结算专项设计 v0.1.md](dev/TrinityWar 掠夺订单与异步结算专项设计 v0.1.md)
 4. shared DTO 基线：[packages/shared/src/index.ts](packages/shared/src/index.ts)
 5. 当前前端组件：[apps/game-client/src/ui/raid/RaidScene.tsx](apps/game-client/src/ui/raid/RaidScene.tsx)
 6. 当前前端组件：[apps/game-client/src/ui/raid/RaidIntelScreen.tsx](apps/game-client/src/ui/raid/RaidIntelScreen.tsx)
@@ -371,7 +371,7 @@ shared 里当前最关键的是这 4 个类型：
 
 ### 1. 联调 RaidTarget 列表
 
-你现在只负责把 `ClientRaidTarget[]` 对接到真实数据库读取链路。请严格按 [dev/ai-backend-battle-report-and-raid-page-field-checklist.md](dev/ai-backend-battle-report-and-raid-page-field-checklist.md) 的字段清单提供首批必要字段。不要顺手改 report list。
+你现在只负责把 `ClientRaidTarget[]` 对接到真实数据库读取链路。请严格按 [dev/TrinityWar Battle Report 与 Raid Page 前端联调字段清单 v0.1.md](dev/TrinityWar Battle Report 与 Raid Page 前端联调字段清单 v0.1.md) 的字段清单提供首批必要字段。不要顺手改 report list。
 
 ### 2. 联调 Raid Intel
 

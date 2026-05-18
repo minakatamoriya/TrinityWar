@@ -25,10 +25,10 @@
 
 本文件与以下文档配套使用：
 
-1. 总计划：[dev/ai-backend-master-plan.md](dev/ai-backend-master-plan.md)
-2. 接口契约：[dev/ai-backend-api-contract-plan.md](dev/ai-backend-api-contract-plan.md)
-3. Service 分层：[dev/ai-backend-service-plan.md](dev/ai-backend-service-plan.md)
-4. 模块骨架：[dev/ai-backend-module-skeleton-plan.md](dev/ai-backend-module-skeleton-plan.md)
+1. 总计划：[dev/TrinityWar AI 后端总计划 v0.1.md](dev/TrinityWar AI 后端总计划 v0.1.md)
+2. 接口契约：[dev/TrinityWar 首批真实接口契约清单 v0.1.md](dev/TrinityWar 首批真实接口契约清单 v0.1.md)
+3. Service 分层：[dev/TrinityWar 后端 Service 分层设计 v0.1.md](dev/TrinityWar 后端 Service 分层设计 v0.1.md)
+4. 模块骨架：[dev/TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md](dev/TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md)
 
 ## 二、先统一 6 条总规则
 
@@ -743,11 +743,11 @@
 
 ### 1. 生成单条命令链路
 
-你现在只负责生成 [动作名] 命令链路。必须严格遵循 [dev/ai-backend-command-transaction-idempotency-plan.md](dev/ai-backend-command-transaction-idempotency-plan.md) 中该动作的事务边界、幂等策略、版本校验点和日志落点。不要顺手实现其他命令。
+你现在只负责生成 [动作名] 命令链路。必须严格遵循 [dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md) 中该动作的事务边界、幂等策略、版本校验点和日志落点。不要顺手实现其他命令。
 
 ### 2. 检查现有命令链路
 
-你现在只负责检查 [动作名] 命令链路是否符合 [dev/ai-backend-command-transaction-idempotency-plan.md](dev/ai-backend-command-transaction-idempotency-plan.md)。请逐项核对：事务内操作、事务外操作、版本校验、幂等处理、审计日志、错误码和重试行为。
+你现在只负责检查 [动作名] 命令链路是否符合 [dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)。请逐项核对：事务内操作、事务外操作、版本校验、幂等处理、审计日志、错误码和重试行为。
 
 ### 3. 补齐幂等与版本校验
 

@@ -21,7 +21,7 @@
 
 当前来源：
 
-1. docs/design/simple-game-design.md
+1. docs/design/Trinity War 简版游戏设计文档 v0.3.md
 
 状态：已具备
 
@@ -35,7 +35,7 @@
 
 当前来源：
 
-1. docs/design/demo-ui-scene-flow.md
+1. docs/design/Trinity War Demo 界面场景与页面流转草案 v0.1.md
 
 状态：已具备
 
@@ -49,8 +49,8 @@
 
 当前来源：
 
-1. docs/design/async-settlement-and-concurrency-rules.md
-2. docs/design/wechat-minigame-tech-solution.md
+1. docs/design/Trinity War 异步结算与并发规则草案 v0.1.md
+2. docs/design/Trinity War 微信小游戏首发技术方案 v0.1.md
 
 状态：已具备
 
@@ -64,9 +64,9 @@
 
 当前来源：
 
-1. docs/design/simple-game-design.md
-2. docs/design/demo-ui-scene-flow.md
-3. docs/design/raid-mechanism-redesign.md
+1. docs/design/Trinity War 简版游戏设计文档 v0.3.md
+2. docs/design/Trinity War Demo 界面场景与页面流转草案 v0.1.md
+3. docs/design/Trinity War 掠夺机制重设计草案 v0.2.md
 
 状态：部分具备
 
@@ -104,8 +104,8 @@
 
 当前来源：
 
-1. docs/frontend/cocos-client-migration.md
-2. docs/frontend/cocos-page-breakdown.md
+1. docs/frontend/TrinityWar Frontend Validation Client.md
+2. docs/frontend/TrinityWar Cocos 页面拆分方案 v0.1.md
 
 状态：已具备基础版本
 
@@ -119,7 +119,7 @@
 
 当前来源：
 
-1. docs/design/wechat-minigame-tech-solution.md
+1. docs/design/Trinity War 微信小游戏首发技术方案 v0.1.md
 
 状态：部分具备
 

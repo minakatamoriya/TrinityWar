@@ -15,16 +15,16 @@
 
 这份文档的目标，不是重复 schema 字段，而是把“数据库变更的落地顺序”安排成 AI 可持续执行的小步任务。
 
-本文件是对 [dev/ai-backend-prisma-schema-plan.md](dev/ai-backend-prisma-schema-plan.md) 中“首批 migration 拆分建议”的细化版，不是替代版。
+本文件是对 [dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md](dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md) 中“首批 migration 拆分建议”的细化版，不是替代版。
 
 它同时要和下面几份文档保持一致：
 
-1. 总计划：[dev/ai-backend-master-plan.md](dev/ai-backend-master-plan.md)
-2. Prisma/schema 规划：[dev/ai-backend-prisma-schema-plan.md](dev/ai-backend-prisma-schema-plan.md)
-3. 接口契约：[dev/ai-backend-api-contract-plan.md](dev/ai-backend-api-contract-plan.md)
-4. Service 分层：[dev/ai-backend-service-plan.md](dev/ai-backend-service-plan.md)
-5. 模块骨架：[dev/ai-backend-module-skeleton-plan.md](dev/ai-backend-module-skeleton-plan.md)
-6. 命令链路事务与幂等：[dev/ai-backend-command-transaction-idempotency-plan.md](dev/ai-backend-command-transaction-idempotency-plan.md)
+1. 总计划：[dev/TrinityWar AI 后端总计划 v0.1.md](dev/TrinityWar AI 后端总计划 v0.1.md)
+2. Prisma/schema 规划：[dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md](dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md)
+3. 接口契约：[dev/TrinityWar 首批真实接口契约清单 v0.1.md](dev/TrinityWar 首批真实接口契约清单 v0.1.md)
+4. Service 分层：[dev/TrinityWar 后端 Service 分层设计 v0.1.md](dev/TrinityWar 后端 Service 分层设计 v0.1.md)
+5. 模块骨架：[dev/TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md](dev/TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md)
+6. 命令链路事务与幂等：[dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)
 
 ## 二、切分总原则
 

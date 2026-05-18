@@ -20,9 +20,9 @@
 
 当前来源：
 
-1. docs/design/simple-game-design.md
-2. docs/design/gold-economy-and-inflation-control-plan.md
-3. docs/design/gold-cost-curve-first-pass.md
+1. docs/design/Trinity War 简版游戏设计文档 v0.3.md
+2. docs/design/Trinity War 金币系统与通胀控制草案 v0.1.md
+3. docs/design/Trinity War 金币消耗曲线草案 v0.1.md
 
 状态：已具备
 
@@ -36,8 +36,8 @@
 
 当前来源：
 
-1. docs/design/simple-game-design.md
-2. docs/design/field-time-state-machine.md
+1. docs/design/Trinity War 简版游戏设计文档 v0.3.md
+2. docs/design/Trinity War 田地时间状态机草案 v0.1.md
 
 状态：已具备
 
@@ -51,7 +51,7 @@
 
 当前来源：
 
-1. docs/design/async-settlement-and-concurrency-rules.md
+1. docs/design/Trinity War 异步结算与并发规则草案 v0.1.md
 
 状态：已具备
 
@@ -64,10 +64,10 @@
 
 当前来源：
 
-1. docs/design/raid-ranking-flow.md
-2. docs/design/matching-and-target-pool-rules.md
-3. docs/design/season-and-soft-reset-plan.md
-4. docs/design/player-daily-task-rules.md
+1. docs/design/Trinity War 掠夺与排名系统运行设计 v0.1.md
+2. docs/design/Trinity War 匹配机制与目标池规则草案 v0.1.md
+3. docs/design/Trinity War 赛季制度与软重置方案草案 v0.1.md
+4. docs/design/Trinity War 玩家每日任务规则草案 v0.1.md
 
 状态：已具备
 
@@ -81,7 +81,7 @@
 
 当前来源：
 
-1. docs/design/wechat-minigame-tech-solution.md
+1. docs/design/Trinity War 微信小游戏首发技术方案 v0.1.md
 
 状态：已具备
 
@@ -95,7 +95,7 @@
 
 当前来源：
 
-1. docs/backend/backend-field-derivation-and-data-model.md
+1. docs/backend/TrinityWar 后端字段推导与首批数据模型 v0.1.md
 
 状态：已具备
 
@@ -127,8 +127,8 @@
 
 当前来源：
 
-1. docs/design/wechat-minigame-tech-solution.md
-2. docs/design/async-settlement-and-concurrency-rules.md
+1. docs/design/Trinity War 微信小游戏首发技术方案 v0.1.md
+2. docs/design/Trinity War 异步结算与并发规则草案 v0.1.md
 
 状态：部分具备
 

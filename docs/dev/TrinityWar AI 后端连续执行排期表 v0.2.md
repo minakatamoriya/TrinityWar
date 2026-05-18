@@ -41,7 +41,7 @@
 3. `[-]` 阻塞，必须先处理阻塞原因。
 4. `[x]` 人工验收通过。
 
-AI 默认不得直接把任务改成 `[x]`。AI 完成实现和自测后，可以把任务改成 `[~]`，并在 [docs/task-development-log.md](../task-development-log.md) 追加执行记录。只有人类验收通过后，才把状态改成 `[x]`。
+AI 默认不得直接把任务改成 `[x]`。AI 完成实现和自测后，可以把任务改成 `[~]`，并在 [docs/任务开发日志.md](../任务开发日志.md) 追加执行记录。只有人类验收通过后，才把状态改成 `[x]`。
 
 如果发现前置文档缺失、前置任务未完成、数据结构不支持、关键契约不清晰，AI 应停止硬写，把任务标成 `[-]` 或在输出中明确列出阻塞点。
 
@@ -96,7 +96,7 @@ AI 输出时必须说明读过哪些关键文档和代码入口。
 
 ### 5. 日志与状态更新分离
 
-AI 完成实现后，应追加 [docs/task-development-log.md](../task-development-log.md) 记录，并把当前任务状态改为 `[~]`。人工验收通过后，再把任务状态改为 `[x]`。
+AI 完成实现后，应追加 [docs/任务开发日志.md](../任务开发日志.md) 记录，并把当前任务状态改为 `[~]`。人工验收通过后，再把任务状态改为 `[x]`。
 
 如果任务阻塞，优先在输出中列出阻塞点。只有阻塞会长期影响排期时，才把任务状态改为 `[-]`。
 
@@ -167,9 +167,9 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-master-plan.md](ai-backend-master-plan.md)
-2. [docs/dev/ai-backend-module-skeleton-plan.md](ai-backend-module-skeleton-plan.md)
-3. [docs/dev/ai-backend-service-plan.md](ai-backend-service-plan.md)
+1. [docs/dev/TrinityWar AI 后端总计划 v0.1.md](TrinityWar AI 后端总计划 v0.1.md)
+2. [docs/dev/TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md](TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md)
+3. [docs/dev/TrinityWar 后端 Service 分层设计 v0.1.md](TrinityWar 后端 Service 分层设计 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -211,8 +211,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-module-skeleton-plan.md](ai-backend-module-skeleton-plan.md)
-2. [docs/dev/ai-backend-service-plan.md](ai-backend-service-plan.md)
+1. [docs/dev/TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md](TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md)
+2. [docs/dev/TrinityWar 后端 Service 分层设计 v0.1.md](TrinityWar 后端 Service 分层设计 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -258,8 +258,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-prisma-schema-plan.md](ai-backend-prisma-schema-plan.md)
-2. [docs/dev/ai-backend-migration-splitting-plan.md](ai-backend-migration-splitting-plan.md)
+1. [docs/dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md](TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md)
+2. [docs/dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md](TrinityWar 首批数据库 Migration 切分计划 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -300,8 +300,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-prisma-schema-plan.md](ai-backend-prisma-schema-plan.md)
-2. [docs/dev/ai-backend-migration-splitting-plan.md](ai-backend-migration-splitting-plan.md)
+1. [docs/dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md](TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md)
+2. [docs/dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md](TrinityWar 首批数据库 Migration 切分计划 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -341,8 +341,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-prisma-seed-and-static-data-plan.md](ai-backend-prisma-seed-and-static-data-plan.md)
-2. [docs/dev/ai-backend-player-initialization-and-test-accounts-plan.md](ai-backend-player-initialization-and-test-accounts-plan.md)
+1. [docs/dev/TrinityWar Prisma Seed 与初始静态数据装载计划 v0.1.md](TrinityWar Prisma Seed 与初始静态数据装载计划 v0.1.md)
+2. [docs/dev/TrinityWar 后端初始建档与首批测试账号方案 v0.1.md](TrinityWar 后端初始建档与首批测试账号方案 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -387,9 +387,9 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-api-contract-plan.md](ai-backend-api-contract-plan.md)
-2. [docs/dev/ai-backend-migration-splitting-plan.md](ai-backend-migration-splitting-plan.md)
-3. [docs/dev/ai-backend-module-skeleton-plan.md](ai-backend-module-skeleton-plan.md)
+1. [docs/dev/TrinityWar 首批真实接口契约清单 v0.1.md](TrinityWar 首批真实接口契约清单 v0.1.md)
+2. [docs/dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md](TrinityWar 首批数据库 Migration 切分计划 v0.1.md)
+3. [docs/dev/TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md](TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -436,8 +436,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-read-api-cutover-plan.md](ai-backend-read-api-cutover-plan.md)
-2. [docs/dev/ai-backend-api-contract-plan.md](ai-backend-api-contract-plan.md)
+1. [docs/dev/TrinityWar 首批读接口联调切换计划 v0.1.md](TrinityWar 首批读接口联调切换计划 v0.1.md)
+2. [docs/dev/TrinityWar 首批真实接口契约清单 v0.1.md](TrinityWar 首批真实接口契约清单 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -476,8 +476,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-read-api-cutover-plan.md](ai-backend-read-api-cutover-plan.md)
-2. [docs/dev/ai-backend-service-plan.md](ai-backend-service-plan.md)
+1. [docs/dev/TrinityWar 首批读接口联调切换计划 v0.1.md](TrinityWar 首批读接口联调切换计划 v0.1.md)
+2. [docs/dev/TrinityWar 后端 Service 分层设计 v0.1.md](TrinityWar 后端 Service 分层设计 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -516,9 +516,9 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-read-api-cutover-plan.md](ai-backend-read-api-cutover-plan.md)
-2. [docs/dev/ai-backend-service-plan.md](ai-backend-service-plan.md)
-3. [docs/dev/ai-backend-battle-report-and-raid-page-field-checklist.md](ai-backend-battle-report-and-raid-page-field-checklist.md)
+1. [docs/dev/TrinityWar 首批读接口联调切换计划 v0.1.md](TrinityWar 首批读接口联调切换计划 v0.1.md)
+2. [docs/dev/TrinityWar 后端 Service 分层设计 v0.1.md](TrinityWar 后端 Service 分层设计 v0.1.md)
+3. [docs/dev/TrinityWar Battle Report 与 Raid Page 前端联调字段清单 v0.1.md](TrinityWar Battle Report 与 Raid Page 前端联调字段清单 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -557,8 +557,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-read-api-cutover-plan.md](ai-backend-read-api-cutover-plan.md)
-2. [docs/dev/frontend-mock-retirement-plan.md](frontend-mock-retirement-plan.md)
+1. [docs/dev/TrinityWar 首批读接口联调切换计划 v0.1.md](TrinityWar 首批读接口联调切换计划 v0.1.md)
+2. [docs/dev/TrinityWar 前端 Mock 数据退场计划 v0.1.md](TrinityWar 前端 Mock 数据退场计划 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -601,8 +601,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-command-transaction-idempotency-plan.md](ai-backend-command-transaction-idempotency-plan.md)
-2. [docs/dev/ai-backend-migration-splitting-plan.md](ai-backend-migration-splitting-plan.md)
+1. [docs/dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)
+2. [docs/dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md](TrinityWar 首批数据库 Migration 切分计划 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -641,9 +641,9 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-command-transaction-idempotency-plan.md](ai-backend-command-transaction-idempotency-plan.md)
-2. [docs/dev/ai-backend-api-contract-plan.md](ai-backend-api-contract-plan.md)
-3. [docs/dev/ai-backend-service-plan.md](ai-backend-service-plan.md)
+1. [docs/dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)
+2. [docs/dev/TrinityWar 首批真实接口契约清单 v0.1.md](TrinityWar 首批真实接口契约清单 v0.1.md)
+3. [docs/dev/TrinityWar 后端 Service 分层设计 v0.1.md](TrinityWar 后端 Service 分层设计 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -685,8 +685,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-command-transaction-idempotency-plan.md](ai-backend-command-transaction-idempotency-plan.md)
-2. [docs/dev/ai-backend-api-contract-plan.md](ai-backend-api-contract-plan.md)
+1. [docs/dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)
+2. [docs/dev/TrinityWar 首批真实接口契约清单 v0.1.md](TrinityWar 首批真实接口契约清单 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -727,8 +727,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-command-transaction-idempotency-plan.md](ai-backend-command-transaction-idempotency-plan.md)
-2. [docs/dev/ai-backend-api-contract-plan.md](ai-backend-api-contract-plan.md)
+1. [docs/dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)
+2. [docs/dev/TrinityWar 首批真实接口契约清单 v0.1.md](TrinityWar 首批真实接口契约清单 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -773,9 +773,9 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-migration-splitting-plan.md](ai-backend-migration-splitting-plan.md)
-2. [docs/dev/ai-backend-prisma-schema-plan.md](ai-backend-prisma-schema-plan.md)
-3. [docs/dev/ai-backend-raid-order-async-settlement-plan.md](ai-backend-raid-order-async-settlement-plan.md)
+1. [docs/dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md](TrinityWar 首批数据库 Migration 切分计划 v0.1.md)
+2. [docs/dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md](TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md)
+3. [docs/dev/TrinityWar 掠夺订单与异步结算专项设计 v0.1.md](TrinityWar 掠夺订单与异步结算专项设计 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -814,9 +814,9 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-api-contract-plan.md](ai-backend-api-contract-plan.md)
-2. [docs/dev/ai-backend-raid-order-async-settlement-plan.md](ai-backend-raid-order-async-settlement-plan.md)
-3. [docs/dev/ai-backend-command-transaction-idempotency-plan.md](ai-backend-command-transaction-idempotency-plan.md)
+1. [docs/dev/TrinityWar 首批真实接口契约清单 v0.1.md](TrinityWar 首批真实接口契约清单 v0.1.md)
+2. [docs/dev/TrinityWar 掠夺订单与异步结算专项设计 v0.1.md](TrinityWar 掠夺订单与异步结算专项设计 v0.1.md)
+3. [docs/dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -857,9 +857,9 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-raid-order-async-settlement-plan.md](ai-backend-raid-order-async-settlement-plan.md)
-2. [docs/dev/ai-backend-service-plan.md](ai-backend-service-plan.md)
-3. [docs/dev/ai-backend-command-transaction-idempotency-plan.md](ai-backend-command-transaction-idempotency-plan.md)
+1. [docs/dev/TrinityWar 掠夺订单与异步结算专项设计 v0.1.md](TrinityWar 掠夺订单与异步结算专项设计 v0.1.md)
+2. [docs/dev/TrinityWar 后端 Service 分层设计 v0.1.md](TrinityWar 后端 Service 分层设计 v0.1.md)
+3. [docs/dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -905,8 +905,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-backend-read-api-cutover-plan.md](ai-backend-read-api-cutover-plan.md)
-2. [docs/dev/frontend-mock-retirement-plan.md](frontend-mock-retirement-plan.md)
+1. [docs/dev/TrinityWar 首批读接口联调切换计划 v0.1.md](TrinityWar 首批读接口联调切换计划 v0.1.md)
+2. [docs/dev/TrinityWar 前端 Mock 数据退场计划 v0.1.md](TrinityWar 前端 Mock 数据退场计划 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -946,8 +946,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/frontend-mock-retirement-plan.md](frontend-mock-retirement-plan.md)
-2. [docs/dev/ai-backend-read-api-cutover-plan.md](ai-backend-read-api-cutover-plan.md)
+1. [docs/dev/TrinityWar 前端 Mock 数据退场计划 v0.1.md](TrinityWar 前端 Mock 数据退场计划 v0.1.md)
+2. [docs/dev/TrinityWar 首批读接口联调切换计划 v0.1.md](TrinityWar 首批读接口联调切换计划 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -992,8 +992,8 @@ AI 每轮最终输出必须包含：
 
 前置文档：
 
-1. [docs/dev/ai-admin-api-contract-plan.md](ai-admin-api-contract-plan.md)
-2. [docs/dev/ai-admin-readonly-debug-panel-plan.md](ai-admin-readonly-debug-panel-plan.md)
+1. [docs/dev/TrinityWar 首批 Admin API 契约清单 v0.1.md](TrinityWar 首批 Admin API 契约清单 v0.1.md)
+2. [docs/dev/TrinityWar 管理后台首批只读视图与排障面板规划 v0.1.md](TrinityWar 管理后台首批只读视图与排障面板规划 v0.1.md)
 
 建议 AI 操作范围：
 
@@ -1035,7 +1035,7 @@ AI 每轮最终输出必须包含：
 前置文档：
 
 1. 本排期表前面所有已完成项。
-2. [docs/dev/ai-backend-master-plan.md](ai-backend-master-plan.md)
+2. [docs/dev/TrinityWar AI 后端总计划 v0.1.md](TrinityWar AI 后端总计划 v0.1.md)
 
 建议 AI 操作范围：
 

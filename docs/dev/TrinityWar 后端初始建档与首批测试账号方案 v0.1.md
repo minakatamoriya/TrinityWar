@@ -21,11 +21,11 @@
 
 本文件默认与下面文档配套使用：
 
-1. Prisma seed 与静态数据：[dev/ai-backend-prisma-seed-and-static-data-plan.md](dev/ai-backend-prisma-seed-and-static-data-plan.md)
-2. Migration 切分计划：[dev/ai-backend-migration-splitting-plan.md](dev/ai-backend-migration-splitting-plan.md)
-3. 接口契约：[dev/ai-backend-api-contract-plan.md](dev/ai-backend-api-contract-plan.md)
-4. Service 分层：[dev/ai-backend-service-plan.md](dev/ai-backend-service-plan.md)
-5. 命令链路事务与幂等：[dev/ai-backend-command-transaction-idempotency-plan.md](dev/ai-backend-command-transaction-idempotency-plan.md)
+1. Prisma seed 与静态数据：[dev/TrinityWar Prisma Seed 与初始静态数据装载计划 v0.1.md](dev/TrinityWar Prisma Seed 与初始静态数据装载计划 v0.1.md)
+2. Migration 切分计划：[dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md](dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md)
+3. 接口契约：[dev/TrinityWar 首批真实接口契约清单 v0.1.md](dev/TrinityWar 首批真实接口契约清单 v0.1.md)
+4. Service 分层：[dev/TrinityWar 后端 Service 分层设计 v0.1.md](dev/TrinityWar 后端 Service 分层设计 v0.1.md)
+5. 命令链路事务与幂等：[dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)
 
 ## 二、先给结论：建档必须是独立 use case，不要散落到登录流程里
 
@@ -428,7 +428,7 @@ PlayerInitializationService 建议在单事务里按下面顺序执行：
 
 ### 1. 生成 PlayerInitializationService
 
-你现在只负责生成 PlayerInitializationService 或等价方案。请严格按 [dev/ai-backend-player-initialization-and-test-accounts-plan.md](dev/ai-backend-player-initialization-and-test-accounts-plan.md) 初始化玩家私有状态。不要顺手生成全局 seed 主数据。
+你现在只负责生成 PlayerInitializationService 或等价方案。请严格按 [dev/TrinityWar 后端初始建档与首批测试账号方案 v0.1.md](dev/TrinityWar 后端初始建档与首批测试账号方案 v0.1.md) 初始化玩家私有状态。不要顺手生成全局 seed 主数据。
 
 ### 2. 生成新手账号初始化路径
 

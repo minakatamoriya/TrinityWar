@@ -6,10 +6,10 @@
 
 前面的文档已经分别定了：
 
-1. 后台首批菜单与只读排障范围：[dev/ai-admin-readonly-debug-panel-plan.md](dev/ai-admin-readonly-debug-panel-plan.md)
-2. 后端模块边界：[dev/ai-backend-module-skeleton-plan.md](dev/ai-backend-module-skeleton-plan.md)
-3. service 分层与复用边界：[dev/ai-backend-service-plan.md](dev/ai-backend-service-plan.md)
-4. migration 与日志模型边界：[dev/ai-backend-migration-splitting-plan.md](dev/ai-backend-migration-splitting-plan.md)
+1. 后台首批菜单与只读排障范围：[dev/TrinityWar 管理后台首批只读视图与排障面板规划 v0.1.md](dev/TrinityWar 管理后台首批只读视图与排障面板规划 v0.1.md)
+2. 后端模块边界：[dev/TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md](dev/TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md)
+3. service 分层与复用边界：[dev/TrinityWar 后端 Service 分层设计 v0.1.md](dev/TrinityWar 后端 Service 分层设计 v0.1.md)
+4. migration 与日志模型边界：[dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md](dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md)
 
 但这些文档还没有把 admin API 逐条落成可联调契约。
 
@@ -691,7 +691,7 @@
 
 ### 1. 生成 system status 接口
 
-你现在只负责生成 `GET /api/admin/system/status`。请严格按 [dev/ai-admin-api-contract-plan.md](dev/ai-admin-api-contract-plan.md) 的结构提供环境、依赖、worker 和 featureFlags 字段。不要顺手生成玩家查询接口。
+你现在只负责生成 `GET /api/admin/system/status`。请严格按 [dev/TrinityWar 首批 Admin API 契约清单 v0.1.md](dev/TrinityWar 首批 Admin API 契约清单 v0.1.md) 的结构提供环境、依赖、worker 和 featureFlags 字段。不要顺手生成玩家查询接口。
 
 ### 2. 生成 player overview 接口
 

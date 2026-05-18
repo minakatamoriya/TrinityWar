@@ -23,10 +23,10 @@
 
 本文件默认与下面文档配套使用：
 
-1. 读接口联调切换计划：[dev/ai-backend-read-api-cutover-plan.md](dev/ai-backend-read-api-cutover-plan.md)
-2. Migration 切分计划：[dev/ai-backend-migration-splitting-plan.md](dev/ai-backend-migration-splitting-plan.md)
-3. 命令链路事务与幂等：[dev/ai-backend-command-transaction-idempotency-plan.md](dev/ai-backend-command-transaction-idempotency-plan.md)
-4. 接口契约：[dev/ai-backend-api-contract-plan.md](dev/ai-backend-api-contract-plan.md)
+1. 读接口联调切换计划：[dev/TrinityWar 首批读接口联调切换计划 v0.1.md](dev/TrinityWar 首批读接口联调切换计划 v0.1.md)
+2. Migration 切分计划：[dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md](dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md)
+3. 命令链路事务与幂等：[dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)
+4. 接口契约：[dev/TrinityWar 首批真实接口契约清单 v0.1.md](dev/TrinityWar 首批真实接口契约清单 v0.1.md)
 
 ## 二、当前 mock 体系真实现状
 
@@ -473,7 +473,7 @@
 
 ### 1. 收口单类 mock
 
-你现在只负责收口 [mock 类型名]，范围仅限 [apps/game-client/src/api.ts](apps/game-client/src/api.ts) 中对应逻辑。请按照 [dev/frontend-mock-retirement-plan.md](dev/frontend-mock-retirement-plan.md) 把它从默认主链路移出，但保留显式 mock 模式能力。不要顺手改其他 mock 类别。
+你现在只负责收口 [mock 类型名]，范围仅限 [apps/game-client/src/api.ts](apps/game-client/src/api.ts) 中对应逻辑。请按照 [dev/TrinityWar 前端 Mock 数据退场计划 v0.1.md](dev/TrinityWar 前端 Mock 数据退场计划 v0.1.md) 把它从默认主链路移出，但保留显式 mock 模式能力。不要顺手改其他 mock 类别。
 
 ### 2. 验证 mock 是否已退出主链路
 

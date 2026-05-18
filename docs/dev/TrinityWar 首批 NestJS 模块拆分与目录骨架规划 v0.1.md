@@ -14,10 +14,10 @@
 
 这份文档默认建立在以下文档之上：
 
-1. 总计划：[dev/ai-backend-master-plan.md](dev/ai-backend-master-plan.md)
-2. 数据模型规划：[dev/ai-backend-prisma-schema-plan.md](dev/ai-backend-prisma-schema-plan.md)
-3. 接口契约规划：[dev/ai-backend-api-contract-plan.md](dev/ai-backend-api-contract-plan.md)
-4. Service 分层规划：[dev/ai-backend-service-plan.md](dev/ai-backend-service-plan.md)
+1. 总计划：[dev/TrinityWar AI 后端总计划 v0.1.md](dev/TrinityWar AI 后端总计划 v0.1.md)
+2. 数据模型规划：[dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md](dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md)
+3. 接口契约规划：[dev/TrinityWar 首批真实接口契约清单 v0.1.md](dev/TrinityWar 首批真实接口契约清单 v0.1.md)
+4. Service 分层规划：[dev/TrinityWar 后端 Service 分层设计 v0.1.md](dev/TrinityWar 后端 Service 分层设计 v0.1.md)
 
 ## 二、模块拆分总原则
 

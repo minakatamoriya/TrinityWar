@@ -95,7 +95,7 @@
 
 来源：
 
-1. docs/design/simple-game-design.md
+1. docs/design/Trinity War 简版游戏设计文档 v0.3.md
 
 设计规则：
 
@@ -115,8 +115,8 @@
 
 来源：
 
-1. docs/design/simple-game-design.md
-2. docs/design/field-time-state-machine.md
+1. docs/design/Trinity War 简版游戏设计文档 v0.3.md
+2. docs/design/Trinity War 田地时间状态机草案 v0.1.md
 
 设计规则：
 
@@ -135,7 +135,7 @@
 
 来源：
 
-1. docs/design/async-settlement-and-concurrency-rules.md
+1. docs/design/Trinity War 异步结算与并发规则草案 v0.1.md
 
 设计规则：
 

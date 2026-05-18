@@ -16,9 +16,9 @@
 
 1. 后端使用 NestJS。
 2. 数据访问使用 Prisma。
-3. 数据模型参考 [dev/ai-backend-prisma-schema-plan.md](dev/ai-backend-prisma-schema-plan.md)。
-4. 接口契约参考 [dev/ai-backend-api-contract-plan.md](dev/ai-backend-api-contract-plan.md)。
-5. 总体节奏参考 [dev/ai-backend-master-plan.md](dev/ai-backend-master-plan.md)。
+3. 数据模型参考 [dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md](dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md)。
+4. 接口契约参考 [dev/TrinityWar 首批真实接口契约清单 v0.1.md](dev/TrinityWar 首批真实接口契约清单 v0.1.md)。
+5. 总体节奏参考 [dev/TrinityWar AI 后端总计划 v0.1.md](dev/TrinityWar AI 后端总计划 v0.1.md)。
 
 ## 二、分层总原则
 

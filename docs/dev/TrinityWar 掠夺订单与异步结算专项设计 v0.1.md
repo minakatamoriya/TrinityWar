@@ -24,11 +24,11 @@
 
 本文件默认与下面文档配套使用：
 
-1. 掠夺玩法设计：[docs/design/raid-mechanism-redesign.md](docs/design/raid-mechanism-redesign.md)
-2. 接口契约：[dev/ai-backend-api-contract-plan.md](dev/ai-backend-api-contract-plan.md)
-3. 命令链路事务与幂等：[dev/ai-backend-command-transaction-idempotency-plan.md](dev/ai-backend-command-transaction-idempotency-plan.md)
-4. Migration 切分计划：[dev/ai-backend-migration-splitting-plan.md](dev/ai-backend-migration-splitting-plan.md)
-5. Prisma/schema 规划：[dev/ai-backend-prisma-schema-plan.md](dev/ai-backend-prisma-schema-plan.md)
+1. 掠夺玩法设计：[docs/design/Trinity War 掠夺机制重设计草案 v0.2.md](docs/design/Trinity War 掠夺机制重设计草案 v0.2.md)
+2. 接口契约：[dev/TrinityWar 首批真实接口契约清单 v0.1.md](dev/TrinityWar 首批真实接口契约清单 v0.1.md)
+3. 命令链路事务与幂等：[dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)
+4. Migration 切分计划：[dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md](dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md)
+5. Prisma/schema 规划：[dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md](dev/TrinityWar 首批数据库表与 Prisma Schema 草案 v0.1.md)
 
 ## 二、先给结论：首版不要把 raid 写成纯同步黑盒
 

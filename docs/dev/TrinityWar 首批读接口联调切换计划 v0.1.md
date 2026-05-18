@@ -25,11 +25,11 @@
 
 本文件默认与下面文档配套使用：
 
-1. 总计划：[dev/ai-backend-master-plan.md](dev/ai-backend-master-plan.md)
-2. 接口契约：[dev/ai-backend-api-contract-plan.md](dev/ai-backend-api-contract-plan.md)
-3. 模块骨架：[dev/ai-backend-module-skeleton-plan.md](dev/ai-backend-module-skeleton-plan.md)
-4. Migration 切分计划：[dev/ai-backend-migration-splitting-plan.md](dev/ai-backend-migration-splitting-plan.md)
-5. 命令链路事务与幂等：[dev/ai-backend-command-transaction-idempotency-plan.md](dev/ai-backend-command-transaction-idempotency-plan.md)
+1. 总计划：[dev/TrinityWar AI 后端总计划 v0.1.md](dev/TrinityWar AI 后端总计划 v0.1.md)
+2. 接口契约：[dev/TrinityWar 首批真实接口契约清单 v0.1.md](dev/TrinityWar 首批真实接口契约清单 v0.1.md)
+3. 模块骨架：[dev/TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md](dev/TrinityWar 首批 NestJS 模块拆分与目录骨架规划 v0.1.md)
+4. Migration 切分计划：[dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md](dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md)
+5. 命令链路事务与幂等：[dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)
 
 ## 二、当前前端真实现状
 
@@ -495,7 +495,7 @@
 
 ### 1. 切换单个读接口
 
-你现在只负责把 [接口名] 读接口接入真实数据库读取链路，并按 [dev/ai-backend-read-api-cutover-plan.md](dev/ai-backend-read-api-cutover-plan.md) 保留当前前端 DTO 形状。不要顺手改写接口，不要顺手拆 scene-content。
+你现在只负责把 [接口名] 读接口接入真实数据库读取链路，并按 [dev/TrinityWar 首批读接口联调切换计划 v0.1.md](dev/TrinityWar 首批读接口联调切换计划 v0.1.md) 保留当前前端 DTO 形状。不要顺手改写接口，不要顺手拆 scene-content。
 
 ### 2. 改造前端 fallback 策略
 

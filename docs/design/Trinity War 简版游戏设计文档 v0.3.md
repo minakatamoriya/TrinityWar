@@ -18,7 +18,7 @@ Trinity War 是一款三阵营轻经营、轻对抗游戏。
 补充：
 
 1. 客户端首发视觉方案采用“新东方极简 + 少量国风轻奢细节”。
-2. 统一视觉规范见 docs/design/ui-visual-style-guide.md。
+2. 统一视觉规范见 docs/design/TrinityWar UI 视觉方案 v0.1.md。
 3. 首发不做完整好友系统，只做“关注列表 + 目标观察”。
 
 ## 二、首发核心目标

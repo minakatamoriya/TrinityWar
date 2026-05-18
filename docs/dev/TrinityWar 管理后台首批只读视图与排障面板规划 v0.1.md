@@ -6,8 +6,8 @@
 
 当前仓库里已经有：
 
-1. 后台总体方向说明：[docs/design/wechat-minigame-tech-solution.md](docs/design/wechat-minigame-tech-solution.md)
-2. 后台参考索引：[docs/admin/admin-reference-index.md](docs/admin/admin-reference-index.md)
+1. 后台总体方向说明：[docs/design/Trinity War 微信小游戏首发技术方案 v0.1.md](docs/design/Trinity War 微信小游戏首发技术方案 v0.1.md)
+2. 后台参考索引：[docs/admin/TrinityWar 后台开发参考文档索引 v0.1.md](docs/admin/TrinityWar 后台开发参考文档索引 v0.1.md)
 3. 一个非常薄的 admin overview 路由：[services/game-server/src/routes/admin.ts](services/game-server/src/routes/admin.ts)
 
 但要真正支撑后续真实数据库联调，仅有 overview 远远不够。
@@ -24,11 +24,11 @@
 
 本文件默认与下面文档配套使用：
 
-1. 技术方案：[docs/design/wechat-minigame-tech-solution.md](docs/design/wechat-minigame-tech-solution.md)
-2. 后台索引：[docs/admin/admin-reference-index.md](docs/admin/admin-reference-index.md)
-3. Migration 切分计划：[dev/ai-backend-migration-splitting-plan.md](dev/ai-backend-migration-splitting-plan.md)
-4. 命令链路事务与幂等：[dev/ai-backend-command-transaction-idempotency-plan.md](dev/ai-backend-command-transaction-idempotency-plan.md)
-5. raid 专项：[dev/ai-backend-raid-order-async-settlement-plan.md](dev/ai-backend-raid-order-async-settlement-plan.md)
+1. 技术方案：[docs/design/Trinity War 微信小游戏首发技术方案 v0.1.md](docs/design/Trinity War 微信小游戏首发技术方案 v0.1.md)
+2. 后台索引：[docs/admin/TrinityWar 后台开发参考文档索引 v0.1.md](docs/admin/TrinityWar 后台开发参考文档索引 v0.1.md)
+3. Migration 切分计划：[dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md](dev/TrinityWar 首批数据库 Migration 切分计划 v0.1.md)
+4. 命令链路事务与幂等：[dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md](dev/TrinityWar 首批写链路事务与幂等策略清单 v0.1.md)
+5. raid 专项：[dev/TrinityWar 掠夺订单与异步结算专项设计 v0.1.md](dev/TrinityWar 掠夺订单与异步结算专项设计 v0.1.md)
 
 ## 二、先给结论：首批后台先只做只读排障，不先做修正操作
 

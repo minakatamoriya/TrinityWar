@@ -15,7 +15,7 @@
 
 当前来源：
 
-1. docs/design/wechat-minigame-tech-solution.md
+1. docs/design/Trinity War 微信小游戏首发技术方案 v0.1.md
 
 状态：已具备
 
@@ -28,10 +28,10 @@
 
 当前来源：
 
-1. docs/design/simple-game-design.md
-2. docs/design/launch-store-and-vip-table.md
-3. docs/design/launch-monetization-and-payment-plan.md
-4. docs/design/player-daily-task-rules.md
+1. docs/design/Trinity War 简版游戏设计文档 v0.3.md
+2. docs/design/Trinity War 首发商品表与 VIP 权益表草案 v0.1.md
+3. docs/design/Trinity War 首发商业化与付费体系草案 v0.1.md
+4. docs/design/Trinity War 玩家每日任务规则草案 v0.1.md
 
 状态：部分具备
 
@@ -49,7 +49,7 @@
 当前来源：
 
 1. services/game-server 的 Swagger 文档
-2. dev/ai-admin-api-contract-plan.md
+2. dev/TrinityWar 首批 Admin API 契约清单 v0.1.md
 
 状态：首批只读接口已具备规划，写操作接口仍未补齐
 
