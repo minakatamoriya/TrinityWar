@@ -1660,6 +1660,7 @@ function App(): JSX.Element {
                   void handleRecruitArmy();
                 }}
                 onSelectCount={setArmyRecruitCount}
+                playerFaction={home.factionName}
                 selectedCount={armyRecruitCount}
                 trainingQueue={armyTrainingQueue}
                 unitCostGold={scenes.army.unitCostGold}

@@ -2518,6 +2518,56 @@ button {
   font-weight: 800;
 }
 
+.spirit-stage-card {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 128px;
+  padding: 12px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 22% 20%, rgba(255, 248, 234, 0.13), transparent 26%),
+    linear-gradient(155deg, rgba(45, 61, 38, 0.72), rgba(24, 18, 16, 0.9));
+}
+
+.spirit-stage-art {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 110px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 248, 234, 0.14);
+  background:
+    radial-gradient(circle at 50% 24%, rgba(247, 239, 225, 0.2), transparent 26%),
+    linear-gradient(160deg, rgba(106, 139, 82, 0.42), rgba(67, 43, 34, 0.4));
+}
+
+.spirit-stage-art span {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 248, 234, 0.22);
+  background: rgba(12, 16, 11, 0.46);
+  color: #f7efe1;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.spirit-stage-meta {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.spirit-stage-meta h4 {
+  margin: 0;
+  font-size: 20px;
+}
+
 .spirit-profile-main {
   display: grid;
   gap: 8px;
@@ -2557,6 +2607,11 @@ button {
 .spirit-rarity-common {
   background: rgba(255, 248, 234, 0.08);
   color: #f5eddc;
+}
+
+.spirit-rarity-rare {
+  background: rgba(110, 176, 218, 0.16);
+  color: #ccecff;
 }
 
 .spirit-rarity-legend {
@@ -2713,6 +2768,32 @@ button.spirit-element-chip {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 16px;
+}
+
+.spirit-compose-picker {
+  display: grid;
+  gap: 12px;
+}
+
+.spirit-compose-icon-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.spirit-compose-icon-item {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+}
+
+.spirit-compose-icon {
+  width: 100%;
+}
+
+.spirit-compose-icon-item small {
+  color: #d8ffb7;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
 }
 
 .spirit-profile-card[role='button'] {
@@ -3419,6 +3500,98 @@ button.spirit-element-chip {
 
 .raid-intel-note .panel-text {
   margin: 0;
+}
+
+.raid-spirit-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.raid-spirit-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.raid-spirit-avatar {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 94px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 248, 234, 0.14);
+  background:
+    radial-gradient(circle at 50% 28%, rgba(255, 248, 234, 0.2), transparent 24%),
+    linear-gradient(155deg, rgba(67, 83, 52, 0.7), rgba(45, 28, 26, 0.88));
+}
+
+.raid-spirit-avatar span {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 248, 234, 0.2);
+  background: rgba(10, 12, 9, 0.42);
+  color: #f7efe1;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.raid-spirit-info {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.raid-spirit-info h4 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.raid-spirit-info strong {
+  color: #d8ffb7;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.raid-spirit-card .secondary-button {
+  min-width: 106px;
+  padding-inline: 10px;
+}
+
+.raid-spirit-revealed {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(54px, 1fr));
+  gap: 6px;
+  min-width: 126px;
+}
+
+.raid-spirit-revealed div {
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  background: rgba(255, 248, 234, 0.05);
+}
+
+.raid-spirit-revealed span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.raid-spirit-revealed strong {
+  color: #f7efe1;
+  font-size: 13px;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .raid-intel-actionbar {

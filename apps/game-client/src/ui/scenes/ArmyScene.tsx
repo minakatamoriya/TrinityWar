@@ -6,6 +6,7 @@ interface ArmySceneProps {
   currentArmy: number;
   armyCapacity: number;
   currentGold: number;
+  playerFaction: string;
   selectedCount: number;
   onSelectCount: (count: number) => void;
   onConfirm: () => void;
@@ -59,15 +60,15 @@ const initialStablePets: StablePet[] = [
 
 const initialCodexPets: CodexPet[] = [
   { id: 'canglang', name: '苍狼', rarity: '普通', faction: '人界', template: '攻击型', shards: '74 / 100', discovered: true, detail: '山野游猎的铁爪狼，起手快，适合承担新手第一只输出宠定位。', everOwned: false, selectableElement: true },
-  { id: 'xuanhu', name: '玄虎', rarity: '普通', faction: '魔界', template: '攻击型', shards: '21 / 100', discovered: true, detail: '黑纹煞虎，扑杀凶猛，强调前段爆发和压制感。', everOwned: false, selectableElement: true },
+  { id: 'xuanhu', name: '玄虎', rarity: '普通', faction: '魔界', template: '攻击型', shards: '101 / 100', discovered: true, detail: '黑纹煞虎，扑杀凶猛，强调前段爆发和压制感。', everOwned: false, selectableElement: true },
   { id: 'linglu', name: '灵鹿', rarity: '普通', faction: '仙界', template: '防御型', shards: '已拥有', discovered: true, detail: '饮露纳灵的山林灵兽，站场稳，适合防守向培养。', everOwned: true, selectableElement: false },
   { id: 'qingyuan', name: '青猿', rarity: '普通', faction: '人界', template: '均衡型', shards: '已拥有', discovered: true, detail: '善于周旋和持续缠斗，成长平滑，适合长期陪跑。', everOwned: true, selectableElement: false },
   { id: 'hegui', name: '河龟', rarity: '普通', faction: '人界', template: '防御型', shards: '0 / 100', discovered: false, detail: '', everOwned: false, selectableElement: true },
-  { id: 'shuanghu', name: '霜狐', rarity: '普通', faction: '仙界', template: '均衡型', shards: '待合成', discovered: true, detail: '擅长拉扯与消耗，速度观感轻巧，适合侦查与反制氛围。', everOwned: false, selectableElement: true },
+  { id: 'shuanghu', name: '霜狐', rarity: '普通', faction: '仙界', template: '均衡型', shards: '102 / 100', discovered: true, detail: '擅长拉扯与消耗，速度观感轻巧，适合侦查与反制氛围。', everOwned: false, selectableElement: true },
   { id: 'yingbao', name: '影豹', rarity: '普通', faction: '魔界', template: '攻击型', shards: '已拥有', discovered: true, detail: '突进迅猛、击杀欲强，是典型高压进攻型普通宠。', everOwned: true, selectableElement: false },
   { id: 'yunying', name: '云鹰', rarity: '普通', faction: '仙界', template: '攻击型', shards: '0 / 100', discovered: false, detail: '', everOwned: false, selectableElement: true },
   { id: 'shanxiong', name: '山熊', rarity: '普通', faction: '魔界', template: '血量型', shards: '0 / 100', discovered: false, detail: '', everOwned: false, selectableElement: true },
-  { id: 'chenghuang', name: '乘黄', rarity: '稀有', faction: '仙界', template: '防御型', shards: '32 / 100', discovered: true, detail: '瑞兽气质鲜明，防守反制能力突出，适合作为仙界高阶门面。', everOwned: false, selectableElement: true },
+  { id: 'chenghuang', name: '乘黄', rarity: '稀有', faction: '仙界', template: '防御型', shards: '108 / 100', discovered: true, detail: '瑞兽气质鲜明，防守反制能力突出，适合作为仙界高阶门面。', everOwned: false, selectableElement: true },
   { id: 'eshou', name: '讹兽', rarity: '稀有', faction: '人界', template: '均衡型', shards: '0 / 100', discovered: false, detail: '', everOwned: false, selectableElement: true },
   { id: 'xuangui', name: '旋龟', rarity: '稀有', faction: '仙界', template: '防御型', shards: '0 / 100', discovered: false, detail: '', everOwned: false, selectableElement: true },
   { id: 'jiaoshou', name: '狡', rarity: '稀有', faction: '魔界', template: '攻击型', shards: '0 / 100', discovered: false, detail: '', everOwned: false, selectableElement: true },
@@ -86,8 +87,134 @@ const codexRarityGroups = [
   { key: 'legend', label: '传说', rarity: '传说' as const },
 ];
 
+const MAX_QUICK_RECOVERY_PER_DAY = 3;
+
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value);
+}
+
+function getElementClass(element: string): string {
+  if (element === '金') {
+    return 'spirit-element-metal';
+  }
+  if (element === '木') {
+    return 'spirit-element-wood';
+  }
+  if (element === '水') {
+    return 'spirit-element-water';
+  }
+  if (element === '火') {
+    return 'spirit-element-fire';
+  }
+  if (element === '土') {
+    return 'spirit-element-earth';
+  }
+  return 'spirit-element-wood';
+}
+
+function getRarityClass(rarity: StablePet['rarity']): string {
+  if (rarity === '传说') {
+    return 'spirit-rarity-legend';
+  }
+  if (rarity === '稀有') {
+    return 'spirit-rarity-rare';
+  }
+  return 'spirit-rarity-common';
+}
+
+function parseShardProgress(shards: string): { current: number; target: number } | null {
+  const match = shards.match(/(\d+)\s*\/\s*(\d+)/);
+  if (!match) {
+    return null;
+  }
+  return {
+    current: Number(match[1]),
+    target: Number(match[2]),
+  };
+}
+
+function isReadyToCompose(pet: CodexPet): boolean {
+  if (pet.shards === '待合成') {
+    return true;
+  }
+  const progress = parseShardProgress(pet.shards);
+  return Boolean(progress && progress.current >= progress.target);
+}
+
+function getPhaseForLevel(level: number): string {
+  if (level >= 50) {
+    return '归真圆满';
+  }
+  if (level >= 40) {
+    return '神异觉醒期';
+  }
+  if (level >= 30) {
+    return '真形期';
+  }
+  if (level >= 20) {
+    return '化形期';
+  }
+  if (level >= 10) {
+    return '幼灵期';
+  }
+  return '灵胎期';
+}
+
+function getUpgradeCost(level: number): number | null {
+  if (level >= 50) {
+    return null;
+  }
+  const fixedCosts: Record<number, number> = {
+    1: 1,
+    2: 2,
+    3: 3,
+    4: 4,
+    5: 5,
+    6: 6,
+    7: 8,
+    8: 10,
+    9: 12,
+    10: 15,
+    41: 290,
+    42: 300,
+    43: 320,
+    44: 340,
+    45: 360,
+    46: 390,
+    47: 420,
+    48: 450,
+    49: 490,
+  };
+  if (fixedCosts[level]) {
+    return fixedCosts[level];
+  }
+  if (level >= 11 && level <= 15) {
+    return 18 + (level - 11) * 3;
+  }
+  if (level >= 16 && level <= 20) {
+    return 35 + (level - 16) * 5;
+  }
+  if (level >= 21 && level <= 25) {
+    return 63 + (level - 21) * 8;
+  }
+  if (level >= 26 && level <= 30) {
+    return 105 + (level - 26) * 10;
+  }
+  if (level >= 31 && level <= 35) {
+    return 160 + (level - 31) * 15;
+  }
+  if (level >= 36 && level <= 40) {
+    return 240 + (level - 36) * 20;
+  }
+  return 1;
+}
+
+function getHealthRatio(hpText: string): number {
+  const value = Number(hpText.replace('%', ''));
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.min(Math.max(value, 0), 100);
 }
 
 function getHealthStatus(hpText: string): string {
@@ -104,8 +231,48 @@ function getHealthStatus(hpText: string): string {
   return '重伤作战，建议先恢复';
 }
 
+function getFactionBonusLabel(faction: string): string {
+  if (faction === '仙界') {
+    return '防御 +8%';
+  }
+  if (faction === '魔界') {
+    return '攻击 +8%';
+  }
+  if (faction === '人界') {
+    return '血量 +8%';
+  }
+  return '未触发';
+}
+
+function SpiritStageCard(props: {
+  name: string;
+  phase: string;
+  level: number;
+  element?: string;
+  rarity: StablePet['rarity'];
+}): JSX.Element {
+  const { name, phase, level, element, rarity } = props;
+
+  return (
+    <div className="spirit-stage-card">
+      <div className="spirit-stage-art" aria-hidden="true">
+        <span>{name.slice(0, 1)}</span>
+      </div>
+      <div className="spirit-stage-meta">
+        <p className="eyebrow">{phase}</p>
+        <h4>{name}</h4>
+        <div className="spirit-tag-row">
+          <span className={`spirit-rarity ${getRarityClass(rarity)}`}>{rarity}</span>
+          {element ? <span className={`spirit-element-chip ${getElementClass(element)}`}>{element}</span> : null}
+          <span className="soft-tag">Lv.{level}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ArmyScene(props: ArmySceneProps): JSX.Element {
-  const { currentArmy, currentGold, selectedCount, onConfirm, confirming, unitCostGold } = props;
+  const { currentArmy, currentGold, playerFaction, selectedCount, onConfirm, confirming, unitCostGold } = props;
   const [stablePets, setStablePets] = useState<StablePet[]>(initialStablePets);
   const [codexPets, setCodexPets] = useState<CodexPet[]>(initialCodexPets);
   const [codexOpen, setCodexOpen] = useState(false);
@@ -114,8 +281,10 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const [starterOpen, setStarterOpen] = useState(false);
   const [selectedStarterId, setSelectedStarterId] = useState<string | null>(null);
   const [starterElement, setStarterElement] = useState<(typeof elementChoices)[number]>('木');
-  const [composeOpen, setComposeOpen] = useState(false);
+  const [selectedComposePetId, setSelectedComposePetId] = useState(() => initialCodexPets.find((pet) => isReadyToCompose(pet))?.id ?? '');
   const [composeElement, setComposeElement] = useState<(typeof elementChoices)[number]>('木');
+  const [soulSpendOffset, setSoulSpendOffset] = useState(0);
+  const [quickRecoveryUsed, setQuickRecoveryUsed] = useState(0);
   const affordableCount = unitCostGold > 0 ? Math.floor(currentGold / unitCostGold) : 0;
   const actualRecruitCount = Math.min(Math.max(selectedCount, affordableCount > 0 ? 1 : 0), affordableCount);
   const canConfirm = actualRecruitCount > 0 && !confirming;
@@ -125,6 +294,11 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const portalTarget = typeof document === 'undefined' ? null : document.querySelector('.phone-frame');
   const occupiedCount = stablePets.filter((pet) => pet.occupied).length;
   const isStableFull = occupiedCount >= 5;
+  const availableSoul = Math.max(currentArmy - soulSpendOffset, 0);
+  const quickRecoverRemaining = Math.max(MAX_QUICK_RECOVERY_PER_DAY - quickRecoveryUsed, 0);
+  const availableComposePets = codexPets.filter((pet) => isReadyToCompose(pet));
+  const selectedComposePet = availableComposePets.find((pet) => pet.id === selectedComposePetId) ?? availableComposePets[0] ?? null;
+  const selectedUpgradeCost = selectedStablePet?.occupied ? getUpgradeCost(selectedStablePet.level) : null;
   const codexGroups = codexRarityGroups.map((group) => ({
     ...group,
     pets: codexPets.filter((pet) => pet.rarity === group.rarity),
@@ -165,36 +339,48 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
     setSelectedStarterId(null);
   }
 
-  function handleComposeCodexPet(): void {
-    if (!selectedCodexPet || selectedCodexPet.shards !== '待合成' || isStableFull) {
+  function handleComposeCodexPet(targetSlotId: string): void {
+    if (!selectedComposePet) {
       return;
     }
 
     setStablePets((current) => current.map((pet) => (
-      pet.occupied || pet.role === '主位'
+      pet.id !== targetSlotId || pet.occupied || pet.role === '主位'
         ? pet
         : {
-            id: selectedCodexPet.id,
-            name: selectedCodexPet.name,
+            id: `${pet.id}-${selectedComposePet.id}`,
+            name: selectedComposePet.name,
             level: 1,
             role: pet.role,
-            element: '木',
+            element: composeElement,
             hp: '100%',
             phase: '灵胎期',
             occupied: true,
-            faction: selectedCodexPet.faction,
-            template: selectedCodexPet.template,
-            rarity: selectedCodexPet.rarity,
+            faction: selectedComposePet.faction,
+            template: selectedComposePet.template,
+            rarity: selectedComposePet.rarity,
             everOwned: true,
           }
     )));
 
     setCodexPets((current) => current.map((pet) => (
-      pet.id === selectedCodexPet.id
+      pet.id === selectedComposePet.id
         ? { ...pet, shards: '已拥有', everOwned: true, selectableElement: false }
         : pet
     )));
-    setComposeOpen(false);
+    setSelectedStablePetId(null);
+  }
+
+  function handleOpenStablePet(petId: string): void {
+    setSelectedStablePetId(petId);
+  }
+
+  function handleCloseStablePet(): void {
+    setSelectedStablePetId(null);
+  }
+
+  function handlePickComposePet(petId: string): void {
+    setSelectedComposePetId(petId);
   }
 
   function handleDissolvePet(petId: string): void {
@@ -211,9 +397,67 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
             occupied: false,
             faction: '',
             template: '',
+            rarity: '普通',
           }
     )));
     setSelectedStablePetId(null);
+  }
+
+  function handleSetMainPet(petId: string): void {
+    setStablePets((current) => {
+      const targetIndex = current.findIndex((pet) => pet.id === petId);
+      if (targetIndex <= 0 || !current[targetIndex]?.occupied) {
+        return current;
+      }
+
+      const next = [...current];
+      const targetPet = next[targetIndex];
+      const currentMain = next[0];
+      const targetRole = targetPet.role;
+      next[0] = { ...targetPet, role: '主位' };
+      next[targetIndex] = currentMain.occupied
+        ? { ...currentMain, role: targetRole }
+        : {
+            ...currentMain,
+            role: targetRole,
+            name: '空栏位',
+            phase: '可合成新宠',
+          };
+      return next;
+    });
+    setSelectedStablePetId(null);
+  }
+
+  function handleUpgradePet(petId: string): void {
+    const pet = stablePets.find((item) => item.id === petId);
+    if (!pet) {
+      return;
+    }
+    const cost = getUpgradeCost(pet.level);
+    if (!cost || availableSoul < cost) {
+      return;
+    }
+
+    setSoulSpendOffset((current) => current + cost);
+    setStablePets((current) => current.map((item) => (
+      item.id === petId
+        ? { ...item, level: item.level + 1, phase: getPhaseForLevel(item.level + 1) }
+        : item
+    )));
+  }
+
+  function handleRecoverPet(petId: string): void {
+    const pet = stablePets.find((item) => item.id === petId);
+    if (!pet || getHealthRatio(pet.hp) >= 100 || quickRecoverRemaining <= 0) {
+      return;
+    }
+
+    setQuickRecoveryUsed((current) => current + 1);
+    setStablePets((current) => current.map((item) => (
+      item.id === petId
+        ? { ...item, hp: '100%' }
+        : item
+    )));
   }
 
   return (
@@ -227,7 +471,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
           <article className="spirit-soul-quick-card">
             <div>
               <span>兽魂库存</span>
-              <strong>{formatNumber(currentArmy)}</strong>
+              <strong>{formatNumber(availableSoul)}</strong>
             </div>
             <button className="primary-button small" disabled={!canConfirm} onClick={onConfirm} type="button">
               {confirming ? '购买中' : '购买兽魂'}
@@ -238,7 +482,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
         <section className="spirit-main-row">
           {mainPet.occupied ? (
             <article className="spirit-profile-card spirit-profile-card-horizontal" onClick={() => setSelectedStablePetId(mainPet.id)} role="button" tabIndex={0}>
-              <div className="spirit-portrait spirit-element-wood" aria-hidden="true">
+              <div className={`spirit-portrait ${getElementClass(mainPet.element)}`} aria-hidden="true">
                 <span>{mainPet.name.slice(0, 1)}</span>
               </div>
               <div className="spirit-profile-main">
@@ -250,11 +494,12 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                   <strong>Lv.{mainPet.level}</strong>
                 </div>
                 <div className="spirit-tag-row">
-                  <span className="spirit-rarity spirit-rarity-common">{mainPet.rarity}</span>
+                  <span className={`spirit-rarity ${getRarityClass(mainPet.rarity)}`}>{mainPet.rarity}</span>
                   <span className="faction-badge">{mainPet.faction}</span>
-                  <span className="spirit-element-chip spirit-element-wood">{mainPet.element}</span>
+                  <span className={`spirit-element-chip ${getElementClass(mainPet.element)}`}>{mainPet.element}</span>
                   <span className="soft-tag">{mainPet.template}</span>
                   <span className="soft-tag">{mainPet.phase}</span>
+                  {mainPet.faction === playerFaction ? <span className="soft-tag">同阵营 {getFactionBonusLabel(mainPet.faction)}</span> : null}
                 </div>
               </div>
             </article>
@@ -274,10 +519,10 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
           </div>
           <div className="spirit-stable-grid">
             {stablePets.slice(1).map((pet) => (
-              <article className={`spirit-stable-slot${pet.occupied ? '' : ' spirit-stable-slot-empty'}`} key={pet.id} onClick={() => setSelectedStablePetId(pet.id)} role="button" tabIndex={0}>
+              <article className={`spirit-stable-slot${pet.occupied ? '' : ' spirit-stable-slot-empty'}`} key={pet.id} onClick={() => handleOpenStablePet(pet.id)} role="button" tabIndex={0}>
                 <strong>{pet.occupied ? `${pet.name} Lv.${pet.level}` : pet.name}</strong>
                 <span>{pet.occupied ? `${pet.role} · ${pet.element} · ${pet.hp}` : pet.role}</span>
-                <small>{pet.phase}</small>
+                <small>{pet.occupied ? `${pet.phase} · ${getHealthStatus(pet.hp)}` : pet.phase}</small>
               </article>
             ))}
           </div>
@@ -335,7 +580,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
               <p className="eyebrow">{selectedStablePet.role}</p>
               <p className="seed-codex-tip">{selectedStablePet.occupied ? `${selectedStablePet.name} Lv.${selectedStablePet.level}` : '空栏位'}</p>
             </div>
-            <button className="ghost-button small" onClick={() => setSelectedStablePetId(null)} type="button">关闭</button>
+            <button className="ghost-button small" onClick={handleCloseStablePet} type="button">关闭</button>
           </div>
           <div className="seed-codex-body">
             <section className="seed-codex-detail-card">
@@ -347,25 +592,90 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                       <h3>{selectedStablePet.name}</h3>
                     </div>
                   </div>
-                  <p className="seed-codex-lore">详情页展示升级、恢复和位置调整。首页保持轻量，细节都收在这里。</p>
+                  <SpiritStageCard
+                    element={selectedStablePet.element}
+                    level={selectedStablePet.level}
+                    name={selectedStablePet.name}
+                    phase={selectedStablePet.phase}
+                    rarity={selectedStablePet.rarity}
+                  />
                   <div className="seed-codex-stats">
-                    <div className="seed-codex-stat-row"><strong>升级进度</strong><span>42 / 45 兽魂</span></div>
-                    <div className="seed-codex-stat-row"><strong>剩余兽魂</strong><span>{formatNumber(currentArmy)}</span></div>
+                    <div className="seed-codex-stat-row"><strong>稀有度</strong><span>{selectedStablePet.rarity}</span></div>
+                    <div className="seed-codex-stat-row"><strong>阵营加成</strong><span>{selectedStablePet.faction === playerFaction ? `已触发 ${getFactionBonusLabel(selectedStablePet.faction)}` : `未触发，当前阵营为${playerFaction}`}</span></div>
+                    <div className="seed-codex-stat-row"><strong>升级需求</strong><span>{selectedUpgradeCost ? `${selectedUpgradeCost} 兽魂` : '已满级'}</span></div>
+                    <div className="seed-codex-stat-row"><strong>剩余兽魂</strong><span>{formatNumber(availableSoul)}</span></div>
                     <div className="seed-codex-stat-row"><strong>当前血量</strong><span>{selectedStablePet.hp}</span></div>
                     <div className="seed-codex-stat-row"><strong>当前状态</strong><span>{getHealthStatus(selectedStablePet.hp)}</span></div>
-                    <div className="seed-codex-stat-row"><strong>恢复情况</strong><span>{selectedStablePet.hp === '100%' ? '自然满血 / 今日快速恢复剩余 3 次' : '自然恢复约 1小时36分 / 今日快速恢复剩余 2 次'}</span></div>
+                    <div className="seed-codex-stat-row"><strong>恢复情况</strong><span>{selectedStablePet.hp === '100%' ? `自然满血 / 今日快速恢复剩余 ${quickRecoverRemaining} 次` : `自然恢复约 1小时36分 / 今日快速恢复剩余 ${quickRecoverRemaining} 次`}</span></div>
+                  </div>
+                  <div className="spirit-progress-block">
+                    <div className="spirit-progress-head">
+                      <span>血量</span>
+                      <strong>{selectedStablePet.hp}</strong>
+                    </div>
+                    <div className="spirit-progress-track" aria-hidden="true">
+                      <div className="spirit-progress-fill spirit-progress-fill-health" style={{ width: `${getHealthRatio(selectedStablePet.hp)}%` }} />
+                    </div>
                   </div>
                   <div className="spirit-pet-action-grid">
-                    <button className="primary-button" type="button">设为主位</button>
-                    <button className="secondary-button" type="button">升级（余 {formatNumber(currentArmy)}）</button>
-                    <button className="secondary-button" type="button">天机符恢复</button>
+                    <button className="primary-button" disabled={selectedStablePet.role === '主位'} onClick={() => handleSetMainPet(selectedStablePet.id)} type="button">设为主位</button>
+                    <button className="secondary-button" disabled={!selectedUpgradeCost || availableSoul < selectedUpgradeCost} onClick={() => handleUpgradePet(selectedStablePet.id)} type="button">{selectedUpgradeCost ? `升级（需 ${selectedUpgradeCost}）` : '已满级'}</button>
+                    <button className="secondary-button" disabled={getHealthRatio(selectedStablePet.hp) >= 100 || quickRecoverRemaining <= 0} onClick={() => handleRecoverPet(selectedStablePet.id)} type="button">天机符恢复</button>
                     <button className="ghost-button" onClick={() => handleDissolvePet(selectedStablePet.id)} type="button">解散（返还 35% 兽魂）</button>
                   </div>
                 </>
               ) : (
                 <>
-                  <p className="seed-codex-undiscovered-text">空栏位</p>
-                  <p className="seed-codex-lore">可从图鉴里的待合成灵宠进入合成流程，占用此栏位。若兽栏满员，则需要先解散旧宠腾栏。</p>
+                  <div className="seed-codex-detail-head">
+                    <div>
+                      <p className="eyebrow">空栏位</p>
+                      <h3>{selectedStablePet.role}</h3>
+                    </div>
+                  </div>
+                  {availableComposePets.length > 0 ? (
+                    <>
+                      <div className="spirit-compose-picker">
+                        <div className="seed-codex-icon-grid spirit-compose-icon-grid">
+                        {availableComposePets.map((pet) => (
+                          <div className="spirit-compose-icon-item" key={pet.id}>
+                            <button
+                              aria-label={`选择${pet.name}`}
+                              className={`seed-codex-icon spirit-compose-icon is-unlocked${selectedComposePet?.id === pet.id ? ' is-selected' : ''}`}
+                              onClick={() => handlePickComposePet(pet.id)}
+                              type="button"
+                            >
+                              <span>{pet.name.slice(0, 2)}</span>
+                            </button>
+                            <small>{pet.shards === '待合成' ? '100/100' : pet.shards.replace(/\s/g, '')}</small>
+                          </div>
+                        ))}
+                        </div>
+                      </div>
+                      {selectedComposePet ? (
+                        <>
+                          <SpiritStageCard
+                            level={1}
+                            name={selectedComposePet.name}
+                            phase="灵胎期"
+                            rarity={selectedComposePet.rarity}
+                          />
+                          <div className="spirit-element-picker">
+                            {elementChoices.map((element) => (
+                              <button className={`spirit-element-chip ${getElementClass(element)} ${composeElement === element ? ' is-selected' : ''}`} key={element} onClick={() => setComposeElement(element)} type="button">
+                                {element}
+                              </button>
+                            ))}
+                          </div>
+                          <button className="primary-button spirit-full-button" onClick={() => handleComposeCodexPet(selectedStablePet.id)} type="button">确认合成并入栏</button>
+                        </>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div className="seed-codex-strategy">
+                      <strong>暂无待合成灵宠</strong>
+                      <p>继续通过掠夺和主城赠送收集精魄。精魄满 100 后会在这里出现可合成项。</p>
+                    </div>
+                  )}
                 </>
               )}
             </section>
@@ -422,48 +732,16 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                     <div className="seed-codex-stat-row"><strong>曾经拥有</strong><span>{selectedCodexPet.everOwned ? '是' : '否'}</span></div>
                     <div className="seed-codex-stat-row"><strong>五行状态</strong><span>{selectedCodexPet.selectableElement ? '未合成前可自选五行' : '已固定当前五行'}</span></div>
                   </div>
-                  {selectedCodexPet.shards === '待合成' ? (
+                  {isReadyToCompose(selectedCodexPet) ? (
                     <div className="seed-codex-strategy">
                       <strong>待合成</strong>
-                      <p>{isStableFull ? '当前兽栏已满，需要先解散旧宠腾出栏位。' : '精魄已满，可进入合成并选择金、木、水、火、土之一作为最终五行。'}</p>
+                      <p>{isStableFull ? '当前兽栏已满，需要先解散旧宠腾出栏位。图鉴只记录状态，不直接发宠。' : '精魄已满。请返回兽栏，点开一个空栏位完成合成与五行指定。'}</p>
                     </div>
                   ) : null}
-                  {selectedCodexPet.shards === '待合成' ? <button className="primary-button spirit-full-button" disabled={isStableFull} onClick={() => setComposeOpen(true)} type="button">合成 {selectedCodexPet.name}</button> : null}
                 </>
               ) : (
                 <p className="seed-codex-undiscovered-text">尚未展示</p>
               )}
-            </section>
-          </div>
-        </section>
-      ), portalTarget) : null}
-
-      {composeOpen && selectedCodexPet && portalTarget ? createPortal((
-        <section className="seed-codex-screen spirit-pet-action-screen" role="dialog" aria-modal="true" aria-label="灵宠合成">
-          <div className="seed-codex-topbar">
-            <div className="seed-codex-title-block">
-              <p className="eyebrow">待合成</p>
-              <p className="seed-codex-tip">{selectedCodexPet.name} 精魄已满，先选择五行再入栏</p>
-            </div>
-            <button className="ghost-button small" onClick={() => setComposeOpen(false)} type="button">关闭</button>
-          </div>
-          <div className="seed-codex-body">
-            <section className="seed-codex-detail-card">
-              <div className="seed-codex-detail-head">
-                <div>
-                  <p className="eyebrow">{selectedCodexPet.rarity}</p>
-                  <h3>{selectedCodexPet.name}</h3>
-                </div>
-              </div>
-              <p className="seed-codex-lore">五行相克：金克木，木克土，土克水，水克火，火克金。合成后五行默认固定，不做无成本来回切换。</p>
-              <div className="spirit-element-picker">
-                {elementChoices.map((element) => (
-                  <button className={`spirit-element-chip ${composeElement === element ? ' is-selected' : ''}`} key={element} onClick={() => setComposeElement(element)} type="button">
-                    {element}
-                  </button>
-                ))}
-              </div>
-              <button className="primary-button spirit-full-button" disabled={isStableFull} onClick={handleComposeCodexPet} type="button">确认合成并赋予 {composeElement}</button>
             </section>
           </div>
         </section>
