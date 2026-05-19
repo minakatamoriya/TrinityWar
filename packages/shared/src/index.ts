@@ -6,6 +6,148 @@ export const DOCS_ROUTE = '/docs';
 export const ARMY_RECRUIT_GOLD_COST_PER_UNIT = 100;
 export const ARMY_RECRUIT_SECONDS_PER_UNIT = 60;
 
+export type ClientSpiritRarity = 'common' | 'rare' | 'legendary';
+export type ClientSpiritRole = 'attack' | 'defense' | 'balanced' | 'health';
+export type ClientSpiritElement = 'metal' | 'wood' | 'water' | 'fire' | 'earth';
+export type ClientSpiritStatus = 'active' | 'wounded' | 'resting' | 'dissolved';
+
+export interface ClientSpiritDefinition {
+  spiritId: string;
+  label: string;
+  rarity: ClientSpiritRarity;
+  factionAffinity: 'human' | 'immortal' | 'demon';
+  role: ClientSpiritRole;
+  shardName: string;
+  shardUnlockRequired: number;
+  lore: string | null;
+}
+
+export interface ClientSpiritSlot {
+  slotIndex: number;
+  spiritId: string | null;
+  isMain: boolean;
+  level: number;
+  exp: number;
+  element: ClientSpiritElement | null;
+  currentHp: number;
+  maxHp: number;
+  status: ClientSpiritStatus;
+  slotVersion: number;
+}
+
+export interface ClientSpiritCodexEntry {
+  spiritId: string;
+  hasSeen: boolean;
+  shardCount: number;
+  readyToCompose: boolean;
+  ownedCurrent: boolean;
+  ownedEver: boolean;
+  definition: ClientSpiritDefinition;
+}
+
+export interface ClientSpiritState {
+  spiritSoul: number;
+  dailyRecoveryUsed: number;
+  resourceVersion: number;
+  mainSlot: ClientSpiritSlot | null;
+  slots: ClientSpiritSlot[];
+  codex: ClientSpiritCodexEntry[];
+  readyToCompose: ClientSpiritCodexEntry[];
+}
+
+export interface ClientSpiritStateResponse {
+  app: string;
+  spirit: ClientSpiritState;
+}
+
+export interface ClientBuySpiritSoulRequest {
+  goldAmount: number;
+  walletVersion?: number;
+  resourceVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientUpgradeSpiritRequest {
+  slotIndex: number;
+  slotVersion?: number;
+  resourceVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientSetMainSpiritRequest {
+  slotIndex: number;
+  slotVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientRecoverSpiritRequest {
+  slotIndex: number;
+  slotVersion?: number;
+  resourceVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientDissolveSpiritRequest {
+  slotIndex: number;
+  slotVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientComposeSpiritRequest {
+  spiritId: string;
+  slotIndex: number;
+  element: ClientSpiritElement;
+  codexVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientSpiritMutationResponse {
+  app: string;
+  summary: string;
+  spirit: ClientSpiritState;
+  home: HomeSummaryResponse;
+  scenes: ClientSceneContentResponse;
+}
+
+export interface ClientFarmBoardState {
+  farmBoardMessage: string;
+  farmBoardUpdatedAt: string | null;
+  farmBoardVersion: number;
+}
+
+export interface ClientFarmBoardUpdateRequest {
+  message: string;
+  farmBoardVersion?: number;
+}
+
+export interface ClientFarmBoardUpdateResponse {
+  app: string;
+  summary: string;
+  board: ClientFarmBoardState;
+}
+
+export interface ClientRaidMessageTemplate {
+  templateId: string;
+  text: string;
+}
+
+export interface ClientRaidMessageSnapshot {
+  messageTemplateId: string;
+  messageEmojiId: null;
+  messageTextSnapshot: string;
+}
+
+export interface ClientRaidOrderMessageRequest {
+  messageTemplateId: string;
+}
+
+export interface ClientRaidOrderMessageResponse {
+  app: string;
+  summary: string;
+  raidMessage: ClientRaidMessageSnapshot;
+  templates: ClientRaidMessageTemplate[];
+}
+
 export interface HealthResponse {
   app: string;
   status: 'ok';
@@ -39,6 +181,57 @@ export interface AdminOverviewResponse {
   app: string;
   docs: string;
   modules: string[];
+}
+
+export interface AdminPagination {
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export interface AdminSystemStatusResponse {
+  app: string;
+  environment: string;
+  version: string;
+  time: string;
+  database: { status: 'up' | 'down' };
+  workers: Array<{ name: string; status: 'registered' }>;
+  featureFlags: Record<string, boolean>;
+}
+
+export interface AdminPlayerSearchResponse {
+  items: Array<{
+    playerId: string;
+    nickname: string;
+    faction: string | null;
+    castleLevel: number;
+    lastLoginAt: string | null;
+    tags: string[];
+  }>;
+  pagination: AdminPagination;
+}
+
+export interface AdminListResponse<T> {
+  items: T[];
+  pagination: AdminPagination;
+}
+
+export interface AdminPlayerOverviewResponse {
+  identity: Record<string, unknown>;
+  wallet: Record<string, unknown> | null;
+  building: Record<string, unknown> | null;
+  army: Record<string, unknown> | null;
+  fields: Array<Record<string, unknown>>;
+  seedInventory: Record<string, unknown>;
+  dailyTasks: Array<Record<string, unknown>>;
+  recentReports: Array<Record<string, unknown>>;
+}
+
+export interface AdminRaidOrderDetailResponse {
+  order: Record<string, unknown>;
+  settlement: Record<string, unknown> | null;
+  reports: Array<Record<string, unknown>>;
+  assetLocks: Array<Record<string, unknown>>;
 }
 
 export type HomeResourceTone = 'vault' | 'army';
@@ -344,6 +537,7 @@ export interface ClientRaidTargetDetailResponse {
   raidRule: string;
   defenseStatus: string;
   protectionStatus: string;
+  targetFarmBoardMessage: string;
   detail: string;
   actions: ClientSceneAction[];
 }
@@ -361,6 +555,7 @@ export interface ClientReportEntry {
   createdAt: string;
   unread?: boolean;
   revengeable?: boolean;
+  raidMessage?: ClientRaidMessageSnapshot | null;
   actions: ClientSceneAction[];
 }
 
@@ -435,6 +630,7 @@ export interface ClientSceneContentResponse {
     hero: ClientFarmHero;
     targets: ClientRaidTarget[];
     detail: ClientRaidDetail;
+    messageTemplates: ClientRaidMessageTemplate[];
   };
   report: {
     defense: ClientReportEntry[];

@@ -1,11 +1,14 @@
 import {
   CLIENT_API_PREFIX,
+  type ClientBuySpiritSoulRequest,
   type ClientBootstrapResponse,
   type ClientArmyTrainingQueue,
   type ClientClaimDailyTaskRequest,
   type ClientClaimDailyTaskResponse,
+  type ClientComposeSpiritRequest,
   type ClientRaidActionRequest,
   type ClientRaidActionResponse,
+  type ClientDissolveSpiritRequest,
   type ClientFactionDonateRequest,
   type ClientClaimPendingRequest,
   type ClientClaimPendingResponse,
@@ -14,17 +17,26 @@ import {
   type ClientDailyTaskSummary,
   type ClientFarmField,
   type ClientRaidTargetDetailResponse,
+  type ClientRecoverSpiritRequest,
   type ClientRecruitArmyRequest,
   type ClientResetDemoStateResponse,
   type ClientSceneContentResponse,
   type ClientStartCultivationRequest,
   type ClientStateMutationResponse,
+  type ClientSetMainSpiritRequest,
+  type ClientSpiritMutationResponse,
+  type ClientSpiritState,
+  type ClientSpiritStateResponse,
   type ClientUpgradeBuildingRequest,
+  type ClientUpgradeSpiritRequest,
   type HomeSummaryResponse,
 } from '@trinitywar/shared';
 import { mockBootstrap, mockHomeSummary, mockRaidTargetDetails, mockSceneContent } from './mockData';
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
+const forceMockReads = parseViteBoolean(import.meta.env.VITE_FORCE_MOCK_READS);
+const allowMockReadFallback = parseViteBoolean(import.meta.env.VITE_ALLOW_MOCK_READ_FALLBACK);
+const forceMockCommands = parseViteBoolean(import.meta.env.VITE_FORCE_MOCK_COMMANDS);
 const AUTH_STORAGE_KEY = 'trinitywar.devAuth';
 
 type DataSource = 'api' | 'mock';
@@ -56,6 +68,13 @@ interface DataEnvelope<T> {
   data: T;
   source: DataSource;
   fallbackReason?: string;
+}
+
+interface ClientReadPolicy<T> {
+  endpoint: ClientReadEndpoint;
+  path: string;
+  fallback: T;
+  allowFallback: boolean;
 }
 
 export interface ClientReadSourceStatus {
@@ -251,6 +270,26 @@ function cloneSceneContent(scenes: ClientSceneContentResponse): ClientSceneConte
   return structuredClone(scenes);
 }
 
+function cloneSpiritState(spirit: ClientSpiritState): ClientSpiritState {
+  return {
+    ...spirit,
+    mainSlot: spirit.mainSlot ? { ...spirit.mainSlot } : null,
+    slots: spirit.slots.map((slot) => ({ ...slot })),
+    codex: spirit.codex.map((entry) => ({
+      ...entry,
+      definition: { ...entry.definition },
+    })),
+    readyToCompose: spirit.readyToCompose.map((entry) => ({
+      ...entry,
+      definition: { ...entry.definition },
+    })),
+  };
+}
+
+function parseViteBoolean(value: string | undefined): boolean {
+  return value === '1' || value?.toLowerCase() === 'true';
+}
+
 function createRaidDetailField(field: Partial<ClientFarmField> & Pick<ClientFarmField, 'id' | 'code' | 'title' | 'badge' | 'tone' | 'description'>): ClientFarmField {
   return {
     progressRemainingSeconds: 0,
@@ -377,15 +416,27 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function fetchWithFallback<T>(path: string, fallback: T): Promise<DataEnvelope<T>> {
+async function fetchReadEndpoint<T>(policy: ClientReadPolicy<T>): Promise<DataEnvelope<T>> {
+  if (forceMockReads) {
+    return {
+      data: policy.fallback,
+      source: 'mock',
+      fallbackReason: 'forced by VITE_FORCE_MOCK_READS',
+    };
+  }
+
   try {
     return {
-      data: await fetchJson<T>(path),
+      data: await fetchJson<T>(policy.path),
       source: 'api',
     };
   } catch (error) {
+    if (!policy.allowFallback) {
+      throw new Error(`${policy.endpoint} read requires real API but failed: ${getFallbackReason(error)}`);
+    }
+
     return {
-      data: fallback,
+      data: policy.fallback,
       source: 'mock',
       fallbackReason: getFallbackReason(error),
     };
@@ -401,13 +452,30 @@ function getFallbackReason(error: unknown): string {
 }
 
 export async function loadClientViewModel(): Promise<ClientViewModel> {
-  syncMockArmyTrainingQueue();
-  syncMockFieldLifecycle();
+  if (forceMockReads || allowMockReadFallback) {
+    syncMockArmyTrainingQueue();
+    syncMockFieldLifecycle();
+  }
 
   const [bootstrap, home, scenes] = await Promise.all([
-    fetchWithFallback<ClientBootstrapResponse>(`${CLIENT_API_PREFIX}/bootstrap`, mockBootstrapSnapshot),
-    fetchWithFallback<HomeSummaryResponse>(`${CLIENT_API_PREFIX}/home-summary`, mockHomeSnapshot),
-    fetchWithFallback<ClientSceneContentResponse>(`${CLIENT_API_PREFIX}/scene-content`, mockSceneSnapshot),
+    fetchReadEndpoint<ClientBootstrapResponse>({
+      endpoint: 'bootstrap',
+      path: `${CLIENT_API_PREFIX}/bootstrap`,
+      fallback: mockBootstrapSnapshot,
+      allowFallback: allowMockReadFallback,
+    }),
+    fetchReadEndpoint<HomeSummaryResponse>({
+      endpoint: 'home',
+      path: `${CLIENT_API_PREFIX}/home-summary`,
+      fallback: mockHomeSnapshot,
+      allowFallback: allowMockReadFallback,
+    }),
+    fetchReadEndpoint<ClientSceneContentResponse>({
+      endpoint: 'scenes',
+      path: `${CLIENT_API_PREFIX}/scene-content`,
+      fallback: mockSceneSnapshot,
+      allowFallback: allowMockReadFallback,
+    }),
   ]);
 
   const sources: ClientReadSources = {
@@ -423,6 +491,11 @@ export async function loadClientViewModel(): Promise<ClientViewModel> {
     usingMock: Object.values(sources).some((status) => status.source === 'mock'),
     sources,
   };
+}
+
+export async function loadSpiritState(): Promise<ClientSpiritState> {
+  const response = await fetchJson<ClientSpiritStateResponse>(`${CLIENT_API_PREFIX}/spirit`);
+  return cloneSpiritState(response.spirit);
 }
 
 function buildSourceStatus<T>(envelope: DataEnvelope<T>): ClientReadSourceStatus {
@@ -1183,21 +1256,21 @@ export async function collectFieldEarnings(input: ClientCollectFieldRequest): Pr
 }
 
 export async function startFieldCultivation(input: ClientStartCultivationRequest): Promise<ClientStateMutationResponse> {
-  try {
-    const response = await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/start-cultivation`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    });
-
-    mockHomeSnapshot = cloneHomeSummary(response.home);
-    mockSceneSnapshot = cloneSceneContent(response.scenes);
-    return response;
-  } catch {
+  if (forceMockCommands) {
     return applyMockStartCultivation(input);
   }
+
+  const response = await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/start-cultivation`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return response;
 }
 
 export async function recruitArmyUnits(input: ClientRecruitArmyRequest): Promise<ClientStateMutationResponse> {
@@ -1239,49 +1312,49 @@ export async function upgradeClientBuilding(input: ClientUpgradeBuildingRequest)
 }
 
 export async function donateFactionResources(input: ClientFactionDonateRequest): Promise<ClientStateMutationResponse> {
-  try {
-    const response = await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/faction-donate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    });
-
-    mockHomeSnapshot = cloneHomeSummary(response.home);
-    mockSceneSnapshot = cloneSceneContent(response.scenes);
-    return response;
-  } catch {
+  if (forceMockCommands) {
     return applyMockFactionDonate(input);
   }
+
+  const response = await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/faction-donate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return response;
 }
 
 export async function claimStarterSeedPack(): Promise<ClientStateMutationResponse> {
-  try {
-    return await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/claim-starter-seeds`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: '{}',
-    });
-  } catch {
+  if (forceMockCommands) {
     return applyMockClaimStarterSeeds();
   }
+
+  return fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/claim-starter-seeds`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: '{}',
+  });
 }
 
 export async function claimTianjiTalismanItem(): Promise<ClientStateMutationResponse> {
-  try {
-    return await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/claim-tianji-talisman`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: '{}',
-    });
-  } catch {
+  if (forceMockCommands) {
     return applyMockClaimTianjiTalisman();
   }
+
+  return fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/claim-tianji-talisman`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: '{}',
+  });
 }
 
 export async function resetDemoExperimentState(): Promise<ClientResetDemoStateResponse> {
@@ -1305,30 +1378,43 @@ export async function resetDemoExperimentState(): Promise<ClientResetDemoStateRe
     };
   };
 
-  try {
-    const response = await fetchJson<ClientResetDemoStateResponse>(`${CLIENT_API_PREFIX}/actions/reset-demo-state`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: '{}',
-    });
-
-    mockBootstrapSnapshot = cloneBootstrap(mockBootstrap);
-    mockHomeSnapshot = cloneHomeSummary(response.home);
-    mockSceneSnapshot = cloneSceneContent(response.scenes);
-    mockFieldTimingState = buildInitialMockFieldTimingStates();
-    return response;
-  } catch {
+  if (forceMockCommands) {
     return resetMockState();
   }
+
+  const response = await fetchJson<ClientResetDemoStateResponse>(`${CLIENT_API_PREFIX}/actions/reset-demo-state`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: '{}',
+  });
+
+  mockBootstrapSnapshot = cloneBootstrap(mockBootstrap);
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  mockFieldTimingState = buildInitialMockFieldTimingStates();
+  return response;
 }
 
 export async function loadRaidTargetDetail(targetId: string): Promise<ClientRaidTargetDetailResponse> {
+  const fallback = mockRaidTargetDetails[targetId];
+
+  if (forceMockReads) {
+    if (!fallback) {
+      throw new Error(`Missing mock raid target detail for ${targetId}`);
+    }
+
+    return normalizeRaidTargetDetail(structuredClone(fallback));
+  }
+
   try {
     return normalizeRaidTargetDetail(await fetchJson<ClientRaidTargetDetailResponse>(`${CLIENT_API_PREFIX}/raid-targets/${targetId}`));
-  } catch {
-    const fallback = mockRaidTargetDetails[targetId];
+  } catch (error) {
+    if (!allowMockReadFallback) {
+      throw new Error(`raid target detail read requires real API but failed: ${getFallbackReason(error)}`);
+    }
+
     if (!fallback) {
       throw new Error(`Missing mock raid target detail for ${targetId}`);
     }
@@ -1338,21 +1424,153 @@ export async function loadRaidTargetDetail(targetId: string): Promise<ClientRaid
 }
 
 export async function raidClientTarget(input: ClientRaidActionRequest): Promise<ClientRaidActionResponse> {
-  try {
-    const response = await fetchJson<ClientRaidActionResponse>(`${CLIENT_API_PREFIX}/actions/raid-target`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    });
-
-    mockHomeSnapshot = cloneHomeSummary(response.home);
-    mockSceneSnapshot = cloneSceneContent(response.scenes);
-    return response;
-  } catch {
+  if (forceMockCommands) {
     return applyMockRaidTarget(input);
   }
+
+  const response = await fetchJson<ClientRaidActionResponse>(`${CLIENT_API_PREFIX}/actions/raid-target`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return response;
+}
+
+export async function buySpiritSoul(input: ClientBuySpiritSoulRequest): Promise<ClientSpiritMutationResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('spirit-buy-soul');
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/buy-soul`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
+
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return {
+    ...response,
+    spirit: cloneSpiritState(response.spirit),
+  };
+}
+
+export async function upgradeSpirit(input: ClientUpgradeSpiritRequest): Promise<ClientSpiritMutationResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('spirit-upgrade');
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/upgrade`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
+
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return {
+    ...response,
+    spirit: cloneSpiritState(response.spirit),
+  };
+}
+
+export async function setMainSpirit(input: ClientSetMainSpiritRequest): Promise<ClientSpiritMutationResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('spirit-set-main');
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/set-main`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
+
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return {
+    ...response,
+    spirit: cloneSpiritState(response.spirit),
+  };
+}
+
+export async function recoverSpirit(input: ClientRecoverSpiritRequest): Promise<ClientSpiritMutationResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('spirit-recover');
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/recover`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
+
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return {
+    ...response,
+    spirit: cloneSpiritState(response.spirit),
+  };
+}
+
+export async function dissolveSpirit(input: ClientDissolveSpiritRequest): Promise<ClientSpiritMutationResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('spirit-dissolve');
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/dissolve`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
+
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return {
+    ...response,
+    spirit: cloneSpiritState(response.spirit),
+  };
+}
+
+export async function composeSpirit(input: ClientComposeSpiritRequest): Promise<ClientSpiritMutationResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('spirit-compose');
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/compose`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
+
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return {
+    ...response,
+    spirit: cloneSpiritState(response.spirit),
+  };
 }
 
 function readStoredDevLoginSession(): DevLoginSession | null {

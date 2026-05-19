@@ -77,6 +77,34 @@ enum BattleReportType {
   BOUNTY
 }
 
+enum SpiritRarity {
+  COMMON
+  RARE
+  LEGENDARY
+}
+
+enum SpiritRole {
+  ATTACK
+  DEFENSE
+  BALANCED
+  HEALTH
+}
+
+enum SpiritElement {
+  METAL
+  WOOD
+  WATER
+  FIRE
+  EARTH
+}
+
+enum PlayerSpiritStatus {
+  ACTIVE
+  WOUNDED
+  RESTING
+  DISSOLVED
+}
+
 model Player {
   id               String    @id @default(cuid())
   nickname         String
@@ -99,6 +127,12 @@ model Player {
   fieldHarvestLogs        FieldHarvestLog[]
   fieldSlots              PlayerFieldSlot[]
   seedInventory           PlayerSeedInventory[]
+  spiritCodex             PlayerSpiritCodex[]
+  spiritResource          PlayerSpiritResource?
+  spiritSlots             PlayerSpiritSlot[]
+  farmBoard               PlayerFarmBoard?
+  raidMessagesAuthored    RaidOrderMessage[]       @relation("RaidOrderMessageAuthor")
+  raidMessagesReceived    RaidOrderMessage[]       @relation("RaidOrderMessageReceiver")
   taskStates              PlayerDailyTaskState[]
   taskRewardLogs          TaskRewardLog[]
   idempotencyRecords      IdempotencyRecord[]
@@ -266,6 +300,150 @@ model SeedDefinition {
 
   @@unique([seedId])
   @@map("seed_definition")
+}
+
+model SpiritDefinition {
+  id                  String       @id @default(cuid())
+  spiritId            String       @map("spirit_id")
+  label               String
+  rarity              SpiritRarity
+  factionAffinity     String       @map("faction_affinity")
+  role                SpiritRole
+  shardName           String       @map("shard_name")
+  shardUnlockRequired Int          @default(100) @map("shard_unlock_required")
+  baseAttack          Int          @map("base_attack")
+  baseDefense         Int          @map("base_defense")
+  baseHp              Int          @map("base_hp")
+  growthAttack        Int          @map("growth_attack")
+  growthDefense       Int          @map("growth_defense")
+  growthHp            Int          @map("growth_hp")
+  sortOrder           Int          @default(0) @map("sort_order")
+  lore                String?
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  codexEntries PlayerSpiritCodex[]
+  spiritSlots  PlayerSpiritSlot[]
+
+  @@unique([spiritId])
+  @@index([rarity, sortOrder])
+  @@map("spirit_definition")
+}
+
+model PlayerSpiritResource {
+  playerId          String   @id @map("player_id")
+  spiritSoul        Int      @default(0) @map("spirit_soul")
+  dailyRecoveryUsed Int      @default(0) @map("daily_recovery_used")
+  resourceVersion   Int      @default(1) @map("resource_version")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("player_spirit_resource")
+}
+
+model PlayerSpiritSlot {
+  id                 String             @id @default(cuid())
+  playerId           String             @map("player_id")
+  slotIndex          Int                @map("slot_index")
+  spiritDefinitionId String?            @map("spirit_definition_id")
+  isMain             Boolean            @default(false) @map("is_main")
+  level              Int                @default(1)
+  exp                Int                @default(0)
+  element            SpiritElement?
+  currentHp          Int                @default(0) @map("current_hp")
+  maxHp              Int                @default(0) @map("max_hp")
+  status             PlayerSpiritStatus @default(ACTIVE)
+  acquiredAt         DateTime?          @map("acquired_at")
+  dissolvedAt        DateTime?          @map("dissolved_at")
+  slotVersion        Int                @default(1) @map("slot_version")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  player           Player            @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  spiritDefinition SpiritDefinition? @relation(fields: [spiritDefinitionId], references: [id], onDelete: SetNull)
+
+  @@unique([playerId, slotIndex])
+  @@index([playerId, isMain])
+  @@index([spiritDefinitionId])
+  @@map("player_spirit_slot")
+}
+
+model PlayerSpiritCodex {
+  id                 String    @id @default(cuid())
+  playerId           String    @map("player_id")
+  spiritDefinitionId String    @map("spirit_definition_id")
+  hasSeen            Boolean   @default(false) @map("has_seen")
+  shardCount         Int       @default(0) @map("shard_count")
+  readyToCompose     Boolean   @default(false) @map("ready_to_compose")
+  ownedCurrent       Boolean   @default(false) @map("owned_current")
+  ownedEver          Boolean   @default(false) @map("owned_ever")
+  firstSeenAt        DateTime? @map("first_seen_at")
+  readyAt            DateTime? @map("ready_at")
+  lastOwnedAt        DateTime? @map("last_owned_at")
+  codexVersion       Int       @default(1) @map("codex_version")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  player           Player           @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  spiritDefinition SpiritDefinition @relation(fields: [spiritDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, spiritDefinitionId])
+  @@index([playerId, readyToCompose])
+  @@index([spiritDefinitionId])
+  @@map("player_spirit_codex")
+}
+
+model PlayerFarmBoard {
+  playerId     String    @id @map("player_id")
+  message      String    @default("")
+  boardVersion Int       @default(1) @map("board_version")
+  hiddenAt     DateTime? @map("hidden_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("player_farm_board")
+}
+
+model RaidMessageTemplate {
+  id         String   @id @default(cuid())
+  templateId String   @map("template_id")
+  text       String
+  sortOrder  Int      @default(0) @map("sort_order")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  raidMessages RaidOrderMessage[]
+
+  @@unique([templateId])
+  @@index([isActive, sortOrder])
+  @@map("raid_message_template")
+}
+
+model RaidOrderMessage {
+  id               String   @id @default(cuid())
+  raidOrderId      String   @unique @map("raid_order_id")
+  authorPlayerId   String   @map("author_player_id")
+  receiverPlayerId String   @map("receiver_player_id")
+  templateId       String   @map("template_id")
+  textSnapshot     String   @map("text_snapshot")
+  isHidden         Boolean  @default(false) @map("is_hidden")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  raidOrder RaidOrder           @relation(fields: [raidOrderId], references: [id], onDelete: Cascade)
+  author    Player              @relation("RaidOrderMessageAuthor", fields: [authorPlayerId], references: [id], onDelete: Cascade)
+  receiver  Player              @relation("RaidOrderMessageReceiver", fields: [receiverPlayerId], references: [id], onDelete: Cascade)
+  template  RaidMessageTemplate @relation(fields: [templateId], references: [templateId], onDelete: Restrict)
+
+  @@index([authorPlayerId, createdAt])
+  @@index([receiverPlayerId, createdAt])
+  @@index([templateId])
+  @@map("raid_order_message")
 }
 
 model PlayerSeedInventory {
@@ -500,13 +678,14 @@ model RaidOrder {
   createdAt                 DateTime        @default(now()) @map("created_at")
   updatedAt                 DateTime        @updatedAt @map("updated_at")
 
-  attacker          Player           @relation("RaidOrderAttacker", fields: [attackerPlayerId], references: [id], onDelete: Cascade)
-  defender          Player           @relation("RaidOrderDefender", fields: [defenderPlayerId], references: [id], onDelete: Cascade)
-  defenderFieldSlot PlayerFieldSlot? @relation(fields: [defenderFieldSlotId], references: [id], onDelete: SetNull)
-  sourceTargetPool  RaidTargetPool?  @relation(fields: [sourceTargetPoolId], references: [id], onDelete: SetNull)
+  attacker          Player            @relation("RaidOrderAttacker", fields: [attackerPlayerId], references: [id], onDelete: Cascade)
+  defender          Player            @relation("RaidOrderDefender", fields: [defenderPlayerId], references: [id], onDelete: Cascade)
+  defenderFieldSlot PlayerFieldSlot?  @relation(fields: [defenderFieldSlotId], references: [id], onDelete: SetNull)
+  sourceTargetPool  RaidTargetPool?   @relation(fields: [sourceTargetPoolId], references: [id], onDelete: SetNull)
   assetLocks        RaidAssetLock[]
   settlement        RaidSettlement?
   battleReports     BattleReport[]
+  raidMessage       RaidOrderMessage?
 
   @@unique([requestIdempotencyKey])
   @@index([attackerPlayerId, status])

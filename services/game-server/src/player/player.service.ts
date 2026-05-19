@@ -1,5 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { APP_NAME } from '@trinitywar/shared';
+import {
+  APP_NAME,
+  type ClientFarmBoardState,
+  type ClientFarmBoardUpdateRequest,
+  type ClientFarmBoardUpdateResponse,
+} from '@trinitywar/shared';
+import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
 
@@ -62,4 +68,104 @@ export class PlayerService {
       },
     };
   }
+
+  async getFarmBoard(playerId: string): Promise<ClientFarmBoardState> {
+    const board = await this.prisma.db.playerFarmBoard.upsert({
+      where: { playerId },
+      create: {
+        playerId,
+        message: '',
+        boardVersion: 1,
+      },
+      update: {},
+    });
+
+    return toFarmBoardState(board);
+  }
+
+  async updateFarmBoard(
+    playerId: string,
+    request: ClientFarmBoardUpdateRequest,
+  ): Promise<ClientFarmBoardUpdateResponse> {
+    const message = normalizeFarmBoardMessage(request.message);
+
+    const board = await this.prisma.transaction(async (client) => {
+      const currentBoard = await client.playerFarmBoard.upsert({
+        where: { playerId },
+        create: {
+          playerId,
+          message: '',
+          boardVersion: 1,
+        },
+        update: {},
+      });
+
+      if (typeof request.farmBoardVersion === 'number' && request.farmBoardVersion !== currentBoard.boardVersion) {
+        throw new BusinessError({
+          code: ErrorCode.StateVersionConflict,
+          message: 'farmBoardVersion conflict.',
+          statusCode: 409,
+          details: { expected: request.farmBoardVersion, actual: currentBoard.boardVersion },
+        });
+      }
+
+      return client.playerFarmBoard.update({
+        where: { playerId },
+        data: {
+          message,
+          hiddenAt: null,
+          boardVersion: { increment: 1 },
+        },
+      });
+    });
+
+    return {
+      app: APP_NAME,
+      summary: 'Farm board message updated.',
+      board: toFarmBoardState(board),
+    };
+  }
+}
+
+function toFarmBoardState(board: {
+  message: string;
+  updatedAt: Date;
+  boardVersion: number;
+  hiddenAt: Date | null;
+}): ClientFarmBoardState {
+  return {
+    farmBoardMessage: board.hiddenAt ? '' : board.message,
+    farmBoardUpdatedAt: board.updatedAt.toISOString(),
+    farmBoardVersion: board.boardVersion,
+  };
+}
+
+function normalizeFarmBoardMessage(rawMessage: string): string {
+  const message = rawMessage.trim().replace(/\s+/g, ' ');
+
+  if (message.length <= 0) {
+    throwBadFarmBoardMessage('Farm board message cannot be blank.');
+  }
+
+  if (message.length > 40) {
+    throwBadFarmBoardMessage('Farm board message must be 40 characters or fewer.');
+  }
+
+  if (/https?:\/\/|www\.|@|微信|QQ|电话|手机|vx|wechat/i.test(message)) {
+    throwBadFarmBoardMessage('Farm board message cannot contain links or contact information.');
+  }
+
+  if (!/^[\p{Script=Han}A-Za-z0-9，。！？、,.!?·\-\s]+$/u.test(message)) {
+    throwBadFarmBoardMessage('Farm board message contains unsupported characters.');
+  }
+
+  return message;
+}
+
+function throwBadFarmBoardMessage(message: string): never {
+  throw new BusinessError({
+    code: ErrorCode.BadRequest,
+    message,
+    statusCode: 400,
+  });
 }

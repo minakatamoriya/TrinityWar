@@ -1,7 +1,9 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { DEV_ACCOUNT_SEEDS } from './seed-data/dev-accounts.js';
 import { FACTION_SEEDS } from './seed-data/factions.js';
+import { RAID_MESSAGE_TEMPLATE_SEEDS } from './seed-data/raid-messages.js';
 import { SEED_DEFINITION_SEEDS } from './seed-data/seeds.js';
+import { SPIRIT_DEFINITION_SEEDS } from './seed-data/spirits.js';
 import { PlayerInitializationService } from './player-initialization.service.js';
 
 type TransactionClient = Prisma.TransactionClient;
@@ -40,6 +42,41 @@ export async function runSeed(): Promise<void> {
             harvestSeedReturn: seed.harvestSeedReturn,
             strategyNote: seed.strategyNote,
             lore: seed.lore,
+          },
+        });
+      }
+
+      for (const spirit of SPIRIT_DEFINITION_SEEDS) {
+        await client.spiritDefinition.upsert({
+          where: { spiritId: spirit.spiritId },
+          create: spirit,
+          update: {
+            label: spirit.label,
+            rarity: spirit.rarity,
+            factionAffinity: spirit.factionAffinity,
+            role: spirit.role,
+            shardName: spirit.shardName,
+            shardUnlockRequired: spirit.shardUnlockRequired,
+            baseAttack: spirit.baseAttack,
+            baseDefense: spirit.baseDefense,
+            baseHp: spirit.baseHp,
+            growthAttack: spirit.growthAttack,
+            growthDefense: spirit.growthDefense,
+            growthHp: spirit.growthHp,
+            sortOrder: spirit.sortOrder,
+            lore: spirit.lore,
+          },
+        });
+      }
+
+      for (const template of RAID_MESSAGE_TEMPLATE_SEEDS) {
+        await client.raidMessageTemplate.upsert({
+          where: { templateId: template.templateId },
+          create: template,
+          update: {
+            text: template.text,
+            sortOrder: template.sortOrder,
+            isActive: template.isActive,
           },
         });
       }

@@ -20,6 +20,13 @@
 2. 需要连接独立测试服时，在 `apps/game-client/.env.local` 中设置 `VITE_API_BASE_URL=https://your-test-domain.com`。
 3. 构建部署后，前端会请求 `${VITE_API_BASE_URL}/api/client/...`；如果变量留空，则仍请求当前域名下的 `/api/client/...`。
 
+### Read Mock Switches
+
+1. `bootstrap` and `home-summary` require the real API by default.
+2. Set `VITE_ALLOW_MOCK_READ_FALLBACK=true` only for local fallback debugging.
+3. Set `VITE_FORCE_MOCK_READS=true` only for explicit offline visual demos.
+4. Set `VITE_FORCE_MOCK_COMMANDS=true` only when local command handlers should simulate mutations.
+
 ## Current Layout
 
 - `src/App.tsx`: 页面壳、导航、弹窗和本地交互状态。

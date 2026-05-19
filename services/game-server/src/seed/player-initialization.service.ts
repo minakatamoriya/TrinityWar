@@ -1,6 +1,7 @@
-import type { FieldStatus, Prisma } from '@prisma/client';
+import type { FieldStatus, Prisma, SpiritElement } from '@prisma/client';
 import { DAILY_TASK_CONFIG } from '../lib/game-balance.js';
 import { getLocalDateKey } from '../lib/date-key.js';
+import { DEFAULT_STARTER_SPIRIT_ID, SPIRIT_SLOT_COUNT } from './seed-data/spirits.js';
 
 export interface PlayerInitializationInput {
   playerId: string;
@@ -25,6 +26,11 @@ export interface PlayerInitializationInput {
     capacity: number;
   };
   seedInventory?: Record<string, { quantity: number; unlocked: boolean }>;
+  spirit?: {
+    spiritSoul?: number;
+    starterSpiritId?: string;
+    starterElement?: SpiritElement;
+  };
   fields?: PlayerFieldInitializationInput[];
   taskOverrides?: Array<{
     taskId: string;
@@ -148,6 +154,8 @@ export class PlayerInitializationService {
 
     await this.initializeFields(client, input.playerId, input.fields ?? buildDefaultFields(castleLevel), seedIdToDefinitionId, now, resetExisting);
     await this.initializeSeedInventory(client, input.playerId, input.seedInventory ?? starterSeedInventory, seedDefinitions, now, resetExisting);
+    await this.initializeSpiritState(client, input.playerId, input.spirit, now, resetExisting);
+    await this.initializeFarmBoard(client, input.playerId, resetExisting);
     await this.initializeDailyTasks(client, input.playerId, input.taskOverrides, resetExisting);
 
     await client.player.update({
@@ -308,6 +316,156 @@ export class PlayerInitializationService {
       });
     }
   }
+
+  private async initializeSpiritState(
+    client: Prisma.TransactionClient,
+    playerId: string,
+    spirit: PlayerInitializationInput['spirit'],
+    now: Date,
+    resetExisting: boolean,
+  ): Promise<void> {
+    const starterSpiritId = spirit?.starterSpiritId ?? DEFAULT_STARTER_SPIRIT_ID;
+    const starterElement = spirit?.starterElement ?? 'WOOD';
+    const spiritSoul = spirit?.spiritSoul ?? 0;
+    const spiritDefinitions = await client.spiritDefinition.findMany({
+      select: {
+        id: true,
+        spiritId: true,
+        baseHp: true,
+        growthHp: true,
+      },
+    });
+    const starterDefinition = spiritDefinitions.find((definition) => definition.spiritId === starterSpiritId)
+      ?? spiritDefinitions.find((definition) => definition.spiritId === DEFAULT_STARTER_SPIRIT_ID)
+      ?? spiritDefinitions[0];
+
+    await client.playerSpiritResource.upsert({
+      where: { playerId },
+      create: {
+        playerId,
+        spiritSoul,
+        dailyRecoveryUsed: 0,
+        resourceVersion: 1,
+      },
+      update: resetExisting
+        ? {
+          spiritSoul,
+          dailyRecoveryUsed: 0,
+          resourceVersion: { increment: 1 },
+        }
+        : {},
+    });
+
+    for (let slotIndex = 1; slotIndex <= SPIRIT_SLOT_COUNT; slotIndex += 1) {
+      const shouldCreateStarter = slotIndex === 1 && !!starterDefinition;
+      const maxHp = shouldCreateStarter ? calculateSpiritMaxHp(starterDefinition, 1) : 0;
+
+      await client.playerSpiritSlot.upsert({
+        where: {
+          playerId_slotIndex: {
+            playerId,
+            slotIndex,
+          },
+        },
+        create: {
+          playerId,
+          slotIndex,
+          spiritDefinitionId: shouldCreateStarter ? starterDefinition.id : null,
+          isMain: shouldCreateStarter,
+          level: 1,
+          exp: 0,
+          element: shouldCreateStarter ? starterElement : null,
+          currentHp: maxHp,
+          maxHp,
+          status: 'ACTIVE',
+          acquiredAt: shouldCreateStarter ? now : null,
+          slotVersion: 1,
+        },
+        update: resetExisting
+          ? {
+            spiritDefinitionId: shouldCreateStarter ? starterDefinition.id : null,
+            isMain: shouldCreateStarter,
+            level: 1,
+            exp: 0,
+            element: shouldCreateStarter ? starterElement : null,
+            currentHp: maxHp,
+            maxHp,
+            status: 'ACTIVE',
+            acquiredAt: shouldCreateStarter ? now : null,
+            dissolvedAt: null,
+            slotVersion: { increment: 1 },
+          }
+          : {},
+      });
+    }
+
+    for (const definition of spiritDefinitions) {
+      const isStarter = starterDefinition?.id === definition.id;
+
+      await client.playerSpiritCodex.upsert({
+        where: {
+          playerId_spiritDefinitionId: {
+            playerId,
+            spiritDefinitionId: definition.id,
+          },
+        },
+        create: {
+          playerId,
+          spiritDefinitionId: definition.id,
+          hasSeen: isStarter,
+          shardCount: 0,
+          readyToCompose: false,
+          ownedCurrent: isStarter,
+          ownedEver: isStarter,
+          firstSeenAt: isStarter ? now : null,
+          lastOwnedAt: isStarter ? now : null,
+          codexVersion: 1,
+        },
+        update: resetExisting
+          ? {
+            hasSeen: isStarter,
+            shardCount: 0,
+            readyToCompose: false,
+            ownedCurrent: isStarter,
+            ownedEver: isStarter,
+            firstSeenAt: isStarter ? now : null,
+            readyAt: null,
+            lastOwnedAt: isStarter ? now : null,
+            codexVersion: { increment: 1 },
+          }
+          : {},
+      });
+    }
+  }
+
+  private async initializeFarmBoard(
+    client: Prisma.TransactionClient,
+    playerId: string,
+    resetExisting: boolean,
+  ): Promise<void> {
+    await client.playerFarmBoard.upsert({
+      where: { playerId },
+      create: {
+        playerId,
+        message: '欢迎来访，成熟田地各凭本事。',
+        boardVersion: 1,
+      },
+      update: resetExisting
+        ? {
+          message: '欢迎来访，成熟田地各凭本事。',
+          hiddenAt: null,
+          boardVersion: { increment: 1 },
+        }
+        : {},
+    });
+  }
+}
+
+function calculateSpiritMaxHp(
+  definition: { baseHp: number; growthHp: number },
+  level: number,
+): number {
+  return definition.baseHp + Math.max(level - 1, 0) * definition.growthHp;
 }
 
 function buildDefaultFields(castleLevel: number): PlayerFieldInitializationInput[] {

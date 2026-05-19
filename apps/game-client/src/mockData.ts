@@ -1,4 +1,4 @@
-import { APP_NAME, type ClientBootstrapResponse, type ClientDailyTaskSummary, type ClientFarmField, type ClientRaidTargetDetailResponse, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
+﻿import { APP_NAME, type ClientBootstrapResponse, type ClientDailyTaskSummary, type ClientFarmField, type ClientRaidMessageTemplate, type ClientRaidTargetDetailResponse, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 
 const mockDailyTasks: ClientDailyTaskSummary[] = [
   {
@@ -45,6 +45,14 @@ function createRaidDetailField(field: Partial<ClientFarmField> & Pick<ClientFarm
     actions: field.actions ?? [],
   };
 }
+
+export const mockRaidMessageTemplates: ClientRaidMessageTemplate[] = [
+  { templateId: 'steady-harvest', text: '今日借一程，来日还一礼。' },
+  { templateId: 'field-well-kept', text: '田照顾得不错，我记下了。' },
+  { templateId: 'next-time-guard', text: '下次记得把成熟田守紧。' },
+  { templateId: 'fair-raid', text: '各凭本事，不伤和气。' },
+  { templateId: 'come-again', text: '这次收下了，改日再会。' },
+];
 
 export const mockBootstrap: ClientBootstrapResponse = {
   app: APP_NAME,
@@ -354,6 +362,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         { label: '确认派遣', target: 'raid', tone: 'primary' },
       ],
     },
+    messageTemplates: mockRaidMessageTemplates,
   },
   report: {
     defense: [
@@ -453,6 +462,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     raidRule: '按当前金币的一部分结算，本次预计命中 520 金币',
     defenseStatus: '防守偏弱，守田灵宠少于常见同级目标',
     protectionStatus: '当前无保护，可直接发起掠夺或通缉令',
+    targetFarmBoardMessage: '成熟田可看，手快者得。',
     detail: '对手昵称烬牙，刚结束一轮农场收取，外露收益仍然较高。魔界加成偏向进攻，适合快速出手。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
@@ -479,6 +489,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     raidRule: '按当前金币的一部分结算，本次预计命中 260 金币',
     defenseStatus: '防守偏稳，仙界被掠损失减免明显',
     protectionStatus: '刚结束保护期，可被单人试探',
+    targetFarmBoardMessage: '仙田清静，来者留名。',
     detail: '对手昵称云栖，收益中等但仙界自带减损，适合先做一轮稳妥试探。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
@@ -504,6 +515,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     raidRule: '按当前金币的一部分结算，本次预计命中 180 金币',
     defenseStatus: '人界经营向，防守一般，但暴露收益偏低',
     protectionStatus: '今日未被掠，可正常查看并试探',
+    targetFarmBoardMessage: '小田薄收，路过随缘。',
     detail: '对手昵称临风，收益较低，更适合作为保守出手对象。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
@@ -530,6 +542,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     raidRule: '按当前金币的一部分结算，本次预计命中 460 金币',
     defenseStatus: '中等防守，守备偏强但守田灵宠分散',
     protectionStatus: '当前无保护，可立即出手',
+    targetFarmBoardMessage: '守田不易，量力而行。',
     detail: '对手昵称玄潮，主城等级高一档，收益不错，但正面强碰战损会更高。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
@@ -556,6 +569,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     raidRule: '按当前金币的一部分结算，本次预计命中 140 金币',
     defenseStatus: '防守偏弱，适合低损验证',
     protectionStatus: '保护已结束，可正常掠夺',
+    targetFarmBoardMessage: '新手田地，请轻些下手。',
     detail: '对手昵称青槐，适合低风险起手，重点看田地收益是否值得你消耗免费次数。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },

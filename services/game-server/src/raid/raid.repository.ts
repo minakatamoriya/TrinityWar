@@ -31,6 +31,7 @@ export class RaidRepository {
             nickname: true,
             castleLevelCache: true,
             faction: { select: { name: true } },
+            farmBoard: { select: { message: true, hiddenAt: true } },
             wallet: { select: { vaultGold: true, walletGold: true } },
             army: {
               select: {
@@ -112,6 +113,7 @@ export class RaidRepository {
         assetLocks: true,
         settlement: true,
         battleReports: true,
+        raidMessage: true,
       },
     });
   }
@@ -168,6 +170,7 @@ export class RaidRepository {
                 armyVersion: true,
               },
             },
+            farmBoard: { select: { message: true, hiddenAt: true } },
           },
         },
         defender: {
@@ -176,6 +179,7 @@ export class RaidRepository {
             nickname: true,
           },
         },
+        raidMessage: true,
       },
     });
   }

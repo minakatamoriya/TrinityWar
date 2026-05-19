@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import type {
-  ClientArmyTrainingQueue,
   ClientCastleExtensionUpgradeId,
   ClientCollectFieldRequest,
   ClientCollectFieldResponse,
   ClientRaidActionRequest,
-  ClientRecruitArmyRequest,
   ClientFactionDonateRequest,
   ClientBuildingUpgradeId,
   ClientClaimPendingRequest,
@@ -13,9 +11,11 @@ import type {
   ClientRaidTargetDetailResponse,
   ClientSceneAction,
   ClientSceneKey,
+  ClientSpiritElement,
+  ClientSpiritState,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { claimDailyTaskReward, claimPendingEarnings, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, devLogin, donateFactionResources, getStoredDevLoginSession, loadClientViewModel, loadRaidTargetDetail, raidClientTarget, recruitArmyUnits, resetDemoExperimentState, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, upgradeClientBuilding } from './api';
+import { buySpiritSoul, claimDailyTaskReward, claimPendingEarnings, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, composeSpirit, devLogin, dissolveSpirit, donateFactionResources, getStoredDevLoginSession, loadClientViewModel, loadRaidTargetDetail, loadSpiritState, raidClientTarget, recoverSpirit, resetDemoExperimentState, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, upgradeClientBuilding, upgradeSpirit } from './api';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
 import { BuildingScene } from './ui/scenes/BuildingScene';
@@ -225,13 +225,6 @@ function formatServerTime(serverTime: string): string {
   }).format(new Date(serverTime));
 }
 
-function getMaxRecruitable(currentGold: number, currentArmy: number, armyCapacity: number, unitCostGold: number, queuedArmyCount = 0): number {
-  const remainingCapacity = Math.max(armyCapacity - currentArmy - queuedArmyCount, 0);
-  const affordableCount = unitCostGold > 0 ? Math.floor(currentGold / unitCostGold) : 0;
-
-  return Math.min(remainingCapacity, affordableCount);
-}
-
 function buildSeasonProgress(status: ClientViewModel['bootstrap']['season']): {
   label: string;
   detail: string;
@@ -321,18 +314,6 @@ function formatReadSource(status: ClientReadSourceStatus): string {
   return status.source === 'api' ? '实时接口' : `本地演示数据${status.fallbackReason ? `（${status.fallbackReason}）` : ''}`;
 }
 
-function getDefaultRecruitCount(currentGold: number, currentArmy: number, armyCapacity: number, unitCostGold: number, queuedArmyCount = 0): number {
-  const remainingCapacity = Math.max(armyCapacity - currentArmy - queuedArmyCount, 0);
-  const affordableCount = unitCostGold > 0 ? Math.floor(currentGold / unitCostGold) : 0;
-  const maxRecruitable = Math.min(remainingCapacity, affordableCount);
-
-  if (maxRecruitable <= 0) {
-    return 0;
-  }
-
-  return Math.max(Math.floor(maxRecruitable / 2), 1);
-}
-
 function getFactionBackground(factionName: string): string {
   return factionBackgroundMap[factionName] ?? factionBackgroundMap['人界'];
 }
@@ -356,6 +337,7 @@ function resolveRaidTargetByContext(targets: ClientRaidTarget[], context?: strin
 
 function App(): JSX.Element {
   const [viewModel, setViewModel] = useState<ClientViewModel | null>(null);
+  const [spiritState, setSpiritState] = useState<ClientSpiritState | null>(null);
   const [loginSession, setLoginSession] = useState<DevLoginSession | null>(() => getStoredDevLoginSession());
   const [loginLoadingMode, setLoginLoadingMode] = useState<DevLoginMode | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -386,7 +368,6 @@ function App(): JSX.Element {
   const [seedRewardModal, setSeedRewardModal] = useState<SeedRewardModalState | null>(null);
   const [seedSelectionState, setSeedSelectionState] = useState<SeedSelectionState | null>(null);
   const [seedCodexState, setSeedCodexState] = useState<SeedCodexState | null>(null);
-  const [armyRecruitCount, setArmyRecruitCount] = useState(0);
   const [armyQueueRefreshReadyAt, setArmyQueueRefreshReadyAt] = useState<string | null>(null);
   const [selectedSeedId, setSelectedSeedId] = useState<string>('qinglingmai');
   const [fieldSeedAssignments, setFieldSeedAssignments] = useState<Record<string, string>>({});
@@ -428,15 +409,32 @@ function App(): JSX.Element {
     syncSeedBackpackState(data.bootstrap.backpack);
   };
 
+  const applyClientBundle = (data: { viewModel: ClientViewModel; spirit: ClientSpiritState }): void => {
+    applyClientViewModel(data.viewModel);
+    setSpiritState(data.spirit);
+  };
+
+  const loadClientBundle = async (): Promise<{ viewModel: ClientViewModel; spirit: ClientSpiritState }> => {
+    const [nextViewModel, nextSpirit] = await Promise.all([
+      loadClientViewModel(),
+      loadSpiritState(),
+    ]);
+
+    return {
+      viewModel: nextViewModel,
+      spirit: nextSpirit,
+    };
+  };
+
   const handleDevLogin = async (mode: DevLoginMode): Promise<void> => {
     setLoginLoadingMode(mode);
     setLoginError(null);
 
     try {
       const session = await devLogin(mode);
-      const data = await loadClientViewModel();
+      const data = await loadClientBundle();
       setLoginSession(session);
-      applyClientViewModel(data);
+      applyClientBundle(data);
     } catch {
       setLoginError('无法连接开发登录接口，请确认后端已启动，并且 VITE_API_BASE_URL 指向正确地址。');
     } finally {
@@ -449,6 +447,7 @@ function App(): JSX.Element {
     clearDevLoginSession();
     setLoginSession(null);
     setViewModel(null);
+    setSpiritState(null);
     setLoginError(null);
   };
 
@@ -459,12 +458,12 @@ function App(): JSX.Element {
 
     let active = true;
 
-    void loadClientViewModel().then((data) => {
+    void loadClientBundle().then((data) => {
       if (!active) {
         return;
       }
 
-      applyClientViewModel(data);
+      applyClientBundle(data);
     }).catch(() => {
       if (!active) {
         return;
@@ -472,6 +471,7 @@ function App(): JSX.Element {
 
       clearDevLoginSession();
       setLoginSession(null);
+      setSpiritState(null);
       setLoginError('登录已失效或真实接口不可用，请重新选择测试账号。');
     });
 
@@ -484,26 +484,6 @@ function App(): JSX.Element {
     if (!viewModel) {
       return;
     }
-
-    const nextVaultResource = findResourceByTone('vault', viewModel.home.resources);
-    const nextArmyResource = findResourceByTone('army', viewModel.home.resources);
-    const nextVaultProgress = nextVaultResource ? parseCapacityResourceValue(nextVaultResource.value) : { current: 0, capacity: 0, ratio: 0 };
-    const nextArmyProgress = nextArmyResource ? parseCapacityResourceValue(nextArmyResource.value) : { current: 0, capacity: 0, ratio: 0 };
-    const nextQueuedArmyCount = viewModel.scenes.army.queue?.queuedUnits ?? 0;
-    const unitCostGold = viewModel.scenes.army.unitCostGold;
-    const maxRecruitable = getMaxRecruitable(nextVaultProgress.current, nextArmyProgress.current, nextArmyProgress.capacity, unitCostGold, nextQueuedArmyCount);
-
-    setArmyRecruitCount((current) => {
-      if (maxRecruitable <= 0) {
-        return 0;
-      }
-
-      if (current <= 0 || current > maxRecruitable) {
-        return getDefaultRecruitCount(nextVaultProgress.current, nextArmyProgress.current, nextArmyProgress.capacity, unitCostGold, nextQueuedArmyCount);
-      }
-
-      return current;
-    });
 
     setFarmTick(0);
 
@@ -626,7 +606,7 @@ function App(): JSX.Element {
     };
   }, [armyQueueRefreshReadyAt, farmTick, viewModel]);
 
-  if (!viewModel) {
+  if (!viewModel || !spiritState) {
     if (!loginSession) {
       return (
         <main className="loading-shell auth-shell">
@@ -698,7 +678,6 @@ function App(): JSX.Element {
   const armyProgress = armyResource ? parseCapacityResourceValue(armyResource.value) : { current: 0, capacity: 0, ratio: 0 };
   const seasonProgress = buildSeasonProgress(bootstrap.season);
   const hourlyTax = parseHourlyTax(taxPending?.description);
-  const armyTrainingQueue: ClientArmyTrainingQueue | null = scenes.army.queue;
   const temporaryClaim = home.temporaryClaim;
   const temporaryClaimRemainingSeconds = getRemainingSeconds(temporaryClaim?.expiresAt);
   const activeTemporaryClaim = temporaryClaim && temporaryClaim.goldAmount > 0 && temporaryClaimRemainingSeconds > 0 ? temporaryClaim : null;
@@ -777,24 +756,125 @@ function App(): JSX.Element {
     }));
   };
 
-  const handleRecruitArmy = async (): Promise<void> => {
-    if (pendingActionKey === 'army:recruit') {
+  const handleBuySpiritSoul = async (): Promise<void> => {
+    if (!spiritState || pendingActionKey === 'spirit:buy-soul') {
       return;
     }
 
-    const input: ClientRecruitArmyRequest = {
-      recruitCount: armyRecruitCount,
-      armyVersion: home.stateVersions.armyVersion,
-      walletVersion: home.stateVersions.walletVersion,
-    };
-
-    setPendingActionKey('army:recruit');
+    setPendingActionKey('spirit:buy-soul');
 
     try {
-      const result = await recruitArmyUnits(input);
-      applyMutationResult(result);
+      const result = await buySpiritSoul({
+        goldAmount: scenes.army.unitCostGold,
+        walletVersion: home.stateVersions.walletVersion,
+        resourceVersion: spiritState.resourceVersion,
+      });
+      applySpiritMutationResult(result);
     } catch {
-      showToast('当前无法完成灵宠培育，请稍后重试。', 'error');
+      showToast('当前无法购买兽魂，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleUpgradeSpiritAction = async (slotIndex: number, slotVersion: number): Promise<void> => {
+    if (!spiritState || pendingActionKey === `spirit:upgrade:${slotIndex}`) {
+      return;
+    }
+
+    setPendingActionKey(`spirit:upgrade:${slotIndex}`);
+
+    try {
+      const result = await upgradeSpirit({
+        slotIndex,
+        slotVersion,
+        resourceVersion: spiritState.resourceVersion,
+      });
+      applySpiritMutationResult(result);
+    } catch {
+      showToast('当前无法升级灵宠，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleSetMainSpiritAction = async (slotIndex: number, slotVersion: number): Promise<void> => {
+    if (pendingActionKey === `spirit:set-main:${slotIndex}`) {
+      return;
+    }
+
+    setPendingActionKey(`spirit:set-main:${slotIndex}`);
+
+    try {
+      const result = await setMainSpirit({
+        slotIndex,
+        slotVersion,
+      });
+      applySpiritMutationResult(result);
+    } catch {
+      showToast('当前无法切换主位灵宠，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleRecoverSpiritAction = async (slotIndex: number, slotVersion: number): Promise<void> => {
+    if (!spiritState || pendingActionKey === `spirit:recover:${slotIndex}`) {
+      return;
+    }
+
+    setPendingActionKey(`spirit:recover:${slotIndex}`);
+
+    try {
+      const result = await recoverSpirit({
+        slotIndex,
+        slotVersion,
+        resourceVersion: spiritState.resourceVersion,
+      });
+      applySpiritMutationResult(result);
+    } catch {
+      showToast('当前无法恢复灵宠，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleDissolveSpiritAction = async (slotIndex: number, slotVersion: number): Promise<void> => {
+    if (pendingActionKey === `spirit:dissolve:${slotIndex}`) {
+      return;
+    }
+
+    setPendingActionKey(`spirit:dissolve:${slotIndex}`);
+
+    try {
+      const result = await dissolveSpirit({
+        slotIndex,
+        slotVersion,
+      });
+      applySpiritMutationResult(result);
+    } catch {
+      showToast('当前无法解散灵宠，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleComposeSpiritAction = async (spiritId: string, slotIndex: number, element: ClientSpiritElement): Promise<void> => {
+    if (pendingActionKey === `spirit:compose:${slotIndex}`) {
+      return;
+    }
+
+    setPendingActionKey(`spirit:compose:${slotIndex}`);
+
+    try {
+      const result = await composeSpirit({
+        spiritId,
+        slotIndex,
+        element,
+      });
+      applySpiritMutationResult(result);
+    } catch {
+      showToast('当前无法合成灵宠，请稍后重试。', 'error');
     } finally {
       setPendingActionKey(null);
     }
@@ -944,6 +1024,7 @@ function App(): JSX.Element {
 
     try {
       const result = await resetDemoExperimentState();
+      const nextSpiritState = await loadSpiritState();
       triggerResourcePulse(result.home);
       setViewModel((current) => {
         if (!current) {
@@ -956,6 +1037,7 @@ function App(): JSX.Element {
           scenes: result.scenes,
         };
       });
+      setSpiritState(nextSpiritState);
 
       showToast(result.summary, 'success');
       setActiveScene('home');
@@ -967,7 +1049,6 @@ function App(): JSX.Element {
       setStarterSeedClaimed(false);
       setTianjiTalismanClaimed(false);
       setSeedRewardModal(null);
-      setArmyRecruitCount(0);
       setArmyQueueRefreshReadyAt(null);
       setSeedSelectionState(null);
       setSelectedSeedId('qinglingmai');
@@ -1048,6 +1129,11 @@ function App(): JSX.Element {
     });
 
     showToast(result.summary, 'success');
+  };
+
+  const applySpiritMutationResult = (result: { home: HomeSummaryResponse; scenes: ClientViewModel['scenes']; spirit: ClientSpiritState; summary: string }): void => {
+    applyMutationResult(result);
+    setSpiritState(result.spirit);
   };
 
   const navigateToScene = (scene: ClientSceneKey, nextRaidHubTab?: RaidHubTabKey): void => {
@@ -1652,19 +1738,30 @@ function App(): JSX.Element {
 
             {activeScene === 'raid' ? (
               <ArmyScene
-                armyCapacity={armyProgress.capacity}
-                confirming={pendingActionKey === 'army:recruit'}
                 currentArmy={armyProgress.current}
                 currentGold={vaultProgress.current}
-                onConfirm={() => {
-                  void handleRecruitArmy();
+                busy={pendingActionKey?.startsWith('spirit:') ?? false}
+                onBuySoul={() => {
+                  void handleBuySpiritSoul();
                 }}
-                onSelectCount={setArmyRecruitCount}
+                onCompose={(spiritId, slotIndex, element) => {
+                  void handleComposeSpiritAction(spiritId, slotIndex, element);
+                }}
+                onDissolve={(slotIndex, slotVersion) => {
+                  void handleDissolveSpiritAction(slotIndex, slotVersion);
+                }}
+                onRecover={(slotIndex, slotVersion) => {
+                  void handleRecoverSpiritAction(slotIndex, slotVersion);
+                }}
+                onSetMain={(slotIndex, slotVersion) => {
+                  void handleSetMainSpiritAction(slotIndex, slotVersion);
+                }}
+                onUpgrade={(slotIndex, slotVersion) => {
+                  void handleUpgradeSpiritAction(slotIndex, slotVersion);
+                }}
                 playerFaction={home.factionName}
-                selectedCount={armyRecruitCount}
-                trainingQueue={armyTrainingQueue}
+                spirit={spiritState}
                 unitCostGold={scenes.army.unitCostGold}
-                unitTrainingSeconds={scenes.army.unitTrainingSeconds}
               />
             ) : null}
 

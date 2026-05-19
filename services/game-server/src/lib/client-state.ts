@@ -1,4 +1,4 @@
-import {
+﻿import {
   APP_NAME,
   type ClientArmyTrainingQueue,
   type ClientBootstrapResponse,
@@ -1150,6 +1150,7 @@ export function buildRaidTargetDetail(targetId: string): ClientRaidTargetDetailR
       defenseStatus: '防守一般，当前暴露值较低',
       protectionStatus: '当前不在可攻击目标池中',
       detail: '该目标当前不可用，可能正处于保护中或已从目标池移除。',
+      targetFarmBoardMessage: '',
       actions: [{ label: '返回掠夺页', target: 'report', tone: 'ghost' }],
     };
   }
@@ -1170,6 +1171,7 @@ export function buildRaidTargetDetail(targetId: string): ClientRaidTargetDetailR
     defenseStatus: target.defenseStatus,
     protectionStatus: formatProtectionStatus(target),
     detail: target.detail,
+    targetFarmBoardMessage: '',
     actions: isTargetProtected(target) ? [{ label: '保护中', target: 'raid', tone: 'ghost' }] : buildRaidDetailActions(),
   };
 }
@@ -1474,6 +1476,13 @@ export function buildSceneContent(): ClientSceneContentResponse {
           { label: '确认出兵', target: 'raid', tone: 'primary' },
         ],
       },
+      messageTemplates: [
+        { templateId: 'steady-harvest', text: '今日借一程，来日还一礼。' },
+        { templateId: 'field-well-kept', text: '田照顾得不错，我记下了。' },
+        { templateId: 'next-time-guard', text: '下次记得把成熟田守紧。' },
+        { templateId: 'fair-raid', text: '各凭本事，不伤和气。' },
+        { templateId: 'come-again', text: '这次收下了，改日再会。' },
+      ],
     },
     report: {
       defense: playerState.defenseReports,

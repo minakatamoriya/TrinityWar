@@ -1,5 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { APP_NAME, type ClientRaidActionResponse, type ClientRaidTargetDetailResponse } from '@trinitywar/shared';
+import {
+  APP_NAME,
+  type ClientRaidActionResponse,
+  type ClientRaidMessageTemplate,
+  type ClientRaidOrderMessageResponse,
+  type ClientRaidTargetDetailResponse,
+} from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -189,6 +195,118 @@ export class RaidTargetService {
 
     return response;
   }
+
+  async createRaidOrderMessage(input: {
+    playerId: string;
+    raidOrderId: string;
+    messageTemplateId: string;
+  }): Promise<ClientRaidOrderMessageResponse> {
+    const templateId = input.messageTemplateId.trim();
+
+    if (!templateId) {
+      throw new BusinessError({
+        code: ErrorCode.BadRequest,
+        message: 'messageTemplateId is required.',
+        statusCode: 400,
+      });
+    }
+
+    const result = await this.prisma.transaction(async (client) => {
+      const [raidOrder, template] = await Promise.all([
+        client.raidOrder.findUnique({
+          where: { id: input.raidOrderId },
+          select: {
+            id: true,
+            attackerPlayerId: true,
+            defenderPlayerId: true,
+            status: true,
+            raidMessage: true,
+          },
+        }),
+        client.raidMessageTemplate.findUnique({
+          where: { templateId },
+          select: {
+            templateId: true,
+            text: true,
+            isActive: true,
+          },
+        }),
+      ]);
+
+      if (!raidOrder) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Raid order not found.',
+          statusCode: 404,
+        });
+      }
+
+      if (raidOrder.attackerPlayerId !== input.playerId) {
+        throw new BusinessError({
+          code: ErrorCode.RaidNotAllowed,
+          message: 'Only the attacker can leave a raid message.',
+          statusCode: 403,
+        });
+      }
+
+      if (raidOrder.status !== 'SETTLED') {
+        throw new BusinessError({
+          code: ErrorCode.RaidNotAllowed,
+          message: 'Raid message can only be added after settlement.',
+          statusCode: 409,
+        });
+      }
+
+      if (raidOrder.raidMessage) {
+        throw new BusinessError({
+          code: ErrorCode.RaidNotAllowed,
+          message: 'Raid order message already exists.',
+          statusCode: 409,
+        });
+      }
+
+      if (!template || !template.isActive) {
+        throw new BusinessError({
+          code: ErrorCode.BadRequest,
+          message: 'Raid message template is not available.',
+          statusCode: 400,
+        });
+      }
+
+      return client.raidOrderMessage.create({
+        data: {
+          raidOrderId: raidOrder.id,
+          authorPlayerId: raidOrder.attackerPlayerId,
+          receiverPlayerId: raidOrder.defenderPlayerId,
+          templateId: template.templateId,
+          textSnapshot: template.text,
+        },
+      });
+    });
+
+    return {
+      app: APP_NAME,
+      summary: 'Raid message saved.',
+      raidMessage: {
+        messageTemplateId: result.templateId,
+        messageEmojiId: null,
+        messageTextSnapshot: result.textSnapshot,
+      },
+      templates: await this.getRaidMessageTemplates(),
+    };
+  }
+
+  async getRaidMessageTemplates(): Promise<ClientRaidMessageTemplate[]> {
+    return this.prisma.db.raidMessageTemplate.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      take: 5,
+      select: {
+        templateId: true,
+        text: true,
+      },
+    });
+  }
 }
 
 function buildRaidTargetDetailResponse(
@@ -232,6 +350,7 @@ function buildRaidTargetDetailResponse(
     fieldPreviewTone: 'seeded',
     fieldStatus: '目标已接入真实目标池',
     fields,
+    targetFarmBoardMessage: target?.targetPlayer.farmBoard?.hiddenAt ? '' : target?.targetPlayer.farmBoard?.message ?? '',
     raidableGold: `${targetSnapshot?.raidableGold ?? 0} 金币`,
     exposedFruit: targetSnapshot?.exposedFruit ?? '暂无',
     raidRule: targetSnapshot?.raidRule ?? '已接入真实目标池。',

@@ -129,15 +129,38 @@ export interface SceneContentReadModel {
     id: string;
     targetSnapshotJson: Prisma.JsonValue;
     expiresAt: Date;
-    targetPlayer: {
-      nickname: string;
-      castleLevelCache: number;
-      faction: {
-        name: string;
-      } | null;
-      army: {
+      targetPlayer: {
+        nickname: string;
+        castleLevelCache: number;
+        faction: {
+          name: string;
+        } | null;
+        farmBoard: {
+          message: string;
+          hiddenAt: Date | null;
+        } | null;
+        army: {
         totalCount: number;
         availableCount: number;
+      } | null;
+    };
+  }>;
+  raidMessageTemplates: Array<{
+    templateId: string;
+    text: string;
+  }>;
+  battleReports: Array<{
+    title: string;
+    summary: string;
+    reportType: string;
+    result: string;
+    revengeAvailable: boolean;
+    createdAt: Date;
+    raidOrder: {
+      raidMessage: {
+        templateId: string;
+        textSnapshot: string;
+        isHidden: boolean;
       } | null;
     };
   }>;
@@ -374,10 +397,49 @@ export class ClientReadRepository {
             nickname: true,
             castleLevelCache: true,
             faction: { select: { name: true } },
+            farmBoard: { select: { message: true, hiddenAt: true } },
             army: {
               select: {
                 totalCount: true,
                 availableCount: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const raidMessageTemplates = await client.raidMessageTemplate.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      take: 5,
+      select: {
+        templateId: true,
+        text: true,
+      },
+    });
+
+    const battleReports = await client.battleReport.findMany({
+      where: {
+        ownerPlayerId: playerId,
+        revokedAt: null,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        title: true,
+        summary: true,
+        reportType: true,
+        result: true,
+        revengeAvailable: true,
+        createdAt: true,
+        raidOrder: {
+          select: {
+            raidMessage: {
+              select: {
+                templateId: true,
+                textSnapshot: true,
+                isHidden: true,
               },
             },
           },
@@ -400,6 +462,8 @@ export class ClientReadRepository {
       fieldSlots: player.fieldSlots,
       factions,
       raidTargetPools,
+      raidMessageTemplates,
+      battleReports,
     };
   }
 }

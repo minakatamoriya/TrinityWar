@@ -895,7 +895,7 @@ AI 每轮最终输出必须包含：
 
 ## P6 前端 mock 退场与真实联调
 
-### [ ] TW-BE-018 让 bootstrap 与 home-summary 默认走真实链路
+### [~] TW-BE-018 让 bootstrap 与 home-summary 默认走真实链路
 
 预计工期：0.5 到 1 天
 
@@ -936,7 +936,7 @@ AI 每轮最终输出必须包含：
 2. [ ] home-summary 默认走真实。
 3. [ ] mock 只在显式失败策略或显式开关下参与。
 
-### [ ] TW-BE-019 让 scene-content 与核心命令退出默认 mock 主链路
+### [~] TW-BE-019 让 scene-content 与核心命令退出默认 mock 主链路
 
 预计工期：1 到 2 天
 
@@ -982,7 +982,7 @@ AI 每轮最终输出必须包含：
 
 ## P7 后台与稳定性收尾
 
-### [ ] TW-BE-020 建立最小后台只读排查能力
+### [~] TW-BE-020 建立最小后台只读排查能力
 
 预计工期：1 到 2 天
 
@@ -1030,7 +1030,7 @@ AI 每轮最终输出必须包含：
 
 以下任务是根据灵宠等级养成与五行战斗方案补入的插入排期。它们必须放在 TW-BE-021 收尾稳定之前完成，或至少明确标记为阻塞和未验收项，避免最终封板时仍沿用旧“灵宠数量/造兵/折损”口径。
 
-### [ ] TW-BE-SPIRIT-001 落地灵宠、兽魂、精魄与图鉴数据结构
+### [~] TW-BE-SPIRIT-001 落地灵宠、兽魂、精魄与图鉴数据结构
 
 预计工期：1 到 2 天
 
@@ -1285,7 +1285,7 @@ AI 每轮最终输出必须包含：
 
 以下任务属于社交表达增强，目标是让掠夺对象和战报更有玩家记忆点。该项默认不阻塞 TW-BE-021 收尾封板，除非产品确认把社交表达纳入首版必交范围。
 
-### [ ] TW-BE-SOCIAL-001 接入菜田留言板与掠夺战报附言
+### [~] TW-BE-SOCIAL-001 接入菜田留言板与掠夺战报附言
 
 预计工期：2 到 4 天
 
@@ -1385,6 +1385,182 @@ AI 每轮最终输出必须包含：
 3. [ ] raid 异步结算可跑通。
 4. [ ] 前端默认主链路不再长期依赖 mock。
 5. [ ] 有最小后台排查能力。
+
+以下补录项来自 2026-05-19 代码复核。若这些补录项未完成，则 TW-BE-021 不得视为验收封板完成。
+
+---
+
+## P7.1 复核补录项
+
+以下任务用于承接 2026-05-19 对 18-21、灵宠与留言板完成情况的复核发现。目标不是扩展新范围，而是把“已落地但未闭环”的实现补齐到可联调、可构建、可验收状态。
+
+### [x] TW-BE-022 修复测试前端 shared 契约漂移与构建阻塞
+
+预计工期：0.5 到 1 天
+
+目标：
+
+1. 修复 `apps/game-client` 与 `packages/shared` 之间新增字段后的类型漂移。
+2. 让测试前端重新恢复可构建、可继续联调的基线状态。
+3. 明确 mock 数据在新增字段下的最小维护策略，避免再次因契约补充导致前端直接失编。
+
+前置文档：
+
+1. TW-BE-018 到 TW-BE-021。
+2. [docs/dev/TrinityWar 前端 Mock 数据退场计划 v0.1.md](TrinityWar 前端 Mock 数据退场计划 v0.1.md)
+
+建议 AI 操作范围：
+
+1. `apps/game-client/src/mockData.ts`
+2. `apps/game-client/src/api.ts`
+3. `packages/shared`
+4. 必要的前端 README 或环境开关说明。
+
+产出要求：
+
+1. `ClientSceneContentResponse.raid.messageTemplates` 在测试前端 mock 中补齐。
+2. `ClientRaidTargetDetailResponse.targetFarmBoardMessage` 在测试前端 mock 中补齐。
+3. 测试前端构建恢复通过。
+4. 不借此回退 shared 契约或删除已接入的真实字段。
+
+最小验证建议：
+
+1. 执行 `npm run build --workspace @trinitywar/game-client`。
+2. 如保留 mock fallback，手动进入目标详情页确认不会因缺字段报错。
+
+验收清单：
+
+1. [ ] 测试前端恢复可构建。
+2. [ ] mock 数据已覆盖新增 shared 字段。
+3. [ ] 未通过删字段或放宽类型掩盖问题。
+
+### [~] TW-BE-023 接通灵宠真实主链路并移除旧 army 默认路径
+
+预计工期：1 到 2 天
+
+目标：
+
+1. 让灵宠页默认读取真实灵宠模型，而不是本地静态演示状态。
+2. 让购买兽魂、升级、设主位、恢复、合成、解散等行为走后端真实接口。
+3. 将旧 `recruit-army`、数量型培育和本地 `ArmyScene` 状态降为兼容层或显式调试入口。
+
+前置文档：
+
+1. TW-BE-SPIRIT-001。
+2. TW-BE-SPIRIT-002 到 TW-BE-SPIRIT-005。
+3. [docs/design/Trinity War 灵宠等级养成与五行战斗设计草案 v0.1.md](../design/Trinity%20War%20灵宠等级养成与五行战斗设计草案%20v0.1.md)
+
+建议 AI 操作范围：
+
+1. `services/game-server` 中灵宠 query / command / controller。
+2. `packages/shared` 中灵宠 DTO 与命令契约。
+3. `apps/game-client/src/App.tsx`
+4. `apps/game-client/src/ui/scenes/ArmyScene.tsx`
+5. 测试前端 API client 与默认路由。
+
+产出要求：
+
+1. 存在真实灵宠读接口与命令接口，且测试前端默认消费这些接口。
+2. 测试前端默认路径不再调用旧 `recruit-army` 作为灵宠主入口。
+3. 本地静态灵宠、图鉴、首宠、合成与恢复状态不再主导默认渲染结果。
+4. 旧 army 逻辑若保留，只能作为兼容层或调试模式入口。
+
+最小验证建议：
+
+1. 执行后端类型检查或构建。
+2. 执行前端构建。
+3. 启动前后端，完成一轮灵宠读取与至少两个核心命令联调。
+
+验收清单：
+
+1. [ ] 灵宠页默认读取真实后端模型。
+2. [ ] 旧 `recruit-army` 不再主导灵宠页默认主链路。
+3. [ ] 购买兽魂、升级、设主位、恢复、合成等命令已真实联调。
+4. [ ] 本地静态灵宠状态不再与真实结果竞争。
+
+### [ ] TW-BE-024 接通掠夺灵宠情报、留言板与战报附言的真实前端消费
+
+预计工期：1 到 2 天
+
+目标：
+
+1. 让掠夺目标卡、目标详情、深度窥视、留言板和战报附言读取真实后端字段。
+2. 移除掠夺页中按 `targetId` 写死的主宠展示与深度窥视结果。
+3. 让战报页面实际展示附言快照与新战斗结果口径，而不是仅保留旧摘要文案。
+
+前置文档：
+
+1. TW-BE-SPIRIT-003 到 TW-BE-SPIRIT-005。
+2. TW-BE-SOCIAL-001。
+3. [docs/dev/TrinityWar Battle Report 与 Raid Page 前端联调字段清单 v0.1.md](TrinityWar Battle Report 与 Raid Page 前端联调字段清单 v0.1.md)
+
+建议 AI 操作范围：
+
+1. `apps/game-client/src/ui/raid/RaidTargetCard.tsx`
+2. `apps/game-client/src/ui/raid/RaidIntelScreen.tsx`
+3. `apps/game-client/src/ui/ReportCard.tsx`
+4. `apps/game-client/src/ui/scenes/ReportScene.tsx`
+5. 必要的 shared DTO 与后端 assembler。
+
+产出要求：
+
+1. 掠夺目标卡不再用主城等级冒充主宠等级。
+2. 目标详情展示真实留言板字段。
+3. 深度窥视结果来自真实接口，而不是本地常量表。
+4. 战报页面可展示真实 `raidMessage` 快照，并兼容七档结果口径。
+
+最小验证建议：
+
+1. 执行前端构建。
+2. 启动前后端，完成一轮打开目标详情、查看留言板、深度窥视、完成掠夺、查看战报附言的联调。
+
+验收清单：
+
+1. [ ] 掠夺页主宠信息来自真实字段。
+2. [ ] 留言板已在目标详情真实展示。
+3. [ ] 深度窥视不再依赖本地写死数据。
+4. [ ] 战报可展示附言快照和新结果口径。
+
+### [ ] TW-BE-025 接通管理后台只读排查前端
+
+预计工期：0.5 到 1.5 天
+
+目标：
+
+1. 让 `apps/game-admin` 不再只是静态占位页，而是接入最小只读排查能力。
+2. 覆盖 overview、system status、player search、player overview、order detail 中至少一条完整排查路径。
+3. 验证 TW-BE-020 的后端只读接口确实能被测试前端消费。
+
+前置文档：
+
+1. TW-BE-020。
+2. [docs/dev/TrinityWar 管理后台首批只读视图与排障面板规划 v0.1.md](TrinityWar 管理后台首批只读视图与排障面板规划 v0.1.md)
+
+建议 AI 操作范围：
+
+1. `apps/game-admin/src/main.tsx`
+2. `apps/game-admin/src/styles.css`
+3. `packages/shared` 中 admin DTO。
+4. 必要的 admin API client。
+
+产出要求：
+
+1. 管理后台至少能请求并展示 overview 与 system status。
+2. 至少有一个玩家检索与详情查看入口。
+3. 不新增任何后台写操作。
+4. 如启用 `ADMIN_DEBUG_KEY`，前端有明确的请求头注入或调试说明。
+
+最小验证建议：
+
+1. 执行 `npm run build --workspace @trinitywar/game-admin`。
+2. 启动后台前端与后端，手动完成 overview、system status、player search 的最小联调。
+
+验收清单：
+
+1. [ ] 后台测试前端不再只是占位页。
+2. [ ] 至少一条只读排查路径已跑通。
+3. [ ] 未引入后台写操作。
+4. [ ] TW-BE-020 的接口与测试前端形成闭环。
 
 ## 九、推荐验收打法
 

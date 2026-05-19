@@ -56,10 +56,11 @@ export class SceneContentAssembler {
             : '当前没有可用目标池记录，执行 seed 后会生成开发联调目标。',
           actions: [{ label: '刷新目标', target: 'raid', tone: 'secondary' }],
         },
+        messageTemplates: readModel.raidMessageTemplates,
       },
       report: {
-        defense: [],
-        attack: [],
+        defense: this.buildReportEntries(readModel, 'DEFENSE'),
+        attack: this.buildReportEntries(readModel, 'ATTACK'),
         actions: [
           { label: '等待战报接入', target: 'report', tone: 'ghost' },
         ],
@@ -110,6 +111,30 @@ export class SceneContentAssembler {
         action: { label: '发起掠夺', target: 'raid', tone: 'primary' },
       };
     });
+  }
+
+  private buildReportEntries(
+    readModel: SceneContentReadModel,
+    reportType: 'ATTACK' | 'DEFENSE',
+  ): ClientSceneContentResponse['report']['attack'] {
+    return readModel.battleReports
+      .filter((report) => report.reportType === reportType)
+      .map((report) => ({
+        title: report.title,
+        tag: reportType === 'ATTACK' ? '攻方' : '守方',
+        tone: report.result === 'WIN' ? 'success' : report.result === 'LOSS' ? 'danger' : 'neutral',
+        summary: report.summary,
+        createdAt: report.createdAt.toISOString(),
+        revengeable: report.revengeAvailable,
+        raidMessage: report.raidOrder.raidMessage && !report.raidOrder.raidMessage.isHidden
+          ? {
+            messageTemplateId: report.raidOrder.raidMessage.templateId,
+            messageEmojiId: null,
+            messageTextSnapshot: report.raidOrder.raidMessage.textSnapshot,
+          }
+          : null,
+        actions: [{ label: '查看详情', target: 'report', tone: 'ghost' }],
+      }));
   }
 
   private buildBuildingUpgrades(readModel: SceneContentReadModel): ClientSceneContentResponse['building']['upgrades'] {

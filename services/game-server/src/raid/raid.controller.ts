@@ -1,6 +1,12 @@
 import { Body, Controller, Headers, Inject, Param, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import type { ClientRaidActionRequest, ClientRaidActionResponse, ClientRaidTargetDetailResponse } from '@trinitywar/shared';
+import type {
+  ClientRaidActionRequest,
+  ClientRaidActionResponse,
+  ClientRaidOrderMessageRequest,
+  ClientRaidOrderMessageResponse,
+  ClientRaidTargetDetailResponse,
+} from '@trinitywar/shared';
 import { AuthPlaceholderGuard } from '../auth/auth-placeholder.guard.js';
 import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
@@ -49,10 +55,31 @@ export class RaidController {
       armyVersion: body.armyVersion,
     });
   }
+
+  @Post('raid-orders/:orderId/message')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Create raid order message from a fixed template.' })
+  async createRaidOrderMessage(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Param('orderId') orderId: string,
+    @Body() body: ClientRaidOrderMessageRequest,
+  ): Promise<ClientRaidOrderMessageResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.raidTargetService.createRaidOrderMessage({
+      playerId: currentPlayer.playerId,
+      raidOrderId: orderId,
+      messageTemplateId: body.messageTemplateId,
+    });
+  }
 }
 
 defineRouteParamTypes(RaidController.prototype, 'getRaidTargetDetail', [Object, String]);
 defineRouteParamTypes(RaidController.prototype, 'raidTarget', [Object, Object, Object]);
+defineRouteParamTypes(RaidController.prototype, 'createRaidOrderMessage', [Object, String, Object]);
 
 function defineRouteParamTypes(target: object, methodName: string, paramTypes: unknown[]): void {
   const defineMetadata = Reflect.defineMetadata as

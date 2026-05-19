@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AdminReadonlyModule } from '../../admin-readonly/admin-readonly.module.js';
 import { AuthModule } from '../../auth/auth.module.js';
 import { AuditModule } from '../../audit/audit.module.js';
 import { ClientCommandModule } from '../../client-command/client-command.module.js';
@@ -10,6 +11,7 @@ import { LoggingModule } from '../../logging/logging.module.js';
 import { PlayerModule } from '../../player/player.module.js';
 import { PrismaModule } from '../../prisma/prisma.module.js';
 import { RaidModule } from '../../raid/raid.module.js';
+import { SpiritModule } from '../../spirit/spirit.module.js';
 import { SystemModule } from '../system/system.module.js';
 
 @Module({
@@ -25,6 +27,8 @@ import { SystemModule } from '../system/system.module.js';
     ClientReadModule,
     ClientCommandModule,
     RaidModule,
+    SpiritModule,
+    AdminReadonlyModule,
     SystemModule,
   ],
 })
