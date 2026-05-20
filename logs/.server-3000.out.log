@@ -1219,4 +1219,67 @@ Foreign key constraint violated: `(not available)`
 c00:24:17 [tsx] rerunning
 c00:24:59 [tsx] rerunning
 c00:25:19 [tsx] rerunning
-c
+c00:27:49 [tsx] rerunning
+c{"level":30,"time":1779294471223,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestFactory","msg":"Starting Nest application..."}
+{"level":30,"time":1779294471223,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AppModule dependencies initialized"}
+{"level":30,"time":1779294471223,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ConfigModule dependencies initialized"}
+{"level":30,"time":1779294471223,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PrismaModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuditModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SystemModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"LoggingModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"IdempotencyModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"CommonModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AdminReadonlyModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuthModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PlayerModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientReadModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"RaidModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientCommandModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SpiritModule dependencies initialized"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"AuthController {/api/client/auth}:"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/auth/dev-login, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"PlayerController {/api/client}:"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/me, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/profile/farm-board, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/profile/farm-board, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientReadController {/api/client}:"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/bootstrap, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/home-summary, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/scene-content, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientCommandController {/api/client/actions}:"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-pending, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-daily-task, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/collect-field, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/start-cultivation, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/recruit-army, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/upgrade-building, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/faction-donate, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-tianji-talisman, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-starter-seeds, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"RaidController {/api/client}:"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/raid-targets/:targetId, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/raid-targets/:targetId/deep-intel, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/raid-target, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/raid-orders/:orderId/message, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"SpiritController {/api/client/spirit}:"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/buy-soul, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/upgrade, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/set-main, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/recover, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/dissolve, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/compose, POST} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"AdminReadonlyController {/api/admin}:"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/overview, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/system/status, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/search, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/overview, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/wallet-logs, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/building-logs, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/field-logs, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/orders, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/raid/orders/:orderId, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"SystemController {/api/health}:"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/health, GET} route"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestApplication","msg":"Nest application successfully started"}
+{"level":30,"time":1779294471224,"pid":26864,"hostname":"DESKTOP-IMD5ASL","name":"game-server","host":"0.0.0.0","port":3000,"msg":"game server started"}

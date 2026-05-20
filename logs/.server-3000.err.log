@@ -174,3 +174,102 @@ game server failed to start Error: listen EADDRINUSE: address already in use 0.0
   address: '0.0.0.0',
   port: 3000
 }
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start TypeError: Cannot read properties of undefined (reading '0')
+    at iteratee (D:\TrinityWar\node_modules\@nestjs\swagger\dist\services\parameter-metadata-accessor.js:14:19)
+    at iteratee (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:13469:38)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:4967:15
+    at baseForOwn (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:3032:24)
+    at mapValues (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:13468:7)
+    at ParameterMetadataAccessor.explore (D:\TrinityWar\node_modules\@nestjs\swagger\dist\services\parameter-metadata-accessor.js:13:49)
+    at exploreApiParametersMetadata (D:\TrinityWar\node_modules\@nestjs\swagger\dist\explorers\api-parameters.explorer.js:20:58)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\dist\swagger-explorer.js:73:45
+    at Array.reduce (<anonymous>)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\dist\swagger-explorer.js:72:104
+game server failed to start TypeError: Cannot read properties of undefined (reading '0')
+    at iteratee (D:\TrinityWar\node_modules\@nestjs\swagger\dist\services\parameter-metadata-accessor.js:14:19)
+    at iteratee (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:13469:38)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:4967:15
+    at baseForOwn (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:3032:24)
+    at mapValues (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:13468:7)
+    at ParameterMetadataAccessor.explore (D:\TrinityWar\node_modules\@nestjs\swagger\dist\services\parameter-metadata-accessor.js:13:49)
+    at exploreApiParametersMetadata (D:\TrinityWar\node_modules\@nestjs\swagger\dist\explorers\api-parameters.explorer.js:20:58)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\dist\swagger-explorer.js:73:45
+    at Array.reduce (<anonymous>)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\dist\swagger-explorer.js:72:104
+game server failed to start TypeError: Cannot read properties of undefined (reading '0')
+    at iteratee (D:\TrinityWar\node_modules\@nestjs\swagger\dist\services\parameter-metadata-accessor.js:14:19)
+    at iteratee (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:13469:38)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:4967:15
+    at baseForOwn (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:3032:24)
+    at mapValues (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:13468:7)
+    at ParameterMetadataAccessor.explore (D:\TrinityWar\node_modules\@nestjs\swagger\dist\services\parameter-metadata-accessor.js:13:49)
+    at exploreApiParametersMetadata (D:\TrinityWar\node_modules\@nestjs\swagger\dist\explorers\api-parameters.explorer.js:20:58)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\dist\swagger-explorer.js:73:45
+    at Array.reduce (<anonymous>)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\dist\swagger-explorer.js:72:104
+game server failed to start TypeError: Cannot read properties of undefined (reading '0')
+    at iteratee (D:\TrinityWar\node_modules\@nestjs\swagger\dist\services\parameter-metadata-accessor.js:14:19)
+    at iteratee (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:13469:38)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:4967:15
+    at baseForOwn (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:3032:24)
+    at mapValues (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:13468:7)
+    at ParameterMetadataAccessor.explore (D:\TrinityWar\node_modules\@nestjs\swagger\dist\services\parameter-metadata-accessor.js:13:49)
+    at exploreApiParametersMetadata (D:\TrinityWar\node_modules\@nestjs\swagger\dist\explorers\api-parameters.explorer.js:20:58)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\dist\swagger-explorer.js:73:45
+    at Array.reduce (<anonymous>)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\dist\swagger-explorer.js:72:104
+game server failed to start TypeError: Cannot read properties of undefined (reading '0')
+    at iteratee (D:\TrinityWar\node_modules\@nestjs\swagger\dist\services\parameter-metadata-accessor.js:14:19)
+    at iteratee (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:13469:38)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:4967:15
+    at baseForOwn (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:3032:24)
+    at mapValues (D:\TrinityWar\node_modules\@nestjs\swagger\node_modules\lodash\lodash.js:13468:7)
+    at ParameterMetadataAccessor.explore (D:\TrinityWar\node_modules\@nestjs\swagger\dist\services\parameter-metadata-accessor.js:13:49)
+    at exploreApiParametersMetadata (D:\TrinityWar\node_modules\@nestjs\swagger\dist\explorers\api-parameters.explorer.js:20:58)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\dist\swagger-explorer.js:73:45
+    at Array.reduce (<anonymous>)
+    at D:\TrinityWar\node_modules\@nestjs\swagger\dist\swagger-explorer.js:72:104
