@@ -44,6 +44,9 @@ export class RaidSettlementQueueService implements OnModuleDestroy {
 
     this.connection = new Redis(this.appConfigService.redisUrl, {
       maxRetriesPerRequest: null,
+      connectTimeout: 500,
+      lazyConnect: true,
+      enableOfflineQueue: false,
     });
     this.queue = new Queue<{ raidOrderId: string }>(RAID_SETTLEMENT_QUEUE_NAME, {
       connection: this.connection,

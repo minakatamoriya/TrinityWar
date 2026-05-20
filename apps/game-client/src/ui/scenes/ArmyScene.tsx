@@ -298,6 +298,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const occupiedCount = slots.filter((slot) => slot.spiritId).length;
   const isStableFull = occupiedCount >= slots.length;
   const availableSoul = spirit.spiritSoul;
+  const availableTianjiTalisman = spirit.tianjiTalisman;
   const quickRecoverRemaining = Math.max(MAX_QUICK_RECOVERY_PER_DAY - spirit.dailyRecoveryUsed, 0);
   const selectedUpgradeCost = selectedSlot && selectedSlotEntry ? getUpgradeCost(selectedSlot.level) : null;
   const codexGroups = codexRarityGroups.map((group) => ({
@@ -410,6 +411,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                     <div className="seed-codex-stat-row"><strong>阵营加成</strong><span>{getFactionLabel(selectedSlotEntry.definition.factionAffinity) === playerFaction ? `已触发 ${getFactionBonusLabel(getFactionLabel(selectedSlotEntry.definition.factionAffinity))}` : `未触发，当前阵营为${playerFaction}`}</span></div>
                     <div className="seed-codex-stat-row"><strong>升级需求</strong><span>{selectedUpgradeCost ? `${selectedUpgradeCost} 兽魂` : '已满级'}</span></div>
                     <div className="seed-codex-stat-row"><strong>剩余兽魂</strong><span>{formatNumber(availableSoul)}</span></div>
+                    <div className="seed-codex-stat-row"><strong>天机符</strong><span>{formatNumber(availableTianjiTalisman)}</span></div>
                     <div className="seed-codex-stat-row"><strong>当前血量</strong><span>{getHealthText(selectedSlot)}</span></div>
                     <div className="seed-codex-stat-row"><strong>当前状态</strong><span>{getHealthStatus(selectedSlot)}</span></div>
                     <div className="seed-codex-stat-row"><strong>恢复情况</strong><span>{getHealthRatio(selectedSlot) >= 100 ? `自然满血 / 今日快速恢复剩余 ${quickRecoverRemaining} 次` : `今日快速恢复剩余 ${quickRecoverRemaining} 次`}</span></div>
@@ -426,7 +428,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                   <div className="spirit-pet-action-grid">
                     <button className="primary-button" disabled={busy || selectedSlot.isMain} onClick={() => onSetMain(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">设为主位</button>
                     <button className="secondary-button" disabled={busy || !selectedUpgradeCost || availableSoul < selectedUpgradeCost} onClick={() => onUpgrade(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">{selectedUpgradeCost ? `升级（需 ${selectedUpgradeCost}）` : '已满级'}</button>
-                    <button className="secondary-button" disabled={busy || getHealthRatio(selectedSlot) >= 100 || quickRecoverRemaining <= 0 || availableSoul < 10} onClick={() => onRecover(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">天机符恢复</button>
+                    <button className="secondary-button" disabled={busy || getHealthRatio(selectedSlot) >= 100 || quickRecoverRemaining <= 0 || availableTianjiTalisman <= 0} onClick={() => onRecover(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">天机符恢复</button>
                     <button className="ghost-button" disabled={busy || selectedSlot.isMain} onClick={() => onDissolve(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">解散（返还 35% 兽魂）</button>
                   </div>
                 </>

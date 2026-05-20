@@ -17,7 +17,12 @@ const SPIRIT_DISSOLVE_REFUND_RATIO = 0.35;
 type SpiritReadResource = {
   playerId: string;
   spiritSoul: number;
+  tianjiTalisman: number;
   dailyRecoveryUsed: number;
+  dailyRecoveryDateKey: string | null;
+  dailyIntelFreeUsed: number;
+  dailyIntelTalismanUsed: number;
+  dailyIntelDateKey: string | null;
   resourceVersion: number;
   updatedAt: Date;
 };
@@ -87,7 +92,12 @@ export class SpiritService {
           where: { playerId },
           select: {
             spiritSoul: true,
+            tianjiTalisman: true,
             dailyRecoveryUsed: true,
+            dailyRecoveryDateKey: true,
+            dailyIntelFreeUsed: true,
+            dailyIntelTalismanUsed: true,
+            dailyIntelDateKey: true,
             resourceVersion: true,
             updatedAt: true,
           },
@@ -170,9 +180,14 @@ export class SpiritService {
           where: { playerId },
           select: {
             spiritSoul: true,
+            tianjiTalisman: true,
             resourceVersion: true,
             updatedAt: true,
             dailyRecoveryUsed: true,
+            dailyRecoveryDateKey: true,
+            dailyIntelFreeUsed: true,
+            dailyIntelTalismanUsed: true,
+            dailyIntelDateKey: true,
           },
         }),
         client.playerSpiritSlot.findUnique({
@@ -348,7 +363,12 @@ export class SpiritService {
           select: {
             playerId: true,
             spiritSoul: true,
+            tianjiTalisman: true,
             dailyRecoveryUsed: true,
+            dailyRecoveryDateKey: true,
+            dailyIntelFreeUsed: true,
+            dailyIntelTalismanUsed: true,
+            dailyIntelDateKey: true,
             resourceVersion: true,
             updatedAt: true,
           },
@@ -401,10 +421,20 @@ export class SpiritService {
         });
       }
 
+      if (resource.tianjiTalisman <= 0) {
+        throw new BusinessError({
+          code: ErrorCode.Conflict,
+          message: 'Insufficient Tianji talisman.',
+          statusCode: 409,
+        });
+      }
+
       await client.playerSpiritResource.update({
         where: { playerId },
         data: {
+          tianjiTalisman: { decrement: 1 },
           dailyRecoveryUsed: nextRecoveryUsed,
+          dailyRecoveryDateKey: getLocalDateKey(),
           resourceVersion: { increment: 1 },
         },
       });
@@ -677,7 +707,12 @@ export class SpiritService {
         select: {
           playerId: true,
           spiritSoul: true,
+          tianjiTalisman: true,
           dailyRecoveryUsed: true,
+          dailyRecoveryDateKey: true,
+          dailyIntelFreeUsed: true,
+          dailyIntelTalismanUsed: true,
+          dailyIntelDateKey: true,
           resourceVersion: true,
           updatedAt: true,
         },
@@ -860,7 +895,10 @@ function buildSpiritState(
 
   return {
     spiritSoul: resource.spiritSoul,
+    tianjiTalisman: resource.tianjiTalisman,
     dailyRecoveryUsed: getEffectiveDailyRecoveryUsed(resource),
+    dailyIntelFreeUsed: getEffectiveDailyIntelFreeUsed(resource),
+    dailyIntelTalismanUsed: getEffectiveDailyIntelTalismanUsed(resource),
     resourceVersion: resource.resourceVersion,
     mainSlot: mappedSlots.find((slot) => slot.isMain && slot.spiritId !== null) ?? null,
     slots: mappedSlots,
@@ -981,7 +1019,15 @@ function getSpiritRefundSoul(level: number): number {
 }
 
 function getEffectiveDailyRecoveryUsed(resource: SpiritReadResource): number {
-  return getLocalDateKey(resource.updatedAt) === getLocalDateKey() ? resource.dailyRecoveryUsed : 0;
+  return resource.dailyRecoveryDateKey === getLocalDateKey() ? resource.dailyRecoveryUsed : 0;
+}
+
+function getEffectiveDailyIntelFreeUsed(resource: SpiritReadResource): number {
+  return resource.dailyIntelDateKey === getLocalDateKey() ? resource.dailyIntelFreeUsed : 0;
+}
+
+function getEffectiveDailyIntelTalismanUsed(resource: SpiritReadResource): number {
+  return resource.dailyIntelDateKey === getLocalDateKey() ? resource.dailyIntelTalismanUsed : 0;
 }
 
 function getNextDailyRecoveryUsed(resource: SpiritReadResource): number {

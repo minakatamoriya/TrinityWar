@@ -129,17 +129,25 @@ export interface SceneContentReadModel {
     id: string;
     targetSnapshotJson: Prisma.JsonValue;
     expiresAt: Date;
-      targetPlayer: {
-        nickname: string;
-        castleLevelCache: number;
-        faction: {
-          name: string;
+    targetPlayer: {
+      nickname: string;
+      castleLevelCache: number;
+      faction: {
+        name: string;
+      } | null;
+      farmBoard: {
+        message: string;
+        hiddenAt: Date | null;
+      } | null;
+      spiritSlots: Array<{
+        level: number;
+        spiritDefinition: {
+          spiritId: string;
+          label: string;
+          rarity: string;
         } | null;
-        farmBoard: {
-          message: string;
-          hiddenAt: Date | null;
-        } | null;
-        army: {
+      }>;
+      army: {
         totalCount: number;
         availableCount: number;
       } | null;
@@ -398,6 +406,20 @@ export class ClientReadRepository {
             castleLevelCache: true,
             faction: { select: { name: true } },
             farmBoard: { select: { message: true, hiddenAt: true } },
+            spiritSlots: {
+              where: { isMain: true },
+              take: 1,
+              select: {
+                level: true,
+                spiritDefinition: {
+                  select: {
+                    spiritId: true,
+                    label: true,
+                    rarity: true,
+                  },
+                },
+              },
+            },
             army: {
               select: {
                 totalCount: true,

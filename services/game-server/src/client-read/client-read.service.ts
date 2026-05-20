@@ -52,6 +52,13 @@ export class ClientReadService {
 
     const seedInventory: Record<string, number> = {};
     const unlockedSeedIds: string[] = [];
+    const spiritResource = await this.prisma.db.playerSpiritResource.findUnique({
+      where: { playerId },
+      select: {
+        tianjiTalisman: true,
+        dailyTianjiClaimDateKey: true,
+      },
+    });
 
     for (const seedDefinition of seedDefinitions) {
       const inventoryEntry = seedDefinition.playerInventory[0];
@@ -77,11 +84,11 @@ export class ClientReadService {
       backpack: {
         seedInventory,
         globalItemInventory: {
-          tianjiTalisman: 0,
+          tianjiTalisman: spiritResource?.tianjiTalisman ?? 0,
         },
         unlockedSeedIds,
         starterSeedClaimed: false,
-        tianjiTalismanClaimed: false,
+        tianjiTalismanClaimed: spiritResource?.dailyTianjiClaimDateKey === getLocalDateKey(),
       },
     };
   }

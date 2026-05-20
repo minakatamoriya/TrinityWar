@@ -331,12 +331,18 @@ model SpiritDefinition {
 }
 
 model PlayerSpiritResource {
-  playerId          String   @id @map("player_id")
-  spiritSoul        Int      @default(0) @map("spirit_soul")
-  dailyRecoveryUsed Int      @default(0) @map("daily_recovery_used")
-  resourceVersion   Int      @default(1) @map("resource_version")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  playerId                String   @id @map("player_id")
+  spiritSoul              Int      @default(0) @map("spirit_soul")
+  tianjiTalisman          Int      @default(0) @map("tianji_talisman")
+  dailyTianjiClaimDateKey String?  @map("daily_tianji_claim_date_key")
+  dailyRecoveryUsed       Int      @default(0) @map("daily_recovery_used")
+  dailyRecoveryDateKey    String?  @map("daily_recovery_date_key")
+  dailyIntelFreeUsed      Int      @default(0) @map("daily_intel_free_used")
+  dailyIntelTalismanUsed  Int      @default(0) @map("daily_intel_talisman_used")
+  dailyIntelDateKey       String?  @map("daily_intel_date_key")
+  resourceVersion         Int      @default(1) @map("resource_version")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
 
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 

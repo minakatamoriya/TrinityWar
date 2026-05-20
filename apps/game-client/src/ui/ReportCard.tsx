@@ -35,6 +35,12 @@ export function ReportCard(props: ReportCardProps): JSX.Element {
         </p>
       </div>
       <p className="report-summary">{entry.summary}</p>
+      {entry.raidMessage ? (
+        <div className="report-message-snapshot">
+          <span>战报附言</span>
+          <strong>{entry.raidMessage.messageTextSnapshot}</strong>
+        </div>
+      ) : null}
       <div className="report-action-row">
         {entry.actions.map((action) => (
           <ActionButton action={action} key={`${entry.title}-${action.label}`} onClick={(nextAction) => onAction(nextAction, entry.title)} />

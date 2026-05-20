@@ -56,6 +56,10 @@ interface RecruitArmyCommandInput {
   idempotencyKey?: string;
 }
 
+interface ClaimTianjiTalismanCommandInput {
+  playerId: string;
+}
+
 @Injectable()
 export class ClientCommandService {
   constructor(
@@ -805,6 +809,50 @@ export class ClientCommandService {
       }
 
       return responseSnapshot;
+    });
+  }
+
+  async claimTianjiTalisman(input: ClaimTianjiTalismanCommandInput): Promise<ClientStateMutationResponse> {
+    return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
+      const dateKey = getLocalDateKey();
+      const resource = await client.playerSpiritResource.findUnique({
+        where: { playerId: input.playerId },
+        select: {
+          dailyTianjiClaimDateKey: true,
+        },
+      });
+
+      if (!resource) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Player spirit resource not found.',
+          statusCode: 404,
+        });
+      }
+
+      if (resource.dailyTianjiClaimDateKey === dateKey) {
+        throw new BusinessError({
+          code: ErrorCode.Conflict,
+          message: 'Daily Tianji talisman has already been claimed.',
+          statusCode: 409,
+        });
+      }
+
+      await client.playerSpiritResource.update({
+        where: { playerId: input.playerId },
+        data: {
+          tianjiTalisman: { increment: 1 },
+          dailyTianjiClaimDateKey: dateKey,
+          resourceVersion: { increment: 1 },
+        },
+      });
+
+      return {
+        app: APP_NAME,
+        summary: '今天天机符已领取，获得 天机符 x1。',
+        home: await this.clientReadService.getHomeSummary(input.playerId, client),
+        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
+      };
     });
   }
 

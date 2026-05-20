@@ -8,6 +8,7 @@ import {
   type ClientComposeSpiritRequest,
   type ClientRaidActionRequest,
   type ClientRaidActionResponse,
+  type ClientRaidDeepIntelResponse,
   type ClientDissolveSpiritRequest,
   type ClientFactionDonateRequest,
   type ClientClaimPendingRequest,
@@ -41,7 +42,7 @@ const AUTH_STORAGE_KEY = 'trinitywar.devAuth';
 
 type DataSource = 'api' | 'mock';
 type ClientReadEndpoint = 'bootstrap' | 'home' | 'scenes';
-export type DevLoginMode = 'new-user' | 'existing-user';
+export type DevLoginMode = 'new-user' | 'existing-user' | 'test-user-1' | 'test-user-2';
 
 export interface DevLoginSession {
   accessToken: string;
@@ -1423,6 +1424,38 @@ export async function loadRaidTargetDetail(targetId: string): Promise<ClientRaid
   }
 }
 
+export async function revealRaidTargetDeepIntel(targetId: string): Promise<ClientRaidDeepIntelResponse> {
+  if (forceMockReads || forceMockCommands) {
+    const detail = mockRaidTargetDetails[targetId];
+
+    if (!detail) {
+      throw new Error(`Missing mock raid target detail for ${targetId}`);
+    }
+
+    return {
+      app: detail.app,
+      targetId,
+      mainPetPreview: detail.mainPetPreview,
+      intel: {
+        element: 'fire',
+        attackRating: 'A',
+        defenseRating: 'B',
+        healthStatus: '状态良好',
+        remainingFreeIntel: 2,
+        remainingTalismanIntel: 3,
+      },
+    };
+  }
+
+  return fetchJson<ClientRaidDeepIntelResponse>(`${CLIENT_API_PREFIX}/raid-targets/${targetId}/deep-intel`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: '{}',
+  });
+}
+
 export async function raidClientTarget(input: ClientRaidActionRequest): Promise<ClientRaidActionResponse> {
   if (forceMockCommands) {
     return applyMockRaidTarget(input);
@@ -1609,17 +1642,13 @@ export function clearDevLoginSession(): void {
 }
 
 export async function devLogin(mode: DevLoginMode): Promise<DevLoginSession> {
-  const isNewUser = mode === 'new-user';
+  const loginRequest = buildDevLoginRequest(mode);
   const response = await fetchJson<DevLoginResponse>(`${CLIENT_API_PREFIX}/auth/dev-login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      providerUserId: isNewUser ? `dev-ui-${Date.now()}` : 'dev-main-loop',
-      nickname: isNewUser ? '新测试玩家' : '主循环测试号',
-      factionCode: isNewUser ? 'human' : 'immortal',
-    }),
+    body: JSON.stringify(loginRequest),
   });
 
   const session: DevLoginSession = {
@@ -1631,4 +1660,56 @@ export async function devLogin(mode: DevLoginMode): Promise<DevLoginSession> {
 
   writeStoredDevLoginSession(session);
   return session;
+}
+
+export function getDevLoginModeLabel(mode: DevLoginMode | null | undefined): string {
+  if (mode === 'new-user') {
+    return '新用户';
+  }
+
+  if (mode === 'existing-user') {
+    return '已注册用户';
+  }
+
+  if (mode === 'test-user-1') {
+    return '测试用户1';
+  }
+
+  if (mode === 'test-user-2') {
+    return '测试用户2';
+  }
+
+  return '未登录';
+}
+
+function buildDevLoginRequest(mode: DevLoginMode): { providerUserId: string; nickname: string; factionCode: string } {
+  if (mode === 'new-user') {
+    return {
+      providerUserId: `dev-ui-${Date.now()}`,
+      nickname: '新测试玩家',
+      factionCode: 'human',
+    };
+  }
+
+  if (mode === 'existing-user') {
+    return {
+      providerUserId: 'dev-main-loop',
+      nickname: '主循环测试号',
+      factionCode: 'immortal',
+    };
+  }
+
+  if (mode === 'test-user-1') {
+    return {
+      providerUserId: 'dev-verifier-1',
+      nickname: '测试用户1',
+      factionCode: 'human',
+    };
+  }
+
+  return {
+    providerUserId: 'dev-verifier-2',
+    nickname: '测试用户2',
+    factionCode: 'demon',
+  };
 }

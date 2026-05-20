@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger'
 import type {
   ClientRaidActionRequest,
   ClientRaidActionResponse,
+  ClientRaidDeepIntelResponse,
   ClientRaidOrderMessageRequest,
   ClientRaidOrderMessageResponse,
   ClientRaidTargetDetailResponse,
@@ -32,6 +33,21 @@ export class RaidController {
     }
 
     return this.raidTargetService.getRaidTargetDetail(currentPlayer.playerId, targetId);
+  }
+
+  @Post('raid-targets/:targetId/deep-intel')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Reveal limited spirit intel for a visible raid target.' })
+  async getRaidTargetDeepIntel(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Param('targetId') targetId: string,
+  ): Promise<ClientRaidDeepIntelResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.raidTargetService.getRaidTargetDeepIntel(currentPlayer.playerId, targetId);
   }
 
   @Post('actions/raid-target')
@@ -78,6 +94,7 @@ export class RaidController {
 }
 
 defineRouteParamTypes(RaidController.prototype, 'getRaidTargetDetail', [Object, String]);
+defineRouteParamTypes(RaidController.prototype, 'getRaidTargetDeepIntel', [Object, String]);
 defineRouteParamTypes(RaidController.prototype, 'raidTarget', [Object, Object, Object]);
 defineRouteParamTypes(RaidController.prototype, 'createRaidOrderMessage', [Object, String, Object]);
 

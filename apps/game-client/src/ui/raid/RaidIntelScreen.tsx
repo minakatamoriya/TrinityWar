@@ -1,4 +1,4 @@
-import type { ClientRaidTargetDetailResponse, ClientSceneAction } from '@trinitywar/shared';
+import type { ClientRaidDeepIntelResponse, ClientRaidSpiritIntel, ClientRaidSpiritPreview, ClientRaidTargetDetailResponse, ClientSceneAction } from '@trinitywar/shared';
 import { useEffect, useState } from 'react';
 import { ActionButton } from '../ActionButton';
 import { buildFarmFieldStatusView, FarmStatusCard } from '../farm/FarmStatusCard';
@@ -11,55 +11,43 @@ interface RaidIntelScreenProps {
   error: string | null;
   onClose: () => void;
   onAction: (action: ClientSceneAction) => void;
+  onRevealDeepIntel: (targetId: string) => Promise<ClientRaidDeepIntelResponse>;
   followed: boolean;
   onToggleFollow: () => void;
   farmTick: number;
 }
 
-const raidSpiritPreviewByTargetId: Record<string, { name: string; level: number; glyph: string }> = {
-  'target-1': { name: '影豹', level: 9, glyph: '影' },
-  'target-2': { name: '灵鹿', level: 8, glyph: '鹿' },
-  'target-3': { name: '青猿', level: 6, glyph: '猿' },
-  'target-4': { name: '玄虎', level: 11, glyph: '虎' },
-  'target-5': { name: '霜狐', level: 5, glyph: '狐' },
-};
-
-const raidSpiritIntelByTargetId: Record<string, { element: string; attack: string; defense: string; status: string }> = {
-  'target-1': { element: '火', attack: 'A', defense: 'C', status: '可出战' },
-  'target-2': { element: '水', attack: 'B', defense: 'A', status: '状态正常' },
-  'target-3': { element: '土', attack: 'B', defense: 'B', status: '可出战' },
-  'target-4': { element: '木', attack: 'A', defense: 'B', status: '状态正常' },
-  'target-5': { element: '金', attack: 'C', defense: 'B', status: '轻伤' },
-};
-
-function getRaidSpiritPreview(detail: ClientRaidTargetDetailResponse): { name: string; level: number; glyph: string } {
-  return raidSpiritPreviewByTargetId[detail.targetId] ?? {
-    name: '主战灵宠',
-    level: Math.max(detail.level, 1),
-    glyph: detail.faction.slice(0, 1),
-  };
-}
-
-function getRaidSpiritIntel(detail: ClientRaidTargetDetailResponse): { element: string; attack: string; defense: string; status: string } {
-  return raidSpiritIntelByTargetId[detail.targetId] ?? {
-    element: '木',
-    attack: 'B',
-    defense: 'B',
-    status: '可出战',
-  };
-}
-
 export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
-  const [intelRevealed, setIntelRevealed] = useState(false);
-  const { mode, targetName, detail, loading, error, onClose, onAction, followed, onToggleFollow, farmTick } = props;
+  const [intelState, setIntelState] = useState<ClientRaidSpiritIntel | null>(null);
+  const [intelLoading, setIntelLoading] = useState(false);
+  const [intelError, setIntelError] = useState<string | null>(null);
+  const { mode, targetName, detail, loading, error, onClose, onAction, onRevealDeepIntel, followed, onToggleFollow, farmTick } = props;
   const title = mode === 'revenge' ? '复仇' : '掠夺';
   const visibleActions = detail ? detail.actions.filter((action) => action.label !== '分享目标') : [];
   const spiritPreview = detail ? getRaidSpiritPreview(detail) : null;
-  const spiritIntel = detail ? getRaidSpiritIntel(detail) : null;
 
   useEffect(() => {
-    setIntelRevealed(false);
+    setIntelState(null);
+    setIntelLoading(false);
+    setIntelError(null);
   }, [detail?.targetId]);
+
+  const handleRevealDeepIntel = (): void => {
+    if (!detail || intelLoading) {
+      return;
+    }
+
+    setIntelLoading(true);
+    setIntelError(null);
+
+    void onRevealDeepIntel(detail.targetId).then((response) => {
+      setIntelState(response.intel);
+    }).catch(() => {
+      setIntelError('深度窥视失败，请稍后重试。');
+    }).finally(() => {
+      setIntelLoading(false);
+    });
+  };
 
   return (
     <section className="raid-intel-screen" role="dialog" aria-modal="true" aria-label={`${title}情报页`}>
@@ -88,23 +76,28 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
               <article className="panel-card raid-spirit-card">
                 <div className="raid-spirit-preview">
                   <div className="raid-spirit-avatar" aria-hidden="true">
-                    <span>{spiritPreview.glyph}</span>
+                    <span>{spiritPreview.avatarGlyph}</span>
                   </div>
                   <div className="raid-spirit-info">
                     <p className="eyebrow">默认情报</p>
-                    <h4>{spiritPreview.name}</h4>
+                    <h4>{spiritPreview.label}</h4>
                     <strong>Lv.{spiritPreview.level}</strong>
                   </div>
                 </div>
-                {intelRevealed && spiritIntel ? (
+                {intelState ? (
                   <div className="raid-spirit-revealed">
-                    <div><span>五行</span><strong>{spiritIntel.element}</strong></div>
-                    <div><span>攻击</span><strong>{spiritIntel.attack}</strong></div>
-                    <div><span>防御</span><strong>{spiritIntel.defense}</strong></div>
-                    <div><span>状态</span><strong>{spiritIntel.status}</strong></div>
+                    <div><span>五行</span><strong>{formatSpiritElement(intelState.element)}</strong></div>
+                    <div><span>攻击</span><strong>{intelState.attackRating}</strong></div>
+                    <div><span>防御</span><strong>{intelState.defenseRating}</strong></div>
+                    <div><span>状态</span><strong>{intelState.healthStatus}</strong></div>
                   </div>
                 ) : (
-                  <button className="secondary-button" onClick={() => setIntelRevealed(true)} type="button">深度窥视 · 免费 3 / 3</button>
+                  <div className="raid-spirit-intel-action">
+                    <button className="secondary-button" disabled={intelLoading} onClick={handleRevealDeepIntel} type="button">
+                      {intelLoading ? '窥视中...' : '深度窥视'}
+                    </button>
+                    {intelError ? <span>{intelError}</span> : <span>默认不展示五行与攻防评级</span>}
+                  </div>
                 )}
               </article>
             ) : null}
@@ -139,6 +132,13 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
               <p><strong>保护状态：</strong>{detail.protectionStatus}</p>
             </div>
 
+            {detail.targetFarmBoardMessage ? (
+              <article className="panel-card raid-farm-board-note">
+                <p className="eyebrow">菜田留言</p>
+                <p>{detail.targetFarmBoardMessage}</p>
+              </article>
+            ) : null}
+
             <article className="panel-card raid-intel-note">
               <p className="panel-text">{detail.detail}</p>
             </article>
@@ -158,4 +158,38 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
       ) : null}
     </section>
   );
+}
+
+function getRaidSpiritPreview(detail: ClientRaidTargetDetailResponse): ClientRaidSpiritPreview {
+  return detail.mainPetPreview ?? {
+    spiritId: null,
+    label: '未发现主宠',
+    level: Math.max(detail.level, 1),
+    rarity: null,
+    avatarGlyph: detail.faction.slice(0, 1) || '灵',
+  };
+}
+
+function formatSpiritElement(element: ClientRaidSpiritIntel['element']): string {
+  if (element === 'metal') {
+    return '金';
+  }
+
+  if (element === 'wood') {
+    return '木';
+  }
+
+  if (element === 'water') {
+    return '水';
+  }
+
+  if (element === 'fire') {
+    return '火';
+  }
+
+  if (element === 'earth') {
+    return '土';
+  }
+
+  return '未知';
 }

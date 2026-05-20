@@ -47,7 +47,10 @@ export interface ClientSpiritCodexEntry {
 
 export interface ClientSpiritState {
   spiritSoul: number;
+  tianjiTalisman: number;
   dailyRecoveryUsed: number;
+  dailyIntelFreeUsed: number;
+  dailyIntelTalismanUsed: number;
   resourceVersion: number;
   mainSlot: ClientSpiritSlot | null;
   slots: ClientSpiritSlot[];
@@ -135,6 +138,30 @@ export interface ClientRaidMessageSnapshot {
   messageTemplateId: string;
   messageEmojiId: null;
   messageTextSnapshot: string;
+}
+
+export interface ClientRaidSpiritPreview {
+  spiritId: string | null;
+  label: string;
+  level: number;
+  rarity: ClientSpiritRarity | null;
+  avatarGlyph: string;
+}
+
+export interface ClientRaidSpiritIntel {
+  element: ClientSpiritElement | null;
+  attackRating: string;
+  defenseRating: string;
+  healthStatus: string;
+  remainingFreeIntel: number;
+  remainingTalismanIntel: number;
+}
+
+export interface ClientRaidDeepIntelResponse {
+  app: string;
+  targetId: string;
+  mainPetPreview: ClientRaidSpiritPreview | null;
+  intel: ClientRaidSpiritIntel;
 }
 
 export interface ClientRaidOrderMessageRequest {
@@ -514,6 +541,7 @@ export interface ClientRaidTarget {
   name: string;
   faction: string;
   level: number;
+  mainPetPreview: ClientRaidSpiritPreview | null;
   combatPower: string;
   summary: string;
   loot: string;
@@ -538,6 +566,7 @@ export interface ClientRaidTargetDetailResponse {
   defenseStatus: string;
   protectionStatus: string;
   targetFarmBoardMessage: string;
+  mainPetPreview: ClientRaidSpiritPreview | null;
   detail: string;
   actions: ClientSceneAction[];
 }

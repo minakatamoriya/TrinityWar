@@ -1,5 +1,7 @@
 ﻿import { APP_NAME, type ClientBootstrapResponse, type ClientDailyTaskSummary, type ClientFarmField, type ClientRaidMessageTemplate, type ClientRaidTargetDetailResponse, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 
+import type { ClientRaidSpiritPreview } from '@trinitywar/shared';
+
 const mockDailyTasks: ClientDailyTaskSummary[] = [
   {
     id: 'daily-harvest-once',
@@ -53,6 +55,14 @@ export const mockRaidMessageTemplates: ClientRaidMessageTemplate[] = [
   { templateId: 'fair-raid', text: '各凭本事，不伤和气。' },
   { templateId: 'come-again', text: '这次收下了，改日再会。' },
 ];
+
+const mockRaidSpiritPreviews: Record<string, ClientRaidSpiritPreview> = {
+  'target-1': { spiritId: 'yingbao', label: '影豹', level: 9, rarity: 'common', avatarGlyph: '影' },
+  'target-2': { spiritId: 'linglu', label: '灵鹿', level: 8, rarity: 'common', avatarGlyph: '鹿' },
+  'target-3': { spiritId: 'qingyuan', label: '青猿', level: 6, rarity: 'common', avatarGlyph: '猿' },
+  'target-4': { spiritId: 'xuanhu', label: '玄虎', level: 11, rarity: 'common', avatarGlyph: '虎' },
+  'target-5': { spiritId: 'shuanghu', label: '霜狐', level: 5, rarity: 'common', avatarGlyph: '狐' },
+};
 
 export const mockBootstrap: ClientBootstrapResponse = {
   app: APP_NAME,
@@ -299,6 +309,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         name: '烬牙',
         faction: '魔界',
         level: 5,
+        mainPetPreview: mockRaidSpiritPreviews['target-1'],
         combatPower: '1,320',
         summary: '魔界 · 资源高 · 防守偏弱',
         loot: '420~560 金币',
@@ -311,6 +322,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         name: '云栖',
         faction: '仙界',
         level: 4,
+        mainPetPreview: mockRaidSpiritPreviews['target-2'],
         combatPower: '1,080',
         summary: '仙界 · 资源中 · 减损明显',
         loot: '260~340 金币',
@@ -323,6 +335,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         name: '临风',
         faction: '人界',
         level: 4,
+        mainPetPreview: mockRaidSpiritPreviews['target-3'],
         combatPower: '920',
         summary: '人界 · 资源低 · 风险较稳',
         loot: '180~260 金币',
@@ -335,6 +348,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         name: '玄潮',
         faction: '魔界',
         level: 5,
+        mainPetPreview: mockRaidSpiritPreviews['target-4'],
         combatPower: '1,240',
         summary: '魔界 · 主宠等级高 · 默认仅见品种',
         loot: '360~480 金币',
@@ -347,6 +361,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         name: '青槐',
         faction: '仙界',
         level: 3,
+        mainPetPreview: mockRaidSpiritPreviews['target-5'],
         combatPower: '760',
         summary: '仙界 · 主宠等级低 · 适合试探',
         loot: '150~220 金币',
@@ -463,6 +478,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     defenseStatus: '防守偏弱，守田灵宠少于常见同级目标',
     protectionStatus: '当前无保护，可直接发起掠夺或通缉令',
     targetFarmBoardMessage: '成熟田可看，手快者得。',
+    mainPetPreview: mockRaidSpiritPreviews['target-1'],
     detail: '对手昵称烬牙，刚结束一轮农场收取，外露收益仍然较高。魔界加成偏向进攻，适合快速出手。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
@@ -490,6 +506,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     defenseStatus: '防守偏稳，仙界被掠损失减免明显',
     protectionStatus: '刚结束保护期，可被单人试探',
     targetFarmBoardMessage: '仙田清静，来者留名。',
+    mainPetPreview: mockRaidSpiritPreviews['target-2'],
     detail: '对手昵称云栖，收益中等但仙界自带减损，适合先做一轮稳妥试探。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
@@ -516,6 +533,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     defenseStatus: '人界经营向，防守一般，但暴露收益偏低',
     protectionStatus: '今日未被掠，可正常查看并试探',
     targetFarmBoardMessage: '小田薄收，路过随缘。',
+    mainPetPreview: mockRaidSpiritPreviews['target-3'],
     detail: '对手昵称临风，收益较低，更适合作为保守出手对象。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
@@ -543,6 +561,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     defenseStatus: '中等防守，守备偏强但守田灵宠分散',
     protectionStatus: '当前无保护，可立即出手',
     targetFarmBoardMessage: '守田不易，量力而行。',
+    mainPetPreview: mockRaidSpiritPreviews['target-4'],
     detail: '对手昵称玄潮，主城等级高一档，收益不错，但正面强碰战损会更高。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
@@ -570,6 +589,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     defenseStatus: '防守偏弱，适合低损验证',
     protectionStatus: '保护已结束，可正常掠夺',
     targetFarmBoardMessage: '新手田地，请轻些下手。',
+    mainPetPreview: mockRaidSpiritPreviews['target-5'],
     detail: '对手昵称青槐，适合低风险起手，重点看田地收益是否值得你消耗免费次数。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },

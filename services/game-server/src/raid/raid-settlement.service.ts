@@ -4,7 +4,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RaidRepository } from './raid.repository.js';
-import { RaidSettlementRuleService } from './raid-settlement-rule.service.js';
+import { RaidSettlementRuleService, type SpiritBattleSnapshot } from './raid-settlement-rule.service.js';
 
 @Injectable()
 export class RaidSettlementService {
@@ -63,15 +63,14 @@ export class RaidSettlementService {
       });
 
       const lockedGold = raidOrder.assetLocks.reduce((sum, lock) => sum + lock.lockedGold, 0);
-      const defenderPower = readDefenderPower(raidOrder.defenderSnapshotJson);
-      const attackerAvailableAtDispatch = readAttackerAvailableAtDispatch(raidOrder.attackerSnapshotJson);
       const settlementResult = this.raidSettlementRuleService.calculate({
         lockedGold,
-        dispatchedUnitCount: raidOrder.dispatchedUnitCount,
-        attackerAvailableAtDispatch,
-        defenderSnapshotPower: defenderPower,
         vaultGold: raidOrder.attacker.wallet.vaultGold,
         vaultCapacity: raidOrder.attacker.wallet.vaultCapacity,
+        attackerFactionName: raidOrder.attacker.faction?.name ?? readFactionName(raidOrder.attackerSnapshotJson) ?? null,
+        defenderFactionName: raidOrder.defender.faction?.name ?? readFactionName(raidOrder.defenderSnapshotJson) ?? null,
+        attackerSpirit: readSpiritSnapshot(raidOrder.attackerSnapshotJson) ?? buildSpiritSnapshotFromSlot(raidOrder.attacker.spiritSlots[0] ?? null),
+        defenderSpirit: readSpiritSnapshot(raidOrder.defenderSnapshotJson) ?? buildSpiritSnapshotFromSlot(raidOrder.defender.spiritSlots[0] ?? null),
       });
       const now = new Date();
       const pendingRaidOverflowExpiresAt = settlementResult.overflowGold > 0
@@ -79,8 +78,8 @@ export class RaidSettlementService {
         : raidOrder.attacker.wallet.pendingRaidOverflowExpiresAt;
       const nextVaultGold = raidOrder.attacker.wallet.vaultGold + settlementResult.depositedGold;
       const nextPendingRaidOverflowGold = raidOrder.attacker.wallet.pendingRaidOverflowGold + settlementResult.overflowGold;
-      const attackerLoss = Math.min(settlementResult.attackerLoss, raidOrder.dispatchedUnitCount);
-      const unitsReturned = Math.max(raidOrder.dispatchedUnitCount - attackerLoss, 0);
+      const attackerUnitLoss = 0;
+      const unitsReturned = raidOrder.dispatchedUnitCount;
 
       await this.applyDefenderLootConsumption(client, raidOrder, settlementResult.lootGold, now);
 
@@ -91,16 +90,18 @@ export class RaidSettlementService {
         depositedGold: settlementResult.depositedGold,
         overflowGold: settlementResult.overflowGold,
         temporaryClaimExpiresAt: settlementResult.overflowGold > 0 ? pendingRaidOverflowExpiresAt : null,
-        attackerLoss,
-        defenderLoss: settlementResult.defenderLoss,
-        rewardItemsJson: [],
+        attackerLoss: settlementResult.attackerHpLossPercent,
+        defenderLoss: settlementResult.defenderHpLossPercent,
+        rewardItemsJson: settlementResult.rewardItems as Prisma.InputJsonValue,
         reportSummary: settlementResult.reportSummary,
       }, client);
+
+      await this.applySpiritSettlement(client, raidOrder, settlementResult);
 
       await client.playerArmy.update({
         where: { playerId: raidOrder.attackerPlayerId },
         data: {
-          totalCount: { decrement: attackerLoss },
+          totalCount: { decrement: attackerUnitLoss },
           availableCount: { increment: unitsReturned },
           frozenCount: { decrement: raidOrder.dispatchedUnitCount },
           armyVersion: { increment: 1 },
@@ -146,7 +147,7 @@ export class RaidSettlementService {
           opponentPlayerId: raidOrder.defenderPlayerId,
           reportType: 'ATTACK',
           result: settlementResult.result,
-          title: '掠夺结算',
+          title: `${settlementResult.title} · ${settlementResult.subtitle}`,
           summary: settlementResult.reportSummary,
           revengeAvailable: false,
         },
@@ -156,8 +157,10 @@ export class RaidSettlementService {
           opponentPlayerId: raidOrder.attackerPlayerId,
           reportType: 'DEFENSE',
           result: settlementResult.result === 'WIN' ? 'LOSS' : 'WIN',
-          title: '遭遇掠夺',
-          summary: `${raidOrder.attacker.nickname} 对你发起掠夺，结算结果已生成。`,
+          title: settlementResult.result === 'WIN'
+            ? `${invertSettlementTitle(settlementResult.title)} · 防线失守`
+            : `${invertSettlementTitle(settlementResult.title)} · 守住田地`,
+          summary: `${raidOrder.attacker.nickname} 对你发起掠夺：${settlementResult.reportSummary}`,
           revengeAvailable: true,
         },
       ], client);
@@ -267,6 +270,71 @@ export class RaidSettlementService {
     }
   }
 
+  private async applySpiritSettlement(
+    client: Prisma.TransactionClient,
+    raidOrder: NonNullable<Awaited<ReturnType<RaidRepository['findRaidOrderForSettlement']>>>,
+    settlementResult: ReturnType<RaidSettlementRuleService['calculate']>,
+  ): Promise<void> {
+    if (settlementResult.attackerSpiritSlotId && settlementResult.attackerNextHp !== null) {
+      await client.playerSpiritSlot.update({
+        where: { id: settlementResult.attackerSpiritSlotId },
+        data: {
+          currentHp: settlementResult.attackerNextHp,
+          status: settlementResult.attackerNextHp <= 0 ? 'WOUNDED' : settlementResult.attackerNextHp < 30 ? 'RESTING' : 'ACTIVE',
+          slotVersion: { increment: 1 },
+        },
+      });
+    }
+
+    if (settlementResult.defenderSpiritSlotId && settlementResult.defenderNextHp !== null) {
+      await client.playerSpiritSlot.update({
+        where: { id: settlementResult.defenderSpiritSlotId },
+        data: {
+          currentHp: settlementResult.defenderNextHp,
+          status: settlementResult.defenderNextHp <= 0 ? 'WOUNDED' : settlementResult.defenderNextHp < 30 ? 'RESTING' : 'ACTIVE',
+          slotVersion: { increment: 1 },
+        },
+      });
+    }
+
+    await client.playerSpiritResource.update({
+      where: { playerId: raidOrder.attackerPlayerId },
+      data: {
+        spiritSoul: { increment: settlementResult.spiritSoulReward },
+        resourceVersion: { increment: 1 },
+      },
+    });
+
+    if (settlementResult.shardDrop) {
+      const existingCodex = await client.playerSpiritCodex.findUnique({
+        where: {
+          playerId_spiritDefinitionId: {
+            playerId: raidOrder.attackerPlayerId,
+            spiritDefinitionId: settlementResult.shardDrop.spiritDefinitionId,
+          },
+        },
+        select: {
+          id: true,
+          shardCount: true,
+        },
+      });
+
+      if (existingCodex) {
+        const nextShardCount = Math.min(existingCodex.shardCount + settlementResult.shardDrop.quantity, 100);
+        await client.playerSpiritCodex.update({
+          where: { id: existingCodex.id },
+          data: {
+            hasSeen: true,
+            shardCount: nextShardCount,
+            readyToCompose: nextShardCount >= 100,
+            readyAt: nextShardCount >= 100 ? new Date() : undefined,
+            codexVersion: { increment: 1 },
+          },
+        });
+      }
+    }
+  }
+
   private async compensateFailedRaidOrder(raidOrderId: string): Promise<void> {
     await this.prisma.transaction(async (client) => {
       const raidOrder = await this.raidRepository.findRaidOrderForSettlement(raidOrderId, client);
@@ -301,24 +369,6 @@ export class RaidSettlementService {
 interface DefenderFieldDeductionPlanEntry {
   fieldId: string;
   requestedGold: number;
-}
-
-function readDefenderPower(value: Prisma.JsonValue): number {
-  const snapshot = value as {
-    targetSnapshotJson?: {
-      combatPower?: number;
-    };
-  };
-
-  return Number(snapshot.targetSnapshotJson?.combatPower ?? 100);
-}
-
-function readAttackerAvailableAtDispatch(value: Prisma.JsonValue): number {
-  const snapshot = value as {
-    availableCount?: number;
-  };
-
-  return Number(snapshot.availableCount ?? 0);
 }
 
 function buildDefenderFieldDeductionPlan(
@@ -372,4 +422,92 @@ function appendFieldDeduction(plan: Map<string, number>, fieldId: string, reques
   }
 
   plan.set(fieldId, (plan.get(fieldId) ?? 0) + normalizedGold);
+}
+
+function readFactionName(value: Prisma.JsonValue): string | null {
+  const snapshot = value as { factionName?: string; faction?: string };
+  return snapshot.factionName ?? snapshot.faction ?? null;
+}
+
+function readSpiritSnapshot(value: Prisma.JsonValue): SpiritBattleSnapshot | null {
+  const snapshot = value as { mainSpirit?: unknown };
+  return isSpiritBattleSnapshot(snapshot.mainSpirit) ? snapshot.mainSpirit : null;
+}
+
+function buildSpiritSnapshotFromSlot(slot: {
+  id: string;
+  slotIndex: number;
+  level: number;
+  element: string | null;
+  currentHp: number;
+  maxHp: number;
+  status: string;
+  spiritDefinition: {
+    id: string;
+    spiritId: string;
+    label: string;
+    rarity: string;
+    factionAffinity: string;
+    role: string;
+    baseAttack: number;
+    baseDefense: number;
+    baseHp: number;
+    growthAttack: number;
+    growthDefense: number;
+    growthHp: number;
+  } | null;
+} | null): SpiritBattleSnapshot | null {
+  if (!slot?.spiritDefinition) {
+    return null;
+  }
+
+  return {
+    slotId: slot.id,
+    slotIndex: slot.slotIndex,
+    level: slot.level,
+    element: isSpiritElement(slot.element) ? slot.element : null,
+    currentHp: slot.currentHp,
+    maxHp: slot.maxHp,
+    status: slot.status,
+    spiritDefinition: slot.spiritDefinition,
+  };
+}
+
+function isSpiritBattleSnapshot(value: unknown): value is SpiritBattleSnapshot {
+  const candidate = value as Partial<SpiritBattleSnapshot> | null;
+  return Boolean(
+    candidate
+    && typeof candidate.slotId === 'string'
+    && typeof candidate.level === 'number'
+    && typeof candidate.currentHp === 'number'
+    && typeof candidate.maxHp === 'number'
+    && candidate.spiritDefinition
+    && typeof candidate.spiritDefinition.id === 'string',
+  );
+}
+
+function isSpiritElement(value: string | null): value is SpiritBattleSnapshot['element'] {
+  return value === 'METAL' || value === 'WOOD' || value === 'WATER' || value === 'FIRE' || value === 'EARTH';
+}
+
+function invertSettlementTitle(title: string): string {
+  if (title === '完胜') {
+    return '完败';
+  }
+  if (title === '大胜') {
+    return '大败';
+  }
+  if (title === '小胜') {
+    return '小败';
+  }
+  if (title === '小败') {
+    return '小胜';
+  }
+  if (title === '大败') {
+    return '大胜';
+  }
+  if (title === '完败') {
+    return '完胜';
+  }
+  return '相持';
 }

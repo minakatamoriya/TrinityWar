@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { APP_NAME, type ClientFarmField, type ClientSceneContentResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientFarmField, type ClientRaidSpiritPreview, type ClientSceneContentResponse } from '@trinitywar/shared';
 import type { FieldStatus } from '@prisma/client';
 import {
   GAME_BALANCE,
@@ -97,14 +97,18 @@ export class SceneContentAssembler {
       const factionName = snapshot.faction ?? targetPool.targetPlayer.faction?.name ?? '未知阵营';
       const combatPower = snapshot.combatPower ?? targetPool.targetPlayer.army?.totalCount ?? 0;
       const raidableGold = snapshot.raidableGold ?? 0;
+      const mainPetPreview = buildRaidSpiritPreview(targetPool.targetPlayer.spiritSlots[0] ?? null);
 
       return {
         id: targetPool.id,
         name: targetName,
         faction: factionName,
         level: snapshot.level ?? targetPool.targetPlayer.castleLevelCache,
+        mainPetPreview,
         combatPower: formatNumber(combatPower),
-        summary: `${factionName} Lv.${snapshot.level ?? targetPool.targetPlayer.castleLevelCache}`,
+        summary: mainPetPreview
+          ? `${factionName} · ${mainPetPreview.label}`
+          : `${factionName} Lv.${snapshot.level ?? targetPool.targetPlayer.castleLevelCache}`,
         loot: `${formatNumber(Math.max(Math.floor(raidableGold * 0.35), 0))}~${formatNumber(raidableGold)} 金币`,
         risk: snapshot.risk ?? '异步结算',
         detail: snapshot.detail ?? `目标池有效至 ${targetPool.expiresAt.toISOString()}`,
@@ -121,7 +125,7 @@ export class SceneContentAssembler {
       .filter((report) => report.reportType === reportType)
       .map((report) => ({
         title: report.title,
-        tag: reportType === 'ATTACK' ? '攻方' : '守方',
+        tag: report.title,
         tone: report.result === 'WIN' ? 'success' : report.result === 'LOSS' ? 'danger' : 'neutral',
         summary: report.summary,
         createdAt: report.createdAt.toISOString(),
@@ -458,4 +462,41 @@ function getExtensionEffectUnit(trackId: ExtensionKey): string {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(Math.max(Math.floor(value), 0));
+}
+
+function buildRaidSpiritPreview(
+  slot: { level: number; spiritDefinition: { spiritId: string; label: string; rarity: string } | null } | null,
+): ClientRaidSpiritPreview | null {
+  if (!slot?.spiritDefinition) {
+    return null;
+  }
+
+  return {
+    spiritId: slot.spiritDefinition.spiritId,
+    label: slot.spiritDefinition.label,
+    level: Math.max(slot.level, 1),
+    rarity: mapSpiritRarity(slot.spiritDefinition.rarity),
+    avatarGlyph: getSpiritGlyph(slot.spiritDefinition.label),
+  };
+}
+
+function mapSpiritRarity(rarity: string): ClientRaidSpiritPreview['rarity'] {
+  if (rarity === 'RARE') {
+    return 'rare';
+  }
+
+  if (rarity === 'LEGENDARY') {
+    return 'legendary';
+  }
+
+  if (rarity === 'COMMON') {
+    return 'common';
+  }
+
+  return null;
+}
+
+function getSpiritGlyph(label: string): string {
+  const firstCharacter = Array.from(label.trim())[0];
+  return firstCharacter ?? '灵';
 }

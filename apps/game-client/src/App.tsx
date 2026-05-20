@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   ClientCastleExtensionUpgradeId,
   ClientCollectFieldRequest,
   ClientCollectFieldResponse,
   ClientRaidActionRequest,
+  ClientRaidDeepIntelResponse,
   ClientFactionDonateRequest,
   ClientBuildingUpgradeId,
   ClientClaimPendingRequest,
@@ -15,7 +16,7 @@ import type {
   ClientSpiritState,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { buySpiritSoul, claimDailyTaskReward, claimPendingEarnings, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, composeSpirit, devLogin, dissolveSpirit, donateFactionResources, getStoredDevLoginSession, loadClientViewModel, loadRaidTargetDetail, loadSpiritState, raidClientTarget, recoverSpirit, resetDemoExperimentState, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, upgradeClientBuilding, upgradeSpirit } from './api';
+import { buySpiritSoul, claimDailyTaskReward, claimPendingEarnings, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, composeSpirit, devLogin, dissolveSpirit, donateFactionResources, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadRaidTargetDetail, loadSpiritState, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, upgradeClientBuilding, upgradeSpirit } from './api';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
 import { BuildingScene } from './ui/scenes/BuildingScene';
@@ -25,6 +26,8 @@ import { HomeScene } from './ui/scenes/HomeScene';
 import { ReportScene } from './ui/scenes/ReportScene';
 import { SeedSelectionScreen } from './ui/scenes/SeedSelectionScreen';
 import { GlobalFeatureModal } from './ui/common/GlobalFeatureModal';
+import { CharacterDialogProvider } from './dialog/CharacterDialogProvider';
+import { useCharacterDialog } from './dialog/useCharacterDialog';
 
 type RaidHubTabKey = 'targets' | 'follows' | 'reports' | 'warrants';
 type FactionTabKey = 'overview' | 'donate' | 'rank';
@@ -378,6 +381,10 @@ function App(): JSX.Element {
   const [followedTargetIds, setFollowedTargetIds] = useState<string[]>([]);
   const [raidTargetDetailsById, setRaidTargetDetailsById] = useState<Record<string, ClientRaidTargetDetailResponse>>({});
   const [globalFeatureModal, setGlobalFeatureModal] = useState<GlobalFeatureModalState | null>(null);
+  const characterDialog = useCharacterDialog();
+  const { playDialogScene } = characterDialog;
+  const welcomeDialogSessionIdRef = useRef<string | null>(null);
+  const farmEnterDialogRef = useRef<{ sceneId: string; at: number } | null>(null);
 
   const cacheRaidTargetDetail = (detail: ClientRaidTargetDetailResponse): void => {
     setRaidTargetDetailsById((current) => ({
@@ -449,6 +456,8 @@ function App(): JSX.Element {
     setViewModel(null);
     setSpiritState(null);
     setLoginError(null);
+    welcomeDialogSessionIdRef.current = null;
+    farmEnterDialogRef.current = null;
   };
 
   useEffect(() => {
@@ -479,6 +488,41 @@ function App(): JSX.Element {
       active = false;
     };
   }, [loginSession]);
+
+  useEffect(() => {
+    if (!loginSession || !viewModel) {
+      return;
+    }
+
+    if (welcomeDialogSessionIdRef.current === loginSession.player.id) {
+      return;
+    }
+
+    welcomeDialogSessionIdRef.current = loginSession.player.id;
+    playDialogScene('home.welcome.fox');
+  }, [loginSession, playDialogScene, viewModel]);
+
+  useEffect(() => {
+    if (activeScene !== 'farm' || !viewModel) {
+      return;
+    }
+
+    const ripeField = viewModel.scenes.farm.fields.find((field) => field.tone === 'mature' || field.tone === 'withered');
+    if (!ripeField) {
+      return;
+    }
+
+    const now = Date.now();
+    const lastShown = farmEnterDialogRef.current;
+    if (lastShown && lastShown.sceneId === 'farm.enter.ripe-crop' && now - lastShown.at < 120000) {
+      return;
+    }
+
+    const shown = playDialogScene('farm.enter.ripe-crop');
+    if (shown) {
+      farmEnterDialogRef.current = { sceneId: 'farm.enter.ripe-crop', at: now };
+    }
+  }, [activeScene, playDialogScene, viewModel]);
 
   useEffect(() => {
     if (!viewModel) {
@@ -637,6 +681,28 @@ function App(): JSX.Element {
                 <span>我是已注册用户</span>
                 <strong>{loginLoadingMode === 'existing-user' ? '登录中...' : '进入已有档案'}</strong>
               </button>
+              <button
+                className="auth-choice-button"
+                disabled={loginLoadingMode !== null}
+                onClick={() => {
+                  void handleDevLogin('test-user-1');
+                }}
+                type="button"
+              >
+                <span>验证账号</span>
+                <strong>{loginLoadingMode === 'test-user-1' ? '登录中...' : '测试用户1'}</strong>
+              </button>
+              <button
+                className="auth-choice-button"
+                disabled={loginLoadingMode !== null}
+                onClick={() => {
+                  void handleDevLogin('test-user-2');
+                }}
+                type="button"
+              >
+                <span>验证账号</span>
+                <strong>{loginLoadingMode === 'test-user-2' ? '登录中...' : '测试用户2'}</strong>
+              </button>
             </div>
             {loginError ? <p className="auth-error">{loginError}</p> : null}
           </section>
@@ -662,6 +728,7 @@ function App(): JSX.Element {
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
   const activeBackgroundImage = `url(${getSceneBackground(activeScene, home.factionName)})`;
   const vaultResource = findResourceByTone('vault', home.resources);
+  const devLoginModeLabel = getDevLoginModeLabel(loginSession?.mode);
   const pendingClaims = home.pendingClaims ?? [];
   const dailyTasks = home.dailyTasks ?? [];
   const taxPending = pendingClaims.find((claim) => claim.source === 'tax');
@@ -1049,6 +1116,7 @@ function App(): JSX.Element {
       setStarterSeedClaimed(false);
       setTianjiTalismanClaimed(false);
       setSeedRewardModal(null);
+      farmEnterDialogRef.current = null;
       setArmyQueueRefreshReadyAt(null);
       setSeedSelectionState(null);
       setSelectedSeedId('qinglingmai');
@@ -1468,7 +1536,8 @@ function App(): JSX.Element {
   };
 
   return (
-    <main className="app-shell">
+    <CharacterDialogProvider controller={characterDialog}>
+      <main className="app-shell">
       <aside className="left-rail">
         <div className="brand-block">
           <p className="eyebrow">TRINITY WAR</p>
@@ -1527,7 +1596,7 @@ function App(): JSX.Element {
           <div className="meta-row source-row"><span>bootstrap</span><strong>{formatReadSource(sources.bootstrap)}</strong></div>
           <div className="meta-row source-row"><span>home</span><strong>{formatReadSource(sources.home)}</strong></div>
           <div className="meta-row source-row"><span>scene</span><strong>{formatReadSource(sources.scenes)}</strong></div>
-          <div className="meta-row"><span>测试账号</span><strong>{loginSession?.mode === 'new-user' ? '新用户' : '已注册用户'}</strong></div>
+          <div className="meta-row"><span>测试账号</span><strong>{devLoginModeLabel}</strong></div>
           <button className="ghost-button" onClick={handleSwitchDevUser} type="button">
             切换测试账号
           </button>
@@ -1595,7 +1664,7 @@ function App(): JSX.Element {
                 <h2>测试登录</h2>
                 <div className="settings-row">
                   <span>当前账号</span>
-                  <strong>{loginSession?.mode === 'new-user' ? '新用户' : '已注册用户'}</strong>
+                  <strong>{devLoginModeLabel}</strong>
                 </div>
                 <div className="settings-row">
                   <span>登录方式</span>
@@ -1838,6 +1907,7 @@ function App(): JSX.Element {
               mode={raidTargetModal.mode}
               onAction={(action) => handleSceneAction(action, raidTargetDetail?.name)}
               onClose={() => setRaidTargetModal(null)}
+              onRevealDeepIntel={(targetId): Promise<ClientRaidDeepIntelResponse> => revealRaidTargetDeepIntel(targetId)}
               onToggleFollow={() => {
                 const target = raidTargetsById.get(raidTargetModal.targetId);
                 if (target) {
@@ -2043,7 +2113,8 @@ function App(): JSX.Element {
         </div>
       </section>
 
-    </main>
+      </main>
+    </CharacterDialogProvider>
   );
 }
 

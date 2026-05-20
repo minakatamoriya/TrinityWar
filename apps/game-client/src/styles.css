@@ -147,6 +147,18 @@ button {
   opacity: 0.72;
 }
 
+@media (min-width: 720px) {
+  .auth-choice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 719px) {
+  .auth-choice-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .auth-error {
   margin: 16px 0 0;
   padding: 10px 12px;
@@ -2285,6 +2297,7 @@ button {
 .target-card-line strong {
   color: #ffe2b7;
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .target-card-subline {
@@ -3565,6 +3578,21 @@ button.spirit-element-chip {
   padding-inline: 10px;
 }
 
+.raid-spirit-intel-action {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  min-width: 122px;
+}
+
+.raid-spirit-intel-action span {
+  max-width: 132px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: right;
+}
+
 .raid-spirit-revealed {
   display: grid;
   grid-template-columns: repeat(2, minmax(54px, 1fr));
@@ -3598,6 +3626,23 @@ button.spirit-element-chip {
   padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(255, 248, 234, 0.08);
   background: rgba(14, 10, 8, 0.94);
+}
+
+.raid-farm-board-note {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.raid-farm-board-note p {
+  margin: 0;
+  color: #f7e8cf;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.raid-farm-board-note .eyebrow {
+  color: var(--text-secondary);
 }
 
 .raid-detail-topline {
@@ -4019,6 +4064,26 @@ button.spirit-element-chip {
   line-height: 1.45;
 }
 
+.report-message-snapshot {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  background: rgba(255, 248, 234, 0.05);
+}
+
+.report-message-snapshot span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.report-message-snapshot strong {
+  color: #ffe2b7;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .report-action-row {
   display: flex;
   flex-wrap: wrap;
@@ -4151,6 +4216,152 @@ button.spirit-element-chip {
 
 .modal-card {
   width: min(520px, 100%);
+}
+
+.character-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  background: rgba(8, 6, 5, 0.16);
+  animation: characterDialogMaskIn 180ms ease-out both;
+}
+
+.character-dialog-panel {
+  position: relative;
+  width: 100vw;
+  min-height: 150px;
+  max-height: min(33dvh, 260px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 24vw);
+  gap: 16px;
+  padding: 20px max(18px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  border-radius: 20px 20px 0 0;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(36, 28, 23, 0.96), rgba(18, 16, 16, 0.96)),
+    rgba(23, 18, 16, 0.96);
+  border-top: 1px solid rgba(244, 209, 158, 0.28);
+  box-shadow: 0 -18px 56px rgba(0, 0, 0, 0.42);
+  transform: translateY(100%);
+}
+
+.character-dialog-panel.is-entering {
+  animation: characterDialogSlideIn 260ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.character-dialog-panel.is-visible {
+  transform: translateY(0);
+}
+
+.character-dialog-panel.is-leaving {
+  animation: characterDialogSlideOut 240ms cubic-bezier(.4, 0, .8, .2) both;
+}
+
+.character-dialog-panel.is-advanceable {
+  cursor: pointer;
+}
+
+.character-dialog-content {
+  min-width: 0;
+  width: min(760px, 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.character-dialog-speaker {
+  margin: 0;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.character-dialog-text {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 18px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.character-dialog-progress {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.character-dialog-image {
+  align-self: end;
+  justify-self: center;
+  width: min(190px, 100%);
+  height: min(210px, 100%);
+  object-fit: contain;
+  object-position: bottom center;
+  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.32));
+}
+
+.character-dialog-next {
+  position: absolute;
+  right: 16px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  color: var(--text-secondary);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.character-dialog-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 248, 234, 0.08);
+  color: #ffe7c0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+@keyframes characterDialogMaskIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes characterDialogSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes characterDialogSlideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
 }
 
 .settings-panel {
@@ -4324,6 +4535,21 @@ button.spirit-element-chip {
     max-height: 72dvh;
     overflow-y: auto;
     border-radius: 22px 22px 18px 18px;
+  }
+
+  .character-dialog-backdrop {
+    padding: 0;
+  }
+
+  .character-dialog-panel {
+    width: 100%;
+    min-height: 136px;
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 32%);
+    padding: 16px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+
+  .character-dialog-text {
+    font-size: 16px;
   }
 
   .collect-overflow-backdrop {

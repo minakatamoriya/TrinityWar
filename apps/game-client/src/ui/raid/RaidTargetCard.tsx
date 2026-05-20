@@ -7,6 +7,7 @@ interface RaidTargetCardProps {
 
 export function RaidTargetCard(props: RaidTargetCardProps): JSX.Element {
   const { target, onSelect } = props;
+  const mainPet = target.mainPetPreview;
 
   return (
     <button className="target-card target-card-shell" onClick={() => onSelect(target)} type="button">
@@ -19,10 +20,10 @@ export function RaidTargetCard(props: RaidTargetCardProps): JSX.Element {
       </div>
       <div className="target-card-line">
         <span>{target.summary}</span>
-        <strong>主宠 Lv.{target.level}</strong>
+        <strong>{mainPet ? `主宠 Lv.${mainPet.level}` : `主城 Lv.${target.level}`}</strong>
       </div>
       <div className="target-card-subline">
-        <span>默认情报：可见等级与品种</span>
+        <span>{mainPet ? `默认情报：${mainPet.label}` : '默认情报：未发现主宠'}</span>
         <em>{target.loot}</em>
       </div>
     </button>

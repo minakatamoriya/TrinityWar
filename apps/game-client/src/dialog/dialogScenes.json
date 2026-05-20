@@ -1,0 +1,73 @@
+{
+  "actors": {
+    "fox": {
+      "name": "狐狸",
+      "imageUrl": "/assets/character/fox.png",
+      "imageAlt": "狐狸宠物"
+    },
+    "tudi": {
+      "name": "土地公",
+      "imageUrl": "/assets/character/tudi.png",
+      "imageAlt": "土地公"
+    }
+  },
+  "defaults": {
+    "mode": "random",
+    "advance": "auto",
+    "priority": 0,
+    "interrupt": "queue",
+    "showCloseButton": true,
+    "closeOnMaskClick": true,
+    "enterDelayMs": 0,
+    "autoCloseMs": 3600,
+    "holdMs": 0
+  },
+  "scenes": {
+    "home.welcome.fox": {
+      "mode": "sequence",
+      "chance": 1,
+      "priority": 10,
+      "interrupt": "queue",
+      "advance": "auto",
+      "enterDelayMs": 650,
+      "options": {
+        "showCloseButton": false,
+        "closeOnMaskClick": true,
+        "autoCloseMs": 3600
+      },
+      "steps": [
+        {
+          "actorId": "fox",
+          "text": "主人，欢迎你回来。"
+        }
+      ]
+    },
+    "farm.enter.ripe-crop": {
+      "mode": "random",
+      "chance": 0.75,
+      "cooldownMs": 120000,
+      "priority": 20,
+      "interrupt": "queue",
+      "advance": "auto",
+      "enterDelayMs": 320,
+      "trigger": {
+        "type": "enterScene",
+        "scene": "farm",
+        "conditions": {
+          "hasMatureCrop": true
+        }
+      },
+      "options": {
+        "showCloseButton": false,
+        "closeOnMaskClick": true,
+        "autoCloseMs": 4200
+      },
+      "steps": [
+        {
+          "actorId": "tudi",
+          "text": "小神在此守候多时了，麦子都熟了。"
+        }
+      ]
+    }
+  }
+}

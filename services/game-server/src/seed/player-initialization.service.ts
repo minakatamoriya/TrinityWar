@@ -28,8 +28,10 @@ export interface PlayerInitializationInput {
   seedInventory?: Record<string, { quantity: number; unlocked: boolean }>;
   spirit?: {
     spiritSoul?: number;
+    tianjiTalisman?: number;
     starterSpiritId?: string;
     starterElement?: SpiritElement;
+    starterLevel?: number;
   };
   fields?: PlayerFieldInitializationInput[];
   taskOverrides?: Array<{
@@ -327,6 +329,8 @@ export class PlayerInitializationService {
     const starterSpiritId = spirit?.starterSpiritId ?? DEFAULT_STARTER_SPIRIT_ID;
     const starterElement = spirit?.starterElement ?? 'WOOD';
     const spiritSoul = spirit?.spiritSoul ?? 0;
+    const tianjiTalisman = spirit?.tianjiTalisman ?? 0;
+    const starterLevel = Math.max(Math.floor(spirit?.starterLevel ?? 1), 1);
     const spiritDefinitions = await client.spiritDefinition.findMany({
       select: {
         id: true,
@@ -344,13 +348,25 @@ export class PlayerInitializationService {
       create: {
         playerId,
         spiritSoul,
+        tianjiTalisman,
+        dailyTianjiClaimDateKey: null,
         dailyRecoveryUsed: 0,
+        dailyRecoveryDateKey: null,
+        dailyIntelFreeUsed: 0,
+        dailyIntelTalismanUsed: 0,
+        dailyIntelDateKey: null,
         resourceVersion: 1,
       },
       update: resetExisting
         ? {
           spiritSoul,
+          tianjiTalisman,
+          dailyTianjiClaimDateKey: null,
           dailyRecoveryUsed: 0,
+          dailyRecoveryDateKey: null,
+          dailyIntelFreeUsed: 0,
+          dailyIntelTalismanUsed: 0,
+          dailyIntelDateKey: null,
           resourceVersion: { increment: 1 },
         }
         : {},
@@ -358,7 +374,8 @@ export class PlayerInitializationService {
 
     for (let slotIndex = 1; slotIndex <= SPIRIT_SLOT_COUNT; slotIndex += 1) {
       const shouldCreateStarter = slotIndex === 1 && !!starterDefinition;
-      const maxHp = shouldCreateStarter ? calculateSpiritMaxHp(starterDefinition, 1) : 0;
+      const level = shouldCreateStarter ? starterLevel : 1;
+      const maxHp = shouldCreateStarter ? calculateSpiritMaxHp(starterDefinition, level) : 0;
 
       await client.playerSpiritSlot.upsert({
         where: {
@@ -372,7 +389,7 @@ export class PlayerInitializationService {
           slotIndex,
           spiritDefinitionId: shouldCreateStarter ? starterDefinition.id : null,
           isMain: shouldCreateStarter,
-          level: 1,
+          level,
           exp: 0,
           element: shouldCreateStarter ? starterElement : null,
           currentHp: maxHp,
@@ -385,7 +402,7 @@ export class PlayerInitializationService {
           ? {
             spiritDefinitionId: shouldCreateStarter ? starterDefinition.id : null,
             isMain: shouldCreateStarter,
-            level: 1,
+            level,
             exp: 0,
             element: shouldCreateStarter ? starterElement : null,
             currentHp: maxHp,

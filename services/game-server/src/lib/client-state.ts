@@ -17,6 +17,7 @@
   type ClientBuildingUpgradeId,
   type ClientPendingClaimSource,
   type ClientRaidRewardItem,
+  type ClientRaidSpiritPreview,
   type ClientRaidTargetDetailResponse,
   type ClientRecruitArmyRequest,
   type ClientResetDemoStateResponse,
@@ -74,6 +75,14 @@ const seedLabelMap: Record<string, string> = {
   zhaoyouming: '照幽冥',
 };
 
+const raidSpiritPreviews: Record<string, ClientRaidSpiritPreview> = {
+  'target-1': { spiritId: 'yingbao', label: '影豹', level: 9, rarity: 'common', avatarGlyph: '影' },
+  'target-2': { spiritId: 'linglu', label: '灵鹿', level: 8, rarity: 'common', avatarGlyph: '鹿' },
+  'target-3': { spiritId: 'qingyuan', label: '青猿', level: 6, rarity: 'common', avatarGlyph: '猿' },
+  'target-4': { spiritId: 'xuanhu', label: '玄虎', level: 11, rarity: 'common', avatarGlyph: '虎' },
+  'target-5': { spiritId: 'shuanghu', label: '霜狐', level: 5, rarity: 'common', avatarGlyph: '狐' },
+};
+
 interface RaidTargetState {
   id: string;
   name: string;
@@ -89,6 +98,7 @@ interface RaidTargetState {
   raidableGold: number;
   exposedFruit: string;
   defenseStatus: string;
+  mainPetPreview: ClientRaidSpiritPreview;
   protectionUntil?: string;
   seedDrop: {
     seedId: string;
@@ -598,6 +608,7 @@ const initialRaidTargets: RaidTargetState[] = [
     faction: '魔界',
     level: 5,
     combatPower: 1320,
+    mainPetPreview: raidSpiritPreviews['target-1'],
     summary: '魔界 · 资源高 · 防守偏弱',
     risk: '高风险',
     detail: '成熟田 2 块 · 可掠 520 · 今日被掠 1 次',
@@ -620,6 +631,7 @@ const initialRaidTargets: RaidTargetState[] = [
     faction: '仙界',
     level: 4,
     combatPower: 1080,
+    mainPetPreview: raidSpiritPreviews['target-2'],
     summary: '仙界 · 资源中 · 减损明显',
     risk: '中风险',
     detail: '成熟田 1 块 · 可掠 260 · 防守偏稳',
@@ -642,6 +654,7 @@ const initialRaidTargets: RaidTargetState[] = [
     faction: '人界',
     level: 4,
     combatPower: 920,
+    mainPetPreview: raidSpiritPreviews['target-3'],
     summary: '人界 · 资源低 · 风险较稳',
     risk: '低风险',
     detail: '成长期 1 块 · 可掠 180 · 适合保守出手',
@@ -664,6 +677,7 @@ const initialRaidTargets: RaidTargetState[] = [
     faction: '魔界',
     level: 5,
     combatPower: 1240,
+    mainPetPreview: raidSpiritPreviews['target-4'],
     summary: '魔界 · 资源中高 · 战力偏高',
     risk: '中高风险',
     detail: '成熟田 1 块 · 可掠 460 · 驻防分散',
@@ -686,6 +700,7 @@ const initialRaidTargets: RaidTargetState[] = [
     faction: '仙界',
     level: 3,
     combatPower: 760,
+    mainPetPreview: raidSpiritPreviews['target-5'],
     summary: '仙界 · 资源低 · 适合起手',
     risk: '低风险',
     detail: '成熟田 1 块 · 可掠 140 · 防守偏弱',
@@ -1151,6 +1166,7 @@ export function buildRaidTargetDetail(targetId: string): ClientRaidTargetDetailR
       protectionStatus: '当前不在可攻击目标池中',
       detail: '该目标当前不可用，可能正处于保护中或已从目标池移除。',
       targetFarmBoardMessage: '',
+      mainPetPreview: raidSpiritPreviews['target-1'],
       actions: [{ label: '返回掠夺页', target: 'report', tone: 'ghost' }],
     };
   }
@@ -1161,6 +1177,13 @@ export function buildRaidTargetDetail(targetId: string): ClientRaidTargetDetailR
     name: target.name,
     faction: target.faction,
     level: target.level,
+    mainPetPreview: raidSpiritPreviews[target.id] ?? {
+      spiritId: null,
+      label: '主战灵宠',
+      level: Math.max(target.level, 1),
+      rarity: null,
+      avatarGlyph: target.faction.slice(0, 1) || '灵',
+    },
     combatPower: formatNumber(target.combatPower),
     fieldPreviewTone: target.fieldPreviewTone,
     fieldStatus: target.fieldStatus,
@@ -1462,6 +1485,7 @@ export function buildSceneContent(): ClientSceneContentResponse {
         name: target.name,
         faction: target.faction,
         level: target.level,
+        mainPetPreview: target.mainPetPreview,
         combatPower: formatNumber(target.combatPower),
         summary: target.summary,
         loot: `${formatNumber(Math.round(target.raidableGold * 0.35))}~${formatNumber(target.raidableGold)} 金币`,

@@ -2,15 +2,21 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   APP_NAME,
   type ClientRaidActionResponse,
+  type ClientRaidDeepIntelResponse,
   type ClientRaidMessageTemplate,
   type ClientRaidOrderMessageResponse,
+  type ClientRaidSpiritPreview,
   type ClientRaidTargetDetailResponse,
 } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
+import { getLocalDateKey } from '../lib/date-key.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RaidSettlementQueueService } from './raid-settlement-queue.service.js';
 import { RaidRepository } from './raid.repository.js';
+
+const RAID_INTEL_FREE_LIMIT = 3;
+const RAID_INTEL_TALISMAN_LIMIT = 3;
 
 @Injectable()
 export class RaidTargetService {
@@ -36,6 +42,88 @@ export class RaidTargetService {
     }
 
     return buildRaidTargetDetailResponse(target, targetId);
+  }
+
+  async getRaidTargetDeepIntel(playerId: string, targetId: string): Promise<ClientRaidDeepIntelResponse> {
+    return this.prisma.transaction(async (client) => {
+      const [target, resource] = await Promise.all([
+        this.raidRepository.findVisibleTargetPoolEntry({
+          ownerPlayerId: playerId,
+          targetPoolId: targetId,
+        }, client),
+        client.playerSpiritResource.findUnique({
+          where: { playerId },
+          select: {
+            tianjiTalisman: true,
+            dailyIntelFreeUsed: true,
+            dailyIntelTalismanUsed: true,
+            dailyIntelDateKey: true,
+          },
+        }),
+      ]);
+
+      if (!target) {
+        throw new BusinessError({
+          code: ErrorCode.RaidTargetNotFound,
+          message: 'Raid target not found or expired.',
+          statusCode: 404,
+        });
+      }
+
+      if (!resource) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Player spirit resource not found.',
+          statusCode: 404,
+        });
+      }
+
+      const dateKey = getLocalDateKey();
+      const freeUsed = resource.dailyIntelDateKey === dateKey ? resource.dailyIntelFreeUsed : 0;
+      const talismanUsed = resource.dailyIntelDateKey === dateKey ? resource.dailyIntelTalismanUsed : 0;
+      let nextFreeUsed = freeUsed;
+      let nextTalismanUsed = talismanUsed;
+      let shouldConsumeTalisman = false;
+
+      if (freeUsed < RAID_INTEL_FREE_LIMIT) {
+        nextFreeUsed += 1;
+      } else {
+        if (talismanUsed >= RAID_INTEL_TALISMAN_LIMIT) {
+          throw new BusinessError({
+            code: ErrorCode.Conflict,
+            message: 'Daily deep intel limit reached.',
+            statusCode: 409,
+          });
+        }
+
+        if (resource.tianjiTalisman <= 0) {
+          throw new BusinessError({
+            code: ErrorCode.Conflict,
+            message: 'Insufficient Tianji talisman.',
+            statusCode: 409,
+          });
+        }
+
+        nextTalismanUsed += 1;
+        shouldConsumeTalisman = true;
+      }
+
+      await client.playerSpiritResource.update({
+        where: { playerId },
+        data: {
+          dailyIntelFreeUsed: nextFreeUsed,
+          dailyIntelTalismanUsed: nextTalismanUsed,
+          dailyIntelDateKey: dateKey,
+          tianjiTalisman: shouldConsumeTalisman ? { decrement: 1 } : undefined,
+          resourceVersion: { increment: 1 },
+        },
+      });
+
+      return buildRaidDeepIntelResponse(target, targetId, {
+        remainingFreeIntel: Math.max(RAID_INTEL_FREE_LIMIT - nextFreeUsed, 0),
+        remainingTalismanIntel: Math.max(RAID_INTEL_TALISMAN_LIMIT - nextTalismanUsed, 0),
+      });
+    });
   }
 
   async createRaidOrder(input: {
@@ -117,6 +205,47 @@ export class RaidTargetService {
       }
 
       const primaryField = pickPrimaryRaidField(target);
+      const attackerMainSpirit = await client.playerSpiritSlot.findFirst({
+        where: {
+          playerId: input.playerId,
+          isMain: true,
+          spiritDefinitionId: { not: null },
+        },
+        select: {
+          id: true,
+          slotIndex: true,
+          level: true,
+          element: true,
+          currentHp: true,
+          maxHp: true,
+          status: true,
+          spiritDefinition: {
+            select: {
+              id: true,
+              spiritId: true,
+              label: true,
+              rarity: true,
+              factionAffinity: true,
+              role: true,
+              baseAttack: true,
+              baseDefense: true,
+              baseHp: true,
+              growthAttack: true,
+              growthDefense: true,
+              growthHp: true,
+            },
+          },
+        },
+      });
+
+      if (!attackerMainSpirit?.spiritDefinition || attackerMainSpirit.currentHp <= 0) {
+        throw new BusinessError({
+          code: ErrorCode.RaidNotAllowed,
+          message: 'Main spirit is required for raid.',
+          statusCode: 409,
+        });
+      }
+
       const nextDispatchedCount = Math.max(1, Math.min(currentArmy.availableCount, 10));
       const settleAt = new Date(Date.now() + 2 * 60 * 1000);
       const frozenUnitSnapshot = { dispatchedCount: nextDispatchedCount };
@@ -140,6 +269,7 @@ export class RaidTargetService {
           playerId: input.playerId,
           availableCount: currentArmy.availableCount,
           frozenCount: currentArmy.frozenCount,
+          mainSpirit: buildSpiritBattleSnapshot(attackerMainSpirit),
         },
         defenderSnapshotJson: {
           targetId: target.id,
@@ -147,6 +277,7 @@ export class RaidTargetService {
           targetSnapshotJson: target.targetSnapshotJson,
           fieldSnapshotJson: target.fieldSnapshotJson,
           riskSnapshotJson: target.riskSnapshotJson,
+          mainSpirit: buildSpiritBattleSnapshot(target.targetPlayer.spiritSlots[0] ?? null),
         },
         dispatchedAt: new Date(),
         settleAt,
@@ -325,6 +456,7 @@ function buildRaidTargetDetailResponse(
     protectionStatus?: string;
     detail?: string;
   } | null;
+  const mainPetPreview = buildRaidSpiritPreview(target?.targetPlayer.spiritSlots[0] ?? null);
   const fields = target?.targetPlayer.fieldSlots.map((field) => ({
     id: field.id,
     fieldVersion: undefined,
@@ -356,8 +488,34 @@ function buildRaidTargetDetailResponse(
     raidRule: targetSnapshot?.raidRule ?? '已接入真实目标池。',
     defenseStatus: targetSnapshot?.defenseStatus ?? '等待结算',
     protectionStatus: targetSnapshot?.protectionStatus ?? '可发起掠夺',
+    mainPetPreview,
     detail: targetSnapshot?.detail ?? '真实 raid 目标详情。',
     actions: [{ label: '发起掠夺', target: 'report', tone: 'primary' }],
+  };
+}
+
+function buildRaidDeepIntelResponse(
+  target: Awaited<ReturnType<RaidRepository['findVisibleTargetPoolEntry']>>,
+  targetId: string,
+  remaining: {
+    remainingFreeIntel: number;
+    remainingTalismanIntel: number;
+  },
+): ClientRaidDeepIntelResponse {
+  const mainSlot = target?.targetPlayer.spiritSlots[0] ?? null;
+
+  return {
+    app: APP_NAME,
+    targetId,
+    mainPetPreview: buildRaidSpiritPreview(mainSlot),
+    intel: {
+      element: mapSpiritElement(mainSlot?.element ?? null),
+      attackRating: buildAttackRating(mainSlot),
+      defenseRating: buildDefenseRating(mainSlot),
+      healthStatus: buildHealthStatus(mainSlot),
+      remainingFreeIntel: remaining.remainingFreeIntel,
+      remainingTalismanIntel: remaining.remainingTalismanIntel,
+    },
   };
 }
 
@@ -456,6 +614,193 @@ function mapRaidOrderStatus(status: string): 'queued' | 'settling' | 'settled' |
   }
 
   return 'queued';
+}
+
+function buildRaidSpiritPreview(
+  slot: {
+    level: number;
+    spiritDefinition: {
+      spiritId: string;
+      label: string;
+      rarity: string;
+    } | null;
+  } | null,
+): ClientRaidSpiritPreview | null {
+  if (!slot?.spiritDefinition) {
+    return null;
+  }
+
+  return {
+    spiritId: slot.spiritDefinition.spiritId,
+    label: slot.spiritDefinition.label,
+    level: Math.max(slot.level, 1),
+    rarity: mapSpiritRarity(slot.spiritDefinition.rarity),
+    avatarGlyph: getSpiritGlyph(slot.spiritDefinition.label),
+  };
+}
+
+function buildSpiritBattleSnapshot(
+  slot: {
+    id: string;
+    slotIndex: number;
+    level: number;
+    element: string | null;
+    currentHp: number;
+    maxHp: number;
+    status: string;
+    spiritDefinition: {
+      id: string;
+      spiritId: string;
+      label: string;
+      rarity: string;
+      factionAffinity: string;
+      role: string;
+      baseAttack: number;
+      baseDefense: number;
+      baseHp: number;
+      growthAttack: number;
+      growthDefense: number;
+      growthHp: number;
+    } | null;
+  } | null,
+) {
+  if (!slot?.spiritDefinition) {
+    return null;
+  }
+
+  return {
+    slotId: slot.id,
+    slotIndex: slot.slotIndex,
+    level: slot.level,
+    element: slot.element,
+    currentHp: slot.currentHp,
+    maxHp: slot.maxHp,
+    status: slot.status,
+    spiritDefinition: slot.spiritDefinition,
+  };
+}
+
+function mapSpiritRarity(rarity: string): ClientRaidSpiritPreview['rarity'] {
+  if (rarity === 'RARE') {
+    return 'rare';
+  }
+
+  if (rarity === 'LEGENDARY') {
+    return 'legendary';
+  }
+
+  if (rarity === 'COMMON') {
+    return 'common';
+  }
+
+  return null;
+}
+
+function mapSpiritElement(element: string | null): ClientRaidDeepIntelResponse['intel']['element'] {
+  if (element === 'METAL') {
+    return 'metal';
+  }
+
+  if (element === 'WOOD') {
+    return 'wood';
+  }
+
+  if (element === 'WATER') {
+    return 'water';
+  }
+
+  if (element === 'FIRE') {
+    return 'fire';
+  }
+
+  if (element === 'EARTH') {
+    return 'earth';
+  }
+
+  return null;
+}
+
+function getSpiritGlyph(label: string): string {
+  const firstCharacter = Array.from(label.trim())[0];
+  return firstCharacter ?? '灵';
+}
+
+function buildAttackRating(
+  slot: {
+    level: number;
+    spiritDefinition: {
+      baseAttack: number;
+      growthAttack: number;
+    } | null;
+  } | null,
+): string {
+  const score = slot?.spiritDefinition
+    ? slot.spiritDefinition.baseAttack + Math.max(slot.level - 1, 0) * slot.spiritDefinition.growthAttack
+    : 0;
+
+  return mapScoreRating(score);
+}
+
+function buildDefenseRating(
+  slot: {
+    level: number;
+    spiritDefinition: {
+      baseDefense: number;
+      growthDefense: number;
+    } | null;
+  } | null,
+): string {
+  const score = slot?.spiritDefinition
+    ? slot.spiritDefinition.baseDefense + Math.max(slot.level - 1, 0) * slot.spiritDefinition.growthDefense
+    : 0;
+
+  return mapScoreRating(score);
+}
+
+function mapScoreRating(score: number): string {
+  if (score >= 170) {
+    return 'S';
+  }
+
+  if (score >= 130) {
+    return 'A';
+  }
+
+  if (score >= 90) {
+    return 'B';
+  }
+
+  if (score > 0) {
+    return 'C';
+  }
+
+  return '未知';
+}
+
+function buildHealthStatus(slot: { currentHp: number; maxHp: number; status: string } | null): string {
+  if (!slot || slot.maxHp <= 0) {
+    return '未知';
+  }
+
+  if (slot.status === 'WOUNDED') {
+    return '受伤';
+  }
+
+  if (slot.status === 'RESTING') {
+    return '休整';
+  }
+
+  const ratio = slot.currentHp / slot.maxHp;
+
+  if (ratio >= 0.8) {
+    return '状态良好';
+  }
+
+  if (ratio >= 0.45) {
+    return '轻伤';
+  }
+
+  return '重伤';
 }
 
 function pickPrimaryRaidField(target: NonNullable<Awaited<ReturnType<RaidRepository['findVisibleTargetPoolEntry']>>>) {

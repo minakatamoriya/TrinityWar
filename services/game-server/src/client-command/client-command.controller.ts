@@ -127,6 +127,22 @@ export class ClientCommandController {
       idempotencyKey,
     });
   }
+
+  @Post('claim-tianji-talisman')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Claim one daily Tianji talisman into spirit resource inventory.' })
+  async claimTianjiTalisman(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+  ): Promise<ClientStateMutationResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.claimTianjiTalisman({
+      playerId: currentPlayer.playerId,
+    });
+  }
 }
 
 defineRouteParamTypes(ClientCommandController.prototype, 'claimPending', [Object, Object, Object]);
@@ -134,6 +150,7 @@ defineRouteParamTypes(ClientCommandController.prototype, 'claimDailyTask', [Obje
 defineRouteParamTypes(ClientCommandController.prototype, 'collectField', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'recruitArmy', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'upgradeBuilding', [Object, Object, Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'claimTianjiTalisman', [Object]);
 
 function defineRouteParamTypes(target: object, methodName: string, paramTypes: unknown[]): void {
   const defineMetadata = Reflect.defineMetadata as
