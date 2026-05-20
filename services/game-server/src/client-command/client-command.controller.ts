@@ -6,8 +6,10 @@ import type {
   ClientClaimPendingRequest,
   ClientClaimPendingResponse,
   ClientCollectFieldRequest,
+  ClientFactionDonateRequest,
   ClientCollectFieldResponse,
   ClientRecruitArmyRequest,
+  ClientStartCultivationRequest,
   ClientStateMutationResponse,
   ClientUpgradeBuildingRequest,
 } from '@trinitywar/shared';
@@ -16,7 +18,7 @@ import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
 import { createUnauthorizedError } from '../common/errors/index.js';
 import { ClientCommandService } from './client-command.service.js';
-import { ClaimDailyTaskRequestDto, ClaimPendingRequestDto, CollectFieldRequestDto, RecruitArmyRequestDto, UpgradeBuildingRequestDto } from './dto.js';
+import { ClaimDailyTaskRequestDto, ClaimPendingRequestDto, CollectFieldRequestDto, FactionDonateRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UpgradeBuildingRequestDto } from './dto.js';
 
 @ApiTags('client')
 @Controller('client/actions')
@@ -86,6 +88,27 @@ export class ClientCommandController {
     });
   }
 
+  @Post('start-cultivation')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: StartCultivationRequestDto })
+  @ApiOkResponse({ description: 'Start field cultivation mutation response.' })
+  async startCultivation(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: ClientStartCultivationRequest,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<ClientStateMutationResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.startCultivation({
+      playerId: currentPlayer.playerId,
+      request: body as StartCultivationRequestDto,
+      idempotencyKey,
+    });
+  }
+
   @Post('recruit-army')
   @UseGuards(AuthPlaceholderGuard)
   @ApiBearerAuth()
@@ -128,6 +151,25 @@ export class ClientCommandController {
     });
   }
 
+  @Post('faction-donate')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: FactionDonateRequestDto })
+  @ApiOkResponse({ description: 'Donate gold to faction and gain contribution.' })
+  async donateFaction(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: ClientFactionDonateRequest,
+  ): Promise<ClientStateMutationResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.donateFaction({
+      playerId: currentPlayer.playerId,
+      request: body,
+    });
+  }
+
   @Post('claim-tianji-talisman')
   @UseGuards(AuthPlaceholderGuard)
   @ApiBearerAuth()
@@ -143,14 +185,33 @@ export class ClientCommandController {
       playerId: currentPlayer.playerId,
     });
   }
+
+  @Post('claim-starter-seeds')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Claim starter seed pack into backpack inventory.' })
+  async claimStarterSeeds(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+  ): Promise<ClientStateMutationResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.claimStarterSeeds({
+      playerId: currentPlayer.playerId,
+    });
+  }
 }
 
 defineRouteParamTypes(ClientCommandController.prototype, 'claimPending', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimDailyTask', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'collectField', [Object, Object, Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'startCultivation', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'recruitArmy', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'upgradeBuilding', [Object, Object, Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'donateFaction', [Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimTianjiTalisman', [Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'claimStarterSeeds', [Object]);
 
 function defineRouteParamTypes(target: object, methodName: string, paramTypes: unknown[]): void {
   const defineMetadata = Reflect.defineMetadata as

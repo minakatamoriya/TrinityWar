@@ -39,7 +39,7 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
             </button>
             <div className="faction-overview-note-block">
               {breakdownText.split(' + ').map((line) => (
-                <p className="faction-breakdown-line" key={line}>{line}</p>
+                <p className="faction-breakdown-line" key={line}>{line} 金/小时</p>
               ))}
             </div>
           </div>

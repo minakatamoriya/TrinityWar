@@ -6,10 +6,11 @@ const CharacterDialogContext = createContext<CharacterDialogController | null>(n
 
 interface CharacterDialogProviderProps {
   controller: CharacterDialogController;
+  portalTarget?: HTMLElement | null;
   children: ReactNode;
 }
 
-export function CharacterDialogProvider({ controller, children }: CharacterDialogProviderProps): JSX.Element {
+export function CharacterDialogProvider({ controller, portalTarget, children }: CharacterDialogProviderProps): JSX.Element {
   return (
     <CharacterDialogContext.Provider value={controller}>
       {children}
@@ -17,6 +18,7 @@ export function CharacterDialogProvider({ controller, children }: CharacterDialo
         dialog={controller.activeDialog}
         onAdvance={controller.advanceDialog}
         onClose={controller.closeDialog}
+        portalTarget={portalTarget}
       />
     </CharacterDialogContext.Provider>
   );

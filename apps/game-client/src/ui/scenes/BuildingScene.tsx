@@ -92,10 +92,8 @@ export function BuildingScene(props: BuildingSceneProps): JSX.Element {
   const { castleLevel, upgrades, extensions, onUpgradeAction } = props;
   const castleUpgrade = upgrades.find((upgrade) => upgrade.id === 'castle');
   const vaultUpgrade = upgrades.find((upgrade) => upgrade.id === 'vault');
-  const populationUpgrade = upgrades.find((upgrade) => upgrade.id === 'population');
   const compactUpgrades = [
     vaultUpgrade,
-    populationUpgrade,
     ...extensions,
   ].filter((upgrade): upgrade is ClientBuildingUpgrade | ClientCastleExtensionUpgrade => Boolean(upgrade));
 

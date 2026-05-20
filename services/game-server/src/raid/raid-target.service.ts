@@ -28,10 +28,13 @@ export class RaidTargetService {
   ) {}
 
   async getRaidTargetDetail(playerId: string, targetId: string): Promise<ClientRaidTargetDetailResponse> {
-    const target = await this.raidRepository.findVisibleTargetPoolEntry({
-      ownerPlayerId: playerId,
-      targetPoolId: targetId,
-    });
+    const [target, intelQuota] = await Promise.all([
+      this.raidRepository.findVisibleTargetPoolEntry({
+        ownerPlayerId: playerId,
+        targetPoolId: targetId,
+      }),
+      this.getIntelQuota(playerId),
+    ]);
 
     if (!target) {
       throw new BusinessError({
@@ -41,7 +44,7 @@ export class RaidTargetService {
       });
     }
 
-    return buildRaidTargetDetailResponse(target, targetId);
+    return buildRaidTargetDetailResponse(target, targetId, intelQuota);
   }
 
   async getRaidTargetDeepIntel(playerId: string, targetId: string): Promise<ClientRaidDeepIntelResponse> {
@@ -124,6 +127,26 @@ export class RaidTargetService {
         remainingTalismanIntel: Math.max(RAID_INTEL_TALISMAN_LIMIT - nextTalismanUsed, 0),
       });
     });
+  }
+
+  private async getIntelQuota(playerId: string): Promise<{ remainingFreeIntel: number; remainingTalismanIntel: number }> {
+    const resource = await this.prisma.db.playerSpiritResource.findUnique({
+      where: { playerId },
+      select: {
+        dailyIntelFreeUsed: true,
+        dailyIntelTalismanUsed: true,
+        dailyIntelDateKey: true,
+      },
+    });
+
+    const dateKey = getLocalDateKey();
+    const freeUsed = resource?.dailyIntelDateKey === dateKey ? resource.dailyIntelFreeUsed : 0;
+    const talismanUsed = resource?.dailyIntelDateKey === dateKey ? resource.dailyIntelTalismanUsed : 0;
+
+    return {
+      remainingFreeIntel: Math.max(RAID_INTEL_FREE_LIMIT - freeUsed, 0),
+      remainingTalismanIntel: Math.max(RAID_INTEL_TALISMAN_LIMIT - talismanUsed, 0),
+    };
   }
 
   async createRaidOrder(input: {
@@ -443,6 +466,10 @@ export class RaidTargetService {
 function buildRaidTargetDetailResponse(
   target: Awaited<ReturnType<RaidRepository['findVisibleTargetPoolEntry']>>,
   targetId: string,
+  intelQuota: {
+    remainingFreeIntel: number;
+    remainingTalismanIntel: number;
+  },
 ): ClientRaidTargetDetailResponse {
   const targetSnapshot = target?.targetSnapshotJson as {
     name?: string;
@@ -489,6 +516,8 @@ function buildRaidTargetDetailResponse(
     defenseStatus: targetSnapshot?.defenseStatus ?? '等待结算',
     protectionStatus: targetSnapshot?.protectionStatus ?? '可发起掠夺',
     mainPetPreview,
+    remainingFreeIntel: intelQuota.remainingFreeIntel,
+    remainingTalismanIntel: intelQuota.remainingTalismanIntel,
     detail: targetSnapshot?.detail ?? '真实 raid 目标详情。',
     actions: [{ label: '发起掠夺', target: 'report', tone: 'primary' }],
   };

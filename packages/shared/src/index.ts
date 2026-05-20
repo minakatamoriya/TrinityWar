@@ -373,7 +373,7 @@ export interface ClientClaimDailyTaskResponse {
   scenes: ClientSceneContentResponse;
 }
 
-export type ClientBuildingUpgradeId = 'castle' | 'vault' | 'field-slot' | 'population' | 'watchtower';
+export type ClientBuildingUpgradeId = 'castle' | 'vault' | 'field-slot' | 'watchtower';
 export type ClientCastleExtensionUpgradeId = 'protectionTech' | 'farmYieldTech' | 'ripeWindowTech' | 'pendingClaimTech';
 export type ClientUpgradeTargetType = 'building' | 'castle-extension';
 
@@ -567,6 +567,8 @@ export interface ClientRaidTargetDetailResponse {
   protectionStatus: string;
   targetFarmBoardMessage: string;
   mainPetPreview: ClientRaidSpiritPreview | null;
+  remainingFreeIntel: number;
+  remainingTalismanIntel: number;
   detail: string;
   actions: ClientSceneAction[];
 }

@@ -557,6 +557,10 @@ button {
   background: linear-gradient(180deg, rgba(79, 96, 57, 0.42), rgba(41, 57, 34, 0.76));
 }
 
+.resource-dock-card-spirit {
+  background: linear-gradient(180deg, rgba(62, 76, 108, 0.42), rgba(28, 34, 54, 0.78));
+}
+
 .resource-dock-head,
 .resource-dock-foot {
   display: flex;
@@ -589,6 +593,7 @@ button {
 }
 
 .resource-dock-capacity,
+.resource-dock-level,
 .resource-dock-foot {
   color: var(--text-secondary);
   font-size: 11px;
@@ -614,6 +619,20 @@ button {
 .resource-dock-card-army .resource-dock-amount {
   color: #a8f0a7;
   text-shadow: 0 0 16px rgba(168, 240, 167, 0.2);
+}
+
+.resource-dock-card-spirit .resource-dock-amount {
+  font-size: 27px;
+  line-height: 1.02;
+  color: #dfe8ff;
+  text-shadow: 0 0 18px rgba(142, 167, 255, 0.2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-dock-card-spirit .resource-dock-progress-fill-army {
+  background: linear-gradient(90deg, #86b4ff 0%, #4d72d8 100%);
 }
 
 .resource-dock-progress {
@@ -1093,6 +1112,21 @@ button {
   color: #ffd7a8;
   font-size: 12px;
   white-space: nowrap;
+}
+
+.task-state-badge {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.task-state-badge-completed {
+  background: rgba(94, 164, 110, 0.2);
+  color: #d3f0be;
 }
 
 .task-row p {
@@ -2251,7 +2285,8 @@ button {
 .target-list-raid {
   grid-template-columns: 1fr;
   gap: 8px;
-  grid-auto-rows: minmax(0, auto);
+  align-content: start;
+  grid-auto-rows: minmax(86px, auto);
 }
 
 .target-card {
@@ -2266,6 +2301,7 @@ button {
 .target-card-shell {
   display: grid;
   gap: 8px;
+  align-content: start;
 }
 
 .target-head div,
@@ -2483,7 +2519,7 @@ button {
 .spirit-profile-card {
   display: grid;
   gap: 12px;
-  padding: 14px;
+  padding: 12px;
 }
 
 .spirit-main-row {
@@ -2491,9 +2527,12 @@ button {
 }
 
 .spirit-profile-card-horizontal {
-  grid-template-columns: auto 78px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+  min-height: 132px;
+  max-height: 148px;
+  overflow: hidden;
 }
 
 .spirit-card-topline,
@@ -2529,6 +2568,31 @@ button {
   color: #f7efe1;
   font-size: 24px;
   font-weight: 800;
+}
+
+.spirit-main-photo {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 108px;
+  border-radius: 16px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(255, 248, 234, 0.18), transparent 30%),
+    linear-gradient(150deg, rgba(55, 78, 50, 0.55), rgba(24, 20, 17, 0.72));
+}
+
+.spirit-main-portrait {
+  width: 100%;
+  height: 100%;
+  min-height: 108px;
+  border-radius: 16px;
+}
+
+.spirit-main-portrait span {
+  width: 58px;
+  height: 58px;
+  font-size: 28px;
 }
 
 .spirit-stage-card {
@@ -2585,6 +2649,13 @@ button {
   display: grid;
   gap: 8px;
   min-width: 0;
+}
+
+.spirit-main-info {
+  align-content: center;
+  gap: 10px;
+  min-height: 108px;
+  overflow: hidden;
 }
 
 .spirit-name-row strong {
@@ -4219,7 +4290,7 @@ button.spirit-element-chip {
 }
 
 .character-dialog-backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 2147483647;
   display: flex;
@@ -4232,12 +4303,10 @@ button.spirit-element-chip {
 
 .character-dialog-panel {
   position: relative;
-  width: 100vw;
+  width: 100%;
   min-height: 150px;
   max-height: min(33dvh, 260px);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, 24vw);
-  gap: 16px;
+  display: block;
   padding: 20px max(18px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
   border-radius: 20px 20px 0 0;
   overflow: hidden;
@@ -4267,12 +4336,13 @@ button.spirit-element-chip {
 
 .character-dialog-content {
   min-width: 0;
-  width: min(760px, 100%);
+  width: 100%;
+  min-height: 114px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
-  padding-right: 4px;
+  padding-right: min(210px, 38%);
 }
 
 .character-dialog-speaker {
@@ -4297,13 +4367,15 @@ button.spirit-element-chip {
 }
 
 .character-dialog-image {
-  align-self: end;
-  justify-self: center;
-  width: min(190px, 100%);
-  height: min(210px, 100%);
+  position: absolute;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: 0;
+  width: min(190px, 38%);
+  height: min(210px, calc(100% - 8px));
   object-fit: contain;
-  object-position: bottom center;
+  object-position: bottom right;
   filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.32));
+  pointer-events: none;
 }
 
 .character-dialog-next {
@@ -4544,8 +4616,17 @@ button.spirit-element-chip {
   .character-dialog-panel {
     width: 100%;
     min-height: 136px;
-    grid-template-columns: minmax(0, 1fr) minmax(96px, 32%);
     padding: 16px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+
+  .character-dialog-content {
+    min-height: 104px;
+    padding-right: min(130px, 34%);
+  }
+
+  .character-dialog-image {
+    width: min(128px, 34%);
+    height: min(156px, calc(100% - 6px));
   }
 
   .character-dialog-text {

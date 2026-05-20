@@ -42,96 +42,6 @@ game server failed to start Error: listen EADDRINUSE: address already in use 0.0
   address: '0.0.0.0',
   port: 3000
 }
-[31m[Nest] 32816  - [39m2026/05/16 22:03:05 [31m  ERROR[39m [38;5;3m[ExceptionHandler] [39m[31mNest can't resolve dependencies of the ClientCommandService (PrismaService, AuditService, IdempotencyService, BuildingUpgradeRuleService, ?). Please make sure that the argument ClientReadService at index [4] is available in the ClientCommandModule context.
-
-Potential solutions:
-- Is ClientCommandModule a valid NestJS module?
-- If ClientReadService is a provider, is it part of the current ClientCommandModule?
-- If ClientReadService is exported from a separate @Module, is that module imported within ClientCommandModule?
-  @Module({
-    imports: [ /* the Module containing ClientReadService */ ]
-  })
-[39m
-Error: Nest can't resolve dependencies of the ClientCommandService (PrismaService, AuditService, IdempotencyService, BuildingUpgradeRuleService, ?). Please make sure that the argument ClientReadService at index [4] is available in the ClientCommandModule context.
-
-Potential solutions:
-- Is ClientCommandModule a valid NestJS module?
-- If ClientReadService is a provider, is it part of the current ClientCommandModule?
-- If ClientReadService is exported from a separate @Module, is that module imported within ClientCommandModule?
-  @Module({
-    imports: [ /* the Module containing ClientReadService */ ]
-  })
-
-    at Injector.lookupComponentInParentModules (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:262:19)
-    at Injector.resolveComponentInstance (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:215:33)
-    at resolveParam (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:129:38)
-    at async Promise.all (index 4)
-    at Injector.resolveConstructorParams (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:144:27)
-    at Injector.loadInstance (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:70:13)
-    at Injector.loadProvider (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:98:9)
-    at D:\TrinityWar\node_modules\@nestjs\core\injector\instance-loader.js:56:13
-    at async Promise.all (index 3)
-    at InstanceLoader.createInstancesOfProviders (D:\TrinityWar\node_modules\@nestjs\core\injector\instance-loader.js:55:9)
-[31m[Nest] 35836  - [39m2026/05/16 22:09:33 [31m  ERROR[39m [38;5;3m[ExceptionHandler] [39m[31mNest can't resolve dependencies of the ClientCommandService (PrismaService, AuditService, IdempotencyService, BuildingUpgradeRuleService, ?). Please make sure that the argument ClientReadService at index [4] is available in the ClientCommandModule context.
-
-Potential solutions:
-- Is ClientCommandModule a valid NestJS module?
-- If ClientReadService is a provider, is it part of the current ClientCommandModule?
-- If ClientReadService is exported from a separate @Module, is that module imported within ClientCommandModule?
-  @Module({
-    imports: [ /* the Module containing ClientReadService */ ]
-  })
-[39m
-Error: Nest can't resolve dependencies of the ClientCommandService (PrismaService, AuditService, IdempotencyService, BuildingUpgradeRuleService, ?). Please make sure that the argument ClientReadService at index [4] is available in the ClientCommandModule context.
-
-Potential solutions:
-- Is ClientCommandModule a valid NestJS module?
-- If ClientReadService is a provider, is it part of the current ClientCommandModule?
-- If ClientReadService is exported from a separate @Module, is that module imported within ClientCommandModule?
-  @Module({
-    imports: [ /* the Module containing ClientReadService */ ]
-  })
-
-    at Injector.lookupComponentInParentModules (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:262:19)
-    at Injector.resolveComponentInstance (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:215:33)
-    at resolveParam (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:129:38)
-    at async Promise.all (index 4)
-    at Injector.resolveConstructorParams (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:144:27)
-    at Injector.loadInstance (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:70:13)
-    at Injector.loadProvider (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:98:9)
-    at D:\TrinityWar\node_modules\@nestjs\core\injector\instance-loader.js:56:13
-    at async Promise.all (index 3)
-    at InstanceLoader.createInstancesOfProviders (D:\TrinityWar\node_modules\@nestjs\core\injector\instance-loader.js:55:9)
-[31m[Nest] 33672  - [39m2026/05/16 22:11:57 [31m  ERROR[39m [38;5;3m[ExceptionHandler] [39m[31mNest can't resolve dependencies of the ClientCommandService (PrismaService, AuditService, IdempotencyService, BuildingUpgradeRuleService, ?). Please make sure that the argument ClientReadService at index [4] is available in the ClientCommandModule context.
-
-Potential solutions:
-- Is ClientCommandModule a valid NestJS module?
-- If ClientReadService is a provider, is it part of the current ClientCommandModule?
-- If ClientReadService is exported from a separate @Module, is that module imported within ClientCommandModule?
-  @Module({
-    imports: [ /* the Module containing ClientReadService */ ]
-  })
-[39m
-Error: Nest can't resolve dependencies of the ClientCommandService (PrismaService, AuditService, IdempotencyService, BuildingUpgradeRuleService, ?). Please make sure that the argument ClientReadService at index [4] is available in the ClientCommandModule context.
-
-Potential solutions:
-- Is ClientCommandModule a valid NestJS module?
-- If ClientReadService is a provider, is it part of the current ClientCommandModule?
-- If ClientReadService is exported from a separate @Module, is that module imported within ClientCommandModule?
-  @Module({
-    imports: [ /* the Module containing ClientReadService */ ]
-  })
-
-    at Injector.lookupComponentInParentModules (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:262:19)
-    at Injector.resolveComponentInstance (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:215:33)
-    at resolveParam (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:129:38)
-    at async Promise.all (index 4)
-    at Injector.resolveConstructorParams (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:144:27)
-    at Injector.loadInstance (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:70:13)
-    at Injector.loadProvider (D:\TrinityWar\node_modules\@nestjs\core\injector\injector.js:98:9)
-    at D:\TrinityWar\node_modules\@nestjs\core\injector\instance-loader.js:56:13
-    at async Promise.all (index 3)
-    at InstanceLoader.createInstancesOfProviders (D:\TrinityWar\node_modules\@nestjs\core\injector\instance-loader.js:55:9)
 game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
     at listenInCluster (node:net:1965:12)
@@ -143,10 +53,124 @@ game server failed to start Error: listen EADDRINUSE: address already in use 0.0
   address: '0.0.0.0',
   port: 3000
 }
-npm error Lifecycle script `dev` failed with error:
-npm error code 1073807364
-npm error path D:\TrinityWar\services\game-server
-npm error workspace @trinitywar/game-server@0.1.0
-npm error location D:\TrinityWar\services\game-server
-npm error command failed
-npm error command C:\Windows\system32\cmd.exe /d /s /c tsx watch src/main.ts
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+game server failed to start Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at doListen (node:net:2139:7)
+    at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}

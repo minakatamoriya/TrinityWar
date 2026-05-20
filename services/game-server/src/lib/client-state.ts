@@ -39,8 +39,6 @@ import {
   getBuildingUpgradeCost,
   getDailyTaskDefinition,
   getFactionDividendPerHour as getConfiguredFactionDividendPerHour,
-  getPopulationLevelConfig,
-  getPopulationCapacityGain,
   getSeedStageGold,
   getSeedStageSeconds,
   getTaxIncomePerHour as getConfiguredTaxIncomePerHour,
@@ -1167,6 +1165,8 @@ export function buildRaidTargetDetail(targetId: string): ClientRaidTargetDetailR
       detail: '该目标当前不可用，可能正处于保护中或已从目标池移除。',
       targetFarmBoardMessage: '',
       mainPetPreview: raidSpiritPreviews['target-1'],
+      remainingFreeIntel: 3,
+      remainingTalismanIntel: 3,
       actions: [{ label: '返回掠夺页', target: 'report', tone: 'ghost' }],
     };
   }
@@ -1195,6 +1195,8 @@ export function buildRaidTargetDetail(targetId: string): ClientRaidTargetDetailR
     protectionStatus: formatProtectionStatus(target),
     detail: target.detail,
     targetFarmBoardMessage: '',
+    remainingFreeIntel: 3,
+    remainingTalismanIntel: 3,
     actions: isTargetProtected(target) ? [{ label: '保护中', target: 'raid', tone: 'ghost' }] : buildRaidDetailActions(),
   };
 }
@@ -1211,13 +1213,10 @@ function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrad
   syncUnlockedFieldsWithCastleLevel();
   const castleLevel = playerState.buildingLevels.castle;
   const vaultLevel = playerState.buildingLevels.vault;
-  const populationLevel = playerState.buildingLevels.population;
   const watchtowerLevel = playerState.buildingLevels.watchtower;
   const lockedFieldExists = playerState.fields.some((field) => !field.unlocked);
   const unlockedFieldCount = playerState.fields.filter((field) => field.unlocked).length;
   const nextFieldUnlockRequirement = getNextFieldUnlockRequirement(castleLevel);
-  const nextPopulationLevelConfig = getPopulationLevelConfig(populationLevel);
-  const populationLocked = Boolean(nextPopulationLevelConfig && castleLevel < nextPopulationLevelConfig.requiredCastleLevel);
   const watchtowerLocked = castleLevel < 5;
   const currentTaxIncome = getTaxIncomePerHour(castleLevel);
   const nextTaxIncome = getTaxIncomePerHour(castleLevel + 1);
@@ -1248,18 +1247,6 @@ function buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrad
       costText: lockedFieldExists && nextFieldUnlockRequirement ? `需要主城 Lv.${nextFieldUnlockRequirement}` : '当前已全部解锁',
       action: buildUpgradeAction('查看条件', 'ghost'),
       locked: true,
-    },
-    {
-      id: 'population',
-      title: '灵宠上限',
-      description: `Lv.${populationLevel} -> Lv.${populationLevel + 1}，灵宠上限由 ${formatNumber(playerState.armyCapacity)} 提升到 ${formatNumber(playerState.armyCapacity + getPopulationCapacityGain(populationLevel))}。`,
-      costText: populationLocked
-        ? `需要主城 Lv.${nextPopulationLevelConfig?.requiredCastleLevel ?? castleLevel}`
-        : getUpgradeCost('population')
-          ? `消耗 ${formatNumber(getUpgradeCost('population') ?? 0)} 金币`
-          : '已达到验证上限',
-      action: buildUpgradeAction(populationLocked || !getUpgradeCost('population') ? '查看条件' : '升级灵宠上限', populationLocked || !getUpgradeCost('population') ? 'ghost' : 'secondary'),
-      locked: populationLocked || !getUpgradeCost('population'),
     },
     {
       id: 'watchtower',
@@ -1946,11 +1933,7 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
   }
 
   if (input.buildingId === 'population') {
-    const nextPopulationLevelConfig = getPopulationLevelConfig(playerState.buildingLevels.population);
-
-    if (nextPopulationLevelConfig && getCastleLevel() < nextPopulationLevelConfig.requiredCastleLevel) {
-      return buildMutationResponse(`当前主城等级不足，需要主城 Lv.${nextPopulationLevelConfig.requiredCastleLevel}。`);
-    }
+    return buildMutationResponse('灵宠上限升级已移除，灵宠现在通过等级成长。');
   }
 
   const cost = getUpgradeCost(input.buildingId);
@@ -1981,14 +1964,6 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
     recordDailyTaskProgress('upgrade-core-line');
     recordDailyTaskProgress('upgrade-core-building');
     return buildMutationResponse(`金库升级完成，容量已提升到 ${formatNumber(playerState.ledger.vaultCapacity)}。`);
-  }
-
-  if (input.buildingId === 'population') {
-    playerState.buildingLevels.population += 1;
-    playerState.armyCapacity += getPopulationCapacityGain(playerState.buildingLevels.population - 1);
-    recordDailyTaskProgress('upgrade-building');
-    recordDailyTaskProgress('upgrade-core-line');
-    return buildMutationResponse(`灵宠上限升级完成，当前灵宠上限已提升到 ${formatNumber(playerState.armyCapacity)}。`);
   }
 
   playerState.buildingLevels.watchtower += 1;

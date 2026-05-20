@@ -313,7 +313,7 @@ export const DAILY_TASK_CONFIG = {
     },
     {
       id: 'daily-upgrade-core-line',
-      title: '升级 1 次主城、金库、灵宠上限或防守',
+      title: '?? 1 ?????????',
       category: '经营',
       objective: { type: 'upgrade-core-line', count: 1 },
       rewards: [{ type: 'gold', amount: 22 }],

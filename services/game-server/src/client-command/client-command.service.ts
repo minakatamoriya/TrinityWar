@@ -5,6 +5,7 @@ import {
   type ClientClaimDailyTaskResponse,
   type ClientClaimPendingResponse,
   type ClientCollectFieldResponse,
+  type ClientFactionDonateRequest,
   type ClientStateMutationResponse,
 } from '@trinitywar/shared';
 import type { Prisma } from '@prisma/client';
@@ -12,8 +13,8 @@ import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
-import { GAME_BALANCE } from '../lib/game-balance.js';
-import { getPopulationCapacityGain, getVaultCapacityGain } from '../lib/game-balance.js';
+import { DAILY_TASK_CONFIG, GAME_BALANCE, getSeedStageGold, getSeedStageSeconds } from '../lib/game-balance.js';
+import { getVaultCapacityGain } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
 import { ArmyTrainingLifecycleService } from '../client-read/army-training-lifecycle.service.js';
@@ -24,7 +25,7 @@ import {
   type PlayerBuildingStateForUpgrade,
 } from './building-upgrade-rule.service.js';
 import { FieldCommandRuleService } from './field-command-rule.service.js';
-import type { ClaimDailyTaskRequestDto, ClaimPendingRequestDto, CollectFieldRequestDto, RecruitArmyRequestDto, UpgradeBuildingRequestDto } from './dto.js';
+import type { ClaimDailyTaskRequestDto, ClaimPendingRequestDto, CollectFieldRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UpgradeBuildingRequestDto } from './dto.js';
 
 interface ClaimPendingCommandInput {
   playerId: string;
@@ -50,13 +51,28 @@ interface CollectFieldCommandInput {
   idempotencyKey?: string;
 }
 
+interface StartCultivationCommandInput {
+  playerId: string;
+  request: StartCultivationRequestDto;
+  idempotencyKey?: string;
+}
+
 interface RecruitArmyCommandInput {
   playerId: string;
   request: RecruitArmyRequestDto;
   idempotencyKey?: string;
 }
 
+interface FactionDonateCommandInput {
+  playerId: string;
+  request: ClientFactionDonateRequest;
+}
+
 interface ClaimTianjiTalismanCommandInput {
+  playerId: string;
+}
+
+interface ClaimStarterSeedsCommandInput {
   playerId: string;
 }
 
@@ -488,6 +504,10 @@ export class ClientCommandService {
         rewardItemsJson: resolution.rewards as unknown as Prisma.InputJsonValue,
       });
 
+      if (input.request.collectMode === 'ripe' && (field.status === 'MATURE' || field.status === 'WITHERED')) {
+        await this.recordDailyTaskProgress(client, input.playerId, 'collect-field');
+      }
+
       const responseSnapshot: ClientCollectFieldResponse = {
         app: APP_NAME,
         summary: resolution.summary,
@@ -498,6 +518,155 @@ export class ClientCommandService {
           overflowGold: resolution.overflowGold,
           rewards: resolution.rewards,
         },
+      };
+
+      if (idempotencyRecord?.id) {
+        await this.idempotencyService.markCompleted(client, {
+          id: idempotencyRecord.id,
+          responseSnapshotJson: responseSnapshot as unknown as Prisma.InputJsonValue,
+          businessEntityType: 'field',
+          businessEntityId: field.id,
+        });
+      }
+
+      return responseSnapshot;
+    });
+  }
+
+  async startCultivation(input: StartCultivationCommandInput): Promise<ClientStateMutationResponse> {
+    const endpointKey = 'client.actions.start-cultivation';
+    const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
+    const requestHash = hashStartCultivationRequest(input.request);
+
+    return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
+      const idempotencyRecord = idempotencyKey
+        ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
+        : null;
+
+      if (idempotencyRecord?.status === 'completed') {
+        return idempotencyRecord.responseSnapshotJson as unknown as ClientStateMutationResponse;
+      }
+
+      await this.fieldLifecycleService.settlePlayerFields(client, input.playerId);
+
+      const [field, seedDefinition] = await Promise.all([
+        client.playerFieldSlot.findFirst({
+          where: {
+            id: input.request.fieldId,
+            playerId: input.playerId,
+          },
+          select: {
+            id: true,
+            slotIndex: true,
+            isUnlocked: true,
+            status: true,
+            statusVersion: true,
+          },
+        }),
+        client.seedDefinition.findUnique({
+          where: { seedId: input.request.seedId },
+          select: {
+            id: true,
+            seedId: true,
+            label: true,
+          },
+        }),
+      ]);
+
+      if (!field) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Field not found.',
+          statusCode: 404,
+        });
+      }
+
+      if (!seedDefinition) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Seed definition not found.',
+          statusCode: 404,
+        });
+      }
+
+      if (!field.isUnlocked || field.status === 'LOCKED') {
+        throw new BusinessError({
+          code: ErrorCode.Forbidden,
+          message: 'Field is not unlocked.',
+          statusCode: 403,
+        });
+      }
+
+      if (field.status !== 'EMPTY') {
+        throw new BusinessError({
+          code: ErrorCode.StateVersionConflict,
+          message: 'Field is not empty.',
+          statusCode: 409,
+        });
+      }
+
+      const inventory = await client.playerSeedInventory.findUnique({
+        where: {
+          playerId_seedDefinitionId: {
+            playerId: input.playerId,
+            seedDefinitionId: seedDefinition.id,
+          },
+        },
+        select: {
+          id: true,
+          quantity: true,
+          unlockedAt: true,
+        },
+      });
+
+      if (!inventory || !inventory.unlockedAt) {
+        throw new BusinessError({
+          code: ErrorCode.Forbidden,
+          message: 'Seed is not unlocked.',
+          statusCode: 403,
+        });
+      }
+
+      if (inventory.quantity <= 0) {
+        throw new BusinessError({
+          code: ErrorCode.Conflict,
+          message: 'Insufficient seed inventory.',
+          statusCode: 409,
+        });
+      }
+
+      const now = new Date();
+      await client.playerSeedInventory.update({
+        where: { id: inventory.id },
+        data: {
+          quantity: { decrement: 1 },
+          inventoryVersion: { increment: 1 },
+        },
+      });
+      await client.playerFieldSlot.update({
+        where: { id: field.id },
+        data: {
+          status: 'SEEDED',
+          seedDefinition: { connect: { id: seedDefinition.id } },
+          investedGold: 0,
+          currentClaimableGold: getSeedStageGold(seedDefinition.seedId, 'seeded'),
+          seedAt: now,
+          matureAt: addSeconds(now, getSeedStageSeconds(seedDefinition.seedId, 'seeded')),
+          fullMatureAt: null,
+          overripeAt: null,
+          lastCalculatedAt: now,
+          statusVersion: { increment: 1 },
+        },
+      });
+
+      await this.recordDailyTaskProgress(client, input.playerId, 'start-cultivation');
+      await this.recordDailyTaskProgress(client, input.playerId, 'farm-cycle');
+
+      const responseSnapshot: ClientStateMutationResponse = {
+        app: APP_NAME,
+        summary: `${seedDefinition.label} 已开始培育。`,
+        home: await this.clientReadService.getHomeSummary(input.playerId, client),
+        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
       };
 
       if (idempotencyRecord?.id) {
@@ -761,16 +930,6 @@ export class ClientCommandService {
         });
       }
 
-      if (target.key === 'population') {
-        await client.playerArmy.update({
-          where: { playerId: input.playerId },
-          data: {
-            capacity: { increment: getPopulationCapacityGain(target.currentLevel) },
-            armyVersion: { increment: 1 },
-          },
-        });
-      }
-
       await this.auditService.createWalletChangeLog(client, {
         playerId: input.playerId,
         walletBucket: 'vault',
@@ -792,6 +951,14 @@ export class ClientCommandService {
         requestIdempotencyKey: idempotencyKey,
       });
 
+      await this.recordDailyTaskProgress(client, input.playerId, 'upgrade-building');
+      if (target.key === 'castle' || target.key === 'vault' || target.key === 'watchtower') {
+        await this.recordDailyTaskProgress(client, input.playerId, 'upgrade-core-line');
+      }
+      if (target.key === 'castle' || target.key === 'vault') {
+        await this.recordDailyTaskProgress(client, input.playerId, 'upgrade-core-building');
+      }
+
       const responseSnapshot: ClientStateMutationResponse = {
         app: APP_NAME,
         summary: `已升级 ${target.key}：Lv.${target.currentLevel} -> Lv.${target.nextLevel}`,
@@ -809,6 +976,127 @@ export class ClientCommandService {
       }
 
       return responseSnapshot;
+    });
+  }
+
+  async donateFaction(input: FactionDonateCommandInput): Promise<ClientStateMutationResponse> {
+    return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
+      const playerState = await client.player.findUnique({
+        where: { id: input.playerId },
+        select: {
+          factionId: true,
+          wallet: {
+            select: {
+              vaultGold: true,
+              balanceVersion: true,
+            },
+          },
+          factionMembers: {
+            take: 1,
+            select: {
+              id: true,
+              factionId: true,
+            },
+          },
+        },
+      });
+
+      if (!playerState?.wallet) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Player wallet state not found.',
+          statusCode: 404,
+        });
+      }
+
+      const factionMember = playerState.factionMembers[0] ?? null;
+      const factionId = factionMember?.factionId ?? playerState.factionId;
+
+      if (!factionMember || !factionId) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Player faction membership not found.',
+          statusCode: 404,
+        });
+      }
+
+      const donateStep = Math.max(Math.floor(GAME_BALANCE.faction.donateGoldStep), 1);
+      const contributionPerStep = Math.max(Math.floor(GAME_BALANCE.faction.contributionPerDonateStep), 1);
+      const normalizedGoldAmount = Math.max(Math.floor(input.request.goldAmount / donateStep) * donateStep, 0);
+
+      if (normalizedGoldAmount <= 0) {
+        throw new BusinessError({
+          code: ErrorCode.BadRequest,
+          message: 'Donation gold amount must be greater than zero.',
+          statusCode: 400,
+        });
+      }
+
+      if (playerState.wallet.vaultGold < normalizedGoldAmount) {
+        throw new BusinessError({
+          code: ErrorCode.InsufficientVaultGold,
+          message: 'Insufficient vault gold.',
+          statusCode: 409,
+        });
+      }
+
+      const contributionGain = Math.floor(normalizedGoldAmount / donateStep) * contributionPerStep;
+      const nextVaultGold = playerState.wallet.vaultGold - normalizedGoldAmount;
+
+      await client.playerWallet.update({
+        where: { playerId: input.playerId },
+        data: {
+          vaultGold: nextVaultGold,
+          balanceVersion: { increment: 1 },
+        },
+      });
+
+      await client.faction.update({
+        where: { id: factionId },
+        data: {
+          treasuryGold: { increment: normalizedGoldAmount },
+          contributionScore: { increment: contributionGain },
+        },
+      });
+
+      await client.factionMember.update({
+        where: { id: factionMember.id },
+        data: {
+          contributionScore: { increment: contributionGain },
+        },
+      });
+
+      await client.factionContributionLog.create({
+        data: {
+          factionId,
+          playerId: input.playerId,
+          donatedGold: normalizedGoldAmount,
+          contributionDelta: contributionGain,
+        },
+      });
+
+      await this.auditService.createWalletChangeLog(client, {
+        playerId: input.playerId,
+        walletBucket: 'vault',
+        changeType: 'faction-donate',
+        deltaGold: -normalizedGoldAmount,
+        beforeGold: playerState.wallet.vaultGold,
+        afterGold: nextVaultGold,
+        relatedEntityType: 'faction',
+        relatedEntityId: factionId,
+        requestIdempotencyKey: undefined,
+        note: `Donate ${normalizedGoldAmount} gold to faction.`,
+      });
+
+      await this.recordDailyTaskProgress(client, input.playerId, 'faction-interaction');
+      await this.recordDailyTaskProgress(client, input.playerId, 'faction-donate');
+
+      return {
+        app: APP_NAME,
+        summary: `已向阵营上缴 ${normalizedGoldAmount} 金币，贡献值 +${contributionGain}。`,
+        home: await this.clientReadService.getHomeSummary(input.playerId, client),
+        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
+      };
     });
   }
 
@@ -850,6 +1138,90 @@ export class ClientCommandService {
       return {
         app: APP_NAME,
         summary: '今天天机符已领取，获得 天机符 x1。',
+        home: await this.clientReadService.getHomeSummary(input.playerId, client),
+        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
+      };
+    });
+  }
+
+  async claimStarterSeeds(input: ClaimStarterSeedsCommandInput): Promise<ClientStateMutationResponse> {
+    return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
+      const dateKey = getLocalDateKey();
+      const player = await client.player.findUnique({
+        where: { id: input.playerId },
+        select: { id: true },
+      });
+
+      if (!player) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Player not found.',
+          statusCode: 404,
+        });
+      }
+
+      const marker = await client.playerSpiritResource.findUnique({
+        where: { playerId: input.playerId },
+        select: { dailyStarterSeedClaimDateKey: true },
+      });
+
+      if (marker?.dailyStarterSeedClaimDateKey === dateKey) {
+        throw new BusinessError({
+          code: ErrorCode.Conflict,
+          message: 'Daily starter seeds have already been claimed.',
+          statusCode: 409,
+        });
+      }
+
+      await client.playerSpiritResource.upsert({
+        where: { playerId: input.playerId },
+        create: {
+          playerId: input.playerId,
+          spiritSoul: 0,
+          dailyRecoveryUsed: 0,
+          dailyStarterSeedClaimDateKey: dateKey,
+        },
+        update: {
+          dailyStarterSeedClaimDateKey: dateKey,
+          resourceVersion: { increment: 1 },
+        },
+      });
+
+      const seedDefinition = await client.seedDefinition.findUnique({
+        where: { seedId: 'qinglingmai' },
+        select: { id: true },
+      });
+
+      if (!seedDefinition) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Starter seed definition not found.',
+          statusCode: 404,
+        });
+      }
+
+      await client.playerSeedInventory.upsert({
+        where: {
+          playerId_seedDefinitionId: {
+            playerId: input.playerId,
+            seedDefinitionId: seedDefinition.id,
+          },
+        },
+        create: {
+          playerId: input.playerId,
+          seedDefinitionId: seedDefinition.id,
+          quantity: 3,
+          unlockedAt: new Date(),
+        },
+        update: {
+          quantity: { increment: 3 },
+          unlockedAt: new Date(),
+        },
+      });
+
+      return {
+        app: APP_NAME,
+        summary: '今日种子已领取，获得 青灵麦 x3。',
         home: await this.clientReadService.getHomeSummary(input.playerId, client),
         scenes: await this.clientReadService.getSceneContent(input.playerId, client),
       };
@@ -931,6 +1303,14 @@ export class ClientCommandService {
         });
       }
 
+      if (error instanceof Error && error.message === 'POPULATION_UPGRADE_REMOVED') {
+        throw new BusinessError({
+          code: ErrorCode.BadRequest,
+          message: 'Population upgrade has been removed. Spirits now progress by level.',
+          statusCode: 400,
+        });
+      }
+
       if (error instanceof Error && error.message === 'BUILDING_MAX_LEVEL') {
         throw new BusinessError({
           code: ErrorCode.BadRequest,
@@ -1001,6 +1381,49 @@ export class ClientCommandService {
       scenes: await this.clientReadService.getSceneContent(playerId, client),
     };
   }
+
+  private async recordDailyTaskProgress(
+    client: Prisma.TransactionClient,
+    playerId: string,
+    objectiveType: string,
+    amount = 1,
+  ): Promise<void> {
+    if (amount <= 0) {
+      return;
+    }
+
+    const taskIds = getDailyTaskIdsByObjective(objectiveType);
+
+    if (taskIds.length <= 0) {
+      return;
+    }
+
+    const taskStates = await client.playerDailyTaskState.findMany({
+      where: {
+        playerId,
+        dateKey: getLocalDateKey(),
+        taskId: { in: taskIds },
+        status: 'IN_PROGRESS',
+      },
+      select: {
+        id: true,
+        progress: true,
+        target: true,
+      },
+    });
+
+    for (const taskState of taskStates) {
+      const nextProgress = Math.min(taskState.progress + amount, taskState.target);
+
+      await client.playerDailyTaskState.update({
+        where: { id: taskState.id },
+        data: {
+          progress: nextProgress,
+          status: nextProgress >= taskState.target ? 'COMPLETED' : 'IN_PROGRESS',
+        },
+      });
+    }
+  }
 }
 
 function normalizeIdempotencyKey(value: string | undefined): string | undefined {
@@ -1049,6 +1472,19 @@ function hashRecruitArmyRequest(request: RecruitArmyRequestDto): string {
       armyVersion: request.armyVersion ?? null,
     }))
     .digest('hex');
+}
+
+function hashStartCultivationRequest(request: StartCultivationRequestDto): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      fieldId: request.fieldId,
+      seedId: request.seedId,
+    }))
+    .digest('hex');
+}
+
+function addSeconds(source: Date, seconds: number): Date {
+  return new Date(source.getTime() + Math.max(Math.floor(seconds), 0) * 1000);
 }
 
 function getPendingGoldBySource(wallet: {
@@ -1156,6 +1592,16 @@ function hashCollectFieldRequest(request: CollectFieldRequestDto): string {
     .digest('hex');
 }
 
+function getDailyTaskIdsByObjective(objectiveType: string): string[] {
+  return [
+    ...DAILY_TASK_CONFIG.fixedTasks,
+    ...DAILY_TASK_CONFIG.randomTasks,
+    ...DAILY_TASK_CONFIG.catchupTasks,
+  ]
+    .filter((task) => task.objective.type === objectiveType)
+    .map((task) => task.id);
+}
+
 function assertVersion(label: string, expected: number | undefined, actual: number): void {
   if (typeof expected !== 'number') {
     return;
@@ -1188,8 +1634,6 @@ function buildBuildingUpdateData(target: BuildingUpgradeTarget): Prisma.PlayerBu
     data.castleLevel = target.nextLevel;
   } else if (target.key === 'vault') {
     data.vaultLevel = target.nextLevel;
-  } else if (target.key === 'population') {
-    data.populationLevel = target.nextLevel;
   } else if (target.key === 'watchtower') {
     data.watchtowerLevel = target.nextLevel;
   } else if (target.key === 'protectionTech') {

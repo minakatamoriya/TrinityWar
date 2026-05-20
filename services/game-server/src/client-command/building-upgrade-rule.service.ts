@@ -4,7 +4,6 @@ import {
   getBuildingUpgradeCost,
   getCastleExtensionLevelConfig,
   getCastleExtensionTrack,
-  getPopulationLevelConfig,
 } from '../lib/game-balance.js';
 
 export interface BuildingUpgradeTarget {
@@ -34,6 +33,10 @@ export class BuildingUpgradeRuleService {
       throw new Error('FIELD_SLOT_AUTO_UNLOCK');
     }
 
+    if (buildingId === 'population') {
+      throw new Error('POPULATION_UPGRADE_REMOVED');
+    }
+
     const currentLevel = getBuildingLevel(buildings, buildingId);
     const costGold = getBuildingUpgradeCost(buildingId, currentLevel);
 
@@ -41,16 +44,12 @@ export class BuildingUpgradeRuleService {
       throw new Error('BUILDING_MAX_LEVEL');
     }
 
-    const requiredCastleLevel = buildingId === 'population'
-      ? getPopulationLevelConfig(currentLevel)?.requiredCastleLevel ?? currentLevel * 2
-      : 1;
-
     return {
       key: buildingId,
       currentLevel,
       nextLevel: currentLevel + 1,
       costGold,
-      requiredCastleLevel,
+      requiredCastleLevel: 1,
       isExtension: false,
     };
   }
@@ -82,10 +81,6 @@ function getBuildingLevel(buildings: PlayerBuildingStateForUpgrade, buildingId: 
 
   if (buildingId === 'vault') {
     return buildings.vaultLevel;
-  }
-
-  if (buildingId === 'population') {
-    return buildings.populationLevel;
   }
 
   if (buildingId === 'watchtower') {

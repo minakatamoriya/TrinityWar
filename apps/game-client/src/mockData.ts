@@ -159,13 +159,6 @@ export const mockSceneContent: ClientSceneContentResponse = {
         locked: true,
       },
       {
-        id: 'population',
-        title: '灵宠上限',
-        description: 'Lv.1 -> Lv.2，灵宠上限由 100 提升到 200。',
-        costText: '消耗 180 金币',
-        action: { label: '升级灵宠上限', target: 'building', tone: 'secondary' },
-      },
-      {
         id: 'watchtower',
         title: '防守',
         description: 'Lv.1 -> Lv.2，降低单次被掠比例并强化田地防守。',
@@ -479,6 +472,8 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     protectionStatus: '当前无保护，可直接发起掠夺或通缉令',
     targetFarmBoardMessage: '成熟田可看，手快者得。',
     mainPetPreview: mockRaidSpiritPreviews['target-1'],
+    remainingFreeIntel: 3,
+    remainingTalismanIntel: 3,
     detail: '对手昵称烬牙，刚结束一轮农场收取，外露收益仍然较高。魔界加成偏向进攻，适合快速出手。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
@@ -507,6 +502,8 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     protectionStatus: '刚结束保护期，可被单人试探',
     targetFarmBoardMessage: '仙田清静，来者留名。',
     mainPetPreview: mockRaidSpiritPreviews['target-2'],
+    remainingFreeIntel: 3,
+    remainingTalismanIntel: 3,
     detail: '对手昵称云栖，收益中等但仙界自带减损，适合先做一轮稳妥试探。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
@@ -534,6 +531,8 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     protectionStatus: '今日未被掠，可正常查看并试探',
     targetFarmBoardMessage: '小田薄收，路过随缘。',
     mainPetPreview: mockRaidSpiritPreviews['target-3'],
+    remainingFreeIntel: 3,
+    remainingTalismanIntel: 3,
     detail: '对手昵称临风，收益较低，更适合作为保守出手对象。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
@@ -562,6 +561,8 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     protectionStatus: '当前无保护，可立即出手',
     targetFarmBoardMessage: '守田不易，量力而行。',
     mainPetPreview: mockRaidSpiritPreviews['target-4'],
+    remainingFreeIntel: 3,
+    remainingTalismanIntel: 3,
     detail: '对手昵称玄潮，主城等级高一档，收益不错，但正面强碰战损会更高。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },
@@ -590,6 +591,8 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     protectionStatus: '保护已结束，可正常掠夺',
     targetFarmBoardMessage: '新手田地，请轻些下手。',
     mainPetPreview: mockRaidSpiritPreviews['target-5'],
+    remainingFreeIntel: 3,
+    remainingTalismanIntel: 3,
     detail: '对手昵称青槐，适合低风险起手，重点看田地收益是否值得你消耗免费次数。',
     actions: [
       { label: '发起掠夺', target: 'raid', tone: 'primary' },

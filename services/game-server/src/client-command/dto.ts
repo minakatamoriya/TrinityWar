@@ -2,10 +2,12 @@ import type {
   ClientClaimDailyTaskRequest,
   ClientClaimPendingRequest,
   ClientCollectFieldRequest,
+  ClientFactionDonateRequest,
   ClientBuildingUpgradeId,
   ClientCastleExtensionUpgradeId,
   ClientRecruitArmyRequest,
   ClientRaidActionRequest,
+  ClientStartCultivationRequest,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
 
@@ -14,6 +16,10 @@ export class ClaimPendingRequestDto implements ClientClaimPendingRequest {
   acceptOverflowLoss?: boolean;
   walletVersion?: number;
   requestIdempotencyKey?: string;
+}
+
+export class FactionDonateRequestDto implements ClientFactionDonateRequest {
+  goldAmount!: number;
 }
 
 export class ClaimDailyTaskRequestDto implements ClientClaimDailyTaskRequest {
@@ -30,6 +36,11 @@ export class CollectFieldRequestDto implements ClientCollectFieldRequest {
   fieldVersion?: number;
   walletVersion?: number;
   requestIdempotencyKey?: string;
+}
+
+export class StartCultivationRequestDto implements ClientStartCultivationRequest {
+  fieldId!: string;
+  seedId!: string;
 }
 
 export class UpgradeBuildingRequestDto {

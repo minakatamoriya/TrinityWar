@@ -113,6 +113,18 @@ interface FarmCollectPresentationState {
   showSeeds: boolean;
 }
 
+function getPendingClaimTitle(source: ClientClaimPendingRequest['source']): string {
+  if (source === 'tax') {
+    return '主城税收';
+  }
+
+  if (source === 'faction') {
+    return '阵营分红';
+  }
+
+  return '临时待领取';
+}
+
 interface FollowedRaidTargetSummary {
   id: string;
   name: string;
@@ -159,13 +171,6 @@ const emptySeedInventory = seedCatalog.reduce<Record<string, number>>((inventory
 const emptyGlobalItemInventory: Record<string, number> = {
   tianjiTalisman: 0,
 };
-
-interface ResourcePulseState {
-  vaultTone: 'gain' | 'spend' | null;
-  vaultToken: number;
-  armyTone: 'gain' | 'spend' | null;
-  armyToken: number;
-}
 
 interface ResourceProgressValue {
   current: number;
@@ -357,12 +362,6 @@ function App(): JSX.Element {
   const [claimingSource, setClaimingSource] = useState<ClientClaimPendingRequest['source'] | null>(null);
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null);
   const [farmTick, setFarmTick] = useState(0);
-  const [resourcePulse, setResourcePulse] = useState<ResourcePulseState>({
-    vaultTone: null,
-    vaultToken: 0,
-    armyTone: null,
-    armyToken: 0,
-  });
   const [seedInventory, setSeedInventory] = useState<Record<string, number>>(emptySeedInventory);
   const [globalItemInventory, setGlobalItemInventory] = useState<Record<string, number>>(emptyGlobalItemInventory);
   const [unlockedSeedIds, setUnlockedSeedIds] = useState<string[]>(defaultUnlockedSeedIds);
@@ -383,6 +382,7 @@ function App(): JSX.Element {
   const [globalFeatureModal, setGlobalFeatureModal] = useState<GlobalFeatureModalState | null>(null);
   const characterDialog = useCharacterDialog();
   const { playDialogScene } = characterDialog;
+  const characterDialogPortalRef = useRef<HTMLDivElement | null>(null);
   const welcomeDialogSessionIdRef = useRef<string | null>(null);
   const farmEnterDialogRef = useRef<{ sceneId: string; at: number } | null>(null);
 
@@ -635,7 +635,6 @@ function App(): JSX.Element {
         return;
       }
 
-      triggerResourcePulse(data.home);
       setViewModel(data);
     }).catch(() => {
       if (!active) {
@@ -729,6 +728,7 @@ function App(): JSX.Element {
   const activeBackgroundImage = `url(${getSceneBackground(activeScene, home.factionName)})`;
   const vaultResource = findResourceByTone('vault', home.resources);
   const devLoginModeLabel = getDevLoginModeLabel(loginSession?.mode);
+  const currentAccountName = loginSession?.player.nickname ?? home.playerName;
   const pendingClaims = home.pendingClaims ?? [];
   const dailyTasks = home.dailyTasks ?? [];
   const taxPending = pendingClaims.find((claim) => claim.source === 'tax');
@@ -736,13 +736,15 @@ function App(): JSX.Element {
   const totalPending = pendingClaims.reduce((sum, claim) => sum + Number(claim.value.replace(/,/g, '')), 0);
   const protectionRemainingSeconds = getRemainingSeconds(home.protectedUntil);
   const isProtectionActive = protectionRemainingSeconds > 0;
-  const resourceCards = home.resources.map((resource) => ({
-    resource,
-    progress: parseCapacityResourceValue(resource.value),
-  }));
   const vaultProgress = vaultResource ? parseCapacityResourceValue(vaultResource.value) : { current: 0, capacity: 0, ratio: 0 };
-  const armyResource = findResourceByTone('army', home.resources);
-  const armyProgress = armyResource ? parseCapacityResourceValue(armyResource.value) : { current: 0, capacity: 0, ratio: 0 };
+  const mainSpiritSlot = spiritState?.mainSlot ?? spiritState?.slots.find((slot) => slot.isMain) ?? null;
+  const mainSpiritEntry = mainSpiritSlot && spiritState
+    ? spiritState.codex.find((entry) => entry.spiritId === mainSpiritSlot.spiritId) ?? null
+    : null;
+  const mainSpiritHealthRatio = mainSpiritSlot ? (mainSpiritSlot.maxHp > 0 ? Math.min(mainSpiritSlot.currentHp / mainSpiritSlot.maxHp, 1) : 0) : 0;
+  const mainSpiritHealthText = mainSpiritSlot
+    ? `${formatNumber(mainSpiritSlot.currentHp)} / ${formatNumber(mainSpiritSlot.maxHp)}`
+    : '--';
   const seasonProgress = buildSeasonProgress(bootstrap.season);
   const hourlyTax = parseHourlyTax(taxPending?.description);
   const temporaryClaim = home.temporaryClaim;
@@ -805,22 +807,6 @@ function App(): JSX.Element {
       message,
       tone,
     });
-  };
-
-  const triggerResourcePulse = (nextHome: HomeSummaryResponse): void => {
-    const currentVaultAmount = vaultResource ? parseCapacityResourceValue(vaultResource.value).current : 0;
-    const nextVaultResource = findResourceByTone('vault', nextHome.resources);
-    const nextVaultAmount = nextVaultResource ? parseCapacityResourceValue(nextVaultResource.value).current : 0;
-    const currentArmyAmount = armyResource ? parseCapacityResourceValue(armyResource.value).current : 0;
-    const nextArmyResource = findResourceByTone('army', nextHome.resources);
-    const nextArmyAmount = nextArmyResource ? parseCapacityResourceValue(nextArmyResource.value).current : 0;
-
-    setResourcePulse((current) => ({
-      vaultTone: nextVaultAmount === currentVaultAmount ? current.vaultTone : nextVaultAmount > currentVaultAmount ? 'gain' : 'spend',
-      vaultToken: nextVaultAmount === currentVaultAmount ? current.vaultToken : current.vaultToken + 1,
-      armyTone: nextArmyAmount === currentArmyAmount ? current.armyTone : nextArmyAmount > currentArmyAmount ? 'gain' : 'spend',
-      armyToken: nextArmyAmount === currentArmyAmount ? current.armyToken : current.armyToken + 1,
-    }));
   };
 
   const handleBuySpiritSoul = async (): Promise<void> => {
@@ -985,6 +971,16 @@ function App(): JSX.Element {
         acceptOverflowLoss,
         walletVersion: home.stateVersions.walletVersion,
       });
+      if (result.claimedGold <= 0 && result.remainingPendingGold > 0 && !acceptOverflowLoss) {
+        setPendingClaimOverflowState({
+          source,
+          title: getPendingClaimTitle(source),
+          pendingYield: result.remainingPendingGold,
+          overflowGold: result.remainingPendingGold,
+        });
+        return;
+      }
+
       applyMutationResult(result);
     } catch {
       showToast('当前无法完成收益入库，请稍后重试。', 'error');
@@ -1092,7 +1088,6 @@ function App(): JSX.Element {
     try {
       const result = await resetDemoExperimentState();
       const nextSpiritState = await loadSpiritState();
-      triggerResourcePulse(result.home);
       setViewModel((current) => {
         if (!current) {
           return current;
@@ -1183,7 +1178,6 @@ function App(): JSX.Element {
   };
 
   const applyMutationResult = (result: { home: HomeSummaryResponse; scenes: ClientViewModel['scenes']; summary: string }): void => {
-    triggerResourcePulse(result.home);
     setViewModel((current) => {
       if (!current) {
         return current;
@@ -1369,13 +1363,13 @@ function App(): JSX.Element {
         const input: ClientRaidActionRequest = {
           targetId,
           mode: raidTargetModal?.mode ?? 'raid',
+          armyVersion: home.stateVersions.armyVersion,
         };
 
         setPendingActionKey('raid:execute');
 
         try {
           const response = await raidClientTarget(input);
-          triggerResourcePulse(response.home);
           setViewModel((current) => {
             if (!current) {
               return current;
@@ -1536,7 +1530,7 @@ function App(): JSX.Element {
   };
 
   return (
-    <CharacterDialogProvider controller={characterDialog}>
+    <CharacterDialogProvider controller={characterDialog} portalTarget={characterDialogPortalRef.current}>
       <main className="app-shell">
       <aside className="left-rail">
         <div className="brand-block">
@@ -1596,7 +1590,7 @@ function App(): JSX.Element {
           <div className="meta-row source-row"><span>bootstrap</span><strong>{formatReadSource(sources.bootstrap)}</strong></div>
           <div className="meta-row source-row"><span>home</span><strong>{formatReadSource(sources.home)}</strong></div>
           <div className="meta-row source-row"><span>scene</span><strong>{formatReadSource(sources.scenes)}</strong></div>
-          <div className="meta-row"><span>测试账号</span><strong>{devLoginModeLabel}</strong></div>
+          <div className="meta-row"><span>测试账号</span><strong>{currentAccountName}</strong></div>
           <button className="ghost-button" onClick={handleSwitchDevUser} type="button">
             切换测试账号
           </button>
@@ -1610,6 +1604,7 @@ function App(): JSX.Element {
 
       <section className="phone-stage">
         <div
+          ref={characterDialogPortalRef}
           className="phone-frame phone-frame-scene"
           style={{ ['--scene-bg-image' as string]: activeBackgroundImage } as React.CSSProperties}
         >
@@ -1691,52 +1686,37 @@ function App(): JSX.Element {
 
             <section className="global-resource-bar">
               <section className="resource-dock resource-dock-global">
-                {resourceCards.map(({ resource, progress }) => {
-                  const isVaultResource = resource.tone === 'vault';
-                  const isProtectedVault = isVaultResource && isProtectionActive;
-                  const pulseTone = resource.tone === 'vault'
-                    ? resourcePulse.vaultTone
-                    : resource.tone === 'army'
-                      ? resourcePulse.armyTone
-                      : null;
-                  const pulseToken = resource.tone === 'vault'
-                    ? resourcePulse.vaultToken
-                    : resource.tone === 'army'
-                      ? resourcePulse.armyToken
-                      : 0;
-                  const pulseToneClass = pulseTone ? ` pulse-${pulseTone}` : '';
-                  const amountLabel = isProtectedVault ? '保护期' : resource.tone === 'army' ? '守护灵宠' : '当前持有';
-                  const isArmyResource = resource.tone === 'army';
-                  const footerValue = isProtectedVault
-                    ? formatProtectionCountdown(protectionRemainingSeconds)
-                    : `${Math.round(progress.ratio * 100)}%`;
-
-                  const cardContent = (
-                    <>
-                      <div className="resource-dock-head">
-                        <span className="resource-name">
-                          {resource.label}
-                          {isProtectedVault ? <span className="resource-protection-tag">◆ 防护中</span> : null}
-                        </span>
-                        <span className="resource-dock-capacity">上限 {formatNumber(progress.capacity)}</span>
-                      </div>
-                      <strong className="resource-dock-amount">{formatNumber(progress.current)}</strong>
-                      <div className="resource-dock-progress" aria-hidden="true">
-                        <div className={`resource-dock-progress-fill resource-dock-progress-fill-${resource.tone}`} style={{ width: `${progress.ratio * 100}%` }} />
-                      </div>
-                      <div className="resource-dock-foot">
-                        <span>{amountLabel}</span>
-                        <span>{footerValue}</span>
-                      </div>
-                    </>
-                  );
-
-                  return (
-                    <div className={`resource-dock-card resource-dock-card-${resource.tone}${isProtectedVault ? ' resource-dock-card-protected' : ''}${pulseToneClass}`} key={`${resource.label}-${isVaultResource || isArmyResource ? pulseToken : 'steady'}`}>
-                      {cardContent}
-                    </div>
-                  );
-                })}
+                <div className={`resource-dock-card resource-dock-card-vault${isProtectionActive ? ' resource-dock-card-protected' : ''}`}>
+                  <div className="resource-dock-head">
+                    <span className="resource-name">
+                      金币
+                      {isProtectionActive ? <span className="resource-protection-tag">防护中</span> : null}
+                    </span>
+                    <span className="resource-dock-capacity">上限 {formatNumber(vaultProgress.capacity)}</span>
+                  </div>
+                  <strong className="resource-dock-amount">{formatNumber(vaultProgress.current)}</strong>
+                  <div className="resource-dock-progress" aria-hidden="true">
+                    <div className="resource-dock-progress-fill resource-dock-progress-fill-vault" style={{ width: `${vaultProgress.ratio * 100}%` }} />
+                  </div>
+                  <div className="resource-dock-foot">
+                    <span>{isProtectionActive ? '保护期' : '当前持有'}</span>
+                    <span>{isProtectionActive ? formatProtectionCountdown(protectionRemainingSeconds) : `${Math.round(vaultProgress.ratio * 100)}%`}</span>
+                  </div>
+                </div>
+                <div className="resource-dock-card resource-dock-card-spirit">
+                  <div className="resource-dock-head">
+                    <span className="resource-name">灵宠</span>
+                    <span className="resource-dock-level">{mainSpiritSlot ? `Lv.${formatNumber(mainSpiritSlot.level)}` : '未上阵'}</span>
+                  </div>
+                  <strong className="resource-dock-amount">{mainSpiritEntry?.definition.label ?? '暂无主战灵宠'}</strong>
+                  <div className="resource-dock-progress" aria-hidden="true">
+                    <div className="resource-dock-progress-fill resource-dock-progress-fill-army" style={{ width: `${mainSpiritHealthRatio * 100}%` }} />
+                  </div>
+                  <div className="resource-dock-foot">
+                    <span>血量</span>
+                    <span>{mainSpiritHealthText}</span>
+                  </div>
+                </div>
               </section>
             </section>
           </section>
@@ -1806,9 +1786,8 @@ function App(): JSX.Element {
             ) : null}
 
             {activeScene === 'raid' ? (
-              <ArmyScene
-                currentArmy={armyProgress.current}
-                currentGold={vaultProgress.current}
+                <ArmyScene
+                  currentGold={vaultProgress.current}
                 busy={pendingActionKey?.startsWith('spirit:') ?? false}
                 onBuySoul={() => {
                   void handleBuySpiritSoul();
@@ -2067,7 +2046,7 @@ function App(): JSX.Element {
                     const seed = item.seedId ? seedCatalogMap.get(item.seedId) : undefined;
                     return (
                       <div className="seed-reward-item" key={`${item.seedId ?? item.itemId ?? item.label ?? 'default'}-${item.quantity}`}>
-                        <strong>{item.label ?? seed?.name ?? item.itemId ?? item.seedId}</strong>
+                        <strong>{seed?.name ?? item.label ?? item.itemId ?? item.seedId ?? '奖励'}</strong>
                         <span>x {item.quantity}</span>
                       </div>
                     );

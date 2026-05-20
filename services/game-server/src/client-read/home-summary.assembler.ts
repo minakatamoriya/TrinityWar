@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { APP_NAME, type ClientDailyTaskStatus, type ClientSceneKey, type HomeSummaryResponse } from '@trinitywar/shared';
-import { getFactionDividendPerHour, getTaxIncomePerHour } from '../lib/game-balance.js';
+import { getDailyTaskDefinition, getFactionDividendPerHour, getTaxIncomePerHour } from '../lib/game-balance.js';
 import type { HomeSummaryReadModel } from './client-read.repository.js';
 
 const DAILY_TASK_LABELS: Record<string, string> = {
@@ -76,7 +76,7 @@ export class HomeSummaryAssembler {
         : null,
       dailyTasks: readModel.taskStates.map((taskState) => ({
         id: taskState.taskId,
-        title: DAILY_TASK_LABELS[taskState.taskId] ?? taskState.taskId,
+        title: getDailyTaskDefinition(taskState.taskId)?.title ?? taskState.taskId,
         description: `每日任务，完成后可领取 ${formatNumber(taskState.rewardGold)} 金币。`,
         progressCurrent: Math.min(taskState.progress, taskState.target),
         progressTarget: taskState.target,

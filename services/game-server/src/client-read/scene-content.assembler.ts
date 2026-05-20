@@ -7,13 +7,12 @@ import {
   getCastleExtensionLevelConfig,
   getCastleExtensionTrack,
   getFactionDividendPerHour,
-  getPopulationCapacityGain,
   getSeedStageSeconds,
   getVaultCapacityGain,
 } from '../lib/game-balance.js';
 import type { SceneContentReadModel } from './client-read.repository.js';
 
-type BuildingKey = 'castle' | 'vault' | 'field-slot' | 'population' | 'watchtower';
+type BuildingKey = 'castle' | 'vault' | 'field-slot' | 'watchtower';
 type ExtensionKey = 'protectionTech' | 'farmYieldTech' | 'ripeWindowTech' | 'pendingClaimTech';
 
 const FIELD_STATUS_COPY: Record<FieldStatus, { title: string; badge: string; tone: ClientFarmField['tone'] }> = {
@@ -145,7 +144,6 @@ export class SceneContentAssembler {
     const buildings = readModel.buildings;
     const castleLevel = buildings?.castleLevel ?? readModel.player.castleLevelCache;
     const vaultLevel = buildings?.vaultLevel ?? 1;
-    const populationLevel = buildings?.populationLevel ?? 1;
     const watchtowerLevel = buildings?.watchtowerLevel ?? 1;
 
     const items: Array<{ id: BuildingKey; title: string; level: number; locked?: boolean; description: string; costText: string; actionLabel: string }> = [
@@ -173,14 +171,6 @@ export class SceneContentAssembler {
         description: `当前已解锁 ${readModel.fieldSlots.filter((field) => field.isUnlocked).length} 块田地，田地位随主城等级自动开启。`,
         costText: '随主城等级自动解锁',
         actionLabel: '查看条件',
-      },
-      {
-        id: 'population',
-        title: '兵力上限',
-        level: populationLevel,
-        description: `Lv.${populationLevel} -> Lv.${populationLevel + 1}，容量预计提升 ${formatNumber(getPopulationCapacityGain(populationLevel))}。`,
-        costText: this.buildUpgradeCostText('population', populationLevel),
-        actionLabel: '升级兵力上限',
       },
       {
         id: 'watchtower',

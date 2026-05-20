@@ -5,9 +5,10 @@ interface CharacterDialogProps {
   dialog: CharacterDialogEntry | null;
   onAdvance: () => void;
   onClose: () => void;
+  portalTarget?: HTMLElement | null;
 }
 
-export function CharacterDialog({ dialog, onAdvance, onClose }: CharacterDialogProps): JSX.Element | null {
+export function CharacterDialog({ dialog, onAdvance, onClose, portalTarget }: CharacterDialogProps): JSX.Element | null {
   if (!dialog) {
     return null;
   }
@@ -69,6 +70,6 @@ export function CharacterDialog({ dialog, onAdvance, onClose }: CharacterDialogP
         ) : null}
       </section>
     </div>,
-    document.body,
+    portalTarget ?? document.body,
   );
 }

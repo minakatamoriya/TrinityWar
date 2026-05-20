@@ -25,6 +25,9 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
   const title = mode === 'revenge' ? '复仇' : '掠夺';
   const visibleActions = detail ? detail.actions.filter((action) => action.label !== '分享目标') : [];
   const spiritPreview = detail ? getRaidSpiritPreview(detail) : null;
+  const remainingFreeIntel = intelState?.remainingFreeIntel ?? detail?.remainingFreeIntel ?? 0;
+  const remainingTalismanIntel = intelState?.remainingTalismanIntel ?? detail?.remainingTalismanIntel ?? 0;
+  const intelQuotaText = getIntelQuotaText(remainingFreeIntel, remainingTalismanIntel);
 
   useEffect(() => {
     setIntelState(null);
@@ -43,7 +46,7 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
     void onRevealDeepIntel(detail.targetId).then((response) => {
       setIntelState(response.intel);
     }).catch(() => {
-      setIntelError('深度窥视失败，请稍后重试。');
+      setIntelError('深度窥视失败，可能是今日次数已用完或天机符不足。');
     }).finally(() => {
       setIntelLoading(false);
     });
@@ -96,7 +99,7 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
                     <button className="secondary-button" disabled={intelLoading} onClick={handleRevealDeepIntel} type="button">
                       {intelLoading ? '窥视中...' : '深度窥视'}
                     </button>
-                    {intelError ? <span>{intelError}</span> : <span>默认不展示五行与攻防评级</span>}
+                    {intelError ? <span>{intelError}</span> : <span>{intelQuotaText}</span>}
                   </div>
                 )}
               </article>
@@ -168,6 +171,18 @@ function getRaidSpiritPreview(detail: ClientRaidTargetDetailResponse): ClientRai
     rarity: null,
     avatarGlyph: detail.faction.slice(0, 1) || '灵',
   };
+}
+
+function getIntelQuotaText(remainingFreeIntel: number, remainingTalismanIntel: number): string {
+  if (remainingFreeIntel > 0) {
+    return `今日免费窥视剩余 ${remainingFreeIntel} 次`;
+  }
+
+  if (remainingTalismanIntel > 0) {
+    return `免费窥视已用完，天机符窥视剩余 ${remainingTalismanIntel} 次`;
+  }
+
+  return '今日免费窥视和天机符窥视次数已全部用完';
 }
 
 function formatSpiritElement(element: ClientRaidSpiritIntel['element']): string {

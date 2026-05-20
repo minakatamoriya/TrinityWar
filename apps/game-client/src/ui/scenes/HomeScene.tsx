@@ -115,12 +115,15 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
                   <div className="task-row-head">
                     <strong>{item.title}</strong>
                     {item.status === 'completed' ? (
-                      <button className="text-link task-link task-link-claim" disabled={claimingTaskId === item.id} onClick={() => onClaimTask(item.id)} type="button">
-                        {claimingTaskId === item.id ? '领取中' : '领取'}
-                      </button>
+                      <>
+                        <span className="task-state-badge task-state-badge-completed">{'\u5df2\u5b8c\u6210'}</span>
+                        <button className="text-link task-link task-link-claim" disabled={claimingTaskId === item.id} onClick={() => onClaimTask(item.id)} type="button">
+                          {claimingTaskId === item.id ? '\u9886\u53d6\u4e2d' : '\u9886\u53d6'}
+                        </button>
+                      </>
                     ) : (
                       <button className="text-link task-link" disabled={item.status === 'claimed'} onClick={() => onNavigate(item.actionScene)} type="button">
-                        {item.status === 'claimed' ? '已领取' : '前往'}
+                        {item.status === 'claimed' ? '\u5df2\u9886\u53d6' : '\u524d\u5f80'}
                       </button>
                     )}
                   </div>

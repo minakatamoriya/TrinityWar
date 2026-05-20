@@ -56,6 +56,7 @@ export class ClientReadService {
       where: { playerId },
       select: {
         tianjiTalisman: true,
+        dailyStarterSeedClaimDateKey: true,
         dailyTianjiClaimDateKey: true,
       },
     });
@@ -87,7 +88,7 @@ export class ClientReadService {
           tianjiTalisman: spiritResource?.tianjiTalisman ?? 0,
         },
         unlockedSeedIds,
-        starterSeedClaimed: false,
+        starterSeedClaimed: spiritResource?.dailyStarterSeedClaimDateKey === getLocalDateKey(),
         tianjiTalismanClaimed: spiritResource?.dailyTianjiClaimDateKey === getLocalDateKey(),
       },
     };

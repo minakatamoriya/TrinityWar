@@ -381,6 +381,8 @@ function buildFallbackRaidFields(detail: ClientRaidTargetDetailResponse): Client
 function normalizeRaidTargetDetail(detail: ClientRaidTargetDetailResponse): ClientRaidTargetDetailResponse {
   return {
     ...detail,
+    remainingFreeIntel: detail.remainingFreeIntel ?? 0,
+    remainingTalismanIntel: detail.remainingTalismanIntel ?? 0,
     fields: Array.isArray(detail.fields) && detail.fields.length > 0 ? detail.fields.map((field) => ({
       ...field,
       actions: [...field.actions],
@@ -1461,12 +1463,17 @@ export async function raidClientTarget(input: ClientRaidActionRequest): Promise<
     return applyMockRaidTarget(input);
   }
 
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('raid-target');
   const response = await fetchJson<ClientRaidActionResponse>(`${CLIENT_API_PREFIX}/actions/raid-target`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
   });
 
   mockHomeSnapshot = cloneHomeSummary(response.home);

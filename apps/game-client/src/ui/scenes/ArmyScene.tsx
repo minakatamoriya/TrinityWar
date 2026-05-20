@@ -10,7 +10,6 @@ import type {
 } from '@trinitywar/shared';
 
 interface ArmySceneProps {
-  currentArmy: number;
   currentGold: number;
   playerFaction: string;
   spirit: ClientSpiritState;
@@ -277,7 +276,7 @@ function SpiritStageCard(props: {
 }
 
 export function ArmyScene(props: ArmySceneProps): JSX.Element {
-  const { currentArmy, currentGold, playerFaction, spirit, unitCostGold, busy, onBuySoul, onUpgrade, onSetMain, onRecover, onDissolve, onCompose } = props;
+  const { currentGold, playerFaction, spirit, unitCostGold, busy, onBuySoul, onUpgrade, onSetMain, onRecover, onDissolve, onCompose } = props;
   const [codexOpen, setCodexOpen] = useState(false);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [selectedCodexSpiritId, setSelectedCodexSpiritId] = useState<string | null>(() => spirit.codex.find((entry) => isDiscovered(entry))?.spiritId ?? spirit.codex[0]?.spiritId ?? null);
@@ -318,21 +317,24 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
             <div>
               <span>兽魂库存</span>
               <strong>{formatNumber(availableSoul)}</strong>
-              <small>金币 {formatNumber(currentGold)} · 统兵 {formatNumber(currentArmy)}</small>
+
             </div>
             <button className="primary-button small" disabled={busy || currentGold < unitCostGold} onClick={onBuySoul} type="button">
               {busy ? '购买中' : '购买兽魂'}
             </button>
+            <small>100金=1兽魂</small>
           </article>
         </section>
 
         <section className="spirit-main-row">
           {mainSlot && mainEntry ? (
             <article className="spirit-profile-card spirit-profile-card-horizontal" onClick={() => setSelectedSlotIndex(mainSlot.slotIndex)} role="button" tabIndex={0}>
-              <div className={`spirit-portrait ${getElementClass(mainSlot.element)}`} aria-hidden="true">
-                <span>{mainEntry.definition.label.slice(0, 1)}</span>
+              <div className="spirit-main-photo" aria-hidden="true">
+                <div className={`spirit-portrait spirit-main-portrait ${getElementClass(mainSlot.element)}`}>
+                  <span>{mainEntry.definition.label.slice(0, 1)}</span>
+                </div>
               </div>
-              <div className="spirit-profile-main">
+              <div className="spirit-profile-main spirit-main-info">
                 <div className="spirit-name-row">
                   <div>
                     <p className="eyebrow">主位灵宠</p>
@@ -427,7 +429,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                   </div>
                   <div className="spirit-pet-action-grid">
                     <button className="primary-button" disabled={busy || selectedSlot.isMain} onClick={() => onSetMain(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">设为主位</button>
-                    <button className="secondary-button" disabled={busy || !selectedUpgradeCost || availableSoul < selectedUpgradeCost} onClick={() => onUpgrade(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">{selectedUpgradeCost ? `升级（需 ${selectedUpgradeCost}）` : '已满级'}</button>
+                    <button className="secondary-button" disabled={busy || !selectedUpgradeCost || availableSoul < selectedUpgradeCost} onClick={() => onUpgrade(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">{selectedUpgradeCost ? `升级（需 ${selectedUpgradeCost} 兽魂）` : '已满级'}</button>
                     <button className="secondary-button" disabled={busy || getHealthRatio(selectedSlot) >= 100 || quickRecoverRemaining <= 0 || availableTianjiTalisman <= 0} onClick={() => onRecover(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">天机符恢复</button>
                     <button className="ghost-button" disabled={busy || selectedSlot.isMain} onClick={() => onDissolve(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">解散（返还 35% 兽魂）</button>
                   </div>
