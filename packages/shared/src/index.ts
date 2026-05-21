@@ -210,10 +210,122 @@ export interface AdminOverviewResponse {
   modules: string[];
 }
 
+export type NotificationCategory = 'system' | 'announcement' | 'maintenance' | 'reward' | 'compensation';
+
+export type PlayerNotificationClaimStatus = 'none' | 'unclaimed' | 'claimed' | 'expired';
+
+export type NotificationAttachmentKind = 'gold' | 'seed' | 'tianjiTalisman' | 'spiritSoul';
+
 export interface AdminPagination {
   page: number;
   pageSize: number;
   total: number;
+}
+
+export interface NotificationAttachment {
+  kind: NotificationAttachmentKind;
+  quantity: number;
+  seedId?: string;
+  label: string;
+}
+
+export interface ClientNotificationItem {
+  id: string;
+  title: string;
+  body: string;
+  category: NotificationCategory;
+  claimStatus: PlayerNotificationClaimStatus;
+  read: boolean;
+  deleted: boolean;
+  hasAttachment: boolean;
+  attachments: NotificationAttachment[];
+  canClaim: boolean;
+  canDelete: boolean;
+  createdAt: string;
+  readAt: string | null;
+  claimedAt: string | null;
+  expiresAt: string | null;
+}
+
+export interface ClientNotificationListResponse {
+  items: ClientNotificationItem[];
+  pagination: AdminPagination;
+  unreadCount: number;
+}
+
+export interface ClientUnreadNotificationCountResponse {
+  unreadCount: number;
+}
+
+export interface ClientMarkNotificationReadResponse {
+  id: string;
+  read: true;
+  readAt: string;
+  unreadCount: number;
+}
+
+export interface ClientDeleteNotificationResponse {
+  id: string;
+  deleted: true;
+  unreadCount: number;
+}
+
+export interface AdminCreateNotificationRequest {
+  title?: string;
+  body?: string;
+  category?: NotificationCategory;
+  expiresAt?: string | null;
+  attachments?: Array<{
+    kind: NotificationAttachmentKind;
+    quantity: number;
+    seedId?: string;
+  }>;
+}
+
+export interface AdminCreateNotificationResponse {
+  notificationId: string;
+  audience: 'global' | 'player';
+  playerCount: number;
+  title: string;
+  category: NotificationCategory;
+  attachmentCount: number;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export interface ClientClaimNotificationResponse {
+  id: string;
+  claimStatus: 'claimed';
+  claimedAt: string;
+  unreadCount: number;
+  summary: string;
+}
+
+export interface AdminNotificationHistoryItem {
+  notificationId: string;
+  title: string;
+  body: string;
+  audience: 'global' | 'player';
+  category: NotificationCategory;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  attachmentCount: number;
+  playerCount: number;
+}
+
+export interface AdminPlayerNotificationItem {
+  id: string;
+  title: string;
+  body: string;
+  category: NotificationCategory;
+  claimStatus: PlayerNotificationClaimStatus;
+  attachments: NotificationAttachment[];
+  readAt: string | null;
+  claimedAt: string | null;
+  deletedAt: string | null;
+  createdAt: string;
+  expiresAt: string | null;
 }
 
 export interface AdminSystemStatusResponse {
@@ -238,6 +350,12 @@ export interface AdminPlayerSearchResponse {
   pagination: AdminPagination;
 }
 
+export interface AdminDeletePlayerResponse {
+  playerId: string;
+  nickname: string;
+  deleted: boolean;
+}
+
 export interface AdminListResponse<T> {
   items: T[];
   pagination: AdminPagination;
@@ -248,6 +366,12 @@ export interface AdminPlayerOverviewResponse {
   wallet: Record<string, unknown> | null;
   building: Record<string, unknown> | null;
   army: Record<string, unknown> | null;
+  spirit: {
+    resource: Record<string, unknown> | null;
+    mainSlot: Record<string, unknown> | null;
+    slots: Array<Record<string, unknown>>;
+    codex: Array<Record<string, unknown>>;
+  };
   fields: Array<Record<string, unknown>>;
   seedInventory: Record<string, unknown>;
   dailyTasks: Array<Record<string, unknown>>;

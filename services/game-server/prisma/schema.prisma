@@ -105,6 +105,26 @@ enum PlayerSpiritStatus {
   DISSOLVED
 }
 
+enum NotificationAudience {
+  GLOBAL
+  PLAYER
+}
+
+enum NotificationCategory {
+  SYSTEM
+  ANNOUNCEMENT
+  MAINTENANCE
+  REWARD
+  COMPENSATION
+}
+
+enum PlayerNotificationClaimStatus {
+  NONE
+  UNCLAIMED
+  CLAIMED
+  EXPIRED
+}
+
 model Player {
   id               String    @id @default(cuid())
   nickname         String
@@ -145,6 +165,7 @@ model Player {
   raidAssetLocks          RaidAssetLock[]          @relation("RaidAssetLockDefender")
   ownedBattleReports      BattleReport[]           @relation("BattleReportOwner")
   opponentBattleReports   BattleReport[]           @relation("BattleReportOpponent")
+  notifications           PlayerNotification[]
 
   @@index([factionId])
   @@index([lastLoginAt])
@@ -451,6 +472,53 @@ model RaidOrderMessage {
   @@index([receiverPlayerId, createdAt])
   @@index([templateId])
   @@map("raid_order_message")
+}
+
+model SystemNotification {
+  id             String               @id @default(cuid())
+  audience       NotificationAudience
+  category       NotificationCategory @default(SYSTEM)
+  title          String
+  body           String
+  createdByAdmin String?              @map("created_by_admin")
+  startsAt       DateTime?            @map("starts_at")
+  expiresAt      DateTime?            @map("expires_at")
+  revokedAt      DateTime?            @map("revoked_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  playerNotifications PlayerNotification[]
+
+  @@index([audience, createdAt])
+  @@index([category, createdAt])
+  @@index([revokedAt])
+  @@map("system_notification")
+}
+
+model PlayerNotification {
+  id                   String                        @id @default(cuid())
+  playerId             String                        @map("player_id")
+  systemNotificationId String?                       @map("system_notification_id")
+  category             NotificationCategory          @default(SYSTEM)
+  titleSnapshot        String                        @map("title_snapshot")
+  bodySnapshot         String                        @map("body_snapshot")
+  attachmentJson       Json?                         @map("attachment_json")
+  claimStatus          PlayerNotificationClaimStatus @default(NONE) @map("claim_status")
+  readAt               DateTime?                     @map("read_at")
+  deletedAt            DateTime?                     @map("deleted_at")
+  claimedAt            DateTime?                     @map("claimed_at")
+  expiresAt            DateTime?                     @map("expires_at")
+  createdAt            DateTime                      @default(now()) @map("created_at")
+  updatedAt            DateTime                      @updatedAt @map("updated_at")
+
+  player             Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  systemNotification SystemNotification? @relation(fields: [systemNotificationId], references: [id], onDelete: SetNull)
+
+  @@index([playerId, deletedAt, createdAt])
+  @@index([playerId, readAt])
+  @@index([playerId, claimStatus])
+  @@index([systemNotificationId])
+  @@map("player_notification")
 }
 
 model PlayerSeedInventory {

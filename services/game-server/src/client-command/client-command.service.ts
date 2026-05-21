@@ -6,6 +6,7 @@ import {
   type ClientClaimPendingResponse,
   type ClientCollectFieldResponse,
   type ClientFactionDonateRequest,
+  type ClientResetDemoStateResponse,
   type ClientStateMutationResponse,
 } from '@trinitywar/shared';
 import type { Prisma } from '@prisma/client';
@@ -16,6 +17,7 @@ import { getLocalDateKey } from '../lib/date-key.js';
 import { DAILY_TASK_CONFIG, GAME_BALANCE, getSeedStageGold, getSeedStageSeconds } from '../lib/game-balance.js';
 import { getVaultCapacityGain } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { PlayerInitializationService } from '../seed/player-initialization.service.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
 import { ArmyTrainingLifecycleService } from '../client-read/army-training-lifecycle.service.js';
 import { FieldLifecycleService } from '../client-read/field-lifecycle.service.js';
@@ -87,9 +89,11 @@ export class ClientCommandService {
     @Inject(ArmyTrainingLifecycleService) private readonly armyTrainingLifecycleService: ArmyTrainingLifecycleService,
     @Inject(FieldLifecycleService) private readonly fieldLifecycleService: FieldLifecycleService,
     @Inject(ClientReadService) private readonly clientReadService: ClientReadService,
+    @Inject(PlayerInitializationService) private readonly playerInitializationService: PlayerInitializationService,
   ) {}
 
   async claimPending(input: ClaimPendingCommandInput): Promise<ClientClaimPendingResponse> {
+    validateClaimPendingRequest(input.request);
     const endpointKey = 'client.actions.claim-pending';
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashClaimPendingRequest(input.request);
@@ -216,6 +220,7 @@ export class ClientCommandService {
   }
 
   async claimDailyTask(input: ClaimDailyTaskCommandInput): Promise<ClientClaimDailyTaskResponse> {
+    validateClaimDailyTaskRequest(input.request);
     const endpointKey = 'client.actions.claim-daily-task';
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashClaimDailyTaskRequest(input.request);
@@ -383,6 +388,7 @@ export class ClientCommandService {
   }
 
   async collectField(input: CollectFieldCommandInput): Promise<ClientCollectFieldResponse> {
+    validateCollectFieldRequest(input.request);
     const endpointKey = 'client.actions.collect-field';
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashCollectFieldRequest(input.request);
@@ -534,6 +540,7 @@ export class ClientCommandService {
   }
 
   async startCultivation(input: StartCultivationCommandInput): Promise<ClientStateMutationResponse> {
+    validateStartCultivationRequest(input.request);
     const endpointKey = 'client.actions.start-cultivation';
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
     const requestHash = hashStartCultivationRequest(input.request);
@@ -683,6 +690,7 @@ export class ClientCommandService {
   }
 
   async recruitArmy(input: RecruitArmyCommandInput): Promise<ClientStateMutationResponse> {
+    validateRecruitArmyRequest(input.request);
     const endpointKey = 'client.actions.recruit-army';
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashRecruitArmyRequest(input.request);
@@ -980,6 +988,7 @@ export class ClientCommandService {
   }
 
   async donateFaction(input: FactionDonateCommandInput): Promise<ClientStateMutationResponse> {
+    validateFactionDonateRequest(input.request);
     return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
       const playerState = await client.player.findUnique({
         where: { id: input.playerId },
@@ -1228,6 +1237,30 @@ export class ClientCommandService {
     });
   }
 
+  async resetDemoState(input: { playerId: string }): Promise<ClientResetDemoStateResponse> {
+    if (!['development', 'test'].includes(process.env.NODE_ENV ?? 'development')) {
+      throw new BusinessError({
+        code: ErrorCode.Forbidden,
+        message: 'Demo state reset is only available in development and test environments.',
+        statusCode: 403,
+      });
+    }
+
+    return this.prisma.transaction<ClientResetDemoStateResponse>(async (client) => {
+      await this.playerInitializationService.initialize(client, {
+        playerId: input.playerId,
+        resetExisting: true,
+      });
+
+      return {
+        app: APP_NAME,
+        summary: 'Development player state has been reset.',
+        home: await this.clientReadService.getHomeSummary(input.playerId, client),
+        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
+      };
+    });
+  }
+
   private async prepareIdempotencyRecord(
     client: Prisma.TransactionClient,
     playerId: string,
@@ -1423,6 +1456,74 @@ export class ClientCommandService {
         },
       });
     }
+  }
+}
+
+function validateClaimPendingRequest(request: ClaimPendingRequestDto): void {
+  const body = assertRequestBody(request);
+  if (!['tax', 'faction', 'raid-overflow'].includes(String(body.source))) {
+    throwBadRequest('source must be tax, faction, or raid-overflow.');
+  }
+  assertOptionalNumber(body.walletVersion, 'walletVersion');
+}
+
+function validateClaimDailyTaskRequest(request: ClaimDailyTaskRequestDto): void {
+  const body = assertRequestBody(request);
+  assertRequiredString(body.taskId, 'taskId');
+  assertOptionalNumber(body.walletVersion, 'walletVersion');
+}
+
+function validateCollectFieldRequest(request: CollectFieldRequestDto): void {
+  const body = assertRequestBody(request);
+  assertRequiredString(body.fieldId, 'fieldId');
+  if (body.collectMode !== 'ripe' && body.collectMode !== 'early') {
+    throwBadRequest('collectMode must be ripe or early.');
+  }
+  assertOptionalNumber(body.fieldVersion, 'fieldVersion');
+  assertOptionalNumber(body.walletVersion, 'walletVersion');
+}
+
+function validateStartCultivationRequest(request: StartCultivationRequestDto): void {
+  const body = assertRequestBody(request);
+  assertRequiredString(body.fieldId, 'fieldId');
+  assertRequiredString(body.seedId, 'seedId');
+}
+
+function validateRecruitArmyRequest(request: RecruitArmyRequestDto): void {
+  const body = assertRequestBody(request);
+  assertPositiveInteger(body.recruitCount, 'recruitCount');
+  assertOptionalNumber(body.armyVersion, 'armyVersion');
+  assertOptionalNumber(body.walletVersion, 'walletVersion');
+}
+
+function validateFactionDonateRequest(request: ClientFactionDonateRequest): void {
+  const body = assertRequestBody(request);
+  assertPositiveInteger(body.goldAmount, 'goldAmount');
+}
+
+function assertRequestBody(request: unknown): Record<string, unknown> {
+  if (!request || typeof request !== 'object' || Array.isArray(request)) {
+    throwBadRequest('Request body must be a JSON object.');
+  }
+
+  return request as Record<string, unknown>;
+}
+
+function assertRequiredString(value: unknown, fieldName: string): void {
+  if (typeof value !== 'string' || value.trim().length <= 0) {
+    throwBadRequest(`${fieldName} is required.`);
+  }
+}
+
+function assertPositiveInteger(value: unknown, fieldName: string): void {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    throwBadRequest(`${fieldName} must be a positive integer.`);
+  }
+}
+
+function assertOptionalNumber(value: unknown, fieldName: string): void {
+  if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value))) {
+    throwBadRequest(`${fieldName} must be a number.`);
   }
 }
 

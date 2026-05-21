@@ -9,6 +9,7 @@ import type {
   ClientFactionDonateRequest,
   ClientCollectFieldResponse,
   ClientRecruitArmyRequest,
+  ClientResetDemoStateResponse,
   ClientStartCultivationRequest,
   ClientStateMutationResponse,
   ClientUpgradeBuildingRequest,
@@ -201,6 +202,22 @@ export class ClientCommandController {
       playerId: currentPlayer.playerId,
     });
   }
+
+  @Post('reset-demo-state')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Reset current development player state.' })
+  async resetDemoState(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+  ): Promise<ClientResetDemoStateResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.resetDemoState({
+      playerId: currentPlayer.playerId,
+    });
+  }
 }
 
 defineRouteParamTypes(ClientCommandController.prototype, 'claimPending', [Object, Object, Object]);
@@ -212,6 +229,7 @@ defineRouteParamTypes(ClientCommandController.prototype, 'upgradeBuilding', [Obj
 defineRouteParamTypes(ClientCommandController.prototype, 'donateFaction', [Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimTianjiTalisman', [Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimStarterSeeds', [Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'resetDemoState', [Object]);
 
 function defineRouteParamTypes(target: object, methodName: string, paramTypes: unknown[]): void {
   const defineMetadata = Reflect.defineMetadata as

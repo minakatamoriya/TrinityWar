@@ -60,6 +60,7 @@ export class SpiritService {
     request: ClientBuySpiritSoulRequest,
     headerIdempotencyKey?: string,
   ): Promise<ClientSpiritMutationResponse> {
+    validateBuySpiritSoulRequest(request);
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
     return this.prisma.transaction(async (client) => {
@@ -161,6 +162,7 @@ export class SpiritService {
     request: ClientUpgradeSpiritRequest,
     headerIdempotencyKey?: string,
   ): Promise<ClientSpiritMutationResponse> {
+    validateSlotRequest(request, 'slotIndex');
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
     return this.prisma.transaction(async (client) => {
@@ -276,6 +278,7 @@ export class SpiritService {
     request: ClientSetMainSpiritRequest,
     headerIdempotencyKey?: string,
   ): Promise<ClientSpiritMutationResponse> {
+    validateSlotRequest(request, 'slotIndex');
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
     return this.prisma.transaction(async (client) => {
@@ -343,6 +346,7 @@ export class SpiritService {
     request: ClientRecoverSpiritRequest,
     headerIdempotencyKey?: string,
   ): Promise<ClientSpiritMutationResponse> {
+    validateSlotRequest(request, 'slotIndex');
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
     return this.prisma.transaction(async (client) => {
@@ -458,6 +462,7 @@ export class SpiritService {
     request: ClientDissolveSpiritRequest,
     headerIdempotencyKey?: string,
   ): Promise<ClientSpiritMutationResponse> {
+    validateSlotRequest(request, 'slotIndex');
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
     return this.prisma.transaction(async (client) => {
@@ -560,6 +565,7 @@ export class SpiritService {
     request: ClientComposeSpiritRequest,
     headerIdempotencyKey?: string,
   ): Promise<ClientSpiritMutationResponse> {
+    validateComposeSpiritRequest(request);
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
     return this.prisma.transaction(async (client) => {
@@ -943,6 +949,51 @@ function toClientStatus(status: PlayerSpiritStatus): ClientSpiritStatus {
 
 function calculateSpiritMaxHp(baseHp: number, growthHp: number, level: number): number {
   return baseHp + Math.max(level - 1, 0) * growthHp;
+}
+
+function validateBuySpiritSoulRequest(request: ClientBuySpiritSoulRequest): void {
+  const body = assertRequestBody(request);
+  if (typeof body.goldAmount !== 'number' || !Number.isFinite(body.goldAmount) || body.goldAmount <= 0) {
+    throwBadRequest(`goldAmount must be at least ${SPIRIT_SOUL_GOLD_PRICE}.`);
+  }
+  assertOptionalNumber(body.walletVersion, 'walletVersion');
+  assertOptionalNumber(body.resourceVersion, 'resourceVersion');
+}
+
+function validateSlotRequest(request: { slotIndex?: number; slotVersion?: number; resourceVersion?: number }, fieldName: string): void {
+  const body = assertRequestBody(request);
+  if (typeof body[fieldName] !== 'number' || !Number.isInteger(body[fieldName]) || Number(body[fieldName]) <= 0) {
+    throwBadRequest(`${fieldName} must be a positive integer.`);
+  }
+  assertOptionalNumber(body.slotVersion, 'slotVersion');
+  assertOptionalNumber(body.resourceVersion, 'resourceVersion');
+}
+
+function validateComposeSpiritRequest(request: ClientComposeSpiritRequest): void {
+  const body = assertRequestBody(request);
+  if (typeof body.spiritId !== 'string' || body.spiritId.trim().length <= 0) {
+    throwBadRequest('spiritId is required.');
+  }
+  if (typeof body.slotIndex !== 'number' || !Number.isInteger(body.slotIndex) || body.slotIndex <= 0) {
+    throwBadRequest('slotIndex must be a positive integer.');
+  }
+  if (!['metal', 'wood', 'water', 'fire', 'earth'].includes(String(body.element))) {
+    throwBadRequest('element must be metal, wood, water, fire, or earth.');
+  }
+}
+
+function assertRequestBody(request: unknown): Record<string, unknown> {
+  if (!request || typeof request !== 'object' || Array.isArray(request)) {
+    throwBadRequest('Request body must be a JSON object.');
+  }
+
+  return request as Record<string, unknown>;
+}
+
+function assertOptionalNumber(value: unknown, fieldName: string): void {
+  if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value))) {
+    throwBadRequest(`${fieldName} must be a number.`);
+  }
 }
 
 function normalizeIdempotencyKey(value: string | undefined): string | undefined {

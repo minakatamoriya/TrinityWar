@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
+  ClientNotificationListResponse,
   ClientCastleExtensionUpgradeId,
   ClientCollectFieldRequest,
   ClientCollectFieldResponse,
@@ -16,7 +17,8 @@ import type {
   ClientSpiritState,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { buySpiritSoul, claimDailyTaskReward, claimPendingEarnings, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, composeSpirit, devLogin, dissolveSpirit, donateFactionResources, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadRaidTargetDetail, loadSpiritState, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, upgradeClientBuilding, upgradeSpirit } from './api';
+import { buySpiritSoul, claimDailyTaskReward, claimNotification, claimPendingEarnings, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadNotifications, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, upgradeClientBuilding, upgradeSpirit } from './api';
+import { NotificationCenter } from './ui/common/NotificationCenter';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
 import { BuildingScene } from './ui/scenes/BuildingScene';
@@ -354,6 +356,12 @@ function App(): JSX.Element {
   const [factionTab, setFactionTab] = useState<FactionTabKey>('overview');
   const [toast, setToast] = useState<ToastState | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationList, setNotificationList] = useState<ClientNotificationListResponse | null>(null);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [notificationBusy, setNotificationBusy] = useState(false);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [notificationActionId, setNotificationActionId] = useState<string | null>(null);
   const [selectedRaidTargetId, setSelectedRaidTargetId] = useState<string>('');
   const [raidTargetModal, setRaidTargetModal] = useState<RaidTargetModalState | null>(null);
   const [raidTargetDetail, setRaidTargetDetail] = useState<ClientRaidTargetDetailResponse | null>(null);
@@ -421,6 +429,119 @@ function App(): JSX.Element {
     setSpiritState(data.spirit);
   };
 
+  const resetNotificationState = (): void => {
+    setNotificationsOpen(false);
+    setNotificationList(null);
+    setNotificationUnreadCount(0);
+    setNotificationBusy(false);
+    setNotificationError(null);
+    setNotificationActionId(null);
+  };
+
+  const refreshNotificationUnreadCount = async (): Promise<void> => {
+    try {
+      const result = await loadUnreadNotificationCount();
+      setNotificationUnreadCount(result.unreadCount);
+    } catch {
+      setNotificationUnreadCount(0);
+    }
+  };
+
+  const loadNotificationPage = async (page = 1): Promise<void> => {
+    setNotificationBusy(true);
+    setNotificationError(null);
+
+    try {
+      const result = await loadNotifications(page, 10);
+      setNotificationList(result);
+      setNotificationUnreadCount(result.unreadCount);
+    } catch {
+      setNotificationError('当前无法读取消息中心，请稍后重试。');
+    } finally {
+      setNotificationBusy(false);
+    }
+  };
+
+  const handleOpenNotifications = (): void => {
+    setNotificationsOpen(true);
+    void loadNotificationPage(1);
+  };
+
+  const handleMarkNotificationRead = async (notificationId: string): Promise<void> => {
+    setNotificationActionId(`read:${notificationId}`);
+    try {
+      const result = await markNotificationAsRead(notificationId);
+      setNotificationUnreadCount(result.unreadCount);
+      setNotificationList((current) => current ? {
+        ...current,
+        unreadCount: result.unreadCount,
+        items: current.items.map((item) => item.id === notificationId ? { ...item, read: true, readAt: result.readAt, canDelete: true } : item),
+      } : current);
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法标记消息已读，请稍后重试。', 'error');
+    } finally {
+      setNotificationActionId(null);
+    }
+  };
+
+  const handleClaimNotification = async (notificationId: string): Promise<void> => {
+    setNotificationActionId(`claim:${notificationId}`);
+    try {
+      const result = await claimNotification(notificationId);
+      const [nextViewModel, nextSpirit] = await Promise.all([
+        loadClientViewModel(),
+        loadSpiritState(),
+      ]);
+
+      setNotificationUnreadCount(result.unreadCount);
+      setNotificationList((current) => current ? {
+        ...current,
+        unreadCount: result.unreadCount,
+        items: current.items.map((item) => item.id === notificationId ? {
+          ...item,
+          claimStatus: result.claimStatus,
+          claimedAt: result.claimedAt,
+          canDelete: true,
+        } : item),
+      } : current);
+      setViewModel(nextViewModel);
+      syncSeedBackpackState(nextViewModel.bootstrap.backpack);
+      setSpiritState(nextSpirit);
+      showToast(result.summary, 'success');
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法领取附件，请稍后重试。', 'error');
+    } finally {
+      setNotificationActionId(null);
+    }
+  };
+
+  const handleDeleteNotification = async (notificationId: string): Promise<void> => {
+    setNotificationActionId(`delete:${notificationId}`);
+    try {
+      const result = await deleteNotification(notificationId);
+      setNotificationUnreadCount(result.unreadCount);
+      setNotificationList((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          unreadCount: result.unreadCount,
+          pagination: {
+            ...current.pagination,
+            total: Math.max(current.pagination.total - 1, 0),
+          },
+          items: current.items.filter((item) => item.id !== notificationId),
+        };
+      });
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法删除消息，请稍后重试。', 'error');
+    } finally {
+      setNotificationActionId(null);
+    }
+  };
+
   const loadClientBundle = async (): Promise<{ viewModel: ClientViewModel; spirit: ClientSpiritState }> => {
     const [nextViewModel, nextSpirit] = await Promise.all([
       loadClientViewModel(),
@@ -455,6 +576,7 @@ function App(): JSX.Element {
     setLoginSession(null);
     setViewModel(null);
     setSpiritState(null);
+    resetNotificationState();
     setLoginError(null);
     welcomeDialogSessionIdRef.current = null;
     farmEnterDialogRef.current = null;
@@ -487,6 +609,15 @@ function App(): JSX.Element {
     return () => {
       active = false;
     };
+  }, [loginSession]);
+
+  useEffect(() => {
+    if (!loginSession) {
+      resetNotificationState();
+      return;
+    }
+
+    void refreshNotificationUnreadCount();
   }, [loginSession]);
 
   useEffect(() => {
@@ -1646,11 +1777,36 @@ function App(): JSX.Element {
                 <button className="ghost-button top-action-button" onClick={() => showToast('签到得奖券，日常活动。')} type="button">
                   活动
                 </button>
+                <button className="ghost-button top-action-button top-notification-button" onClick={handleOpenNotifications} type="button">
+                  消息
+                  {notificationUnreadCount > 0 ? <span className="top-notification-badge">{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</span> : null}
+                </button>
                 <button className="ghost-button top-action-button" onClick={() => setSettingsOpen(true)} type="button">
                   设置
                 </button>
               </div>
             </header>
+
+          <NotificationCenter
+            actionId={notificationActionId}
+            busy={notificationBusy}
+            data={notificationList}
+            error={notificationError}
+            onClaim={(notificationId) => {
+              void handleClaimNotification(notificationId);
+            }}
+            onClose={() => setNotificationsOpen(false)}
+            onDelete={(notificationId) => {
+              void handleDeleteNotification(notificationId);
+            }}
+            onMarkRead={(notificationId) => {
+              void handleMarkNotificationRead(notificationId);
+            }}
+            onPageChange={(page) => {
+              void loadNotificationPage(page);
+            }}
+            open={notificationsOpen}
+          />
 
           {settingsOpen ? (
             <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}>

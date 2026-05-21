@@ -140,7 +140,11 @@ function toFarmBoardState(board: {
   };
 }
 
-function normalizeFarmBoardMessage(rawMessage: string): string {
+function normalizeFarmBoardMessage(rawMessage: unknown): string {
+  if (typeof rawMessage !== 'string') {
+    throwBadFarmBoardMessage('Farm board message is required.');
+  }
+
   const message = rawMessage.trim().replace(/\s+/g, ' ');
 
   if (message.length <= 0) {

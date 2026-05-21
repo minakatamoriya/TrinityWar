@@ -33,10 +33,6 @@ export class BuildingUpgradeRuleService {
       throw new Error('FIELD_SLOT_AUTO_UNLOCK');
     }
 
-    if (buildingId === 'population') {
-      throw new Error('POPULATION_UPGRADE_REMOVED');
-    }
-
     const currentLevel = getBuildingLevel(buildings, buildingId);
     const costGold = getBuildingUpgradeCost(buildingId, currentLevel);
 

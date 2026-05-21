@@ -745,7 +745,6 @@ const initialPlayerState: InMemoryPlayerState = {
     castle: 4,
     vault: 3,
     'field-slot': 1,
-    population: 1,
     watchtower: 1,
   },
   castleExtensionLevels: {
@@ -1930,10 +1929,6 @@ export function upgradeBuilding(input: ClientUpgradeBuildingRequest): ClientStat
 
   if (input.buildingId === 'field-slot') {
     return buildMutationResponse('田地位不需要额外花钱购买，会在主城达到指定等级后自动开启。');
-  }
-
-  if (input.buildingId === 'population') {
-    return buildMutationResponse('灵宠上限升级已移除，灵宠现在通过等级成长。');
   }
 
   const cost = getUpgradeCost(input.buildingId);

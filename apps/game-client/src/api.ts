@@ -1,5 +1,7 @@
 import {
   CLIENT_API_PREFIX,
+  type ClientClaimNotificationResponse,
+  type ClientDeleteNotificationResponse,
   type ClientBuySpiritSoulRequest,
   type ClientBootstrapResponse,
   type ClientArmyTrainingQueue,
@@ -17,6 +19,8 @@ import {
   type ClientCollectFieldResponse,
   type ClientDailyTaskSummary,
   type ClientFarmField,
+  type ClientMarkNotificationReadResponse,
+  type ClientNotificationListResponse,
   type ClientRaidTargetDetailResponse,
   type ClientRecoverSpiritRequest,
   type ClientRecruitArmyRequest,
@@ -24,6 +28,7 @@ import {
   type ClientSceneContentResponse,
   type ClientStartCultivationRequest,
   type ClientStateMutationResponse,
+  type ClientUnreadNotificationCountResponse,
   type ClientSetMainSpiritRequest,
   type ClientSpiritMutationResponse,
   type ClientSpiritState,
@@ -413,7 +418,8 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json().catch(() => null) as { message?: string } | null;
+    throw new Error(payload?.message?.trim() || `HTTP ${response.status}`);
   }
 
   return (await response.json()) as T;
@@ -499,6 +505,79 @@ export async function loadClientViewModel(): Promise<ClientViewModel> {
 export async function loadSpiritState(): Promise<ClientSpiritState> {
   const response = await fetchJson<ClientSpiritStateResponse>(`${CLIENT_API_PREFIX}/spirit`);
   return cloneSpiritState(response.spirit);
+}
+
+export async function loadNotifications(page = 1, pageSize = 10): Promise<ClientNotificationListResponse> {
+  try {
+    return await fetchJson<ClientNotificationListResponse>(`${CLIENT_API_PREFIX}/notifications?page=${page}&pageSize=${pageSize}`);
+  } catch (error) {
+    if (forceMockReads || allowMockReadFallback) {
+      return {
+        items: [],
+        pagination: { page, pageSize, total: 0 },
+        unreadCount: 0,
+      };
+    }
+
+    throw error;
+  }
+}
+
+export async function loadUnreadNotificationCount(): Promise<ClientUnreadNotificationCountResponse> {
+  try {
+    return await fetchJson<ClientUnreadNotificationCountResponse>(`${CLIENT_API_PREFIX}/notifications/unread-count`);
+  } catch (error) {
+    if (forceMockReads || allowMockReadFallback) {
+      return { unreadCount: 0 };
+    }
+
+    throw error;
+  }
+}
+
+export async function markNotificationAsRead(notificationId: string): Promise<ClientMarkNotificationReadResponse> {
+  if (forceMockReads) {
+    return {
+      id: notificationId,
+      read: true,
+      readAt: new Date().toISOString(),
+      unreadCount: 0,
+    };
+  }
+
+  return fetchJson<ClientMarkNotificationReadResponse>(`${CLIENT_API_PREFIX}/notifications/${notificationId}/read`, {
+    method: 'POST',
+  });
+}
+
+export async function claimNotification(notificationId: string): Promise<ClientClaimNotificationResponse> {
+  if (forceMockReads) {
+    return {
+      id: notificationId,
+      claimStatus: 'claimed',
+      claimedAt: new Date().toISOString(),
+      unreadCount: 0,
+      summary: '模拟模式下已领取附件。',
+    };
+  }
+
+  return fetchJson<ClientClaimNotificationResponse>(`${CLIENT_API_PREFIX}/notifications/${notificationId}/claim`, {
+    method: 'POST',
+  });
+}
+
+export async function deleteNotification(notificationId: string): Promise<ClientDeleteNotificationResponse> {
+  if (forceMockReads) {
+    return {
+      id: notificationId,
+      deleted: true,
+      unreadCount: 0,
+    };
+  }
+
+  return fetchJson<ClientDeleteNotificationResponse>(`${CLIENT_API_PREFIX}/notifications/${notificationId}`, {
+    method: 'DELETE',
+  });
 }
 
 function buildSourceStatus<T>(envelope: DataEnvelope<T>): ClientReadSourceStatus {

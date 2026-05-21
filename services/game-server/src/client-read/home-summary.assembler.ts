@@ -3,14 +3,6 @@ import { APP_NAME, type ClientDailyTaskStatus, type ClientSceneKey, type HomeSum
 import { getDailyTaskDefinition, getFactionDividendPerHour, getTaxIncomePerHour } from '../lib/game-balance.js';
 import type { HomeSummaryReadModel } from './client-read.repository.js';
 
-const DAILY_TASK_LABELS: Record<string, string> = {
-  'daily-harvest-once': '收一次田地',
-  'daily-start-cultivation': '开始一次培育',
-  'daily-upgrade-building': '升级一次建筑',
-  'daily-recruit-army': '征召一次战力',
-  'daily-donate-faction': '上缴一次阵营资源',
-};
-
 @Injectable()
 export class HomeSummaryAssembler {
   assemble(readModel: HomeSummaryReadModel, now: Date = new Date()): HomeSummaryResponse {

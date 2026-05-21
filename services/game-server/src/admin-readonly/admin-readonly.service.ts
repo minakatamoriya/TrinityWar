@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import type {
+  AdminDeletePlayerResponse,
   AdminListResponse,
   AdminOverviewResponse,
   AdminPlayerOverviewResponse,
@@ -9,6 +11,7 @@ import type {
 } from '@trinitywar/shared';
 import { APP_NAME, DOCS_ROUTE } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
+import { GAME_DESIGN_CONFIG } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 interface PagingQuery {
@@ -35,6 +38,9 @@ export class AdminReadonlyService {
         'field-logs',
         'player-orders',
         'raid-order-detail',
+        'seed-config',
+        'spirit-config',
+        'castle-level-config',
       ],
     };
   }
@@ -64,24 +70,129 @@ export class AdminReadonlyService {
     };
   }
 
-  async searchPlayers(query: Record<string, string | undefined>): Promise<AdminPlayerSearchResponse> {
-    const keyword = query.keyword?.trim();
-    if (!keyword) {
-      throw new BusinessError({
-        code: ErrorCode.BadRequest,
-        message: 'keyword is required.',
-        statusCode: 400,
-      });
+  async listSeedDefinitions(query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const [items, total] = await Promise.all([
+      this.prisma.db.seedDefinition.findMany({
+        orderBy: [{ rarity: 'asc' }, { seedId: 'asc' }],
+        skip,
+        take,
+      }),
+      this.prisma.db.seedDefinition.count(),
+    ]);
+
+    return { items: items.map(normalizeDates), pagination: { page, pageSize, total } };
+  }
+
+  async createSeedDefinition(body: unknown): Promise<Record<string, unknown>> {
+    const payload = parseSeedDefinitionPayload(body, true);
+    try {
+      const created = await this.prisma.db.seedDefinition.create({ data: payload as unknown as Prisma.SeedDefinitionUncheckedCreateInput });
+      return normalizeDates(created);
+    } catch (caught) {
+      throwConfigMutationError(caught, 'Seed definition already exists or is referenced.');
+    }
+  }
+
+  async updateSeedDefinition(seedId: string, body: unknown): Promise<Record<string, unknown>> {
+    const payload = parseSeedDefinitionPayload(body, false);
+    if (Object.keys(payload).length <= 0) {
+      throwBadRequest('At least one seed field is required.');
     }
 
+    try {
+      const updated = await this.prisma.db.seedDefinition.update({
+        where: { seedId },
+        data: payload as Prisma.SeedDefinitionUncheckedUpdateInput,
+      });
+      return normalizeDates(updated);
+    } catch (caught) {
+      throwConfigMutationError(caught, 'Seed definition not found or update conflicts.');
+    }
+  }
+
+  async deleteSeedDefinition(seedId: string): Promise<Record<string, unknown>> {
+    try {
+      const deleted = await this.prisma.db.seedDefinition.delete({ where: { seedId } });
+      return { seedId: deleted.seedId, label: deleted.label, deleted: true };
+    } catch (caught) {
+      throwConfigMutationError(caught, 'Seed definition is referenced by player data or does not exist.');
+    }
+  }
+
+  async listSpiritDefinitions(query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
     const { page, pageSize, skip, take } = parsePagination(query);
-    const where = {
-      OR: [
-        { id: { contains: keyword } },
-        { nickname: { contains: keyword, mode: 'insensitive' as const } },
-        { authIdentities: { some: { providerUserId: { contains: keyword, mode: 'insensitive' as const } } } },
-      ],
+    const [items, total] = await Promise.all([
+      this.prisma.db.spiritDefinition.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { spiritId: 'asc' }],
+        skip,
+        take,
+      }),
+      this.prisma.db.spiritDefinition.count(),
+    ]);
+
+    return { items: items.map(normalizeDates), pagination: { page, pageSize, total } };
+  }
+
+  async createSpiritDefinition(body: unknown): Promise<Record<string, unknown>> {
+    const payload = parseSpiritDefinitionPayload(body, true);
+    try {
+      const created = await this.prisma.db.spiritDefinition.create({ data: payload as unknown as Prisma.SpiritDefinitionUncheckedCreateInput });
+      return normalizeDates(created);
+    } catch (caught) {
+      throwConfigMutationError(caught, 'Spirit definition already exists or is referenced.');
+    }
+  }
+
+  async updateSpiritDefinition(spiritId: string, body: unknown): Promise<Record<string, unknown>> {
+    const payload = parseSpiritDefinitionPayload(body, false);
+    if (Object.keys(payload).length <= 0) {
+      throwBadRequest('At least one spirit field is required.');
+    }
+
+    try {
+      const updated = await this.prisma.db.spiritDefinition.update({
+        where: { spiritId },
+        data: payload as Prisma.SpiritDefinitionUncheckedUpdateInput,
+      });
+      return normalizeDates(updated);
+    } catch (caught) {
+      throwConfigMutationError(caught, 'Spirit definition not found or update conflicts.');
+    }
+  }
+
+  async deleteSpiritDefinition(spiritId: string): Promise<Record<string, unknown>> {
+    try {
+      const deleted = await this.prisma.db.spiritDefinition.delete({ where: { spiritId } });
+      return { spiritId: deleted.spiritId, label: deleted.label, deleted: true };
+    } catch (caught) {
+      throwConfigMutationError(caught, 'Spirit definition is referenced by player data or does not exist.');
+    }
+  }
+
+  async listCastleLevels(): Promise<AdminListResponse<Record<string, unknown>>> {
+    const items = GAME_DESIGN_CONFIG.castleLevels.map((levelConfig: Record<string, unknown>) => ({
+      ...levelConfig,
+      unlocks: Array.isArray(levelConfig['unlocks']) ? levelConfig['unlocks'].join('；') : '',
+    }));
+    return {
+      items,
+      pagination: { page: 1, pageSize: items.length, total: items.length },
     };
+  }
+
+  async searchPlayers(query: Record<string, string | undefined>): Promise<AdminPlayerSearchResponse> {
+    const keyword = query.keyword?.trim();
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const where = keyword
+      ? {
+          OR: [
+            { id: { contains: keyword } },
+            { nickname: { contains: keyword, mode: 'insensitive' as const } },
+            { authIdentities: { some: { providerUserId: { contains: keyword, mode: 'insensitive' as const } } } },
+          ],
+        }
+      : {};
     const [items, total] = await Promise.all([
       this.prisma.db.player.findMany({
         where,
@@ -113,6 +224,36 @@ export class AdminReadonlyService {
     };
   }
 
+  async deletePlayer(playerId: string): Promise<AdminDeletePlayerResponse> {
+    const normalizedPlayerId = playerId.trim();
+    if (!normalizedPlayerId) {
+      throw new BusinessError({
+        code: ErrorCode.BadRequest,
+        message: 'playerId is required.',
+        statusCode: 400,
+      });
+    }
+
+    const existing = await this.prisma.db.player.findUnique({
+      where: { id: normalizedPlayerId },
+      select: { id: true, nickname: true },
+    });
+    if (!existing) {
+      throw new BusinessError({
+        code: ErrorCode.NotFound,
+        message: 'Player not found.',
+        statusCode: 404,
+      });
+    }
+
+    await this.prisma.db.player.delete({ where: { id: normalizedPlayerId } });
+    return {
+      playerId: existing.id,
+      nickname: existing.nickname,
+      deleted: true,
+    };
+  }
+
   async getPlayerOverview(playerId: string): Promise<AdminPlayerOverviewResponse> {
     const player = await this.prisma.db.player.findUnique({
       where: { id: playerId },
@@ -136,6 +277,16 @@ export class AdminReadonlyService {
         wallet: true,
         buildings: true,
         army: true,
+        spiritResource: true,
+        spiritSlots: {
+          orderBy: { slotIndex: 'asc' },
+          include: { spiritDefinition: true },
+        },
+        spiritCodex: {
+          orderBy: { updatedAt: 'desc' },
+          take: 20,
+          include: { spiritDefinition: true },
+        },
         fieldSlots: { orderBy: { slotIndex: 'asc' }, include: { seedDefinition: true } },
         seedInventory: { include: { seedDefinition: true }, orderBy: { updatedAt: 'desc' } },
         taskStates: { orderBy: { updatedAt: 'desc' }, take: 20 },
@@ -170,6 +321,32 @@ export class AdminReadonlyService {
       wallet: player.wallet ? normalizeDates(player.wallet) : null,
       building: player.buildings ? normalizeDates(player.buildings) : null,
       army: player.army ? normalizeDates(player.army) : null,
+      spirit: {
+        resource: player.spiritResource ? normalizeDates(player.spiritResource) : null,
+        mainSlot: (() => {
+          const mainSlot = player.spiritSlots.find((slot) => slot.isMain);
+          return mainSlot ? normalizeSpiritSlot(mainSlot) : null;
+        })(),
+        slots: player.spiritSlots.map(normalizeSpiritSlot),
+        codex: player.spiritCodex.map((entry) => normalizeDates({
+          spiritId: entry.spiritDefinition.spiritId,
+          label: entry.spiritDefinition.label,
+          rarity: entry.spiritDefinition.rarity,
+          factionAffinity: entry.spiritDefinition.factionAffinity,
+          role: entry.spiritDefinition.role,
+          shardName: entry.spiritDefinition.shardName,
+          shardCount: entry.shardCount,
+          shardUnlockRequired: entry.spiritDefinition.shardUnlockRequired,
+          hasSeen: entry.hasSeen,
+          readyToCompose: entry.readyToCompose,
+          ownedCurrent: entry.ownedCurrent,
+          ownedEver: entry.ownedEver,
+          firstSeenAt: entry.firstSeenAt,
+          readyAt: entry.readyAt,
+          lastOwnedAt: entry.lastOwnedAt,
+          codexVersion: entry.codexVersion,
+        })),
+      },
       fields: player.fieldSlots.map((field) => normalizeDates({
         id: field.id,
         slotIndex: field.slotIndex,
@@ -366,6 +543,183 @@ function parsePagination(query: PagingQuery): { page: number; pageSize: number; 
   };
 }
 
+function parseSeedDefinitionPayload(body: unknown, requireAll: boolean): Record<string, string | number | null> {
+  const record = requireRecord(body);
+  const payload: Record<string, string | number | null> = {};
+
+  copyStringField(payload, record, 'seedId', requireAll);
+  copyStringField(payload, record, 'label', requireAll);
+  copyEnumField(payload, record, 'rarity', ['common', 'rare', 'legendary'], requireAll);
+  copyIntegerField(payload, record, 'seedSeconds', requireAll, 1);
+  copyIntegerField(payload, record, 'growSeconds', requireAll, 1);
+  copyIntegerField(payload, record, 'matureSeconds', requireAll, 1);
+  copyIntegerField(payload, record, 'ripeWindowSeconds', requireAll, 0);
+  copyIntegerField(payload, record, 'baseYieldGold', requireAll, 0);
+  copyIntegerField(payload, record, 'harvestSeedReturn', requireAll, 0);
+  copyNullableStringField(payload, record, 'strategyNote', requireAll);
+  copyNullableStringField(payload, record, 'lore', requireAll);
+
+  return payload;
+}
+
+function parseSpiritDefinitionPayload(body: unknown, requireAll: boolean): Record<string, string | number | null> {
+  const record = requireRecord(body);
+  const payload: Record<string, string | number | null> = {};
+
+  copyStringField(payload, record, 'spiritId', requireAll);
+  copyStringField(payload, record, 'label', requireAll);
+  copyEnumField(payload, record, 'rarity', ['COMMON', 'RARE', 'LEGENDARY'], requireAll, true);
+  copyEnumField(payload, record, 'factionAffinity', ['human', 'immortal', 'demon'], requireAll);
+  copyEnumField(payload, record, 'role', ['ATTACK', 'DEFENSE', 'BALANCED', 'HEALTH'], requireAll, true);
+  copyStringField(payload, record, 'shardName', requireAll);
+  copyIntegerField(payload, record, 'shardUnlockRequired', requireAll, 1);
+  copyIntegerField(payload, record, 'baseAttack', requireAll, 0);
+  copyIntegerField(payload, record, 'baseDefense', requireAll, 0);
+  copyIntegerField(payload, record, 'baseHp', requireAll, 1);
+  copyIntegerField(payload, record, 'growthAttack', requireAll, 0);
+  copyIntegerField(payload, record, 'growthDefense', requireAll, 0);
+  copyIntegerField(payload, record, 'growthHp', requireAll, 0);
+  copyIntegerField(payload, record, 'sortOrder', requireAll, 0);
+  copyNullableStringField(payload, record, 'lore', requireAll);
+
+  return payload;
+}
+
+function requireRecord(body: unknown): Record<string, unknown> {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throwBadRequest('Request body must be a JSON object.');
+  }
+  return body as Record<string, unknown>;
+}
+
+function copyStringField(
+  payload: Record<string, string | number | null>,
+  record: Record<string, unknown>,
+  field: string,
+  required: boolean,
+): void {
+  const value = record[field];
+  if (value === undefined) {
+    if (required) {
+      throwBadRequest(`${field} is required.`);
+    }
+    return;
+  }
+  if (typeof value !== 'string' || value.trim().length <= 0) {
+    throwBadRequest(`${field} must be a non-empty string.`);
+  }
+  payload[field] = value.trim();
+}
+
+function copyNullableStringField(
+  payload: Record<string, string | number | null>,
+  record: Record<string, unknown>,
+  field: string,
+  required: boolean,
+): void {
+  const value = record[field];
+  if (value === undefined) {
+    if (required) {
+      payload[field] = null;
+    }
+    return;
+  }
+  if (value === null) {
+    payload[field] = null;
+    return;
+  }
+  if (typeof value !== 'string') {
+    throwBadRequest(`${field} must be a string or null.`);
+  }
+  payload[field] = value.trim() || null;
+}
+
+function copyIntegerField(
+  payload: Record<string, string | number | null>,
+  record: Record<string, unknown>,
+  field: string,
+  required: boolean,
+  minValue: number,
+): void {
+  const value = record[field];
+  if (value === undefined) {
+    if (required) {
+      throwBadRequest(`${field} is required.`);
+    }
+    return;
+  }
+  const normalized = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  if (!Number.isInteger(normalized) || Number(normalized) < minValue) {
+    throwBadRequest(`${field} must be an integer >= ${minValue}.`);
+  }
+  payload[field] = Number(normalized);
+}
+
+function copyEnumField(
+  payload: Record<string, string | number | null>,
+  record: Record<string, unknown>,
+  field: string,
+  allowedValues: string[],
+  required: boolean,
+  uppercase = false,
+): void {
+  const value = record[field];
+  if (value === undefined) {
+    if (required) {
+      throwBadRequest(`${field} is required.`);
+    }
+    return;
+  }
+  if (typeof value !== 'string') {
+    throwBadRequest(`${field} must be a string.`);
+  }
+  const normalized = uppercase ? value.trim().toUpperCase() : value.trim();
+  if (!allowedValues.includes(normalized)) {
+    throwBadRequest(`${field} must be one of: ${allowedValues.join(', ')}.`);
+  }
+  payload[field] = normalized;
+}
+
+function throwConfigMutationError(caught: unknown, fallbackMessage: string): never {
+  const code = getPrismaErrorCode(caught);
+  if (code === 'P2025') {
+    throw new BusinessError({
+      code: ErrorCode.NotFound,
+      message: fallbackMessage,
+      statusCode: 404,
+    });
+  }
+  if (code === 'P2002' || code === 'P2003') {
+    throw new BusinessError({
+      code: ErrorCode.Conflict,
+      message: fallbackMessage,
+      statusCode: 409,
+    });
+  }
+  throw new BusinessError({
+    code: ErrorCode.Conflict,
+    message: fallbackMessage,
+    statusCode: 409,
+    details: caught instanceof Error ? caught.message : String(caught),
+  });
+}
+
+function getPrismaErrorCode(caught: unknown): string | null {
+  if (!caught || typeof caught !== 'object' || !('code' in caught)) {
+    return null;
+  }
+  const code = (caught as { code?: unknown }).code;
+  return typeof code === 'string' ? code : null;
+}
+
+function throwBadRequest(message: string): never {
+  throw new BusinessError({
+    code: ErrorCode.BadRequest,
+    message,
+    statusCode: 400,
+  });
+}
+
 function buildDateRange(query: PagingQuery): { createdAt?: { gte?: Date; lte?: Date } } {
   const createdAt: { gte?: Date; lte?: Date } = {};
   if (query.from) {
@@ -381,6 +735,73 @@ function normalizeDates<T extends Record<string, unknown>>(record: T): Record<st
   return Object.fromEntries(
     Object.entries(record).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value]),
   );
+}
+
+function normalizeSpiritSlot(slot: {
+  id: string;
+  playerId: string;
+  slotIndex: number;
+  spiritDefinitionId: string | null;
+  isMain: boolean;
+  level: number;
+  exp: number;
+  element: unknown;
+  currentHp: number;
+  maxHp: number;
+  status: unknown;
+  acquiredAt: Date | null;
+  dissolvedAt: Date | null;
+  slotVersion: number;
+  createdAt: Date;
+  updatedAt: Date;
+  spiritDefinition: {
+    spiritId: string;
+    label: string;
+    rarity: unknown;
+    factionAffinity: string;
+    role: unknown;
+    shardName: string;
+    shardUnlockRequired: number;
+    baseAttack: number;
+    baseDefense: number;
+    baseHp: number;
+    growthAttack: number;
+    growthDefense: number;
+    growthHp: number;
+    lore: string | null;
+  } | null;
+}): Record<string, unknown> {
+  return normalizeDates({
+    id: slot.id,
+    playerId: slot.playerId,
+    slotIndex: slot.slotIndex,
+    isMain: slot.isMain,
+    spiritId: slot.spiritDefinition?.spiritId ?? null,
+    label: slot.spiritDefinition?.label ?? null,
+    rarity: slot.spiritDefinition?.rarity ?? null,
+    factionAffinity: slot.spiritDefinition?.factionAffinity ?? null,
+    role: slot.spiritDefinition?.role ?? null,
+    element: slot.element,
+    level: slot.level,
+    exp: slot.exp,
+    currentHp: slot.currentHp,
+    maxHp: slot.maxHp,
+    status: slot.status,
+    baseAttack: slot.spiritDefinition?.baseAttack ?? null,
+    baseDefense: slot.spiritDefinition?.baseDefense ?? null,
+    baseHp: slot.spiritDefinition?.baseHp ?? null,
+    growthAttack: slot.spiritDefinition?.growthAttack ?? null,
+    growthDefense: slot.spiritDefinition?.growthDefense ?? null,
+    growthHp: slot.spiritDefinition?.growthHp ?? null,
+    shardName: slot.spiritDefinition?.shardName ?? null,
+    shardUnlockRequired: slot.spiritDefinition?.shardUnlockRequired ?? null,
+    lore: slot.spiritDefinition?.lore ?? null,
+    acquiredAt: slot.acquiredAt,
+    dissolvedAt: slot.dissolvedAt,
+    slotVersion: slot.slotVersion,
+    createdAt: slot.createdAt,
+    updatedAt: slot.updatedAt,
+  });
 }
 
 function toIso(value: Date | null): string | null {
