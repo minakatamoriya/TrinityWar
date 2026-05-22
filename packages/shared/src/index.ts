@@ -196,6 +196,8 @@ export interface ClientSeedBackpack {
   unlockedSeedIds: string[];
   starterSeedClaimed: boolean;
   tianjiTalismanClaimed: boolean;
+  spiritSoulClaimed: boolean;
+  dailySpiritSoulAmount: number;
 }
 
 export interface ClientSeasonStatus {

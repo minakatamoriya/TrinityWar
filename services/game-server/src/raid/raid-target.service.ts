@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   APP_NAME,
+  type ClientRaidRewardItem,
   type ClientRaidActionResponse,
   type ClientRaidDeepIntelResponse,
   type ClientRaidMessageTemplate,
@@ -13,6 +14,7 @@ import { ClientReadService } from '../client-read/client-read.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RaidSettlementQueueService } from './raid-settlement-queue.service.js';
+import { RaidSettlementService } from './raid-settlement.service.js';
 import { RaidRepository } from './raid.repository.js';
 
 const RAID_INTEL_FREE_LIMIT = 3;
@@ -25,6 +27,7 @@ export class RaidTargetService {
     @Inject(RaidRepository) private readonly raidRepository: RaidRepository,
     @Inject(ClientReadService) private readonly clientReadService: ClientReadService,
     @Inject(RaidSettlementQueueService) private readonly raidSettlementQueueService: RaidSettlementQueueService,
+    @Inject(RaidSettlementService) private readonly raidSettlementService: RaidSettlementService,
   ) {}
 
   async getRaidTargetDetail(playerId: string, targetId: string): Promise<ClientRaidTargetDetailResponse> {
@@ -178,6 +181,14 @@ export class RaidTargetService {
       });
     }
 
+    if (target.targetPlayer.protectedUntil && target.targetPlayer.protectedUntil.getTime() > Date.now()) {
+      throw new BusinessError({
+        code: ErrorCode.RaidNotAllowed,
+        message: 'Target is under raid protection.',
+        statusCode: 409,
+      });
+    }
+
     const response = await this.prisma.transaction(async (client) => {
       const currentArmy = await client.playerArmy.findUnique({
         where: { playerId: input.playerId },
@@ -270,13 +281,9 @@ export class RaidTargetService {
       }
 
       const nextDispatchedCount = Math.max(1, Math.min(currentArmy.availableCount, 10));
-      const settleAt = new Date(Date.now() + 2 * 60 * 1000);
+      const settleAt = new Date();
       const frozenUnitSnapshot = { dispatchedCount: nextDispatchedCount };
-      const lockedGold = Math.max(
-        primaryField?.currentClaimableGold
-          ?? Number((target.targetSnapshotJson as { raidableGold?: number }).raidableGold ?? 0),
-        0,
-      );
+      const lockedGold = resolveLockedGold(target, primaryField);
       const raidOrder = await this.raidRepository.createRaidOrder({
         attacker: { connect: { id: input.playerId } },
         defender: { connect: { id: target.targetPlayerId } },
@@ -345,6 +352,39 @@ export class RaidTargetService {
       });
     } catch {
       // The durable order remains queryable by settleAt/status; TW-BE-017 worker can scan and backfill.
+    }
+
+    if (response.result.orderId) {
+      try {
+        const settlement = await this.raidSettlementService.settleRaidOrder(response.result.orderId);
+        const [home, scenes, order] = await Promise.all([
+          this.clientReadService.getHomeSummary(input.playerId),
+          this.clientReadService.getSceneContent(input.playerId),
+          this.prisma.db.raidOrder.findUnique({
+            where: { id: response.result.orderId },
+            select: {
+              defender: {
+                select: {
+                  nickname: true,
+                  protectedUntil: true,
+                },
+              },
+            },
+          }),
+        ]);
+
+        return buildSettledRaidActionResponse(response.result.orderId, settlement, order?.defender.nickname ?? response.result.targetName, order?.defender.protectedUntil ?? null, home, scenes);
+      } catch (error) {
+        if (error instanceof BusinessError) {
+          throw error;
+        }
+
+        throw new BusinessError({
+          code: ErrorCode.Conflict,
+          message: 'Raid settlement failed. Please try again after refreshing raid targets.',
+          statusCode: 409,
+        });
+      }
     }
 
     return response;
@@ -579,6 +619,64 @@ function buildRaidActionResponse(
       reportSummary: '已进入异步结算队列。',
     },
   };
+}
+
+function buildSettledRaidActionResponse(
+  orderId: string,
+  settlement: {
+    lootGold: number;
+    depositedGold: number;
+    overflowGold: number;
+    temporaryClaimExpiresAt: Date | null;
+    rewardItemsJson: unknown;
+    attackerLoss: number;
+    defenderLoss: number;
+    reportSummary: string;
+  },
+  targetName: string,
+  protectedUntil: Date | null,
+  home: Awaited<ReturnType<ClientReadService['getHomeSummary']>>,
+  scenes: Awaited<ReturnType<ClientReadService['getSceneContent']>>,
+): ClientRaidActionResponse {
+  const rewards = normalizeRaidRewards(settlement.rewardItemsJson);
+
+  return {
+    app: APP_NAME,
+    summary: settlement.reportSummary,
+    home,
+    scenes,
+    result: {
+      orderId,
+      settlementStatus: 'settled',
+      settleAt: new Date().toISOString(),
+      targetId: '',
+      targetName,
+      goldLoot: settlement.lootGold,
+      depositedGold: settlement.depositedGold,
+      overflowGold: settlement.overflowGold,
+      temporaryClaimExpiresAt: settlement.temporaryClaimExpiresAt?.toISOString() ?? null,
+      casualties: 0,
+      rewards,
+      protectedUntil: protectedUntil?.toISOString() ?? new Date().toISOString(),
+      reportSummary: settlement.reportSummary,
+    },
+  };
+}
+
+function normalizeRaidRewards(value: unknown): ClientRaidRewardItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => item as { type?: string; seedId?: string; spiritId?: string; label?: string; quantity?: number })
+    .filter((item) => typeof item.label === 'string' && typeof item.quantity === 'number')
+    .map((item) => ({
+      seedId: item.seedId ?? item.spiritId ?? item.type ?? 'raid-reward',
+      label: item.label ?? '奖励',
+      quantity: Math.max(Math.floor(item.quantity ?? 0), 0),
+    }))
+    .filter((item) => item.quantity > 0);
 }
 
 function mapFieldStatusBadge(status: string): string {
@@ -850,4 +948,15 @@ function pickPrimaryRaidField(target: NonNullable<Awaited<ReturnType<RaidReposit
   });
 
   return candidateFields[0] ?? null;
+}
+
+function resolveLockedGold(
+  target: NonNullable<Awaited<ReturnType<RaidRepository['findVisibleTargetPoolEntry']>>>,
+  primaryField: ReturnType<typeof pickPrimaryRaidField>,
+): number {
+  const snapshotGold = Number((target.targetSnapshotJson as { raidableGold?: number }).raidableGold ?? 0);
+  const fieldGold = primaryField?.currentClaimableGold ?? 0;
+  const totalFieldGold = target.targetPlayer.fieldSlots.reduce((sum, field) => sum + Math.max(field.currentClaimableGold, 0), 0);
+
+  return Math.max(Math.floor(fieldGold || snapshotGold || totalFieldGold), 0);
 }

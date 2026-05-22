@@ -2,6 +2,7 @@ import { ADMIN_API_PREFIX } from '@trinitywar/shared';
 
 export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 export const DEBUG_KEY = import.meta.env.VITE_ADMIN_DEBUG_KEY ?? '';
+export const WRITE_DEBUG_KEY = import.meta.env.VITE_ADMIN_WRITE_DEBUG_KEY ?? '';
 
 export function jsonRequest(method: string, body: Record<string, unknown>): RequestInit {
   return {
@@ -16,6 +17,7 @@ export async function adminFetch<T>(path: string, init?: RequestInit): Promise<T
     ...init,
     headers: {
       ...(DEBUG_KEY ? { 'x-admin-debug-key': DEBUG_KEY } : {}),
+      ...(WRITE_DEBUG_KEY ? { 'x-admin-write-debug-key': WRITE_DEBUG_KEY } : {}),
       ...init?.headers,
     },
   });

@@ -6,12 +6,13 @@ import { ClientReadRepository } from './client-read.repository.js';
 import { ClientReadService } from './client-read.service.js';
 import { FieldLifecycleService } from './field-lifecycle.service.js';
 import { HomeSummaryAssembler } from './home-summary.assembler.js';
+import { PassiveIncomeLifecycleService } from './passive-income-lifecycle.service.js';
 import { SceneContentAssembler } from './scene-content.assembler.js';
 
 @Module({
   imports: [AuthModule],
   controllers: [ClientReadController],
-  providers: [ClientReadService, ClientReadRepository, HomeSummaryAssembler, SceneContentAssembler, FieldLifecycleService, ArmyTrainingLifecycleService],
-  exports: [ClientReadService, FieldLifecycleService, ArmyTrainingLifecycleService],
+  providers: [ClientReadService, ClientReadRepository, HomeSummaryAssembler, SceneContentAssembler, FieldLifecycleService, ArmyTrainingLifecycleService, PassiveIncomeLifecycleService],
+  exports: [ClientReadService, FieldLifecycleService, ArmyTrainingLifecycleService, PassiveIncomeLifecycleService],
 })
 export class ClientReadModule {}

@@ -17,7 +17,7 @@ import type {
   ClientSpiritState,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { buySpiritSoul, claimDailyTaskReward, claimNotification, claimPendingEarnings, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadNotifications, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, upgradeClientBuilding, upgradeSpirit } from './api';
+import { buySpiritSoul, claimDailyTaskReward, claimNotification, claimPendingEarnings, claimSpiritSoulItem, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadNotifications, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, upgradeClientBuilding, upgradeSpirit } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
@@ -73,7 +73,7 @@ interface SeedCodexState {
 interface SeedRewardModalState {
   title: string;
   summary: string;
-  confirmAction?: 'claim-starter-seeds' | 'claim-tianji-talisman';
+  confirmAction?: 'claim-starter-seeds' | 'claim-tianji-talisman' | 'claim-spirit-soul';
   items: Array<{
     seedId?: string;
     itemId?: string;
@@ -375,6 +375,8 @@ function App(): JSX.Element {
   const [unlockedSeedIds, setUnlockedSeedIds] = useState<string[]>(defaultUnlockedSeedIds);
   const [starterSeedClaimed, setStarterSeedClaimed] = useState(false);
   const [tianjiTalismanClaimed, setTianjiTalismanClaimed] = useState(false);
+  const [spiritSoulClaimed, setSpiritSoulClaimed] = useState(false);
+  const [dailySpiritSoulAmount, setDailySpiritSoulAmount] = useState(1);
   const [seedRewardModal, setSeedRewardModal] = useState<SeedRewardModalState | null>(null);
   const [seedSelectionState, setSeedSelectionState] = useState<SeedSelectionState | null>(null);
   const [seedCodexState, setSeedCodexState] = useState<SeedCodexState | null>(null);
@@ -413,6 +415,8 @@ function App(): JSX.Element {
     setUnlockedSeedIds(backpack.unlockedSeedIds.length > 0 ? backpack.unlockedSeedIds : defaultUnlockedSeedIds);
     setStarterSeedClaimed(backpack.starterSeedClaimed);
     setTianjiTalismanClaimed(backpack.tianjiTalismanClaimed);
+    setSpiritSoulClaimed(backpack.spiritSoulClaimed);
+    setDailySpiritSoulAmount(Math.max(backpack.dailySpiritSoulAmount, 1));
     if (!backpack.unlockedSeedIds.includes(selectedSeedId)) {
       setSelectedSeedId(backpack.unlockedSeedIds[0] ?? 'qinglingmai');
     }
@@ -576,6 +580,23 @@ function App(): JSX.Element {
     setLoginSession(null);
     setViewModel(null);
     setSpiritState(null);
+    setActiveScene('home');
+    setRaidHubTab('targets');
+    setFactionTab('overview');
+    setSelectedRaidTargetId('');
+    setRaidTargetModal(null);
+    setRaidTargetDetail(null);
+    setRaidTargetDetailError(null);
+    setSeedRewardModal(null);
+    setSeedSelectionState(null);
+    setSeedCodexState(null);
+    setCollectOverflowState(null);
+    setPendingClaimOverflowState(null);
+    setTaskRewardOverflowState(null);
+    setFarmCollectPresentation(null);
+    setGlobalFeatureModal(null);
+    setPendingActionKey(null);
+    setClaimingSource(null);
     resetNotificationState();
     setLoginError(null);
     welcomeDialogSessionIdRef.current = null;
@@ -1175,6 +1196,37 @@ function App(): JSX.Element {
     }
   };
 
+  const handleConfirmSpiritSoulClaim = async (): Promise<void> => {
+    if (!seedRewardModal || seedRewardModal.confirmAction !== 'claim-spirit-soul') {
+      return;
+    }
+
+    if (pendingActionKey === 'home:claim-spirit-soul') {
+      return;
+    }
+
+    setPendingActionKey('home:claim-spirit-soul');
+
+    try {
+      const result = await claimSpiritSoulItem();
+      applyMutationResult(result);
+      setSpiritState((current) => (current ? {
+        ...current,
+        spiritSoul: current.spiritSoul + dailySpiritSoulAmount,
+      } : current));
+      setGlobalItemInventory((current) => ({
+        ...current,
+        spiritSoul: (current.spiritSoul ?? 0) + dailySpiritSoulAmount,
+      }));
+      setSpiritSoulClaimed(true);
+      setSeedRewardModal(null);
+    } catch {
+      showToast('当前无法领取今日兽魂，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
   const handleClaimDailyTask = async (taskId: string, acceptOverflowLoss = false): Promise<void> => {
     const actionKey = `home:daily-task:${taskId}`;
     if (pendingActionKey === actionKey) {
@@ -1501,6 +1553,7 @@ function App(): JSX.Element {
 
         try {
           const response = await raidClientTarget(input);
+          const nextSpiritState = await loadSpiritState();
           setViewModel((current) => {
             if (!current) {
               return current;
@@ -1512,6 +1565,7 @@ function App(): JSX.Element {
               scenes: response.scenes,
             };
           });
+          setSpiritState(nextSpiritState);
           setSelectedRaidTargetId(response.scenes.raid.targets[0]?.id ?? '');
 
           setSeedRewardModal({
@@ -1532,6 +1586,15 @@ function App(): JSX.Element {
               })),
             ],
           });
+
+          setSeedRewardModal((current) => current ? {
+            ...current,
+            title: '掠夺所得',
+            summary: response.result.overflowGold > 0
+              ? `本次掠夺 ${formatNumber(response.result.goldLoot)} 金币，其中 ${formatNumber(response.result.depositedGold)} 已入库，另有 ${formatNumber(response.result.overflowGold)} 转入待领取。${response.result.reportSummary}`
+              : `获得 ${formatNumber(response.result.goldLoot)} 金币。${response.result.reportSummary}`,
+            items: current.items.map((item) => item.seedId === 'raid-gold' ? { ...item, label: '金币' } : item),
+          } : current);
 
           if (response.result.rewards.length > 0) {
             setSeedInventory((current) => {
@@ -1613,6 +1676,19 @@ function App(): JSX.Element {
       summary: `当前库存 ${currentTianjiTalismanCount}，确认后会把 天机符 x1 收进全局物品。`,
       confirmAction: 'claim-tianji-talisman',
       items: [{ itemId: 'tianjiTalisman', label: '天机符', quantity: 1 }],
+    });
+  };
+
+  const handleClaimSpiritSoul = (): void => {
+    if (spiritSoulClaimed) {
+      return;
+    }
+
+    setSeedRewardModal({
+      title: '领取每日兽魂',
+      summary: `当前主城等级 ${dailySpiritSoulAmount}，确认后会把 兽魂 x${dailySpiritSoulAmount} 收进全局物品。`,
+      confirmAction: 'claim-spirit-soul',
+      items: [{ itemId: 'spiritSoul', label: '兽魂', quantity: dailySpiritSoulAmount }],
     });
   };
 
@@ -1882,9 +1958,11 @@ function App(): JSX.Element {
               <HomeScene
                 claimingStarterSeeds={pendingActionKey === 'home:claim-starter-seeds'}
                 claimingTianjiTalisman={pendingActionKey === 'home:claim-tianji-talisman'}
+                claimingSpiritSoul={pendingActionKey === 'home:claim-spirit-soul'}
                 claimingTaskId={pendingActionKey?.startsWith('home:daily-task:') ? pendingActionKey.replace('home:daily-task:', '') : null}
                 claimingTax={claimingSource === 'tax'}
                 dailyTasks={dailyTasks}
+                dailySpiritSoulAmount={dailySpiritSoulAmount}
                 hourlyTax={hourlyTax}
                 onClaimTax={() => {
                   const taxPendingAmount = taxPending ? Number(taxPending.value.replace(/,/g, '')) : 0;
@@ -1907,7 +1985,9 @@ function App(): JSX.Element {
                 }}
                 onClaimStarterSeeds={handleClaimStarterSeeds}
                 onClaimTianjiTalisman={handleClaimTianjiTalisman}
+                onClaimSpiritSoul={handleClaimSpiritSoul}
                 onNavigate={navigateToScene}
+                spiritSoulClaimed={spiritSoulClaimed}
                 starterSeedClaimed={starterSeedClaimed}
                 tianjiTalismanClaimed={tianjiTalismanClaimed}
                 taxPending={taxPending}
@@ -2209,7 +2289,7 @@ function App(): JSX.Element {
                   })}
                 </div>
                 <div className="transfer-foot-row seed-reward-actions">
-                  <button className="secondary-button" disabled={pendingActionKey === 'home:claim-starter-seeds' || pendingActionKey === 'home:claim-tianji-talisman'} onClick={() => {
+                  <button className="secondary-button" disabled={pendingActionKey === 'home:claim-starter-seeds' || pendingActionKey === 'home:claim-tianji-talisman' || pendingActionKey === 'home:claim-spirit-soul'} onClick={() => {
                     if (seedRewardModal.confirmAction === 'claim-starter-seeds') {
                       void handleConfirmStarterSeedClaim();
                       return;
@@ -2220,8 +2300,13 @@ function App(): JSX.Element {
                       return;
                     }
 
+                    if (seedRewardModal.confirmAction === 'claim-spirit-soul') {
+                      void handleConfirmSpiritSoulClaim();
+                      return;
+                    }
+
                     setSeedRewardModal(null);
-                  }} type="button">{pendingActionKey === 'home:claim-starter-seeds' || pendingActionKey === 'home:claim-tianji-talisman' ? '收取中...' : '确认'}</button>
+                  }} type="button">{pendingActionKey === 'home:claim-starter-seeds' || pendingActionKey === 'home:claim-tianji-talisman' || pendingActionKey === 'home:claim-spirit-soul' ? '收取中...' : '确认'}</button>
                 </div>
               </div>
             </div>

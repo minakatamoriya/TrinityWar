@@ -1,0 +1,351 @@
+# TrinityWar 开发进度与遗留清理清单 v0.1
+
+日期：2026-05-22
+
+本文用于承接当前项目扫描结果，把前端、后端、管理后台、运行时依赖、文档验收和后续计划统一列成可逐步执行的清单。
+
+## 一、状态标记
+
+- `[ ]` 未开始。
+- `[~]` 处理中或已有实现但未验收。
+- `[x]` 已完成并验收。
+- `[-]` 暂停或阻塞。
+
+## 二、当前基线
+
+1. [x] 本地数据库已恢复到 `backups/trinitywar-2026-05-21-225528.backup` 口径。
+2. [x] 恢复前安全快照已生成：`backups/pre-restore-20260522-164837.backup`。
+3. [x] 全量构建通过：`npm run build`。
+4. [~] 源码工作区当前无未提交源码改动，但存在未跟踪备份文件。
+5. [~] 当前正式后端入口为 Nest：`services/game-server/src/main.ts`。
+6. [~] 项目内仍残留旧 Fastify 与 in-memory 演示链路。
+
+## 三、P0 优先清理项
+
+### [x] TW-CLEAN-001 修复管理后台中文乱码
+
+范围：
+
+1. `apps/game-admin/src/domain/navigation.ts`
+2. 重点检查后台导航、说明文案、按钮文案是否仍有乱码。
+
+验收：
+
+1. 后台导航显示正常中文。
+2. `npm run build --workspace @trinitywar/game-admin` 通过。
+
+### [x] TW-CLEAN-002 清理或隔离旧 Fastify 入口
+
+范围：
+
+1. `services/game-server/src/index.ts`
+2. `services/game-server/src/routes/*`
+3. `services/game-server/src/lib/client-state.ts`
+
+处理原则：
+
+1. 当前正式入口是 Nest `src/main.ts`，旧入口不得继续被误认为主服务。
+2. 若仍需保留演示模式，应移入明确的 legacy/dev-only 目录，并写明不参与正式运行。
+3. 若确认无用，应删除并同步移除相关依赖。
+
+验收：
+
+1. `npm run build --workspace @trinitywar/game-server` 通过。
+2. `rg "in-memory|client-state|Fastify" services/game-server/src` 不再命中正式主链路。
+3. 文档明确正式启动命令只走 Nest。
+
+### [x] TW-CLEAN-003 清理临时产物与仓库策略
+
+范围：
+
+1. `.tmp-devserver-*.log`
+2. `logs/*.log`
+3. `services/game-server/dist-houduan.zip`
+4. 各 workspace `dist`
+5. `backups/*.backup`
+
+处理原则：
+
+1. 先确认哪些需要留作本地备份。
+2. 不删除有效数据库备份，除非明确有替代备份。
+3. 补齐 `.gitignore` 或文档说明，避免临时日志反复进入扫描结果。
+
+验收：
+
+1. `git status --short` 只剩预期文件。
+2. 临时日志和旧 zip 不再干扰项目扫描。
+
+## 四、P1 后端与运行时稳定
+
+### [x] TW-BE-STABLE-001 重新验证 Prisma 与数据库工具链
+
+范围：
+
+1. `npm run prisma:validate --workspace @trinitywar/game-server`
+2. `npx prisma validate --schema services/game-server/prisma/schema.prisma`
+3. `_prisma_migrations` 当前状态核对。
+
+验收：
+
+1. Prisma validate 命令返回清晰成功结果。
+2. 如 npm script 仍失败，修复脚本或记录真实原因。
+
+### [ ] TW-BE-STABLE-002 固化 Redis 与 raid worker 本地运行流程
+
+范围：
+
+1. `REDIS_URL=redis://localhost:6379`
+2. `npm run worker:raid-settlement --workspace @trinitywar/game-server`
+3. `npm run worker:raid-settlement:sweep --workspace @trinitywar/game-server`
+4. raid 下单、入队、结算、补扫流程。
+
+验收：
+
+1. Redis 启动时，raid 下单能正常入队并被 worker 结算。
+2. Redis 不可用时，失败行为可解释，sweep 能补偿到期订单。
+3. 管理后台能查询 raid order detail。
+
+### [ ] TW-BE-STABLE-003 系统通知端到端回归
+
+范围：
+
+1. 后台发送全服通知。
+2. 后台发送单玩家通知。
+3. 玩家消息列表、未读数、标记已读、领取附件、删除已读。
+4. 金币、种子、天机符、兽魂附件落库。
+
+验收：
+
+1. 至少覆盖一个全服文本通知。
+2. 至少覆盖一个单玩家带附件通知。
+3. 附件领取后资源变化与日志可在数据库或后台看到。
+
+## 五、P1 管理后台边界重整
+
+### [ ] TW-ADMIN-001 重新定义 Admin 模块命名与权限边界
+
+背景：
+
+当前模块仍叫 `AdminReadonlyModule` / `admin-readonly`，但已经包含写操作：
+
+1. 新增、编辑、删除种子定义。
+2. 新增、编辑、删除灵宠定义。
+3. 删除玩家。
+4. 发送系统通知。
+
+处理方向：
+
+1. 将只读模块重命名为更准确的 `AdminModule`，或拆分为 readonly/config/notification/danger。
+2. 保留现有接口兼容性时，要明确迁移路线。
+
+验收：
+
+1. 命名不再误导。
+2. 代码和文档都承认后台已包含写操作。
+
+### [ ] TW-ADMIN-002 拆分后台权限级别
+
+建议权限：
+
+1. 只读排查权限。
+2. 配置写权限。
+3. 通知发送权限。
+4. 玩家危险操作权限。
+
+验收：
+
+1. 删除玩家、删除配置、发送通知不能只依赖普通只读权限。
+2. `ADMIN_DEBUG_KEY` 的开发用途被写清楚。
+3. production 环境没有无 key 放行。
+
+进度：
+
+1. [x] 后台非 GET 写操作已支持独立 `ADMIN_WRITE_DEBUG_KEY` / `x-admin-write-debug-key`。
+2. [x] 管理后台已支持 `VITE_ADMIN_WRITE_DEBUG_KEY` 请求头注入。
+3. [x] production 环境没有 `ADMIN_DEBUG_KEY` 时不再放行。
+4. [ ] 仍待拆成正式角色/权限体系，而不是 debug key 分层。
+
+### [ ] TW-ADMIN-003 后台危险操作增加审计与确认
+
+范围：
+
+1. 删除玩家。
+2. 删除种子定义。
+3. 删除灵宠定义。
+4. 后台发送带资源附件通知。
+
+验收：
+
+1. 前端有明确二次确认。
+2. 后端写入审计或至少有可查询操作记录。
+3. 错误提示能区分权限不足、引用冲突、数据不存在。
+
+## 六、P1 前端与 Mock 退场
+
+### [ ] TW-FE-MOCK-001 拆分真实 API client 与 mock adapter
+
+范围：
+
+1. `apps/game-client/src/api.ts`
+2. `apps/game-client/src/mockData.ts`
+
+处理方向：
+
+1. 真实 API client 保持默认主链路。
+2. mock 逻辑迁移到 dev-only adapter。
+3. `VITE_FORCE_MOCK_READS`、`VITE_ALLOW_MOCK_READ_FALLBACK`、`VITE_FORCE_MOCK_COMMANDS` 只影响显式演示模式。
+
+验收：
+
+1. 默认运行不依赖 mock mutation。
+2. production build 不携带大量未使用 mock 写逻辑，或至少不进入主 bundle 主路径。
+3. 离线演示模式仍可显式启用。
+
+### [ ] TW-FE-MOCK-002 移除旧 army 默认路径残留
+
+范围：
+
+1. 灵宠页默认读取真实 `ClientSpiritState`。
+2. 旧 `recruit-army` 仅作为历史兼容或完全退场。
+3. UI 文案不再把灵宠养成称为造兵/兵力，除非是旧 raid 派遣概念。
+
+验收：
+
+1. 登录后灵宠页展示来自真实后端。
+2. 购买兽魂、升级、设主位、恢复、解散、合成都走真实接口。
+3. 前端静态灵宠状态不与真实结果竞争。
+
+### [ ] TW-FE-MOCK-003 主循环手动验收
+
+范围：
+
+1. 登录测试用户 1 和测试用户 2。
+2. 首页 bootstrap/home-summary。
+3. 建筑升级。
+4. 农场播种与收取。
+5. 灵宠购买、升级、恢复。
+6. 掠夺目标详情、深度窥视、发起掠夺、查看战报。
+7. 系统通知入口。
+
+验收：
+
+1. 所有操作失败时直接暴露真实错误，不静默假成功。
+2. 关键写操作有幂等键或明确说明为什么不需要。
+3. 页面刷新后状态仍能从数据库恢复。
+
+## 七、P1 文档与验收封板
+
+### [ ] TW-DOC-001 修复或替换乱码开发日志
+
+范围：
+
+1. `docs/任务开发日志.md`
+2. 其他出现乱码的中文文档或源码文件。
+
+验收：
+
+1. 最新开发记录可读。
+2. 如果历史内容无法自动恢复，至少新增一段清晰的当前状态摘要。
+
+### [ ] TW-DOC-002 复核排期表 `[~]` 状态
+
+范围：
+
+1. `docs/dev/TrinityWar AI 后端连续执行排期表 v0.2.md`
+2. TW-BE-009 到 TW-BE-025。
+3. TW-BE-SPIRIT 系列。
+4. TW-BE-SOCIAL-001。
+5. TW-BE-021 收尾稳定与验收封板。
+
+验收：
+
+1. 已人工验收的任务改为 `[x]`。
+2. 未验收任务保留 `[~]` 并写清缺口。
+3. 阻塞任务标记 `[-]` 并写清前置条件。
+
+### [ ] TW-DOC-003 更新后台文档
+
+范围：
+
+1. 首批 Admin API 契约清单。
+2. 管理后台只读视图与排障面板规划。
+3. 新增配置写、通知发送、玩家删除的权限说明。
+
+验收：
+
+1. 文档不再声称后台只有只读操作。
+2. 危险写操作有边界、权限、审计说明。
+
+## 八、P2 功能补齐
+
+### [ ] TW-FEATURE-001 灵宠真实链路完整验收
+
+范围：
+
+1. `GET /api/client/spirit`
+2. `buy-soul`
+3. `upgrade`
+4. `set-main`
+5. `recover`
+6. `dissolve`
+7. `compose`
+
+验收：
+
+1. 每条命令前后端联调通过。
+2. 资源消耗、血量、图鉴、槽位状态持久化。
+3. 后台玩家详情能看到变化。
+
+### [ ] TW-FEATURE-002 掠夺、留言板、战报附言完整验收
+
+范围：
+
+1. 玩家编辑菜田留言。
+2. 掠夺目标详情展示留言。
+3. 掠夺后选择预设短句和表情。
+4. 战报展示附言快照。
+5. 长度、敏感词、链接、异常符号限制。
+
+验收：
+
+1. 两个测试用户互相可见留言。
+2. 战报保留当次附言快照，不被后续编辑覆盖。
+3. 非法内容被拒绝并返回明确错误。
+
+### [ ] TW-FEATURE-003 后台配置管理回归
+
+范围：
+
+1. 种子定义 CRUD。
+2. 灵宠定义 CRUD。
+3. 主城等级只读配置。
+
+验收：
+
+1. 新增配置后前端或后端读模型能按预期消费。
+2. 被玩家数据引用的定义不能被误删。
+3. 枚举和数值校验覆盖明显错误输入。
+
+## 九、推荐执行顺序
+
+1. TW-CLEAN-001：先修后台乱码。
+2. TW-CLEAN-002：清理或隔离旧 Fastify/in-memory 代码。
+3. TW-BE-STABLE-001：确认 Prisma 工具链。
+4. TW-BE-STABLE-002：固化 Redis 和 raid worker 验收。
+5. TW-BE-STABLE-003：系统通知端到端回归。
+6. TW-ADMIN-001 到 TW-ADMIN-003：重整后台命名、权限和审计。
+7. TW-FE-MOCK-001 到 TW-FE-MOCK-003：前端 mock 退场和主循环验收。
+8. TW-DOC-001 到 TW-DOC-003：修复文档、排期状态和后台契约。
+9. TW-FEATURE-001 到 TW-FEATURE-003：灵宠、掠夺社交、配置管理补齐。
+
+## 十、完成记录
+
+后续每完成一项，在这里追加记录：
+
+- 2026-05-22：创建本文档，作为恢复数据库后的开发进度和遗留清理基线。
+- 2026-05-22：完成 TW-CLEAN-001，修复 `apps/game-admin/src/domain/navigation.ts` 后台导航中文乱码。
+- 2026-05-22：完成 TW-CLEAN-002，删除旧 Fastify 入口、旧 routes/plugins 与 in-memory `client-state.ts`，并移除后端 Fastify 运行时依赖声明；已通过后端 typecheck、后端 build 和全量 `npm run build`。
+- 2026-05-22：完成 TW-CLEAN-003，删除已跟踪的临时 dev server 日志、`logs/*.log` 与旧 `dist-houduan.zip`，并补充 `.gitignore` 忽略后续日志和 `pre-restore` 快照；正式数据库备份保留。
+- 2026-05-22：完成 TW-BE-STABLE-001，修复 `prisma:validate` 在 Windows/npm workspace 下静默失败的问题，改为直接调用 Prisma CLI JS 入口；`npm run prisma:validate --workspace @trinitywar/game-server`、带 `DATABASE_URL` 的根目录 `npx prisma validate`、后端 typecheck/build 均已通过，数据库 migration 最新为 `011_system_notifications`。
+- 2026-05-22：推进 TW-ADMIN-002 的基础加固，后台写操作新增独立 `ADMIN_WRITE_DEBUG_KEY` / `VITE_ADMIN_WRITE_DEBUG_KEY`，并补充前后端 `.env.example`；正式角色化权限仍待后续实现。
+- 2026-05-22：完成每日任务旧设定修正与每日兽魂领取链路：旧“培育 10 只灵宠”运行配置改为“升级 1 次灵宠”，灵宠升级会推进每日任务；新增 `claim-spirit-soul` 命令、`daily_spirit_soul_claim_date_key` 持久化字段、bootstrap 领取状态与主城等级对应的每日兽魂数量，前端首页已展示并可领取“每日兽魂”。已通过 shared build、game-server typecheck/build、game-client build、game-admin build。

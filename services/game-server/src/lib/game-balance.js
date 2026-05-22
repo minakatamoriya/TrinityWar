@@ -298,10 +298,10 @@ export const DAILY_TASK_CONFIG = {
       rewards: [{ type: 'gold', amount: 22 }],
     },
     {
-      id: 'daily-recruit-army',
-      title: '培育 10 只灵宠',
+      id: 'daily-upgrade-spirit',
+      title: '升级 1 次灵宠',
       category: '经营',
-      objective: { type: 'recruit-army', count: 10 },
+      objective: { type: 'upgrade-spirit', count: 1 },
       rewards: [{ type: 'gold', amount: 20 }],
     },
     {
@@ -531,6 +531,14 @@ export function getDailyTaskDefinition(taskId) {
   ];
 
   return allTasks.find((task) => task.id === taskId) ?? null;
+}
+
+export function getActiveDailyTaskIds() {
+  return new Set([
+    ...DAILY_TASK_CONFIG.fixedTasks,
+    ...DAILY_TASK_CONFIG.randomTasks,
+    ...DAILY_TASK_CONFIG.catchupTasks,
+  ].map((task) => task.id));
 }
 
 export function getSeedLevelConfig(seedId) {

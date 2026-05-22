@@ -7,6 +7,7 @@ import { ClientReadService } from '../client-read/client-read.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
+import { DAILY_TASK_CONFIG } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 const SPIRIT_SOUL_GOLD_PRICE = 100;
@@ -266,6 +267,7 @@ export class SpiritService {
           slotVersion: { increment: 1 },
         },
       });
+      await this.recordDailyTaskProgress(client, playerId, 'upgrade-spirit');
 
       const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition.label} 已升至 Lv.${nextLevel}。`);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
@@ -837,6 +839,54 @@ export class SpiritService {
       businessEntityType,
       businessEntityId,
     });
+  }
+
+  private async recordDailyTaskProgress(
+    client: Prisma.TransactionClient,
+    playerId: string,
+    objectiveType: string,
+    amount = 1,
+  ): Promise<void> {
+    if (amount <= 0) {
+      return;
+    }
+
+    const taskIds = [
+      ...DAILY_TASK_CONFIG.fixedTasks,
+      ...DAILY_TASK_CONFIG.randomTasks,
+      ...DAILY_TASK_CONFIG.catchupTasks,
+    ]
+      .filter((task) => task.objective.type === objectiveType)
+      .map((task) => task.id);
+
+    if (taskIds.length <= 0) {
+      return;
+    }
+
+    const taskStates = await client.playerDailyTaskState.findMany({
+      where: {
+        playerId,
+        dateKey: getLocalDateKey(),
+        taskId: { in: taskIds },
+        status: 'IN_PROGRESS',
+      },
+      select: {
+        id: true,
+        progress: true,
+        target: true,
+      },
+    });
+
+    for (const taskState of taskStates) {
+      const nextProgress = Math.min(taskState.progress + amount, taskState.target);
+      await client.playerDailyTaskState.update({
+        where: { id: taskState.id },
+        data: {
+          progress: nextProgress,
+          status: nextProgress >= taskState.target ? 'COMPLETED' : 'IN_PROGRESS',
+        },
+      });
+    }
   }
 }
 

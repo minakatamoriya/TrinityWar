@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
 import { APP_NAME, type ClientFarmField, type ClientRaidSpiritPreview, type ClientSceneContentResponse } from '@trinitywar/shared';
 import type { FieldStatus } from '@prisma/client';
 import {
@@ -27,6 +27,8 @@ const FIELD_STATUS_COPY: Record<FieldStatus, { title: string; badge: string; ton
 @Injectable()
 export class SceneContentAssembler {
   assemble(readModel: SceneContentReadModel, now: Date = new Date()): ClientSceneContentResponse {
+    const visibleRaidTargets = this.buildRaidTargets(readModel, now);
+
     return {
       app: APP_NAME,
       building: {
@@ -48,9 +50,9 @@ export class SceneContentAssembler {
       },
       raid: {
         hero: this.buildRaidHero(readModel),
-        targets: this.buildRaidTargets(readModel),
+        targets: visibleRaidTargets,
         detail: {
-          advice: readModel.raidTargetPools.length > 0
+          advice: visibleRaidTargets.length > 0
             ? '目标来自 raid_target_pool，发起掠夺会先创建订单并等待异步结算。'
             : '当前没有可用目标池记录，执行 seed 后会生成开发联调目标。',
           actions: [{ label: '刷新目标', target: 'raid', tone: 'secondary' }],
@@ -70,7 +72,7 @@ export class SceneContentAssembler {
 
   private buildRaidHero(readModel: SceneContentReadModel): ClientSceneContentResponse['raid']['hero'] {
     const availableCount = readModel.army?.availableCount ?? 0;
-    const targetCount = readModel.raidTargetPools.length;
+    const targetCount = this.buildRaidTargets(readModel).length;
 
     return {
       eyebrow: '可掠夺目标',
@@ -80,8 +82,8 @@ export class SceneContentAssembler {
     };
   }
 
-  private buildRaidTargets(readModel: SceneContentReadModel): ClientSceneContentResponse['raid']['targets'] {
-    return readModel.raidTargetPools.map((targetPool) => {
+  private buildRaidTargets(readModel: SceneContentReadModel, now: Date = new Date()): ClientSceneContentResponse['raid']['targets'] {
+    return readModel.raidTargetPools.filter((targetPool) => !targetPool.targetPlayer.protectedUntil || targetPool.targetPlayer.protectedUntil <= now).map((targetPool) => {
       const snapshot = targetPool.targetSnapshotJson as {
         name?: string;
         faction?: string;
@@ -296,6 +298,9 @@ export class SceneContentAssembler {
     const currentFaction = readModel.player.faction;
     const contribution = readModel.player.factionMembers[0]?.contributionScore ?? 0;
     const dividend = getFactionDividendPerHour(contribution);
+    const donateGoldStep = GAME_BALANCE.faction.donateGoldStep;
+    const contributionPerDonateStep = GAME_BALANCE.faction.contributionPerDonateStep;
+    const dividendBonusPerStep = GAME_BALANCE.faction.dividendBonusPerStepPerHour;
 
     return {
       hero: {
@@ -304,14 +309,14 @@ export class SceneContentAssembler {
         description: currentFaction
           ? `阵营金库 ${formatNumber(currentFaction.treasuryGold)}，阵营总贡献 ${formatNumber(currentFaction.contributionScore)}。`
           : '当前账号没有阵营关系，后续命令阶段再接入转换阵营。',
-        advantage: currentFaction ? `当前每小时预计分红 ${formatNumber(dividend.total)} 金币` : '暂无阵营加成',
-        breakdown: `基础 ${formatNumber(dividend.base)} + 贡献加成 ${formatNumber(dividend.bonus)}`,
+        advantage: currentFaction ? `当前每小时阵营分红 ${formatNumber(dividend.total)} 金币` : '暂无阵营加成',
+        breakdown: `每小时 ${formatNumber(dividend.total)} = 基础 ${formatNumber(dividend.base)} + 贡献加成 ${formatNumber(dividend.bonus)} 金币`,
         action: { label: '查看阵营', target: 'faction', tone: currentFaction ? 'secondary' : 'ghost' },
       },
       contribution: {
         title: '个人阵营贡献',
         value: formatNumber(contribution),
-        description: `每 ${formatNumber(dividend.contributionStep)} 点贡献提高一档分红，当前第 ${formatNumber(dividend.contributionTier)} 档。`,
+        description: `每 ${formatNumber(dividend.contributionStep)} 贡献提高 1 档分红，每档 +${formatNumber(dividendBonusPerStep)} 金币/小时；当前第 ${formatNumber(dividend.contributionTier)} 档。`,
       },
       comparison: readModel.factions.map((faction) => ({
         faction: faction.name,
@@ -322,9 +327,9 @@ export class SceneContentAssembler {
       })),
       donate: {
         title: '阵营上缴',
-        description: '命令写链路尚未接入，本阶段仅展示真实阵营与贡献读模型。',
-        goldStep: GAME_BALANCE.faction.donateGoldStep,
-        contributionRule: `每上缴 ${formatNumber(GAME_BALANCE.faction.donateGoldStep)} 金币预计获得 ${formatNumber(GAME_BALANCE.faction.contributionPerDonateStep)} 贡献。`,
+        description: `上缴金币可增加个人贡献，贡献会提高每小时阵营分红。当前规则：每 ${formatNumber(donateGoldStep)} 金币 = ${formatNumber(contributionPerDonateStep)} 贡献。`,
+        goldStep: donateGoldStep,
+        contributionRule: `每上缴 ${formatNumber(donateGoldStep)} 金币获得 ${formatNumber(contributionPerDonateStep)} 贡献；每 ${formatNumber(dividend.contributionStep)} 贡献让分红 +${formatNumber(dividendBonusPerStep)} 金币/小时。`,
       },
       rankings: readModel.factions.map((faction, index) => ({
         label: `${index + 1}. ${faction.name}`,

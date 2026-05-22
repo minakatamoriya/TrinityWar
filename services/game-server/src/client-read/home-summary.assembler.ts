@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { APP_NAME, type ClientDailyTaskStatus, type ClientSceneKey, type HomeSummaryResponse } from '@trinitywar/shared';
-import { getDailyTaskDefinition, getFactionDividendPerHour, getTaxIncomePerHour } from '../lib/game-balance.js';
+import { getActiveDailyTaskIds, getDailyTaskDefinition, getFactionDividendPerHour, getTaxIncomePerHour } from '../lib/game-balance.js';
 import type { HomeSummaryReadModel } from './client-read.repository.js';
 
 @Injectable()
@@ -16,6 +16,7 @@ export class HomeSummaryAssembler {
     const factionContribution = readModel.player.factionMembers[0]?.contributionScore ?? 0;
     const factionDividend = getFactionDividendPerHour(factionContribution);
     const activeTrainingQueue = readModel.trainingQueues.find((queue) => queue.finishAt.getTime() > now.getTime());
+    const activeDailyTaskIds = getActiveDailyTaskIds();
 
     return {
       app: APP_NAME,
@@ -30,7 +31,9 @@ export class HomeSummaryAssembler {
       staminaStatus: this.buildStaminaStatus(armyCount, armyCapacity, activeTrainingQueue?.finishAt ?? null, now),
       fieldStatus: this.buildFieldStatus(readModel),
       reportStatus: '暂无新战报',
-      protectedUntil: null,
+      protectedUntil: readModel.player.protectedUntil && readModel.player.protectedUntil.getTime() > now.getTime()
+        ? readModel.player.protectedUntil.toISOString()
+        : null,
       resources: [
         {
           label: '金币',
@@ -66,7 +69,7 @@ export class HomeSummaryAssembler {
           description: '掠夺时金库已满，超出的金币会临时保留在这里，过期后消失。',
         }
         : null,
-      dailyTasks: readModel.taskStates.map((taskState) => ({
+      dailyTasks: readModel.taskStates.filter((taskState) => activeDailyTaskIds.has(taskState.taskId)).map((taskState) => ({
         id: taskState.taskId,
         title: getDailyTaskDefinition(taskState.taskId)?.title ?? taskState.taskId,
         description: `每日任务，完成后可领取 ${formatNumber(taskState.rewardGold)} 金币。`,

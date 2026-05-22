@@ -29,6 +29,7 @@ export class RaidRepository {
           select: {
             id: true,
             nickname: true,
+            protectedUntil: true,
             castleLevelCache: true,
             faction: { select: { name: true } },
             farmBoard: { select: { message: true, hiddenAt: true } },
@@ -123,6 +124,7 @@ export class RaidRepository {
         targetPlayer: {
           select: {
             nickname: true,
+            protectedUntil: true,
             castleLevelCache: true,
             faction: { select: { name: true } },
             army: { select: { totalCount: true, availableCount: true } },

@@ -26,12 +26,12 @@ const mockDailyTasks: ClientDailyTaskSummary[] = [
     actionScene: 'farm',
   },
   {
-    id: 'daily-recruit-army',
-    title: '培育 10 只灵宠',
+    id: 'daily-upgrade-spirit',
+    title: '升级 1 次灵宠',
     description: '经营任务，完成后可领取 20 金币。',
     progressCurrent: 0,
-    progressTarget: 10,
-    progressText: '0/10',
+    progressTarget: 1,
+    progressText: '0/1',
     rewardGold: 20,
     status: 'in-progress',
     actionScene: 'raid',
@@ -91,11 +91,14 @@ export const mockBootstrap: ClientBootstrapResponse = {
       zhaoyouming: 0,
     },
     globalItemInventory: {
+      spiritSoul: 0,
       tianjiTalisman: 0,
     },
     unlockedSeedIds: ['qinglingmai'],
     starterSeedClaimed: false,
     tianjiTalismanClaimed: false,
+    spiritSoulClaimed: false,
+    dailySpiritSoulAmount: 4,
   },
 };
 

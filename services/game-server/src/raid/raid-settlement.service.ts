@@ -82,6 +82,7 @@ export class RaidSettlementService {
       const unitsReturned = raidOrder.dispatchedUnitCount;
 
       await this.applyDefenderLootConsumption(client, raidOrder, settlementResult.lootGold, now);
+      const defenderProtectedUntil = new Date(now.getTime() + 60 * 60 * 1000);
 
       const settlement = await this.raidRepository.createRaidSettlement({
         raidOrder: { connect: { id: raidOrder.id } },
@@ -97,6 +98,11 @@ export class RaidSettlementService {
       }, client);
 
       await this.applySpiritSettlement(client, raidOrder, settlementResult);
+
+      await client.player.update({
+        where: { id: raidOrder.defenderPlayerId },
+        data: { protectedUntil: defenderProtectedUntil },
+      });
 
       await client.playerArmy.update({
         where: { playerId: raidOrder.attackerPlayerId },
@@ -148,7 +154,7 @@ export class RaidSettlementService {
           reportType: 'ATTACK',
           result: settlementResult.result,
           title: `${settlementResult.title} · ${settlementResult.subtitle}`,
-          summary: settlementResult.reportSummary,
+          summary: buildAttackReportSummary(settlementResult),
           revengeAvailable: false,
         },
         {
@@ -164,6 +170,16 @@ export class RaidSettlementService {
           revengeAvailable: true,
         },
       ], client);
+      await client.battleReport.updateMany({
+        where: {
+          raidOrderId: raidOrder.id,
+          ownerPlayerId: raidOrder.defenderPlayerId,
+          reportType: 'DEFENSE',
+        },
+        data: {
+          summary: buildDefenseReportSummary(raidOrder.attacker.nickname, settlementResult),
+        },
+      });
 
       await client.raidOrder.update({
         where: { id: raidOrder.id },
@@ -488,6 +504,19 @@ function isSpiritBattleSnapshot(value: unknown): value is SpiritBattleSnapshot {
 
 function isSpiritElement(value: string | null): value is SpiritBattleSnapshot['element'] {
   return value === 'METAL' || value === 'WOOD' || value === 'WATER' || value === 'FIRE' || value === 'EARTH';
+}
+
+function buildAttackReportSummary(
+  settlementResult: ReturnType<RaidSettlementRuleService['calculate']>,
+): string {
+  return `${settlementResult.title} · ${settlementResult.subtitle}，带回 ${settlementResult.lootGold} 金币、${settlementResult.spiritSoulReward} 颗兽魂。己方灵宠受到 ${settlementResult.attackerHpLossPercent}% 伤害，对方灵宠受到 ${settlementResult.defenderHpLossPercent}% 伤害。`;
+}
+
+function buildDefenseReportSummary(
+  attackerName: string,
+  settlementResult: ReturnType<RaidSettlementRuleService['calculate']>,
+): string {
+  return `${attackerName} 对你发起掠夺：${invertSettlementTitle(settlementResult.title)} · ${settlementResult.subtitle}，损失 ${settlementResult.lootGold} 金币。己方灵宠受到 ${settlementResult.defenderHpLossPercent}% 伤害，对方灵宠受到 ${settlementResult.attackerHpLossPercent}% 伤害。`;
 }
 
 function invertSettlementTitle(title: string): string {

@@ -123,7 +123,7 @@ export class RaidSettlementRuleService {
       defenderSpiritSlotId: input.defenderSpirit?.slotId ?? null,
       attackerNextHp,
       defenderNextHp,
-      reportSummary: `${config.title} · ${config.subtitle}，带回 ${lootGold} 金币、${config.soulReward} 颗兽魂，主战灵宠扣血 ${config.attackerHpLossPercent}%。`,
+      reportSummary: `${config.title} · ${config.subtitle}，带回 ${lootGold} 金币、${config.soulReward} 颗兽魂。己方灵宠受到 ${config.attackerHpLossPercent}% 伤害，对方灵宠受到 ${config.defenderHpLossPercent}% 伤害。`,
     };
   }
 }

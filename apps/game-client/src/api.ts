@@ -114,6 +114,8 @@ function normalizeBootstrap(bootstrap: ClientBootstrapResponse): ClientBootstrap
       unlockedSeedIds: [...bootstrap.backpack.unlockedSeedIds],
       starterSeedClaimed: bootstrap.backpack.starterSeedClaimed,
       tianjiTalismanClaimed: bootstrap.backpack.tianjiTalismanClaimed,
+      spiritSoulClaimed: bootstrap.backpack.spiritSoulClaimed,
+      dailySpiritSoulAmount: bootstrap.backpack.dailySpiritSoulAmount,
     },
   };
 }
@@ -1114,6 +1116,18 @@ function applyMockClaimTianjiTalisman(): ClientStateMutationResponse {
   return buildMockMutation('今天天机符已领取，获得 天机符 x1。');
 }
 
+function applyMockClaimSpiritSoul(): ClientStateMutationResponse {
+  if (mockBootstrapSnapshot.backpack.spiritSoulClaimed) {
+    return buildMockMutation('今天兽魂已经领取过了。');
+  }
+
+  const amount = Math.max(mockBootstrapSnapshot.backpack.dailySpiritSoulAmount ?? mockHomeSnapshot.castleLevel ?? 1, 1);
+  mockBootstrapSnapshot.backpack.spiritSoulClaimed = true;
+  mockBootstrapSnapshot.backpack.globalItemInventory.spiritSoul = (mockBootstrapSnapshot.backpack.globalItemInventory.spiritSoul ?? 0) + amount;
+
+  return buildMockMutation(`今日兽魂已领取，获得 兽魂 x${amount}。`);
+}
+
 function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutationResponse {
   syncMockArmyTrainingQueue();
 
@@ -1162,7 +1176,7 @@ function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutat
     totalSeconds: nextTotalSeconds,
     remainingSeconds: nextTotalSeconds,
   };
-  updateMockDailyTask('daily-recruit-army', actualRecruitCount);
+  updateMockDailyTask('daily-upgrade-spirit', actualRecruitCount > 0 ? 1 : 0);
 
   return buildMockMutation(
     actualRecruitCount < requestedCount
@@ -1431,6 +1445,20 @@ export async function claimTianjiTalismanItem(): Promise<ClientStateMutationResp
   }
 
   return fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/claim-tianji-talisman`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: '{}',
+  });
+}
+
+export async function claimSpiritSoulItem(): Promise<ClientStateMutationResponse> {
+  if (forceMockCommands) {
+    return applyMockClaimSpiritSoul();
+  }
+
+  return fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/claim-spirit-soul`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

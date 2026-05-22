@@ -74,6 +74,10 @@ interface ClaimTianjiTalismanCommandInput {
   playerId: string;
 }
 
+interface ClaimSpiritSoulCommandInput {
+  playerId: string;
+}
+
 interface ClaimStarterSeedsCommandInput {
   playerId: string;
 }
@@ -1153,6 +1157,60 @@ export class ClientCommandService {
     });
   }
 
+  async claimDailySpiritSoul(input: ClaimSpiritSoulCommandInput): Promise<ClientStateMutationResponse> {
+    return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
+      const dateKey = getLocalDateKey();
+      const player = await client.player.findUnique({
+        where: { id: input.playerId },
+        select: { id: true, castleLevelCache: true },
+      });
+
+      if (!player) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Player not found.',
+          statusCode: 404,
+        });
+      }
+
+      const resource = await client.playerSpiritResource.findUnique({
+        where: { playerId: input.playerId },
+        select: { dailySpiritSoulClaimDateKey: true },
+      });
+
+      if (resource?.dailySpiritSoulClaimDateKey === dateKey) {
+        throw new BusinessError({
+          code: ErrorCode.Conflict,
+          message: 'Daily spirit soul has already been claimed.',
+          statusCode: 409,
+        });
+      }
+
+      const spiritSoulAmount = Math.max(Math.floor(player.castleLevelCache), 1);
+      await client.playerSpiritResource.upsert({
+        where: { playerId: input.playerId },
+        create: {
+          playerId: input.playerId,
+          spiritSoul: spiritSoulAmount,
+          dailySpiritSoulClaimDateKey: dateKey,
+          dailyRecoveryUsed: 0,
+        },
+        update: {
+          spiritSoul: { increment: spiritSoulAmount },
+          dailySpiritSoulClaimDateKey: dateKey,
+          resourceVersion: { increment: 1 },
+        },
+      });
+
+      return {
+        app: APP_NAME,
+        summary: `今日兽魂已领取，获得 兽魂 x${spiritSoulAmount}。`,
+        home: await this.clientReadService.getHomeSummary(input.playerId, client),
+        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
+      };
+    });
+  }
+
   async claimStarterSeeds(input: ClaimStarterSeedsCommandInput): Promise<ClientStateMutationResponse> {
     return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
       const dateKey = getLocalDateKey();
@@ -1675,7 +1733,7 @@ function getDailyTaskTitle(taskId: string): string {
     'daily-harvest-once': '收一次田地',
     'daily-start-cultivation': '开始一次培育',
     'daily-upgrade-building': '升级一次建筑',
-    'daily-recruit-army': '征召一次战力',
+    'daily-upgrade-spirit': '升级一次灵宠',
     'daily-donate-faction': '上缴一次阵营资源',
   };
 

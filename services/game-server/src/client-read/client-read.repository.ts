@@ -7,6 +7,7 @@ export interface HomeSummaryReadModel {
     id: string;
     nickname: string;
     castleLevelCache: number;
+    protectedUntil: Date | null;
     faction: {
       name: string;
     } | null;
@@ -129,9 +130,10 @@ export interface SceneContentReadModel {
     id: string;
     targetSnapshotJson: Prisma.JsonValue;
     expiresAt: Date;
-    targetPlayer: {
-      nickname: string;
-      castleLevelCache: number;
+      targetPlayer: {
+        nickname: string;
+        protectedUntil: Date | null;
+        castleLevelCache: number;
       faction: {
         name: string;
       } | null;
@@ -189,6 +191,7 @@ export class ClientReadRepository {
         id: true,
         nickname: true,
         castleLevelCache: true,
+        protectedUntil: true,
         faction: {
           select: {
             name: true,
@@ -266,6 +269,7 @@ export class ClientReadRepository {
         id: player.id,
         nickname: player.nickname,
         castleLevelCache: player.castleLevelCache,
+        protectedUntil: player.protectedUntil,
         faction: player.faction,
         factionMembers: player.factionMembers,
       },
@@ -403,6 +407,7 @@ export class ClientReadRepository {
         targetPlayer: {
           select: {
             nickname: true,
+            protectedUntil: true,
             castleLevelCache: true,
             faction: { select: { name: true } },
             farmBoard: { select: { message: true, hiddenAt: true } },

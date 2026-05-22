@@ -63,6 +63,7 @@ export class AdminReadonlyService {
       workers: [{ name: 'raid-settlement', status: 'registered' }],
       featureFlags: {
         adminDebugKeyEnabled: Boolean(process.env.ADMIN_DEBUG_KEY?.trim()),
+        adminWriteDebugKeyEnabled: Boolean(process.env.ADMIN_WRITE_DEBUG_KEY?.trim()),
         forceMockReads: parseBoolean(process.env.VITE_FORCE_MOCK_READS),
         allowMockReadFallback: parseBoolean(process.env.VITE_ALLOW_MOCK_READ_FALLBACK),
         forceMockCommands: parseBoolean(process.env.VITE_FORCE_MOCK_COMMANDS),

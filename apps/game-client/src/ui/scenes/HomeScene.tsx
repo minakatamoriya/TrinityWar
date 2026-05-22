@@ -6,12 +6,16 @@ interface HomeSceneProps {
   claimingTax: boolean;
   claimingStarterSeeds: boolean;
   claimingTianjiTalisman: boolean;
+  claimingSpiritSoul: boolean;
   claimingTaskId: string | null;
   dailyTasks: ClientDailyTaskSummary[];
+  dailySpiritSoulAmount: number;
   onClaimTax: () => void;
   onClaimTask: (taskId: string) => void;
   starterSeedClaimed: boolean;
   onClaimStarterSeeds: () => void;
+  spiritSoulClaimed: boolean;
+  onClaimSpiritSoul: () => void;
   tianjiTalismanClaimed: boolean;
   onClaimTianjiTalisman: () => void;
   onNavigate: (scene: ClientSceneKey) => void;
@@ -32,12 +36,16 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
     claimingTax,
     claimingStarterSeeds,
     claimingTianjiTalisman,
+    claimingSpiritSoul,
     claimingTaskId,
     dailyTasks,
+    dailySpiritSoulAmount,
     onClaimTax,
     onClaimTask,
     starterSeedClaimed,
     onClaimStarterSeeds,
+    spiritSoulClaimed,
+    onClaimSpiritSoul,
     tianjiTalismanClaimed,
     onClaimTianjiTalisman,
     onNavigate,
@@ -46,7 +54,8 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
   const canClaimTax = taxPendingAmount > 0;
   const canClaimStarterSeed = !starterSeedClaimed;
   const canClaimTianjiTalisman = !tianjiTalismanClaimed;
-  const hasClaimableRewards = canClaimTax || canClaimStarterSeed || canClaimTianjiTalisman;
+  const canClaimSpiritSoul = !spiritSoulClaimed;
+  const hasClaimableRewards = canClaimTax || canClaimStarterSeed || canClaimTianjiTalisman || canClaimSpiritSoul;
 
   return (
     <div className="scene-shell scene-shell-home">
@@ -91,6 +100,19 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
                   {/* <em className="home-claim-item-foot">每日 1 张</em> */}
                   <button className="secondary-button home-claim-item-button" disabled={claimingTianjiTalisman} onClick={onClaimTianjiTalisman} type="button">
                     {claimingTianjiTalisman ? '收取中' : '领取'}
+                  </button>
+                </div>
+              ) : null}
+              {canClaimSpiritSoul ? (
+                <div className="home-claim-item home-claim-item-spirit-soul">
+                  <div className="home-claim-item-title">
+                    <span className="home-claim-item-tag">灵宠</span>
+                    <strong>每日兽魂</strong>
+                  </div>
+                  <strong className="home-claim-item-amount">兽魂 x{formatNumber(dailySpiritSoulAmount)}</strong>
+                  <em className="home-claim-item-foot">随主城等级提升</em>
+                  <button className="secondary-button home-claim-item-button" disabled={claimingSpiritSoul} onClick={onClaimSpiritSoul} type="button">
+                    {claimingSpiritSoul ? '收取中' : '领取'}
                   </button>
                 </div>
               ) : null}

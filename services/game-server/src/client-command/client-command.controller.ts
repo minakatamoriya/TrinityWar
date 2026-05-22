@@ -203,6 +203,22 @@ export class ClientCommandController {
     });
   }
 
+  @Post('claim-spirit-soul')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Claim daily spirit soul by castle level.' })
+  async claimSpiritSoul(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+  ): Promise<ClientStateMutationResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.claimDailySpiritSoul({
+      playerId: currentPlayer.playerId,
+    });
+  }
+
   @Post('reset-demo-state')
   @UseGuards(AuthPlaceholderGuard)
   @ApiBearerAuth()
@@ -229,6 +245,7 @@ defineRouteParamTypes(ClientCommandController.prototype, 'upgradeBuilding', [Obj
 defineRouteParamTypes(ClientCommandController.prototype, 'donateFaction', [Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimTianjiTalisman', [Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimStarterSeeds', [Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'claimSpiritSoul', [Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'resetDemoState', [Object]);
 
 function defineRouteParamTypes(target: object, methodName: string, paramTypes: unknown[]): void {

@@ -254,14 +254,6 @@ export class AuthService {
 
     const playerIds = Array.from(playerIdByProviderUserId.values());
 
-    await client.raidOrder.deleteMany({
-      where: {
-        OR: [
-          { attackerPlayerId: { in: playerIds } },
-          { defenderPlayerId: { in: playerIds } },
-        ],
-      },
-    });
     await client.raidTargetPool.deleteMany({
       where: {
         OR: [
@@ -376,7 +368,7 @@ export class AuthService {
     await this.playerInitializationService.initialize(client, {
       ...account.initialization,
       playerId: player.id,
-      resetExisting: true,
+      resetExisting: !existingIdentity,
     });
 
     return player.id;

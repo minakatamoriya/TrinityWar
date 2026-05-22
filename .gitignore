@@ -2,6 +2,10 @@ node_modules/
 dist/
 .turbo/
 .DS_Store
+.tmp-devserver-*.log
+logs/
+services/game-server/dist-houduan.zip
+backups/pre-restore-*.backup
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

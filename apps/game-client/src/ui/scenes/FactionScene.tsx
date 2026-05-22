@@ -18,11 +18,24 @@ interface FactionSceneProps {
 }
 
 export function FactionScene(props: FactionSceneProps): JSX.Element {
-  const { hero, contribution, factionPending, donating, currentGold, factionTab, comparison, donate, rankings, onClaim, onChangeTab, onDonate, onTransferFaction } = props;
+  const {
+    hero,
+    contribution,
+    factionPending,
+    donating,
+    currentGold,
+    factionTab,
+    comparison,
+    donate,
+    rankings,
+    onClaim,
+    onChangeTab,
+    onDonate,
+    onTransferFaction,
+  } = props;
   const [donateGoldAmount, setDonateGoldAmount] = useState(0);
   const maxDonateGoldAmount = Math.floor(currentGold / donate.goldStep) * donate.goldStep;
   const contributionGain = donateGoldAmount / donate.goldStep;
-  const breakdownText = hero.breakdown.replace('金额构成：', '');
 
   useEffect(() => {
     setDonateGoldAmount((current) => Math.min(current, maxDonateGoldAmount));
@@ -38,9 +51,8 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
               <strong>{factionPending?.value ?? '0'}</strong>
             </button>
             <div className="faction-overview-note-block">
-              {breakdownText.split(' + ').map((line) => (
-                <p className="faction-breakdown-line" key={line}>{line} 金/小时</p>
-              ))}
+              <p className="faction-breakdown-line">{hero.advantage}</p>
+              <p className="faction-breakdown-line">{hero.breakdown}</p>
             </div>
           </div>
 
@@ -50,16 +62,22 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
               <strong className="faction-contribution-value">{contribution.value}</strong>
             </div>
             <div className="faction-overview-note-block">
-              <p className="faction-contribution-description">100 金 = 1 贡献</p>
+              <p className="faction-contribution-description">{contribution.description}</p>
             </div>
           </div>
         </div>
       </section>
 
       <div className="tab-row">
-        <button className={`tab-button ${factionTab === 'overview' ? 'active' : ''}`} onClick={() => onChangeTab('overview')} type="button">阵营对比</button>
-        <button className={`tab-button ${factionTab === 'donate' ? 'active' : ''}`} onClick={() => onChangeTab('donate')} type="button">增加贡献</button>
-        <button className={`tab-button ${factionTab === 'rank' ? 'active' : ''}`} onClick={() => onChangeTab('rank')} type="button">战力排行</button>
+        <button className={`tab-button ${factionTab === 'overview' ? 'active' : ''}`} onClick={() => onChangeTab('overview')} type="button">
+          阵营对比
+        </button>
+        <button className={`tab-button ${factionTab === 'donate' ? 'active' : ''}`} onClick={() => onChangeTab('donate')} type="button">
+          增加贡献
+        </button>
+        <button className={`tab-button ${factionTab === 'rank' ? 'active' : ''}`} onClick={() => onChangeTab('rank')} type="button">
+          贡献排行
+        </button>
       </div>
 
       <div className="scene-scroll">
@@ -69,13 +87,22 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
               <article className={`panel-card faction-comparison-card${item.isCurrent ? ' is-current' : ''}`} key={item.faction}>
                 <div className="panel-head">
                   <h4>{item.faction}</h4>
-                  {item.isCurrent ? <span className="soft-tag">当前阵营</span> : <div className="faction-comparison-actions">
-                    <button className="secondary-button" onClick={() => onTransferFaction(item.faction)} type="button">转阵营</button>
-                  </div>}
+                  {item.isCurrent ? (
+                    <span className="soft-tag">当前阵营</span>
+                  ) : (
+                    <div className="faction-comparison-actions">
+                      <button className="secondary-button" onClick={() => onTransferFaction(item.faction)} type="button">
+                        转阵营
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <p className="muted faction-comparison-advantage">{item.advantage}</p>
                 <div className="faction-comparison-metrics">
-                  <div className="stat-row"><span>阵营资金</span><strong>{item.gold}</strong></div>
+                  <div className="stat-row">
+                    <span>阵营资金</span>
+                    <strong>{item.gold}</strong>
+                  </div>
                 </div>
               </article>
             ))}
@@ -87,14 +114,23 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
             <div className="faction-donate-copy">
               <p className="eyebrow">{donate.title}</p>
               <p className="muted">{donate.description}</p>
+              <p className="muted">{donate.contributionRule}</p>
             </div>
 
             <div className="faction-donate-slider-group">
               <div className="faction-donate-slider-head">
                 <strong>金币 {donateGoldAmount}</strong>
-                <span>最多 {maxDonateGoldAmount}</span>
+                <span>最大 {maxDonateGoldAmount}</span>
               </div>
-              <input className="army-recruit-slider" max={maxDonateGoldAmount} min={0} onChange={(event) => setDonateGoldAmount(Number(event.target.value))} step={donate.goldStep} type="range" value={donateGoldAmount} />
+              <input
+                className="army-recruit-slider"
+                max={maxDonateGoldAmount}
+                min={0}
+                onChange={(event) => setDonateGoldAmount(Number(event.target.value))}
+                step={donate.goldStep}
+                type="range"
+                value={donateGoldAmount}
+              />
             </div>
 
             <div className="faction-donate-footer">
