@@ -607,6 +607,7 @@ export interface ClientSceneAction {
   label: string;
   target: ClientSceneKey;
   tone: ClientButtonTone;
+  context?: string;
 }
 
 export interface ClientMetricRow {
@@ -710,6 +711,13 @@ export interface ClientReportEntry {
   tone: 'danger' | 'success' | 'neutral';
   summary: string;
   createdAt: string;
+  occurredAtText?: string;
+  opponentName?: string;
+  metrics?: {
+    gold: string;
+    ownDamage: string;
+    opponentDamage: string;
+  };
   unread?: boolean;
   revengeable?: boolean;
   raidMessage?: ClientRaidMessageSnapshot | null;

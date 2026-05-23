@@ -26,8 +26,8 @@ const FIELD_STATUS_COPY: Record<FieldStatus, { title: string; badge: string; ton
 
 @Injectable()
 export class SceneContentAssembler {
-  assemble(readModel: SceneContentReadModel, now: Date = new Date()): ClientSceneContentResponse {
-    const visibleRaidTargets = this.buildRaidTargets(readModel, now);
+  assemble(readModel: SceneContentReadModel, codex: Array<{ spiritDefinition: { spiritId: string }, hasSeen: boolean }> = [], now: Date = new Date()): ClientSceneContentResponse {
+    const visibleRaidTargets = this.buildRaidTargets(readModel, codex, now);
 
     return {
       app: APP_NAME,
@@ -82,7 +82,11 @@ export class SceneContentAssembler {
     };
   }
 
-  private buildRaidTargets(readModel: SceneContentReadModel, now: Date = new Date()): ClientSceneContentResponse['raid']['targets'] {
+  private buildRaidTargets(
+    readModel: SceneContentReadModel,
+    codex: Array<{ spiritDefinition: { spiritId: string }, hasSeen: boolean }> = [],
+    now: Date = new Date(),
+  ): ClientSceneContentResponse['raid']['targets'] {
     return readModel.raidTargetPools.filter((targetPool) => !targetPool.targetPlayer.protectedUntil || targetPool.targetPlayer.protectedUntil <= now).map((targetPool) => {
       const snapshot = targetPool.targetSnapshotJson as {
         name?: string;
@@ -98,7 +102,14 @@ export class SceneContentAssembler {
       const factionName = snapshot.faction ?? targetPool.targetPlayer.faction?.name ?? '未知阵营';
       const combatPower = snapshot.combatPower ?? targetPool.targetPlayer.army?.totalCount ?? 0;
       const raidableGold = snapshot.raidableGold ?? 0;
-      const mainPetPreview = buildRaidSpiritPreview(targetPool.targetPlayer.spiritSlots[0] ?? null);
+      const mainSlot = targetPool.targetPlayer.spiritSlots[0] ?? null;
+      let hasSeen = false;
+      const spiritId = mainSlot?.spiritDefinition?.spiritId;
+      if (spiritId) {
+        const entry = codex.find(e => e.spiritDefinition?.spiritId === spiritId);
+        hasSeen = !!entry?.hasSeen;
+      }
+      const mainPetPreview = buildRaidSpiritPreview(mainSlot, hasSeen);
 
       return {
         id: targetPool.id,
@@ -124,22 +135,46 @@ export class SceneContentAssembler {
   ): ClientSceneContentResponse['report']['attack'] {
     return readModel.battleReports
       .filter((report) => report.reportType === reportType)
-      .map((report) => ({
-        title: report.title,
-        tag: report.title,
-        tone: report.result === 'WIN' ? 'success' : report.result === 'LOSS' ? 'danger' : 'neutral',
-        summary: report.summary,
-        createdAt: report.createdAt.toISOString(),
-        revengeable: report.revengeAvailable,
-        raidMessage: report.raidOrder.raidMessage && !report.raidOrder.raidMessage.isHidden
-          ? {
-            messageTemplateId: report.raidOrder.raidMessage.templateId,
-            messageEmojiId: null,
-            messageTextSnapshot: report.raidOrder.raidMessage.textSnapshot,
-          }
-          : null,
-        actions: [{ label: '查看详情', target: 'report', tone: 'ghost' }],
-      }));
+      .map((report) => {
+        const settlement = report.raidOrder.settlement;
+        const ownDamage = report.reportType === 'ATTACK'
+          ? settlement?.attackerLoss
+          : settlement?.defenderLoss;
+        const opponentDamage = report.reportType === 'ATTACK'
+          ? settlement?.defenderLoss
+          : settlement?.attackerLoss;
+
+        return {
+          title: report.title,
+          tag: report.title,
+          tone: report.result === 'WIN' ? 'success' : report.result === 'LOSS' ? 'danger' : 'neutral',
+          summary: report.summary,
+          createdAt: report.createdAt.toISOString(),
+          occurredAtText: formatDateTime(report.createdAt),
+          opponentName: report.opponentPlayer.nickname,
+          metrics: settlement
+            ? {
+              gold: formatNumber(settlement.lootGold),
+              ownDamage: `${formatNumber(ownDamage ?? 0)}%`,
+              opponentDamage: `${formatNumber(opponentDamage ?? 0)}%`,
+            }
+            : undefined,
+          revengeable: report.revengeAvailable,
+          raidMessage: report.raidOrder.raidMessage && !report.raidOrder.raidMessage.isHidden
+            ? {
+              messageTemplateId: report.raidOrder.raidMessage.templateId,
+              messageEmojiId: null,
+              messageTextSnapshot: report.raidOrder.raidMessage.textSnapshot,
+            }
+            : null,
+          actions: report.revengeAvailable
+            ? [
+              { label: '复仇', target: 'report', tone: 'primary', context: report.opponentPlayerId },
+              { label: '查看详情', target: 'report', tone: 'ghost', context: report.opponentPlayerId },
+            ]
+            : [{ label: '查看详情', target: 'report', tone: 'ghost', context: report.opponentPlayerId }],
+        };
+      });
   }
 
   private buildBuildingUpgrades(readModel: SceneContentReadModel): ClientSceneContentResponse['building']['upgrades'] {
@@ -459,13 +494,34 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(Math.max(Math.floor(value), 0));
 }
 
+function formatDateTime(value: Date): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(value);
+}
+
 function buildRaidSpiritPreview(
   slot: { level: number; spiritDefinition: { spiritId: string; label: string; rarity: string } | null } | null,
+  hasSeen: boolean = false,
 ): ClientRaidSpiritPreview | null {
   if (!slot?.spiritDefinition) {
     return null;
   }
-
+  if (!hasSeen) {
+    return {
+      spiritId: null,
+      label: '？？',
+      level: Math.max(slot.level, 1),
+      rarity: null,
+      avatarGlyph: 'unknown',
+    };
+  }
   return {
     spiritId: slot.spiritDefinition.spiritId,
     label: slot.spiritDefinition.label,

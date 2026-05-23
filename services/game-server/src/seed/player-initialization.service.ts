@@ -55,6 +55,7 @@ export interface PlayerFieldInitializationInput {
 const fieldUnlockMilestones = [1, 5, 10, 15];
 const starterSeedInventory: Record<string, { quantity: number; unlocked: boolean }> = {
   qinglingmai: { quantity: 3, unlocked: true },
+  xunyamai: { quantity: 3, unlocked: true },
 };
 
 export class PlayerInitializationService {

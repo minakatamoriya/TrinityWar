@@ -307,6 +307,7 @@ model SeedDefinition {
   seedId            String   @map("seed_id")
   label             String
   rarity            String
+  sortOrder         Int      @default(0) @map("sort_order")
   seedSeconds       Int      @map("seed_seconds")
   growSeconds       Int      @map("grow_seconds")
   matureSeconds     Int      @map("mature_seconds")
@@ -322,6 +323,7 @@ model SeedDefinition {
   playerInventory PlayerSeedInventory[]
 
   @@unique([seedId])
+  @@index([rarity, sortOrder])
   @@map("seed_definition")
 }
 

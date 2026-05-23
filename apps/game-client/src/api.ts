@@ -18,6 +18,9 @@ import {
   type ClientCollectFieldRequest,
   type ClientCollectFieldResponse,
   type ClientDailyTaskSummary,
+  type ClientFarmBoardState,
+  type ClientFarmBoardUpdateRequest,
+  type ClientFarmBoardUpdateResponse,
   type ClientFarmField,
   type ClientMarkNotificationReadResponse,
   type ClientNotificationListResponse,
@@ -151,6 +154,7 @@ interface MockFieldTimingState {
 
 const seedLabelMap: Record<string, string> = {
   qinglingmai: '青灵麦',
+  xunyamai: '风云稻',
   ninglucao: '凝露草',
   suixinhua: '碎心花',
   baiyulian: '白玉莲',
@@ -167,6 +171,7 @@ const seedLabelMap: Record<string, string> = {
 
 const mockSeedStageGold: Record<string, { seeded: number; growing: number; mature: number; withered: number }> = {
   qinglingmai: { seeded: 100, growing: 100, mature: 200, withered: 100 },
+  xunyamai: { seeded: 100, growing: 100, mature: 200, withered: 100 },
   ninglucao: { seeded: 100, growing: 100, mature: 140, withered: 40 },
   suixinhua: { seeded: 120, growing: 120, mature: 300, withered: 50 },
   baiyulian: { seeded: 160, growing: 160, mature: 220, withered: 180 },
@@ -183,6 +188,7 @@ const mockSeedStageGold: Record<string, { seeded: number; growing: number; matur
 
 const mockSeedStageSeconds: Record<string, { seeded: number; growing: number }> = {
   qinglingmai: { seeded: 7200, growing: 3600 },
+  xunyamai: { seeded: 900, growing: 900 },
   ninglucao: { seeded: 5400, growing: 1800 },
   suixinhua: { seeded: 7200, growing: 3600 },
   baiyulian: { seeded: 10800, growing: 5400 },
@@ -507,6 +513,38 @@ export async function loadClientViewModel(): Promise<ClientViewModel> {
 export async function loadSpiritState(): Promise<ClientSpiritState> {
   const response = await fetchJson<ClientSpiritStateResponse>(`${CLIENT_API_PREFIX}/spirit`);
   return cloneSpiritState(response.spirit);
+}
+
+export async function loadFarmBoard(): Promise<ClientFarmBoardState> {
+  if (forceMockReads) {
+    return {
+      farmBoardMessage: '成熟田可看，手快者得。',
+      farmBoardUpdatedAt: null,
+      farmBoardVersion: 1,
+    };
+  }
+
+  return fetchJson<ClientFarmBoardState>(`${CLIENT_API_PREFIX}/profile/farm-board`);
+}
+
+export async function updateFarmBoard(input: ClientFarmBoardUpdateRequest): Promise<ClientFarmBoardUpdateResponse> {
+  if (forceMockCommands) {
+    return {
+      app: mockHomeSnapshot.app,
+      summary: '留言板已更新。',
+      board: {
+        farmBoardMessage: input.message.trim(),
+        farmBoardUpdatedAt: new Date().toISOString(),
+        farmBoardVersion: (input.farmBoardVersion ?? 1) + 1,
+      },
+    };
+  }
+
+  return fetchJson<ClientFarmBoardUpdateResponse>(`${CLIENT_API_PREFIX}/profile/farm-board`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
 }
 
 export async function loadNotifications(page = 1, pageSize = 10): Promise<ClientNotificationListResponse> {
@@ -1100,9 +1138,9 @@ function applyMockClaimStarterSeeds(): ClientStateMutationResponse {
   }
 
   mockBootstrapSnapshot.backpack.starterSeedClaimed = true;
-  applyMockSeedRewards([{ seedId: 'qinglingmai', quantity: 3 }]);
+  applyMockSeedRewards([{ seedId: 'qinglingmai', quantity: 3 }, { seedId: 'xunyamai', quantity: 3 }]);
 
-  return buildMockMutation('今日种子已领取，获得 青灵麦 x3。');
+  return buildMockMutation('今日种子已领取，获得 青灵麦 x3 与 风云稻 x3。');
 }
 
 function applyMockClaimTianjiTalisman(): ClientStateMutationResponse {

@@ -77,6 +77,7 @@ export const mockBootstrap: ClientBootstrapResponse = {
   backpack: {
     seedInventory: {
       qinglingmai: 0,
+      xunyamai: 0,
       ninglucao: 0,
       suixinhua: 0,
       baiyulian: 0,
@@ -94,7 +95,7 @@ export const mockBootstrap: ClientBootstrapResponse = {
       spiritSoul: 0,
       tianjiTalisman: 0,
     },
-    unlockedSeedIds: ['qinglingmai'],
+    unlockedSeedIds: ['qinglingmai', 'xunyamai'],
     starterSeedClaimed: false,
     tianjiTalismanClaimed: false,
     spiritSoulClaimed: false,

@@ -1531,6 +1531,48 @@ button {
   scrollbar-gutter: stable;
 }
 
+.farm-top-card-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.farm-top-action-card {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  background: rgba(255, 248, 234, 0.05);
+  cursor: pointer;
+}
+
+.farm-top-action-card strong {
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.farm-top-action-card span:last-child {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.home-farm-board-card {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.home-farm-board-card strong {
+  font-size: 14px;
+}
+
+.home-farm-board-card span:last-child {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
 .farm-scene-toolbar {
   display: flex;
   align-items: center;
@@ -2324,6 +2366,26 @@ button {
   display: grid;
   gap: 8px;
   align-content: start;
+}
+
+.target-card-main {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.target-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.target-card-follow-state {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .target-head div,
@@ -3883,6 +3945,17 @@ button.spirit-element-chip {
   line-height: 1.2;
 }
 
+.compact-report-card .report-head {
+  align-items: flex-start;
+}
+
+.report-meta-line {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .report-tag-row {
   margin: 0;
   display: flex;
@@ -4177,6 +4250,19 @@ button.spirit-element-chip {
   line-height: 1.35;
 }
 
+.report-metric-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.report-metric-row strong {
+  color: #ffe2b7;
+  font-weight: 700;
+}
+
 .report-action-row {
   display: flex;
   flex-wrap: wrap;
@@ -4187,6 +4273,46 @@ button.spirit-element-chip {
   min-height: 30px;
   padding: 6px 10px;
   font-size: 12px;
+}
+
+.farm-board-textarea {
+  min-height: 120px;
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 248, 234, 0.14);
+  background: rgba(30, 23, 18, 0.9);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.farm-board-modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.farm-board-backdrop {
+  z-index: 1250;
+  align-items: center;
+}
+
+.farm-board-modal {
+  display: grid;
+  gap: 12px;
+  width: min(520px, calc(100vw - 28px));
+  max-height: min(76dvh, 620px);
+  overflow-y: auto;
+}
+
+.farm-board-modal h3 {
+  margin: 0;
 }
 
 .tab-row,
@@ -4814,6 +4940,16 @@ button.spirit-element-chip {
   .collect-overflow-card {
     width: min(520px, 100%);
     border-radius: 18px;
+  }
+
+  .farm-board-modal {
+    width: 100%;
+    max-height: 72dvh;
+    border-radius: 22px 22px 18px 18px;
+  }
+
+  .farm-board-textarea {
+    min-height: 128px;
   }
 
   .bottom-dock {

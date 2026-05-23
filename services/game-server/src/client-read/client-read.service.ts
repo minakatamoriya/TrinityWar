@@ -38,7 +38,7 @@ export class ClientReadService {
     }
 
     const seedDefinitions = await this.prisma.db.seedDefinition.findMany({
-      orderBy: { seedId: 'asc' },
+      orderBy: [{ sortOrder: 'asc' }, { seedId: 'asc' }],
       include: {
         playerInventory: {
           where: {
@@ -143,7 +143,13 @@ export class ClientReadService {
     await this.passiveIncomeLifecycleService.settlePlayerPassiveIncome(client, playerId);
     await this.fieldLifecycleService.settlePlayerFields(client, playerId);
     await this.ensureRaidTargetPool(client, playerId);
-    const readModel = await this.clientReadRepository.findSceneContent(playerId, client);
+    const [readModel, codex] = await Promise.all([
+      this.clientReadRepository.findSceneContent(playerId, client),
+      client.playerSpiritCodex.findMany({
+        where: { playerId },
+        select: { spiritDefinition: { select: { spiritId: true } }, hasSeen: true },
+      }),
+    ]);
 
     if (!readModel) {
       throw new BusinessError({
@@ -153,7 +159,7 @@ export class ClientReadService {
       });
     }
 
-    return this.sceneContentAssembler.assemble(readModel);
+    return this.sceneContentAssembler.assemble(readModel, codex);
   }
 
   private async ensureRaidTargetPool(client: Prisma.TransactionClient | PrismaClient, playerId: string): Promise<void> {

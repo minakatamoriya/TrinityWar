@@ -64,6 +64,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
     army: { totalCount: 10, availableCount: 10, frozenCount: 0, woundedCount: 0, capacity: 10 },
     seedInventory: {
       qinglingmai: { quantity: 3, unlocked: true },
+      xunyamai: { quantity: 3, unlocked: true },
     },
     fields: [
       { slotIndex: 1, isUnlocked: true, unlockCastleLevel: 1, status: 'EMPTY' },
@@ -90,6 +91,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
     army: { totalCount: 30, availableCount: 26, frozenCount: 0, woundedCount: 4, capacity: 30 },
     seedInventory: {
       qinglingmai: { quantity: 8, unlocked: true },
+      xunyamai: { quantity: 8, unlocked: true },
       ninglucao: { quantity: 4, unlocked: true },
       suixinhua: { quantity: 2, unlocked: true },
       huichuncao: { quantity: 1, unlocked: true },
@@ -140,6 +142,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
     army: { totalCount: 55, availableCount: 48, frozenCount: 0, woundedCount: 7, capacity: 70 },
     seedInventory: {
       qinglingmai: { quantity: 12, unlocked: true },
+      xunyamai: { quantity: 12, unlocked: true },
       xueyuehua: { quantity: 3, unlocked: true },
       jingdaosong: { quantity: 2, unlocked: true },
       zhanqingsi: { quantity: 1, unlocked: true },
@@ -193,6 +196,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
     army: { totalCount: 42, availableCount: 18, frozenCount: 10, woundedCount: 14, capacity: 50 },
     seedInventory: {
       qinglingmai: { quantity: 6, unlocked: true },
+      xunyamai: { quantity: 6, unlocked: true },
       baiyulian: { quantity: 4, unlocked: true },
       hundunguo: { quantity: 1, unlocked: true },
     },

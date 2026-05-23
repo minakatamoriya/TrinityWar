@@ -121,7 +121,7 @@ export class PlayerService {
 
     return {
       app: APP_NAME,
-      summary: 'Farm board message updated.',
+      summary: '留言板已更新。',
       board: toFarmBoardState(board),
     };
   }

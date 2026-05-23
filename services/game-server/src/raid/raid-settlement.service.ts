@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+﻿import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
@@ -153,8 +153,8 @@ export class RaidSettlementService {
           opponentPlayerId: raidOrder.defenderPlayerId,
           reportType: 'ATTACK',
           result: settlementResult.result,
-          title: `${settlementResult.title} · ${settlementResult.subtitle}`,
-          summary: buildAttackReportSummary(settlementResult),
+          title: `${settlementResult.title} · ${raidOrder.defender.nickname}`,
+          summary: buildAttackReportSummary(raidOrder.defender.nickname, now, settlementResult),
           revengeAvailable: false,
         },
         {
@@ -163,10 +163,8 @@ export class RaidSettlementService {
           opponentPlayerId: raidOrder.attackerPlayerId,
           reportType: 'DEFENSE',
           result: settlementResult.result === 'WIN' ? 'LOSS' : 'WIN',
-          title: settlementResult.result === 'WIN'
-            ? `${invertSettlementTitle(settlementResult.title)} · 防线失守`
-            : `${invertSettlementTitle(settlementResult.title)} · 守住田地`,
-          summary: `${raidOrder.attacker.nickname} 对你发起掠夺：${settlementResult.reportSummary}`,
+          title: `${invertSettlementTitle(settlementResult.title)} · ${raidOrder.attacker.nickname}`,
+          summary: buildDefenseReportSummary(raidOrder.attacker.nickname, now, settlementResult),
           revengeAvailable: true,
         },
       ], client);
@@ -177,7 +175,7 @@ export class RaidSettlementService {
           reportType: 'DEFENSE',
         },
         data: {
-          summary: buildDefenseReportSummary(raidOrder.attacker.nickname, settlementResult),
+          summary: buildDefenseReportSummary(raidOrder.attacker.nickname, now, settlementResult),
         },
       });
 
@@ -322,6 +320,7 @@ export class RaidSettlementService {
     });
 
     if (settlementResult.shardDrop) {
+      const now = new Date();
       const existingCodex = await client.playerSpiritCodex.findUnique({
         where: {
           playerId_spiritDefinitionId: {
@@ -343,8 +342,26 @@ export class RaidSettlementService {
             hasSeen: true,
             shardCount: nextShardCount,
             readyToCompose: nextShardCount >= 100,
-            readyAt: nextShardCount >= 100 ? new Date() : undefined,
+            firstSeenAt: existingCodex.shardCount > 0 ? undefined : now,
+            readyAt: nextShardCount >= 100 ? now : null,
             codexVersion: { increment: 1 },
+          },
+        });
+      } else {
+        const nextShardCount = Math.min(settlementResult.shardDrop.quantity, 100);
+        await client.playerSpiritCodex.create({
+          data: {
+            playerId: raidOrder.attackerPlayerId,
+            spiritDefinitionId: settlementResult.shardDrop.spiritDefinitionId,
+            hasSeen: true,
+            shardCount: nextShardCount,
+            readyToCompose: nextShardCount >= 100,
+            ownedCurrent: false,
+            ownedEver: false,
+            firstSeenAt: now,
+            readyAt: nextShardCount >= 100 ? now : null,
+            lastOwnedAt: null,
+            codexVersion: 1,
           },
         });
       }
@@ -507,16 +524,41 @@ function isSpiritElement(value: string | null): value is SpiritBattleSnapshot['e
 }
 
 function buildAttackReportSummary(
+  defenderName: string,
+  happenedAt: Date,
   settlementResult: ReturnType<RaidSettlementRuleService['calculate']>,
 ): string {
-  return `${settlementResult.title} · ${settlementResult.subtitle}，带回 ${settlementResult.lootGold} 金币、${settlementResult.spiritSoulReward} 颗兽魂。己方灵宠受到 ${settlementResult.attackerHpLossPercent}% 伤害，对方灵宠受到 ${settlementResult.defenderHpLossPercent}% 伤害。`;
+  return `${formatBattleReportTime(happenedAt)}，你对 ${defenderName} 发起掠夺：${settlementResult.title} · ${settlementResult.subtitle}，带回 ${settlementResult.lootGold} 金币、${formatRewardSummary(settlementResult)}。己方灵宠受到 ${settlementResult.attackerHpLossPercent}% 伤害，对方灵宠受到 ${settlementResult.defenderHpLossPercent}% 伤害。`;
 }
 
 function buildDefenseReportSummary(
   attackerName: string,
+  happenedAt: Date,
   settlementResult: ReturnType<RaidSettlementRuleService['calculate']>,
 ): string {
-  return `${attackerName} 对你发起掠夺：${invertSettlementTitle(settlementResult.title)} · ${settlementResult.subtitle}，损失 ${settlementResult.lootGold} 金币。己方灵宠受到 ${settlementResult.defenderHpLossPercent}% 伤害，对方灵宠受到 ${settlementResult.attackerHpLossPercent}% 伤害。`;
+  return `${formatBattleReportTime(happenedAt)}，${attackerName} 对你发起掠夺：${invertSettlementTitle(settlementResult.title)} · ${settlementResult.subtitle}，损失 ${settlementResult.lootGold} 金币。己方灵宠受到 ${settlementResult.defenderHpLossPercent}% 伤害，对方灵宠受到 ${settlementResult.attackerHpLossPercent}% 伤害。`;
+}
+
+function formatRewardSummary(settlementResult: ReturnType<RaidSettlementRuleService['calculate']>): string {
+  const rewardParts = [`${settlementResult.spiritSoulReward} 颗兽魂`];
+
+  if (settlementResult.shardDrop) {
+    rewardParts.push(`${settlementResult.shardDrop.label}精魄 x${settlementResult.shardDrop.quantity}`);
+  }
+
+  return rewardParts.join('、');
+}
+
+function formatBattleReportTime(value: Date): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(value);
 }
 
 function invertSettlementTitle(title: string): string {
@@ -540,3 +582,4 @@ function invertSettlementTitle(title: string): string {
   }
   return '相持';
 }
+

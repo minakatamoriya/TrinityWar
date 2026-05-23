@@ -31,12 +31,17 @@ export class RaidTargetService {
   ) {}
 
   async getRaidTargetDetail(playerId: string, targetId: string): Promise<ClientRaidTargetDetailResponse> {
-    const [target, intelQuota] = await Promise.all([
+    // 查目标和情报额度
+    const [target, intelQuota, codex] = await Promise.all([
       this.raidRepository.findVisibleTargetPoolEntry({
         ownerPlayerId: playerId,
         targetPoolId: targetId,
       }),
       this.getIntelQuota(playerId),
+      this.prisma.db.playerSpiritCodex.findMany({
+        where: { playerId },
+        select: { spiritDefinition: { select: { spiritId: true } }, hasSeen: true },
+      }),
     ]);
 
     if (!target) {
@@ -47,12 +52,21 @@ export class RaidTargetService {
       });
     }
 
-    return buildRaidTargetDetailResponse(target, targetId, intelQuota);
+    // 取主宠 spiritId
+    const mainSlot = target?.targetPlayer.spiritSlots[0] ?? null;
+    let hasSeen = false;
+    const spiritId = mainSlot?.spiritDefinition?.spiritId;
+    if (spiritId) {
+      const entry = codex.find(e => e.spiritDefinition?.spiritId === spiritId);
+      hasSeen = !!entry?.hasSeen;
+    }
+
+    return buildRaidTargetDetailResponse(target, targetId, intelQuota, hasSeen);
   }
 
   async getRaidTargetDeepIntel(playerId: string, targetId: string): Promise<ClientRaidDeepIntelResponse> {
     return this.prisma.transaction(async (client) => {
-      const [target, resource] = await Promise.all([
+      const [target, resource, codex] = await Promise.all([
         this.raidRepository.findVisibleTargetPoolEntry({
           ownerPlayerId: playerId,
           targetPoolId: targetId,
@@ -65,6 +79,10 @@ export class RaidTargetService {
             dailyIntelTalismanUsed: true,
             dailyIntelDateKey: true,
           },
+        }),
+        client.playerSpiritCodex.findMany({
+          where: { playerId },
+          select: { spiritDefinition: { select: { spiritId: true } }, hasSeen: true },
         }),
       ]);
 
@@ -125,10 +143,27 @@ export class RaidTargetService {
         },
       });
 
+      // 确保窥探后 hasSeen=true
+      const mainSlot = target?.targetPlayer.spiritSlots[0] ?? null;
+      const spiritId = mainSlot?.spiritDefinition?.spiritId;
+      if (spiritId) {
+        const entry = codex.find(e => e.spiritDefinition?.spiritId === spiritId);
+        if (entry && !entry.hasSeen) {
+          await client.playerSpiritCodex.updateMany({
+            where: {
+              playerId,
+              spiritDefinition: { spiritId },
+            },
+            data: { hasSeen: true, firstSeenAt: new Date() },
+          });
+        }
+      }
+
+      // deepIntel 一定返回真名
       return buildRaidDeepIntelResponse(target, targetId, {
         remainingFreeIntel: Math.max(RAID_INTEL_FREE_LIMIT - nextFreeUsed, 0),
         remainingTalismanIntel: Math.max(RAID_INTEL_TALISMAN_LIMIT - nextTalismanUsed, 0),
-      });
+      }, true);
     });
   }
 
@@ -168,7 +203,7 @@ export class RaidTargetService {
       });
     }
 
-    const target = await this.raidRepository.findVisibleTargetPoolEntry({
+    let target = await this.raidRepository.findVisibleTargetPoolEntry({
       ownerPlayerId: input.playerId,
       targetPoolId: input.targetId,
     });
@@ -190,6 +225,7 @@ export class RaidTargetService {
     }
 
     const response = await this.prisma.transaction(async (client) => {
+      const now = new Date();
       const currentArmy = await client.playerArmy.findUnique({
         where: { playerId: input.playerId },
         select: {
@@ -237,6 +273,42 @@ export class RaidTargetService {
 
         return buildRaidActionResponse(existingOrder.id, existingOrder.settleAt, target, existingOrder.status, home, scenes);
       }
+
+      const targetInTransaction = await this.raidRepository.findVisibleTargetPoolEntry({
+        ownerPlayerId: input.playerId,
+        targetPoolId: input.targetId,
+        now,
+      }, client);
+
+      if (!targetInTransaction) {
+        throw new BusinessError({
+          code: ErrorCode.RaidTargetNotFound,
+          message: 'Raid target not found or expired.',
+          statusCode: 404,
+        });
+      }
+
+      const defenderProtectedUntil = new Date(now.getTime() + 60 * 60 * 1000);
+      const protectionClaim = await client.player.updateMany({
+        where: {
+          id: targetInTransaction.targetPlayerId,
+          OR: [
+            { protectedUntil: null },
+            { protectedUntil: { lte: now } },
+          ],
+        },
+        data: { protectedUntil: defenderProtectedUntil },
+      });
+
+      if (protectionClaim.count !== 1) {
+        throw new BusinessError({
+          code: ErrorCode.RaidNotAllowed,
+          message: 'Target is under raid protection.',
+          statusCode: 409,
+        });
+      }
+
+      target = targetInTransaction;
 
       const primaryField = pickPrimaryRaidField(target);
       const attackerMainSpirit = await client.playerSpiritSlot.findFirst({
@@ -309,7 +381,7 @@ export class RaidTargetService {
           riskSnapshotJson: target.riskSnapshotJson,
           mainSpirit: buildSpiritBattleSnapshot(target.targetPlayer.spiritSlots[0] ?? null),
         },
-        dispatchedAt: new Date(),
+        dispatchedAt: now,
         settleAt,
         requestIdempotencyKey,
         sourceTargetPool: { connect: { id: target.id } },
@@ -510,6 +582,7 @@ function buildRaidTargetDetailResponse(
     remainingFreeIntel: number;
     remainingTalismanIntel: number;
   },
+  hasSeen: boolean = false,
 ): ClientRaidTargetDetailResponse {
   const targetSnapshot = target?.targetSnapshotJson as {
     name?: string;
@@ -523,7 +596,7 @@ function buildRaidTargetDetailResponse(
     protectionStatus?: string;
     detail?: string;
   } | null;
-  const mainPetPreview = buildRaidSpiritPreview(target?.targetPlayer.spiritSlots[0] ?? null);
+  const mainPetPreview = buildRaidSpiritPreview(target?.targetPlayer.spiritSlots[0] ?? null, hasSeen);
   const fields = target?.targetPlayer.fieldSlots.map((field) => ({
     id: field.id,
     fieldVersion: undefined,
@@ -570,13 +643,14 @@ function buildRaidDeepIntelResponse(
     remainingFreeIntel: number;
     remainingTalismanIntel: number;
   },
+  hasSeen: boolean = true,
 ): ClientRaidDeepIntelResponse {
   const mainSlot = target?.targetPlayer.spiritSlots[0] ?? null;
 
   return {
     app: APP_NAME,
     targetId,
-    mainPetPreview: buildRaidSpiritPreview(mainSlot),
+    mainPetPreview: buildRaidSpiritPreview(mainSlot, hasSeen),
     intel: {
       element: mapSpiritElement(mainSlot?.element ?? null),
       attackRating: buildAttackRating(mainSlot),
@@ -752,11 +826,20 @@ function buildRaidSpiritPreview(
       rarity: string;
     } | null;
   } | null,
+  hasSeen: boolean = false,
 ): ClientRaidSpiritPreview | null {
   if (!slot?.spiritDefinition) {
     return null;
   }
-
+  if (!hasSeen) {
+    return {
+      spiritId: null,
+      label: '？？',
+      level: Math.max(slot.level, 1),
+      rarity: null,
+      avatarGlyph: 'unknown',
+    };
+  }
   return {
     spiritId: slot.spiritDefinition.spiritId,
     label: slot.spiritDefinition.label,

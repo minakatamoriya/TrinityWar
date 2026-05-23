@@ -1254,41 +1254,44 @@ export class ClientCommandService {
         },
       });
 
-      const seedDefinition = await client.seedDefinition.findUnique({
-        where: { seedId: 'qinglingmai' },
-        select: { id: true },
+      const starterSeedDefinitions = await client.seedDefinition.findMany({
+        where: { seedId: { in: ['qinglingmai', 'xunyamai'] } },
+        orderBy: [{ sortOrder: 'asc' }, { seedId: 'asc' }],
+        select: { seedId: true, id: true },
       });
 
-      if (!seedDefinition) {
+      if (starterSeedDefinitions.length < 2) {
         throw new BusinessError({
           code: ErrorCode.NotFound,
-          message: 'Starter seed definition not found.',
+          message: 'Starter seed definition not found. Please seed seed definitions first.',
           statusCode: 404,
         });
       }
 
-      await client.playerSeedInventory.upsert({
-        where: {
-          playerId_seedDefinitionId: {
+      for (const seedDefinition of starterSeedDefinitions) {
+        await client.playerSeedInventory.upsert({
+          where: {
+            playerId_seedDefinitionId: {
+              playerId: input.playerId,
+              seedDefinitionId: seedDefinition.id,
+            },
+          },
+          create: {
             playerId: input.playerId,
             seedDefinitionId: seedDefinition.id,
+            quantity: 3,
+            unlockedAt: new Date(),
           },
-        },
-        create: {
-          playerId: input.playerId,
-          seedDefinitionId: seedDefinition.id,
-          quantity: 3,
-          unlockedAt: new Date(),
-        },
-        update: {
-          quantity: { increment: 3 },
-          unlockedAt: new Date(),
-        },
-      });
+          update: {
+            quantity: { increment: 3 },
+            unlockedAt: new Date(),
+          },
+        });
+      }
 
       return {
         app: APP_NAME,
-        summary: '今日种子已领取，获得 青灵麦 x3。',
+        summary: '今日种子已领取，获得 青灵麦 x3 与 风云稻 x3。',
         home: await this.clientReadService.getHomeSummary(input.playerId, client),
         scenes: await this.clientReadService.getSceneContent(input.playerId, client),
       };

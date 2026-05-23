@@ -162,11 +162,20 @@ export interface SceneContentReadModel {
   battleReports: Array<{
     title: string;
     summary: string;
+    opponentPlayerId: string;
     reportType: string;
     result: string;
     revengeAvailable: boolean;
     createdAt: Date;
+    opponentPlayer: {
+      nickname: string;
+    };
     raidOrder: {
+      settlement: {
+        lootGold: number;
+        attackerLoss: number;
+        defenderLoss: number;
+      } | null;
       raidMessage: {
         templateId: string;
         textSnapshot: string;
@@ -456,12 +465,25 @@ export class ClientReadRepository {
       select: {
         title: true,
         summary: true,
+        opponentPlayerId: true,
         reportType: true,
         result: true,
         revengeAvailable: true,
         createdAt: true,
+        opponentPlayer: {
+          select: {
+            nickname: true,
+          },
+        },
         raidOrder: {
           select: {
+            settlement: {
+              select: {
+                lootGold: true,
+                attackerLoss: true,
+                defenderLoss: true,
+              },
+            },
             raidMessage: {
               select: {
                 templateId: true,

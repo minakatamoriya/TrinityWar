@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import type {
   ClientNotificationListResponse,
   ClientCastleExtensionUpgradeId,
@@ -13,11 +13,12 @@ import type {
   ClientRaidTargetDetailResponse,
   ClientSceneAction,
   ClientSceneKey,
+  ClientFarmBoardState,
   ClientSpiritElement,
   ClientSpiritState,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { buySpiritSoul, claimDailyTaskReward, claimNotification, claimPendingEarnings, claimSpiritSoulItem, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadNotifications, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, upgradeClientBuilding, upgradeSpirit } from './api';
+import { buySpiritSoul, claimDailyTaskReward, claimNotification, claimPendingEarnings, claimSpiritSoulItem, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, updateFarmBoard, upgradeClientBuilding, upgradeSpirit } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
@@ -52,6 +53,7 @@ interface SeedCatalogItem {
   id: string;
   name: string;
   rarity: SeedRarity;
+  sortOrder: number;
   description: string;
   lore: string;
   stageGold: {
@@ -115,6 +117,12 @@ interface FarmCollectPresentationState {
   showSeeds: boolean;
 }
 
+interface FarmBoardEditorState {
+  initialMessage: string;
+  message: string;
+  saving: boolean;
+}
+
 function getPendingClaimTitle(source: ClientClaimPendingRequest['source']): string {
   if (source === 'tax') {
     return '主城税收';
@@ -140,19 +148,20 @@ interface GlobalFeatureModalState {
 }
 
 const seedCatalog: SeedCatalogItem[] = [
-  { id: 'qinglingmai', name: '青灵麦', rarity: 'common', description: '普通、标准稳收基准种，初始默认可培育。', lore: '田野间最常见的灵粮，穗头泛淡青光泽，脱壳后熬粥清香回甘。凡人食之强身，修士食之略养经脉。春种秋收，从不妖异。', stageGold: { growing: 100, mature: 200, withered: 100 }, stageSeconds: { seeded: 7200, growing: 3600 }, unlockedByDefault: true },
-  { id: 'ninglucao', name: '凝露草', rarity: 'common', description: '普通、短线抢收种，适合高频上线卡成熟。', lore: '叶尖常凝夜露，晨时如泪珠滚落，有清心明目之效。低阶弟子多用其露水研磨朱砂画符，成功率能稍许提升。', stageGold: { growing: 100, mature: 140, withered: 40 }, stageSeconds: { seeded: 5400, growing: 1800 }, unlockedByDefault: false },
-  { id: 'suixinhua', name: '碎心花', rarity: 'common', description: '普通、高折损高回报种，丰熟收益波动很强。', lore: '花瓣薄如蝉翼，嫣红带紫纹，看似艳丽。但有微毒，采摘时指尖会传来一阵短暂的钻心刺痛，故名。可入麻醉类丹药。', stageGold: { growing: 120, mature: 300, withered: 50 }, stageSeconds: { seeded: 7200, growing: 3600 }, unlockedByDefault: false },
-  { id: 'baiyulian', name: '白玉莲', rarity: 'common', description: '普通、低频保值种，错过窗口也不容易血亏。', lore: '纯白无瑕，瓣如凝脂，生于清澈浅塘。花心微黄，清香远溢。凡人供于佛前，修士取其花瓣泡茶，可净体内杂气。', stageGold: { growing: 160, mature: 220, withered: 180 }, stageSeconds: { seeded: 10800, growing: 5400 }, unlockedByDefault: false },
-  { id: 'yingyuezhu', name: '影月竹', rarity: 'common', description: '普通、稳健中速种，适合平衡型经营。', lore: '竹身乌青，夜来月光下会在地上投出淡淡银影，竹节修长如剑。常种于书斋窗外，能助人凝神夜读，抵御睡魔。', stageGold: { growing: 150, mature: 230, withered: 140 }, stageSeconds: { seeded: 9000, growing: 3600 }, unlockedByDefault: false },
-  { id: 'qianjiteng', name: '牵机藤', rarity: 'common', description: '普通、丰熟爆发种，适合做等还是收的选择题。', lore: '藤蔓天生细密纹路，如牵机阵法。缠绕古木或篱笆，可束缚小妖、守护庭院，是低阶阵法师最喜搭配的活体材料。', stageGold: { growing: 170, mature: 360, withered: 120 }, stageSeconds: { seeded: 9000, growing: 3600 }, unlockedByDefault: false },
-  { id: 'huichuncao', name: '回春草', rarity: 'rare', description: '稀有、回种保值种，上线不稳时更稳。', lore: '通体碧玉，全草如翡翠，五十年才成熟一株。煮水内服可愈沉疴暗伤，对外伤亦有奇效。一株值百金，药农视若性命。', stageGold: { growing: 320, mature: 480, withered: 380 }, stageSeconds: { seeded: 10800, growing: 3600 }, unlockedByDefault: false },
-  { id: 'xueyuehua', name: '雪月花', rarity: 'rare', description: '稀有、高丰熟倍率种，卡点收益很高。', lore: '只在高寒雪山顶的月圆之夜盛开，花瓣冰白带银纹，花蕊一点淡蓝。盛开时方圆十丈飘雪，花谢后雪融。可炼“寒魄丹”，助冰系功法。', stageGold: { growing: 300, mature: 760, withered: 180 }, stageSeconds: { seeded: 9000, growing: 3600 }, unlockedByDefault: false },
-  { id: 'jingdaosong', name: '劲道松', rarity: 'rare', description: '稀有、长周期高保值种，适合重仓慢收。', lore: '矮松，树皮龟裂如铁，松针短而刚硬。长在罡风口的悬崖上，木质极密、韧性惊人。折断一松枝制成剑胚，便是不错的筑基法器。', stageGold: { growing: 450, mature: 620, withered: 520 }, stageSeconds: { seeded: 14400, growing: 3600 }, unlockedByDefault: false },
-  { id: 'hundunguo', name: '混沌果', rarity: 'rare', description: '稀有、后期抽水种，中后段高价值诱盗目标。', lore: '拳头大的圆果，灰蒙蒙无纹，剖开内里一片浑浊。罕见地生长在灵脉与地脉交错的混乱处。炼化后可让修士短暂进入“混沌”状态，免疫五行术法一炷香。', stageGold: { growing: 420, mature: 880, withered: 260 }, stageSeconds: { seeded: 14400, growing: 5400 }, unlockedByDefault: false },
-  { id: 'zhanqingsi', name: '斩情丝', rarity: 'legendary', description: '传说、高风险斩杀种，高收益也高失败代价。', lore: '茎如金丝，赤红纤细，一旦被它缠住手指，便会暂时斩断某人对另一人的爱慕或怨恨。传说上古有大能以此草炼制“绝情丹”，后被各派联手销毁，仅余深山数株。', stageGold: { growing: 520, mature: 1200, withered: 200 }, stageSeconds: { seeded: 10800, growing: 3600 }, unlockedByDefault: false },
-  { id: 'wangchuanying', name: '忘川影', rarity: 'legendary', description: '传说、长周期隐性暴利种，后段重投入慢兑现。', lore: '水边黑色丝状藻类，夜来投影如人影晃动。用它泡水喝下，会看到一段不属于自己的前世片段，往往是最痛苦的那一瞬。邪修常用其拷问死者的秘密。', stageGold: { growing: 760, mature: 1200, withered: 960 }, stageSeconds: { seeded: 18000, growing: 3600 }, unlockedByDefault: false },
-  { id: 'zhaoyouming', name: '照幽冥', rarity: 'legendary', description: '传说、极限丰熟回种种，终局上限最高之一。', lore: '通体漆黑的矮草，夜里发出微弱青光，能照亮脚下三尺的地气与亡魂足迹。相传若手握此草走进刚死之人的屋子，可看见死者徘徊不去的淡影，并与之做最后交谈。', stageGold: { growing: 700, mature: 1600, withered: 680 }, stageSeconds: { seeded: 14400, growing: 3600 }, unlockedByDefault: false },
+  { id: 'qinglingmai', name: '青灵麦', rarity: 'common', sortOrder: 10, description: '普通、标准稳收基准种，初始默认可培育。', lore: '田野间最常见的灵粮，穗头泛淡青光泽，脱壳后熬粥清香回甘。凡人食之强身，修士食之略养经脉。春种秋收，从不妖异。', stageGold: { growing: 100, mature: 200, withered: 100 }, stageSeconds: { seeded: 7200, growing: 3600 }, unlockedByDefault: true },
+  { id: 'xunyamai', name: '风云稻', rarity: 'common', sortOrder: 20, description: '普通、半小时快收种，适合切碎片时间。', lore: '稻芒起势极快，晨起沾露便能成势，半个时辰内就能完成一轮收益。', stageGold: { growing: 100, mature: 200, withered: 100 }, stageSeconds: { seeded: 900, growing: 900 }, unlockedByDefault: true },
+  { id: 'ninglucao', name: '凝露草', rarity: 'common', sortOrder: 30, description: '普通、短线抢收种，适合高频上线卡成熟。', lore: '叶尖常凝夜露，晨时如泪珠滚落，有清心明目之效。低阶弟子多用其露水研磨朱砂画符，成功率能稍许提升。', stageGold: { growing: 100, mature: 140, withered: 40 }, stageSeconds: { seeded: 5400, growing: 1800 }, unlockedByDefault: false },
+  { id: 'suixinhua', name: '碎心花', rarity: 'common', sortOrder: 40, description: '普通、高折损高回报种，丰熟收益波动很强。', lore: '花瓣薄如蝉翼，嫣红带紫纹，看似艳丽。但有微毒，采摘时指尖会传来一阵短暂的钻心刺痛，故名。可入麻醉类丹药。', stageGold: { growing: 120, mature: 300, withered: 50 }, stageSeconds: { seeded: 7200, growing: 3600 }, unlockedByDefault: false },
+  { id: 'baiyulian', name: '白玉莲', rarity: 'common', sortOrder: 50, description: '普通、低频保值种，错过窗口也不容易血亏。', lore: '纯白无瑕，瓣如凝脂，生于清澈浅塘。花心微黄，清香远溢。凡人供于佛前，修士取其花瓣泡茶，可净体内杂气。', stageGold: { growing: 160, mature: 220, withered: 180 }, stageSeconds: { seeded: 10800, growing: 5400 }, unlockedByDefault: false },
+  { id: 'yingyuezhu', name: '影月竹', rarity: 'common', sortOrder: 60, description: '普通、稳健中速种，适合平衡型经营。', lore: '竹身乌青，夜来月光下会在地上投出淡淡银影，竹节修长如剑。常种于书斋窗外，能助人凝神夜读，抵御睡魔。', stageGold: { growing: 150, mature: 230, withered: 140 }, stageSeconds: { seeded: 9000, growing: 3600 }, unlockedByDefault: false },
+  { id: 'qianjiteng', name: '牵机藤', rarity: 'common', sortOrder: 70, description: '普通、丰熟爆发种，适合做等还是收的选择题。', lore: '藤蔓天生细密纹路，如牵机阵法。缠绕古木或篱笆，可束缚小妖、守护庭院，是低阶阵法师最喜搭配的活体材料。', stageGold: { growing: 170, mature: 360, withered: 120 }, stageSeconds: { seeded: 9000, growing: 3600 }, unlockedByDefault: false },
+  { id: 'huichuncao', name: '回春草', rarity: 'rare', sortOrder: 110, description: '稀有、回种保值种，上线不稳时更稳。', lore: '通体碧玉，全草如翡翠，五十年才成熟一株。煮水内服可愈沉疴暗伤，对外伤亦有奇效。一株值百金，药农视若性命。', stageGold: { growing: 320, mature: 480, withered: 380 }, stageSeconds: { seeded: 10800, growing: 3600 }, unlockedByDefault: false },
+  { id: 'xueyuehua', name: '雪月花', rarity: 'rare', sortOrder: 120, description: '稀有、高丰熟倍率种，卡点收益很高。', lore: '只在高寒雪山顶的月圆之夜盛开，花瓣冰白带银纹，花蕊一点淡蓝。盛开时方圆十丈飘雪，花谢后雪融。可炼“寒魄丹”，助冰系功法。', stageGold: { growing: 300, mature: 760, withered: 180 }, stageSeconds: { seeded: 9000, growing: 3600 }, unlockedByDefault: false },
+  { id: 'jingdaosong', name: '劲道松', rarity: 'rare', sortOrder: 130, description: '稀有、长周期高保值种，适合重仓慢收。', lore: '矮松，树皮龟裂如铁，松针短而刚硬。长在罡风口的悬崖上，木质极密、韧性惊人。折断一松枝制成剑胚，便是不错的筑基法器。', stageGold: { growing: 450, mature: 620, withered: 520 }, stageSeconds: { seeded: 14400, growing: 3600 }, unlockedByDefault: false },
+  { id: 'hundunguo', name: '混沌果', rarity: 'rare', sortOrder: 140, description: '稀有、后期抽水种，中后段高价值诱盗目标。', lore: '拳头大的圆果，灰蒙蒙无纹，剖开内里一片浑浊。罕见地生长在灵脉与地脉交错的混乱处。炼化后可让修士短暂进入“混沌”状态，免疫五行术法一炷香。', stageGold: { growing: 420, mature: 880, withered: 260 }, stageSeconds: { seeded: 14400, growing: 5400 }, unlockedByDefault: false },
+  { id: 'zhanqingsi', name: '斩情丝', rarity: 'legendary', sortOrder: 210, description: '传说、高风险斩杀种，高收益也高失败代价。', lore: '茎如金丝，赤红纤细，一旦被它缠住手指，便会暂时斩断某人对另一人的爱慕或怨恨。传说上古有大能以此草炼制“绝情丹”，后被各派联手销毁，仅余深山数株。', stageGold: { growing: 520, mature: 1200, withered: 200 }, stageSeconds: { seeded: 10800, growing: 3600 }, unlockedByDefault: false },
+  { id: 'wangchuanying', name: '忘川影', rarity: 'legendary', sortOrder: 220, description: '传说、长周期隐性暴利种，后段重投入慢兑现。', lore: '水边黑色丝状藻类，夜来投影如人影晃动。用它泡水喝下，会看到一段不属于自己的前世片段，往往是最痛苦的那一瞬。邪修常用其拷问死者的秘密。', stageGold: { growing: 760, mature: 1200, withered: 960 }, stageSeconds: { seeded: 18000, growing: 3600 }, unlockedByDefault: false },
+  { id: 'zhaoyouming', name: '照幽冥', rarity: 'legendary', sortOrder: 230, description: '传说、极限丰熟回种种，终局上限最高之一。', lore: '通体漆黑的矮草，夜里发出微弱青光，能照亮脚下三尺的地气与亡魂足迹。相传若手握此草走进刚死之人的屋子，可看见死者徘徊不去的淡影，并与之做最后交谈。', stageGold: { growing: 700, mature: 1600, withered: 680 }, stageSeconds: { seeded: 14400, growing: 3600 }, unlockedByDefault: false },
 ];
 
 const FARM_COLLECT_PRESENTATION_MS = 1250;
@@ -163,7 +172,14 @@ const seedRarityLabels: Record<SeedRarity, string> = {
   legendary: '传说',
 };
 
-const defaultUnlockedSeedIds = seedCatalog.filter((seed) => seed.unlockedByDefault).map((seed) => seed.id);
+function compareSeedCatalogItems(left: SeedCatalogItem, right: SeedCatalogItem): number {
+  return left.sortOrder - right.sortOrder || left.id.localeCompare(right.id);
+}
+
+const defaultUnlockedSeedIds = seedCatalog
+  .filter((seed) => seed.unlockedByDefault)
+  .sort(compareSeedCatalogItems)
+  .map((seed) => seed.id);
 
 const emptySeedInventory = seedCatalog.reduce<Record<string, number>>((inventory, seed) => {
   inventory[seed.id] = 0;
@@ -247,7 +263,6 @@ function buildSeasonProgress(status: ClientViewModel['bootstrap']['season']): {
     detail: `${safeCurrentWeek}/${safeTotalWeeks} 周`,
   };
 }
-
 function buildActionMessage(label: string, context?: string): string {
   const subject = context ? `当前目标：${context}。` : '';
 
@@ -341,7 +356,7 @@ function resolveRaidTargetByContext(targets: ClientRaidTarget[], context?: strin
     return targets[0] ?? null;
   }
 
-  const matchedTarget = targets.find((target) => context.includes(target.name));
+  const matchedTarget = targets.find((target) => target.id === context || context.includes(target.name));
   return matchedTarget ?? targets[0] ?? null;
 }
 
@@ -387,6 +402,8 @@ function App(): JSX.Element {
   const [pendingClaimOverflowState, setPendingClaimOverflowState] = useState<PendingClaimOverflowState | null>(null);
   const [taskRewardOverflowState, setTaskRewardOverflowState] = useState<TaskRewardOverflowState | null>(null);
   const [farmCollectPresentation, setFarmCollectPresentation] = useState<FarmCollectPresentationState | null>(null);
+  const [farmBoard, setFarmBoard] = useState<ClientFarmBoardState | null>(null);
+  const [farmBoardEditor, setFarmBoardEditor] = useState<FarmBoardEditorState | null>(null);
   const [followedTargetIds, setFollowedTargetIds] = useState<string[]>([]);
   const [raidTargetDetailsById, setRaidTargetDetailsById] = useState<Record<string, ClientRaidTargetDetailResponse>>({});
   const [globalFeatureModal, setGlobalFeatureModal] = useState<GlobalFeatureModalState | null>(null);
@@ -403,7 +420,102 @@ function App(): JSX.Element {
     }));
   };
 
+  const patchRaidTargetPreview = (
+    targetId: string,
+    mainPetPreview: ClientRaidTarget['mainPetPreview'],
+  ): void => {
+    setViewModel((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        scenes: {
+          ...current.scenes,
+          raid: {
+            ...current.scenes.raid,
+            targets: current.scenes.raid.targets.map((target) => (
+              target.id === targetId
+                ? {
+                  ...target,
+                  mainPetPreview,
+                }
+                : target
+            )),
+          },
+        },
+      };
+    });
+
+    setRaidTargetDetailsById((current) => {
+      const existing = current[targetId];
+
+      if (!existing) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [targetId]: {
+          ...existing,
+          mainPetPreview,
+        },
+      };
+    });
+
+    setRaidTargetDetail((current) => (current?.targetId === targetId
+      ? {
+        ...current,
+        mainPetPreview,
+      }
+      : current));
+  };
+
+  const replaceRaidTargetDetail = (detail: ClientRaidTargetDetailResponse): void => {
+    cacheRaidTargetDetail(detail);
+    patchRaidTargetPreview(detail.targetId, detail.mainPetPreview);
+
+    setViewModel((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        scenes: {
+          ...current.scenes,
+          raid: {
+            ...current.scenes.raid,
+            targets: current.scenes.raid.targets.map((target) => (
+              target.id === detail.targetId
+                ? {
+                  ...target,
+                  name: detail.name,
+                  faction: detail.faction,
+                  level: detail.level,
+                  mainPetPreview: detail.mainPetPreview,
+                }
+                : target
+            )),
+          },
+        },
+      };
+    });
+  };
+
+  const refreshRaidTargetDetail = async (targetId: string): Promise<void> => {
+    try {
+      const detail = await loadRaidTargetDetail(targetId);
+      replaceRaidTargetDetail(detail);
+    } catch {
+      // 只刷新当前目标，失败时保留旧缓存，避免影响整个列表。
+    }
+  };
+
   const syncSeedBackpackState = (backpack: ClientViewModel['bootstrap']['backpack']): void => {
+    const mergedUnlockedSeedIds = Array.from(new Set([...defaultUnlockedSeedIds, ...backpack.unlockedSeedIds]));
+
     setSeedInventory({
       ...emptySeedInventory,
       ...backpack.seedInventory,
@@ -412,13 +524,13 @@ function App(): JSX.Element {
       ...emptyGlobalItemInventory,
       ...backpack.globalItemInventory,
     });
-    setUnlockedSeedIds(backpack.unlockedSeedIds.length > 0 ? backpack.unlockedSeedIds : defaultUnlockedSeedIds);
+    setUnlockedSeedIds(mergedUnlockedSeedIds);
     setStarterSeedClaimed(backpack.starterSeedClaimed);
     setTianjiTalismanClaimed(backpack.tianjiTalismanClaimed);
     setSpiritSoulClaimed(backpack.spiritSoulClaimed);
     setDailySpiritSoulAmount(Math.max(backpack.dailySpiritSoulAmount, 1));
-    if (!backpack.unlockedSeedIds.includes(selectedSeedId)) {
-      setSelectedSeedId(backpack.unlockedSeedIds[0] ?? 'qinglingmai');
+    if (!mergedUnlockedSeedIds.includes(selectedSeedId)) {
+      setSelectedSeedId(mergedUnlockedSeedIds[0] ?? 'qinglingmai');
     }
   };
 
@@ -428,9 +540,10 @@ function App(): JSX.Element {
     syncSeedBackpackState(data.bootstrap.backpack);
   };
 
-  const applyClientBundle = (data: { viewModel: ClientViewModel; spirit: ClientSpiritState }): void => {
+  const applyClientBundle = (data: { viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState }): void => {
     applyClientViewModel(data.viewModel);
     setSpiritState(data.spirit);
+    setFarmBoard(data.farmBoard);
   };
 
   const resetNotificationState = (): void => {
@@ -546,15 +659,17 @@ function App(): JSX.Element {
     }
   };
 
-  const loadClientBundle = async (): Promise<{ viewModel: ClientViewModel; spirit: ClientSpiritState }> => {
-    const [nextViewModel, nextSpirit] = await Promise.all([
+  const loadClientBundle = async (): Promise<{ viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState }> => {
+    const [nextViewModel, nextSpirit, nextFarmBoard] = await Promise.all([
       loadClientViewModel(),
       loadSpiritState(),
+      loadFarmBoard(),
     ]);
 
     return {
       viewModel: nextViewModel,
       spirit: nextSpirit,
+      farmBoard: nextFarmBoard,
     };
   };
 
@@ -580,6 +695,8 @@ function App(): JSX.Element {
     setLoginSession(null);
     setViewModel(null);
     setSpiritState(null);
+    setFarmBoard(null);
+    setFarmBoardEditor(null);
     setActiveScene('home');
     setRaidHubTab('targets');
     setFactionTab('overview');
@@ -906,7 +1023,7 @@ function App(): JSX.Element {
   const seedGroups = (['common', 'rare', 'legendary'] as const).map((rarity) => ({
     rarity,
     label: seedRarityLabels[rarity],
-    seeds: seedCatalog.filter((seed) => seed.rarity === rarity).map((seed) => ({
+    seeds: seedCatalog.filter((seed) => seed.rarity === rarity).sort(compareSeedCatalogItems).map((seed) => ({
       ...seed,
       unlocked: unlockedSeedIds.includes(seed.id),
       quantity: seedInventory[seed.id] ?? 0,
@@ -1158,8 +1275,14 @@ function App(): JSX.Element {
       setSeedInventory((current) => ({
         ...current,
         qinglingmai: (current.qinglingmai ?? 0) + 3,
+        xunyamai: (current.xunyamai ?? 0) + 3,
       }));
-      setUnlockedSeedIds((current) => current.includes('qinglingmai') ? current : [...current, 'qinglingmai']);
+      setUnlockedSeedIds((current) => {
+        const next = new Set(current);
+        next.add('qinglingmai');
+        next.add('xunyamai');
+        return Array.from(next);
+      });
       setStarterSeedClaimed(true);
       setSeedRewardModal(null);
     } catch {
@@ -1336,6 +1459,26 @@ function App(): JSX.Element {
       targetName: target.name,
       mode: 'raid',
     });
+  };
+
+  const handleCloseRaidTargetModal = (): void => {
+    const targetId = raidTargetModal?.targetId;
+
+    if (targetId) {
+      setRaidTargetDetailsById((current) => {
+        if (!(targetId in current)) {
+          return current;
+        }
+
+        const next = { ...current };
+        delete next[targetId];
+        return next;
+      });
+
+      void refreshRaidTargetDetail(targetId);
+    }
+
+    setRaidTargetModal(null);
   };
 
   const handleOpenFollowedRaidTarget = (target: FollowedRaidTargetSummary): void => {
@@ -1658,9 +1801,9 @@ function App(): JSX.Element {
 
     setSeedRewardModal({
       title: '领取今日种子',
-      summary: '确认后会把 青灵麦 x3 收进背包。',
+      summary: '确认后会把 青灵麦 x3 与 风云稻 x3 收进背包。',
       confirmAction: 'claim-starter-seeds',
-      items: [{ seedId: 'qinglingmai', quantity: 3 }],
+      items: [{ seedId: 'qinglingmai', quantity: 3 }, { seedId: 'xunyamai', quantity: 3 }],
     });
   };
 
@@ -1690,6 +1833,62 @@ function App(): JSX.Element {
       confirmAction: 'claim-spirit-soul',
       items: [{ itemId: 'spiritSoul', label: '兽魂', quantity: dailySpiritSoulAmount }],
     });
+  };
+
+  const handleOpenFarmBoardEditor = (): void => {
+    const currentMessage = farmBoard?.farmBoardMessage ?? '';
+    setFarmBoardEditor({
+      initialMessage: currentMessage,
+      message: currentMessage,
+      saving: false,
+    });
+  };
+
+  const handleCloseFarmBoardEditor = (): void => {
+    if (!farmBoardEditor || farmBoardEditor.saving) {
+      return;
+    }
+
+    const nextMessage = farmBoardEditor.message.trim();
+    const initialMessage = farmBoardEditor.initialMessage.trim();
+    if (nextMessage === initialMessage || nextMessage.length <= 0 || Array.from(nextMessage).length > 40) {
+      setFarmBoardEditor(null);
+      return;
+    }
+
+    void handleSaveFarmBoard();
+  };
+
+  const handleSaveFarmBoard = async (): Promise<void> => {
+    if (!farmBoardEditor || farmBoardEditor.saving) {
+      return;
+    }
+
+    const nextMessage = farmBoardEditor.message.trim();
+    if (nextMessage.length <= 0) {
+      showToast('留言不能为空。', 'error');
+      return;
+    }
+
+    if (Array.from(nextMessage).length > 40) {
+      showToast('留言最多 40 个字。', 'error');
+      return;
+    }
+
+    setFarmBoardEditor((current) => current ? { ...current, saving: true } : current);
+
+    try {
+      const result = await updateFarmBoard({
+        message: nextMessage,
+        farmBoardVersion: farmBoard?.farmBoardVersion,
+      });
+      setFarmBoard(result.board);
+      setFarmBoardEditor(null);
+      showToast(result.summary, 'success');
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法修改留言，请稍后重试。', 'error');
+      setFarmBoardEditor((current) => current ? { ...current, saving: false } : current);
+    }
   };
 
   const handleConfirmSeedCultivation = async (): Promise<void> => {
@@ -1986,6 +2185,8 @@ function App(): JSX.Element {
                 onClaimStarterSeeds={handleClaimStarterSeeds}
                 onClaimTianjiTalisman={handleClaimTianjiTalisman}
                 onClaimSpiritSoul={handleClaimSpiritSoul}
+                farmBoardMessage={farmBoard?.farmBoardMessage ?? ''}
+                onOpenFarmBoard={handleOpenFarmBoardEditor}
                 onNavigate={navigateToScene}
                 spiritSoulClaimed={spiritSoulClaimed}
                 starterSeedClaimed={starterSeedClaimed}
@@ -2009,10 +2210,13 @@ function App(): JSX.Element {
               <FarmScene
                 collectPresentation={farmCollectPresentation}
                 farmTick={farmTick}
+                farmBoardMessage={farmBoard?.farmBoardMessage ?? ''}
+                farmBoardUpdatedAt={farmBoard?.farmBoardUpdatedAt ?? null}
                 fields={farmFields}
                 onAction={(action, fieldId, fieldCode) => {
                   void handleFarmAction(action, fieldId, fieldCode);
                 }}
+                onOpenFarmBoard={handleOpenFarmBoardEditor}
                 onOpenSeedCodex={() => {
                   setSeedCodexState({
                     selectedSeedId: selectedSeedId || unlockedSeedIds[0] || 'qinglingmai',
@@ -2056,8 +2260,10 @@ function App(): JSX.Element {
                 heroTitle={scenes.raid.hero.title}
                 onAction={handleSceneAction}
                 onChangeTab={setRaidHubTab}
+                followedTargetIds={followedTargetIds}
                 onOpenFollowedTarget={handleOpenFollowedRaidTarget}
                 onOpenTarget={handleOpenRaidTargetModal}
+                onToggleFollowTarget={handleToggleFollowTarget}
                 onRefresh={() => {
                   void handleRefreshRaidTargets();
                 }}
@@ -2121,8 +2327,12 @@ function App(): JSX.Element {
               loading={raidTargetDetailLoading}
               mode={raidTargetModal.mode}
               onAction={(action) => handleSceneAction(action, raidTargetDetail?.name)}
-              onClose={() => setRaidTargetModal(null)}
-              onRevealDeepIntel={(targetId): Promise<ClientRaidDeepIntelResponse> => revealRaidTargetDeepIntel(targetId)}
+              onClose={handleCloseRaidTargetModal}
+              onRevealDeepIntel={async (targetId): Promise<ClientRaidDeepIntelResponse> => {
+                const response = await revealRaidTargetDeepIntel(targetId);
+                patchRaidTargetPreview(targetId, response.mainPetPreview);
+                return response;
+              }}
               onToggleFollow={() => {
                 const target = raidTargetsById.get(raidTargetModal.targetId);
                 if (target) {
@@ -2195,6 +2405,36 @@ function App(): JSX.Element {
               onClose={() => setGlobalFeatureModal(null)}
               title={globalFeatureModal.title}
             />
+          ) : null}
+          {farmBoardEditor ? (
+            <div className="modal-backdrop farm-board-backdrop" role="presentation">
+              <div className="modal-card transfer-card farm-board-modal" role="dialog" aria-modal="true" aria-label="农场留言板">
+                <div>
+                  <div>
+                    <p className="eyebrow">农场留言板</p>
+                    <h3>修改留言</h3>
+                  </div>
+                </div>
+                <textarea
+                  className="farm-board-textarea"
+                  maxLength={40}
+                  onChange={(event) => setFarmBoardEditor((current) => current ? { ...current, message: event.target.value } : current)}
+                  placeholder="写一句给来访者看的农场留言"
+                  value={farmBoardEditor.message}
+                />
+                <div className="transfer-foot-row farm-board-modal-foot">
+                  <span>{Array.from(farmBoardEditor.message).length}/40</span>
+                  <button
+                    className="secondary-button"
+                    disabled={farmBoardEditor.saving}
+                    onClick={handleCloseFarmBoardEditor}
+                    type="button"
+                  >
+                    {farmBoardEditor.saving ? '保存中...' : '关闭'}
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : null}
           {seedCodexState && selectedSeedCodexItem ? (
             <section className="seed-codex-screen" role="dialog" aria-modal="true" aria-label="灵植图鉴">

@@ -18,6 +18,8 @@ interface HomeSceneProps {
   onClaimSpiritSoul: () => void;
   tianjiTalismanClaimed: boolean;
   onClaimTianjiTalisman: () => void;
+  farmBoardMessage: string;
+  onOpenFarmBoard: () => void;
   onNavigate: (scene: ClientSceneKey) => void;
 }
 
@@ -48,6 +50,8 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
     onClaimSpiritSoul,
     tianjiTalismanClaimed,
     onClaimTianjiTalisman,
+    farmBoardMessage,
+    onOpenFarmBoard,
     onNavigate,
   } = props;
   const taxPendingAmount = parseClaimValue(taxPending?.value);
@@ -83,7 +87,7 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
                     <span className="home-claim-item-tag">物品</span>
                     <strong>领取种子</strong>
                   </div>
-                  {/* <strong className="home-claim-item-amount">青灵麦 x3</strong> */}
+                  {/* <strong className="home-claim-item-amount">青灵麦 x3 · 风云稻 x3</strong> */}
                   <em className="home-claim-item-foot" />
                   <button className="secondary-button home-claim-item-button" disabled={claimingStarterSeeds} onClick={onClaimStarterSeeds} type="button">
                     {claimingStarterSeeds ? '收取中' : '领取'}
@@ -124,6 +128,12 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
             </div>
           )}
         </article>
+
+        {/* <button className="panel-card home-farm-board-card" onClick={onOpenFarmBoard} type="button">
+          <span className="eyebrow">农场留言板</span>
+          <strong>{farmBoardMessage.trim() || '还没有留言'}</strong>
+          <span>点击查看或修改留言</span>
+        </button> */}
 
         <article className="panel-card home-task-card">
           <div className="panel-head">

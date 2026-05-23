@@ -34,6 +34,7 @@ export async function runSeed(): Promise<void> {
           update: {
             label: seed.label,
             rarity: seed.rarity,
+            sortOrder: seed.sortOrder,
             seedSeconds: seed.seedSeconds,
             growSeconds: seed.growSeconds,
             matureSeconds: seed.matureSeconds,

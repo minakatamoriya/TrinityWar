@@ -105,6 +105,12 @@ const SEED_LEVEL_CONFIG = {
     stageGold: { growing: 100, mature: 200, withered: 100 },
     stageSeconds: { seeded: 7200, growing: 3600 },
   },
+  xunyamai: {
+    label: '风云稻',
+    rarity: 'common',
+    stageGold: { growing: 100, mature: 200, withered: 100 },
+    stageSeconds: { seeded: 900, growing: 900 },
+  },
   ninglucao: {
     label: '凝露草',
     rarity: 'common',

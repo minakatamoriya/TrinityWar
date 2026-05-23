@@ -59,6 +59,16 @@ export interface RaidSettlementRuleResult {
   reportSummary: string;
 }
 
+function buildRewardSummary(config: { soulReward: number }, shardDrop: RaidSettlementRuleResult['shardDrop']): string {
+  const rewardParts = [`${config.soulReward} 颗兽魂`];
+
+  if (shardDrop) {
+    rewardParts.push(`${shardDrop.label}精魄 x${shardDrop.quantity}`);
+  }
+
+  return rewardParts.join('、');
+}
+
 const TIER_CONFIG: Record<RaidOutcomeTier, {
   title: string;
   subtitle: string;
@@ -96,6 +106,7 @@ export class RaidSettlementRuleService {
     const attackerNextHp = applyHpLoss(input.attackerSpirit, config.attackerHpLossPercent);
     const defenderNextHp = applyHpLoss(input.defenderSpirit, config.defenderHpLossPercent);
     const shardDrop = buildShardDrop(input.defenderSpirit, tier, scoreDeltaRatio);
+    const rewardSummary = buildRewardSummary(config, shardDrop);
     const rewardItems: Array<Record<string, unknown>> = [
       { type: 'spiritSoul', label: '兽魂', quantity: config.soulReward },
     ];
@@ -123,7 +134,7 @@ export class RaidSettlementRuleService {
       defenderSpiritSlotId: input.defenderSpirit?.slotId ?? null,
       attackerNextHp,
       defenderNextHp,
-      reportSummary: `${config.title} · ${config.subtitle}，带回 ${lootGold} 金币、${config.soulReward} 颗兽魂。己方灵宠受到 ${config.attackerHpLossPercent}% 伤害，对方灵宠受到 ${config.defenderHpLossPercent}% 伤害。`,
+      reportSummary: `${config.title} · ${config.subtitle}，带回 ${lootGold} 金币、${rewardSummary}。己方灵宠受到 ${config.attackerHpLossPercent}% 伤害，对方灵宠受到 ${config.defenderHpLossPercent}% 伤害。`,
     };
   }
 }

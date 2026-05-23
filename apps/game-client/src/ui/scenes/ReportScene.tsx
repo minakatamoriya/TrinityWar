@@ -16,11 +16,13 @@ interface ReportSceneProps {
   refreshLabel: string;
   refreshPending: boolean;
   targets: ClientRaidTarget[];
+  followedTargetIds: string[];
   followedTargets: FollowedRaidTargetRow[];
   reportEntries: ClientReportEntry[];
   onChangeTab: (tab: RaidHubTabKey) => void;
   onOpenTarget: (target: ClientRaidTarget) => void;
   onOpenFollowedTarget: (target: FollowedRaidTargetRow) => void;
+  onToggleFollowTarget: (target: ClientRaidTarget) => void;
   onRefresh: () => void;
   onAction: (action: ClientSceneAction, context?: string) => void;
 }
@@ -32,11 +34,13 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
     refreshLabel,
     refreshPending,
     targets,
+    followedTargetIds,
     followedTargets,
     reportEntries,
     onChangeTab,
     onOpenTarget,
     onOpenFollowedTarget,
+    onToggleFollowTarget,
     onRefresh,
     onAction,
   } = props;
@@ -62,7 +66,13 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
           <div className="raid-list-shell">
             <div className="target-list target-list-raid">
               {targets.map((target) => (
-                <RaidTargetCard key={target.id} onSelect={onOpenTarget} target={target} />
+                <RaidTargetCard
+                  followed={followedTargetIds.includes(target.id)}
+                  key={target.id}
+                  onSelect={onOpenTarget}
+                  onToggleFollow={onToggleFollowTarget}
+                  target={target}
+                />
               ))}
             </div>
           </div>

@@ -75,7 +75,7 @@ export class AdminReadonlyService {
     const { page, pageSize, skip, take } = parsePagination(query);
     const [items, total] = await Promise.all([
       this.prisma.db.seedDefinition.findMany({
-        orderBy: [{ rarity: 'asc' }, { seedId: 'asc' }],
+        orderBy: [{ sortOrder: 'asc' }, { seedId: 'asc' }],
         skip,
         take,
       }),
@@ -551,6 +551,7 @@ function parseSeedDefinitionPayload(body: unknown, requireAll: boolean): Record<
   copyStringField(payload, record, 'seedId', requireAll);
   copyStringField(payload, record, 'label', requireAll);
   copyEnumField(payload, record, 'rarity', ['common', 'rare', 'legendary'], requireAll);
+  copyIntegerField(payload, record, 'sortOrder', requireAll, 0);
   copyIntegerField(payload, record, 'seedSeconds', requireAll, 1);
   copyIntegerField(payload, record, 'growSeconds', requireAll, 1);
   copyIntegerField(payload, record, 'matureSeconds', requireAll, 1);
