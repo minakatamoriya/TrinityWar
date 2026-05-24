@@ -341,6 +341,12 @@ export class RaidTargetService {
               growthHp: true,
             },
           },
+          traits: {
+            select: {
+              traitCode: true,
+              traitValue: true,
+            },
+          },
         },
       });
 
@@ -713,6 +719,7 @@ function buildSettledRaidActionResponse(
   scenes: Awaited<ReturnType<ClientReadService['getSceneContent']>>,
 ): ClientRaidActionResponse {
   const rewards = normalizeRaidRewards(settlement.rewardItemsJson);
+  const battleEvents = normalizeRaidBattleEvents(settlement.rewardItemsJson);
 
   return {
     app: APP_NAME,
@@ -731,6 +738,7 @@ function buildSettledRaidActionResponse(
       temporaryClaimExpiresAt: settlement.temporaryClaimExpiresAt?.toISOString() ?? null,
       casualties: 0,
       rewards,
+      battleEvents,
       protectedUntil: protectedUntil?.toISOString() ?? new Date().toISOString(),
       reportSummary: settlement.reportSummary,
     },
@@ -744,13 +752,28 @@ function normalizeRaidRewards(value: unknown): ClientRaidRewardItem[] {
 
   return value
     .map((item) => item as { type?: string; seedId?: string; spiritId?: string; label?: string; quantity?: number })
-    .filter((item) => typeof item.label === 'string' && typeof item.quantity === 'number')
+    .filter((item) => item.type !== 'battleEvent' && typeof item.label === 'string' && typeof item.quantity === 'number')
     .map((item) => ({
       seedId: item.seedId ?? item.spiritId ?? item.type ?? 'raid-reward',
       label: item.label ?? '奖励',
       quantity: Math.max(Math.floor(item.quantity ?? 0), 0),
     }))
     .filter((item) => item.quantity > 0);
+}
+
+function normalizeRaidBattleEvents(value: unknown): NonNullable<ClientRaidActionResponse['result']['battleEvents']> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => item as { type?: string; label?: string; description?: string })
+    .filter((item) => item.type === 'battleEvent' && typeof item.label === 'string' && typeof item.description === 'string')
+    .map((item) => ({
+      type: 'damage' as const,
+      label: item.label ?? '',
+      description: item.description ?? '',
+    }));
 }
 
 function mapFieldStatusBadge(status: string): string {
@@ -872,6 +895,10 @@ function buildSpiritBattleSnapshot(
       growthDefense: number;
       growthHp: number;
     } | null;
+    traits?: Array<{
+      traitCode: string;
+      traitValue: number;
+    }>;
   } | null,
 ) {
   if (!slot?.spiritDefinition) {
@@ -887,6 +914,7 @@ function buildSpiritBattleSnapshot(
     maxHp: slot.maxHp,
     status: slot.status,
     spiritDefinition: slot.spiritDefinition,
+    traits: slot.traits ?? [],
   };
 }
 

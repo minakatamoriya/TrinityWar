@@ -2,6 +2,7 @@
 import type { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
+import { LandDeedService } from '../land-deed/land-deed.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RaidRepository } from './raid.repository.js';
 import { RaidSettlementRuleService, type SpiritBattleSnapshot } from './raid-settlement-rule.service.js';
@@ -13,6 +14,7 @@ export class RaidSettlementService {
     @Inject(RaidRepository) private readonly raidRepository: RaidRepository,
     @Inject(RaidSettlementRuleService) private readonly raidSettlementRuleService: RaidSettlementRuleService,
     @Inject(AuditService) private readonly auditService: AuditService,
+    @Inject(LandDeedService) private readonly landDeedService: LandDeedService,
   ) {}
 
   settleRaidOrder(raidOrderId: string) {
@@ -66,18 +68,13 @@ export class RaidSettlementService {
       const settlementResult = this.raidSettlementRuleService.calculate({
         lockedGold,
         vaultGold: raidOrder.attacker.wallet.vaultGold,
-        vaultCapacity: raidOrder.attacker.wallet.vaultCapacity,
         attackerFactionName: raidOrder.attacker.faction?.name ?? readFactionName(raidOrder.attackerSnapshotJson) ?? null,
         defenderFactionName: raidOrder.defender.faction?.name ?? readFactionName(raidOrder.defenderSnapshotJson) ?? null,
         attackerSpirit: readSpiritSnapshot(raidOrder.attackerSnapshotJson) ?? buildSpiritSnapshotFromSlot(raidOrder.attacker.spiritSlots[0] ?? null),
         defenderSpirit: readSpiritSnapshot(raidOrder.defenderSnapshotJson) ?? buildSpiritSnapshotFromSlot(raidOrder.defender.spiritSlots[0] ?? null),
       });
       const now = new Date();
-      const pendingRaidOverflowExpiresAt = settlementResult.overflowGold > 0
-        ? new Date(now.getTime() + 5 * 60 * 1000)
-        : raidOrder.attacker.wallet.pendingRaidOverflowExpiresAt;
       const nextVaultGold = raidOrder.attacker.wallet.vaultGold + settlementResult.depositedGold;
-      const nextPendingRaidOverflowGold = raidOrder.attacker.wallet.pendingRaidOverflowGold + settlementResult.overflowGold;
       const attackerUnitLoss = 0;
       const unitsReturned = raidOrder.dispatchedUnitCount;
 
@@ -89,11 +86,14 @@ export class RaidSettlementService {
         result: settlementResult.result,
         lootGold: settlementResult.lootGold,
         depositedGold: settlementResult.depositedGold,
-        overflowGold: settlementResult.overflowGold,
-        temporaryClaimExpiresAt: settlementResult.overflowGold > 0 ? pendingRaidOverflowExpiresAt : null,
+        overflowGold: 0,
+        temporaryClaimExpiresAt: null,
         attackerLoss: settlementResult.attackerHpLossPercent,
         defenderLoss: settlementResult.defenderHpLossPercent,
-        rewardItemsJson: settlementResult.rewardItems as Prisma.InputJsonValue,
+        rewardItemsJson: [
+          ...settlementResult.rewardItems,
+          ...settlementResult.battleEvents.map((event) => ({ ...event, type: 'battleEvent' })),
+        ] as Prisma.InputJsonValue,
         reportSummary: settlementResult.reportSummary,
       }, client);
 
@@ -114,13 +114,11 @@ export class RaidSettlementService {
         },
       });
 
-      if (settlementResult.depositedGold > 0 || settlementResult.overflowGold > 0) {
+      if (settlementResult.depositedGold > 0) {
         await client.playerWallet.update({
           where: { playerId: raidOrder.attackerPlayerId },
           data: {
             vaultGold: nextVaultGold,
-            pendingRaidOverflowGold: nextPendingRaidOverflowGold,
-            pendingRaidOverflowExpiresAt,
             balanceVersion: { increment: 1 },
           },
         });
@@ -186,6 +184,10 @@ export class RaidSettlementService {
           settledAt: now,
         },
       });
+
+      if (settlementResult.result === 'WIN') {
+        await this.landDeedService.reconcilePlayerLandDeeds(client, raidOrder.attackerPlayerId, now);
+      }
 
       return settlement;
     });
@@ -311,13 +313,17 @@ export class RaidSettlementService {
       });
     }
 
-    await client.playerSpiritResource.update({
-      where: { playerId: raidOrder.attackerPlayerId },
-      data: {
-        spiritSoul: { increment: settlementResult.spiritSoulReward },
-        resourceVersion: { increment: 1 },
-      },
-    });
+    if (settlementResult.soulRewards.ordinary > 0 || settlementResult.soulRewards.rare > 0 || settlementResult.soulRewards.legendary > 0) {
+      await client.playerSpiritResource.update({
+        where: { playerId: raidOrder.attackerPlayerId },
+        data: {
+          ordinarySoul: settlementResult.soulRewards.ordinary > 0 ? { increment: settlementResult.soulRewards.ordinary } : undefined,
+          rareSoul: settlementResult.soulRewards.rare > 0 ? { increment: settlementResult.soulRewards.rare } : undefined,
+          legendarySoul: settlementResult.soulRewards.legendary > 0 ? { increment: settlementResult.soulRewards.legendary } : undefined,
+          resourceVersion: { increment: 1 },
+        },
+      });
+    }
 
     if (settlementResult.shardDrop) {
       const now = new Date();
@@ -489,6 +495,10 @@ function buildSpiritSnapshotFromSlot(slot: {
     growthDefense: number;
     growthHp: number;
   } | null;
+  traits?: Array<{
+    traitCode: string;
+    traitValue: number;
+  }>;
 } | null): SpiritBattleSnapshot | null {
   if (!slot?.spiritDefinition) {
     return null;
@@ -503,6 +513,7 @@ function buildSpiritSnapshotFromSlot(slot: {
     maxHp: slot.maxHp,
     status: slot.status,
     spiritDefinition: slot.spiritDefinition,
+    traits: slot.traits ?? [],
   };
 }
 
@@ -540,13 +551,17 @@ function buildDefenseReportSummary(
 }
 
 function formatRewardSummary(settlementResult: ReturnType<RaidSettlementRuleService['calculate']>): string {
-  const rewardParts = [`${settlementResult.spiritSoulReward} 颗兽魂`];
+  const rewardParts = [
+    settlementResult.soulRewards.ordinary > 0 ? `普通兽魂 x${settlementResult.soulRewards.ordinary}` : '',
+    settlementResult.soulRewards.rare > 0 ? `稀有兽魂 x${settlementResult.soulRewards.rare}` : '',
+    settlementResult.soulRewards.legendary > 0 ? `传说兽魂 x${settlementResult.soulRewards.legendary}` : '',
+  ].filter(Boolean);
 
   if (settlementResult.shardDrop) {
     rewardParts.push(`${settlementResult.shardDrop.label}精魄 x${settlementResult.shardDrop.quantity}`);
   }
 
-  return rewardParts.join('、');
+  return rewardParts.join('、') || '无额外掉落';
 }
 
 function formatBattleReportTime(value: Date): string {

@@ -56,12 +56,18 @@ export class RaidRepository {
                     baseDefense: true,
                     baseHp: true,
                     growthAttack: true,
-                    growthDefense: true,
-                    growthHp: true,
-                  },
-                },
+                growthDefense: true,
+                growthHp: true,
               },
             },
+            traits: {
+              select: {
+                traitCode: true,
+                traitValue: true,
+              },
+            },
+          },
+        },
             wallet: { select: { vaultGold: true, walletGold: true } },
             army: {
               select: {

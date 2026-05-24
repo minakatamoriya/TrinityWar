@@ -3,9 +3,11 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { APP_NAME, type ClientBootstrapResponse, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
+import { LandDeedService } from '../land-deed/land-deed.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ArmyTrainingLifecycleService } from './army-training-lifecycle.service.js';
 import { ClientReadRepository } from './client-read.repository.js';
+import { DailyTaskLifecycleService } from './daily-task-lifecycle.service.js';
 import { FieldLifecycleService } from './field-lifecycle.service.js';
 import { HomeSummaryAssembler } from './home-summary.assembler.js';
 import { PassiveIncomeLifecycleService } from './passive-income-lifecycle.service.js';
@@ -18,7 +20,9 @@ export class ClientReadService {
     @Inject(ClientReadRepository) private readonly clientReadRepository: ClientReadRepository,
     @Inject(ArmyTrainingLifecycleService) private readonly armyTrainingLifecycleService: ArmyTrainingLifecycleService,
     @Inject(FieldLifecycleService) private readonly fieldLifecycleService: FieldLifecycleService,
+    @Inject(DailyTaskLifecycleService) private readonly dailyTaskLifecycleService: DailyTaskLifecycleService,
     @Inject(PassiveIncomeLifecycleService) private readonly passiveIncomeLifecycleService: PassiveIncomeLifecycleService,
+    @Inject(LandDeedService) private readonly landDeedService: LandDeedService,
     @Inject(HomeSummaryAssembler) private readonly homeSummaryAssembler: HomeSummaryAssembler,
     @Inject(SceneContentAssembler) private readonly sceneContentAssembler: SceneContentAssembler,
   ) {}
@@ -118,7 +122,9 @@ export class ClientReadService {
     await this.armyTrainingLifecycleService.settlePlayerTrainingQueues(client, playerId);
     await this.passiveIncomeLifecycleService.settlePlayerPassiveIncome(client, playerId);
     await this.fieldLifecycleService.settlePlayerFields(client, playerId);
-    const readModel = await this.clientReadRepository.findHomeSummary(playerId, getLocalDateKey(), client);
+    const dateKey = getLocalDateKey();
+    await this.dailyTaskLifecycleService.ensurePlayerDailyTasks(client, playerId, dateKey);
+    const readModel = await this.clientReadRepository.findHomeSummary(playerId, dateKey, client);
 
     if (!readModel) {
       throw new BusinessError({
@@ -142,6 +148,7 @@ export class ClientReadService {
     await this.armyTrainingLifecycleService.settlePlayerTrainingQueues(client, playerId);
     await this.passiveIncomeLifecycleService.settlePlayerPassiveIncome(client, playerId);
     await this.fieldLifecycleService.settlePlayerFields(client, playerId);
+    await this.landDeedService.reconcilePlayerLandDeeds(client, playerId);
     await this.ensureRaidTargetPool(client, playerId);
     const [readModel, codex] = await Promise.all([
       this.clientReadRepository.findSceneContent(playerId, client),

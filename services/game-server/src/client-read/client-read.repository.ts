@@ -120,6 +120,19 @@ export interface SceneContentReadModel {
       baseYieldGold: number;
     } | null;
   }>;
+  landDeedProgress: Array<{
+    deedKey: string;
+    status: string;
+    progressJson: Prisma.JsonValue;
+    claimedAt: Date | null;
+  }>;
+  factionStipendStates: Array<{
+    dateKey: string;
+    contributionSnapshot: number;
+    tierKey: string;
+    rewardJson: Prisma.JsonValue;
+    claimedAt: Date | null;
+  }>;
   factions: Array<{
     id: string;
     name: string;
@@ -266,6 +279,26 @@ export class ClientReadRepository {
             finishAt: true,
           },
         },
+        landDeedProgress: {
+          orderBy: { deedKey: 'asc' },
+          select: {
+            deedKey: true,
+            status: true,
+            progressJson: true,
+            claimedAt: true,
+          },
+        },
+        factionStipendStates: {
+          where: { dateKey: getLocalDateKeyForRepository() },
+          take: 1,
+          select: {
+            dateKey: true,
+            contributionSnapshot: true,
+            tierKey: true,
+            rewardJson: true,
+            claimedAt: true,
+          },
+        },
       },
     });
 
@@ -383,6 +416,26 @@ export class ClientReadRepository {
                 baseYieldGold: true,
               },
             },
+          },
+        },
+        landDeedProgress: {
+          orderBy: { deedKey: 'asc' },
+          select: {
+            deedKey: true,
+            status: true,
+            progressJson: true,
+            claimedAt: true,
+          },
+        },
+        factionStipendStates: {
+          where: { dateKey: getLocalDateKeyForRepository() },
+          take: 1,
+          select: {
+            dateKey: true,
+            contributionSnapshot: true,
+            tierKey: true,
+            rewardJson: true,
+            claimedAt: true,
           },
         },
       },
@@ -509,10 +562,23 @@ export class ClientReadRepository {
       army: player.army,
       trainingQueues: player.trainingQueues,
       fieldSlots: player.fieldSlots,
+      landDeedProgress: player.landDeedProgress,
+      factionStipendStates: player.factionStipendStates,
       factions,
       raidTargetPools,
       raidMessageTemplates,
       battleReports,
     };
   }
+}
+
+function getLocalDateKeyForRepository(): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  return formatter.format(new Date());
 }

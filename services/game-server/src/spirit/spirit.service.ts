@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { PlayerSpiritStatus, Prisma, PrismaClient, SpiritElement, SpiritRarity, SpiritRole } from '@prisma/client';
-import { APP_NAME, type ClientBuySpiritSoulRequest, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientRecoverSpiritRequest, type ClientSetMainSpiritRequest, type ClientSpiritCodexEntry, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritStatus, type ClientSpiritSlot, type ClientSpiritDefinition, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
+import { APP_NAME, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientRecoverSpiritRequest, type ClientRollSpiritTraitsRequest, type ClientSetMainSpiritRequest, type ClientSpiritCodexEntry, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritStatus, type ClientSpiritSlot, type ClientSpiritDefinition, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
 import { AuditService } from '../audit/audit.service.js';
+import { DailyTaskLifecycleService } from '../client-read/daily-task-lifecycle.service.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
@@ -14,10 +15,54 @@ const SPIRIT_SOUL_GOLD_PRICE = 100;
 const SPIRIT_MAX_LEVEL = 50;
 const SPIRIT_DAILY_RECOVERY_LIMIT = 3;
 const SPIRIT_DISSOLVE_REFUND_RATIO = 0.35;
+const SPIRIT_LEVEL_EXP_REQUIRED = 10_000;
+const SPIRIT_ROOT_EXP_BPS = 50;
+const SPIRIT_ROOT_PER_SATIATED_HOUR = 5;
+const SPIRIT_FEED_ONCE_SECONDS = 2 * 60 * 60;
+const SPIRIT_SATIATED_MAX_SECONDS = 8 * 60 * 60;
+const SPIRIT_SATIATED_EXP_BONUS_BPS = 5000;
+const SPIRIT_AD_DAILY_LIMIT = 3;
+const SPIRIT_AD_TALISMAN_REWARD = 5;
+
+const SPIRIT_SHOP_ITEMS: ClientSpiritShopItem[] = [
+  { itemId: 'spirit-root-100', label: '灵根 x100', description: '日常补粮', priceTianjiTalisman: 10, limitLabel: '不限购', remainingPurchases: null, rewards: [{ kind: 'spirit-root', label: '灵根', quantity: 100 }] },
+  { itemId: 'spirit-marrow-5', label: '灵髓 x5', description: '洗练基础材料', priceTianjiTalisman: 20, limitLabel: '每日 5 次', remainingPurchases: 5, rewards: [{ kind: 'spirit-marrow', label: '灵髓', quantity: 5 }] },
+  { itemId: 'spirit-jade-1', label: '灵玉 x1', description: '高级洗练材料', priceTianjiTalisman: 80, limitLabel: '每周 1 次', remainingPurchases: 1, rewards: [{ kind: 'spirit-jade', label: '灵玉', quantity: 1 }] },
+  { itemId: 'ordinary-soul-10', label: '普通兽魂 x10', description: '低段突破', priceTianjiTalisman: 5, limitLabel: '每日 3 次', remainingPurchases: 3, rewards: [{ kind: 'ordinary-soul', label: '普通兽魂', quantity: 10 }] },
+  { itemId: 'rare-soul-1', label: '稀有兽魂 x1', description: '中段突破', priceTianjiTalisman: 30, limitLabel: '每日 2 次', remainingPurchases: 2, rewards: [{ kind: 'rare-soul', label: '稀有兽魂', quantity: 1 }] },
+  { itemId: 'legendary-soul-1', label: '传说兽魂 x1', description: '高层突破', priceTianjiTalisman: 150, limitLabel: '每周 1 次', remainingPurchases: 1, rewards: [{ kind: 'legendary-soul', label: '传说兽魂', quantity: 1 }] },
+];
+
+const SPIRIT_BREAKTHROUGH_COSTS: Record<number, { quality: 'ordinary' | 'rare' | 'legendary'; count: number }> = {
+  1: { quality: 'ordinary', count: 5 },
+  2: { quality: 'ordinary', count: 12 },
+  3: { quality: 'rare', count: 10 },
+  4: { quality: 'rare', count: 20 },
+  5: { quality: 'legendary', count: 8 },
+};
+
+const SPIRIT_TRAIT_DEFINITIONS: Array<{ code: ClientSpiritTraitCode; label: string; value: number; description: string }> = [
+  { code: 'claw', label: '利爪', value: 10, description: '攻击 +10%' },
+  { code: 'thick_skin', label: '厚皮', value: 10, description: '生命 +10%' },
+  { code: 'hard_armor', label: '硬甲', value: 10, description: '防御 +10%' },
+  { code: 'crit', label: '暴击', value: 6, description: '暴击率 +6%' },
+  { code: 'crit_damage', label: '爆伤', value: 20, description: '暴击伤害 +20%' },
+  { code: 'dodge', label: '闪避', value: 5, description: '闪避率 +5%' },
+  { code: 'counter', label: '反击', value: 10, description: '受击 +10% 概率反击，造成 50% 伤害' },
+  { code: 'lifesteal', label: '吸血', value: 10, description: '造成伤害的 10% 回复自身' },
+  { code: 'armor_break', label: '破甲', value: 10, description: '攻击无视目标 10% 防御' },
+  { code: 'tenacity', label: '韧性', value: 10, description: '受暴击时伤害降低 10%' },
+];
 
 type SpiritReadResource = {
   playerId: string;
   spiritSoul: number;
+  spiritRoot: number;
+  spiritMarrow: number;
+  spiritJade: number;
+  ordinarySoul: number;
+  rareSoul: number;
+  legendarySoul: number;
   tianjiTalisman: number;
   dailyRecoveryUsed: number;
   dailyRecoveryDateKey: string | null;
@@ -28,6 +73,13 @@ type SpiritReadResource = {
   updatedAt: Date;
 };
 
+type SpiritReadTrait = {
+  slotIndex: number;
+  traitCode: string;
+  traitValue: number;
+  sourceType: string;
+};
+
 @Injectable()
 export class SpiritService {
   constructor(
@@ -35,6 +87,7 @@ export class SpiritService {
     @Inject(ClientReadService) private readonly clientReadService: ClientReadService,
     @Inject(IdempotencyService) private readonly idempotencyService: IdempotencyService,
     @Inject(AuditService) private readonly auditService: AuditService,
+    @Inject(DailyTaskLifecycleService) private readonly dailyTaskLifecycleService: DailyTaskLifecycleService,
   ) {}
 
   async getSpiritStateResponse(playerId: string): Promise<ClientSpiritStateResponse> {
@@ -53,7 +106,7 @@ export class SpiritService {
     }
 
     const readModel = await this.findSpiritReadModel(playerId, client);
-    return buildSpiritState(readModel.resource, readModel.slots, readModel.codex);
+    return buildSpiritState(readModel.resource, readModel.slots, readModel.codex, readModel.shopPurchases, readModel.adRewardUsedToday);
   }
 
   async buySpiritSoul(
@@ -271,6 +324,542 @@ export class SpiritService {
 
       const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition.label} 已升至 Lv.${nextLevel}。`);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
+      return response;
+    });
+  }
+
+  async feedSpirit(
+    playerId: string,
+    request: ClientFeedSpiritRequest,
+    headerIdempotencyKey?: string,
+  ): Promise<ClientSpiritMutationResponse> {
+    validateFeedSpiritRequest(request);
+    const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
+
+    return this.prisma.transaction(async (client) => {
+      const requestHash = hashRequest({
+        endpoint: 'feed',
+        slotIndex: request.slotIndex,
+        actionType: request.actionType,
+        slotVersion: request.slotVersion ?? null,
+        resourceVersion: request.resourceVersion ?? null,
+      });
+      const idempotencyRecord = await this.prepareIdempotencyRecord(client, playerId, 'spirit-feed', idempotencyKey, requestHash);
+      if (idempotencyRecord?.status === 'completed' && idempotencyRecord.responseSnapshotJson) {
+        return idempotencyRecord.responseSnapshotJson as unknown as ClientSpiritMutationResponse;
+      }
+
+      const [resource, slot] = await Promise.all([
+        client.playerSpiritResource.findUnique({
+          where: { playerId },
+          select: {
+            spiritRoot: true,
+            resourceVersion: true,
+          },
+        }),
+        client.playerSpiritSlot.findUnique({
+          where: { playerId_slotIndex: { playerId, slotIndex: request.slotIndex } },
+          select: {
+            id: true,
+            level: true,
+            exp: true,
+            breakthroughStage: true,
+            satiatedUntil: true,
+            lastExpSettledAt: true,
+            slotVersion: true,
+            spiritDefinitionId: true,
+            spiritDefinition: { select: { label: true } },
+          },
+        }),
+      ]);
+
+      if (!resource || !slot || !slot.spiritDefinitionId) {
+        throw new BusinessError({ code: ErrorCode.NotFound, message: 'Spirit slot not found.', statusCode: 404 });
+      }
+
+      assertVersion('resourceVersion', request.resourceVersion, resource.resourceVersion);
+      assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
+
+      const now = new Date();
+      const settled = settleSpiritProgress(slot, now);
+      const satiatedRemainingSeconds = Math.max(Math.floor(((settled.satiatedUntil?.getTime() ?? now.getTime()) - now.getTime()) / 1000), 0);
+      const availableSatiatedSeconds = Math.max(SPIRIT_SATIATED_MAX_SECONDS - satiatedRemainingSeconds, 0);
+      if (availableSatiatedSeconds <= 0) {
+        throw new BusinessError({ code: ErrorCode.Conflict, message: 'Spirit satiated time is already full.', statusCode: 409 });
+      }
+
+      const requestedSeconds = request.actionType === 'feed_once' ? SPIRIT_FEED_ONCE_SECONDS : availableSatiatedSeconds;
+      const satiatedSecondsAdded = Math.min(requestedSeconds, availableSatiatedSeconds);
+      const feedCount = Math.ceil(satiatedSecondsAdded / 3600 * SPIRIT_ROOT_PER_SATIATED_HOUR);
+
+      if (resource.spiritRoot < feedCount) {
+        throw new BusinessError({ code: ErrorCode.Conflict, message: 'Insufficient spirit root.', statusCode: 409 });
+      }
+
+      const isAtBreakthrough = isAtPendingBreakthrough(settled.level, settled.breakthroughStage);
+      const immediateExpGain = isAtBreakthrough ? 0 : feedCount * SPIRIT_ROOT_EXP_BPS;
+      const progressed = applyExpGain(settled, immediateExpGain);
+      const nextSatiatedUntil = new Date(now.getTime() + (satiatedRemainingSeconds + satiatedSecondsAdded) * 1000);
+
+      await client.playerSpiritResource.update({
+        where: { playerId },
+        data: {
+          spiritRoot: { decrement: feedCount },
+          resourceVersion: { increment: 1 },
+        },
+      });
+      await client.playerSpiritSlot.update({
+        where: { id: slot.id },
+        data: {
+          level: progressed.level,
+          exp: progressed.exp,
+          breakthroughStage: progressed.breakthroughStage,
+          satiatedUntil: nextSatiatedUntil,
+          lastExpSettledAt: now,
+          slotVersion: { increment: 1 },
+        },
+      });
+      await client.spiritFeedLog.create({
+        data: {
+          playerId,
+          spiritSlotId: slot.id,
+          actionType: request.actionType,
+          feedCount,
+          satiatedSecondsAdded,
+          immediateExpGain,
+          beforeSatiatedUntil: slot.satiatedUntil,
+          afterSatiatedUntil: nextSatiatedUntil,
+          requestIdempotencyKey: idempotencyKey ?? null,
+        },
+      });
+
+      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 已投喂灵根。`);
+      await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
+      return response;
+    });
+  }
+
+  async breakthroughSpirit(
+    playerId: string,
+    request: ClientBreakthroughSpiritRequest,
+    headerIdempotencyKey?: string,
+  ): Promise<ClientSpiritMutationResponse> {
+    validateBreakthroughSpiritRequest(request);
+    const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
+
+    return this.prisma.transaction(async (client) => {
+      const requestHash = hashRequest({
+        endpoint: 'breakthrough',
+        slotIndex: request.slotIndex,
+        targetStage: request.targetStage ?? null,
+        slotVersion: request.slotVersion ?? null,
+        resourceVersion: request.resourceVersion ?? null,
+      });
+      const idempotencyRecord = await this.prepareIdempotencyRecord(client, playerId, 'spirit-breakthrough', idempotencyKey, requestHash);
+      if (idempotencyRecord?.status === 'completed' && idempotencyRecord.responseSnapshotJson) {
+        return idempotencyRecord.responseSnapshotJson as unknown as ClientSpiritMutationResponse;
+      }
+
+      const [resource, slot] = await Promise.all([
+        client.playerSpiritResource.findUnique({
+          where: { playerId },
+          select: {
+            ordinarySoul: true,
+            rareSoul: true,
+            legendarySoul: true,
+            resourceVersion: true,
+          },
+        }),
+        client.playerSpiritSlot.findUnique({
+          where: { playerId_slotIndex: { playerId, slotIndex: request.slotIndex } },
+          select: {
+            id: true,
+            level: true,
+            breakthroughStage: true,
+            slotVersion: true,
+            spiritDefinitionId: true,
+            spiritDefinition: { select: { label: true } },
+          },
+        }),
+      ]);
+
+      if (!resource || !slot || !slot.spiritDefinitionId) {
+        throw new BusinessError({ code: ErrorCode.NotFound, message: 'Spirit slot not found.', statusCode: 404 });
+      }
+
+      assertVersion('resourceVersion', request.resourceVersion, resource.resourceVersion);
+      assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
+
+      const targetStage = request.targetStage ?? Math.floor(slot.level / 10);
+      if (!isBreakthroughLevel(slot.level) || targetStage !== Math.floor(slot.level / 10) || slot.breakthroughStage >= targetStage) {
+        throw new BusinessError({ code: ErrorCode.BadRequest, message: 'Spirit is not at a pending breakthrough node.', statusCode: 400 });
+      }
+
+      const cost = SPIRIT_BREAKTHROUGH_COSTS[targetStage];
+      if (!cost) {
+        throw new BusinessError({ code: ErrorCode.BadRequest, message: 'Unsupported breakthrough stage.', statusCode: 400 });
+      }
+
+      const currentSoul = getSoulCount(resource, cost.quality);
+      if (currentSoul < cost.count) {
+        throw new BusinessError({ code: ErrorCode.Conflict, message: 'Insufficient spirit soul for breakthrough.', statusCode: 409 });
+      }
+
+      await client.playerSpiritResource.update({
+        where: { playerId },
+        data: {
+          [getSoulField(cost.quality)]: { decrement: cost.count },
+          resourceVersion: { increment: 1 },
+        },
+      });
+      await client.playerSpiritSlot.update({
+        where: { id: slot.id },
+        data: {
+          breakthroughStage: targetStage,
+          lastExpSettledAt: new Date(),
+          slotVersion: { increment: 1 },
+        },
+      });
+      await client.spiritBreakthroughLog.create({
+        data: {
+          playerId,
+          spiritSlotId: slot.id,
+          fromStage: slot.breakthroughStage,
+          toStage: targetStage,
+          consumedSoulQuality: cost.quality,
+          consumedSoulCount: cost.count,
+          requestIdempotencyKey: idempotencyKey ?? null,
+        },
+      });
+
+      await this.ensureNaturalTraitSlots(client, slot.id, targetStage);
+      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 已突破。`);
+      await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
+      return response;
+    });
+  }
+
+  async rollSpiritTraits(
+    playerId: string,
+    request: ClientRollSpiritTraitsRequest,
+    headerIdempotencyKey?: string,
+  ): Promise<ClientSpiritMutationResponse> {
+    validateRollSpiritTraitsRequest(request);
+    const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
+
+    return this.prisma.transaction(async (client) => {
+      const requestHash = hashRequest({
+        endpoint: 'roll-traits',
+        slotIndex: request.slotIndex,
+        mode: request.mode,
+        lockedSlotIndex: request.lockedSlotIndex ?? null,
+        targetSlotIndex: request.targetSlotIndex ?? null,
+        targetTraitCode: request.targetTraitCode ?? null,
+        slotVersion: request.slotVersion ?? null,
+        walletVersion: request.walletVersion ?? null,
+        resourceVersion: request.resourceVersion ?? null,
+      });
+      const idempotencyRecord = await this.prepareIdempotencyRecord(client, playerId, 'spirit-roll-traits', idempotencyKey, requestHash);
+      if (idempotencyRecord?.status === 'completed' && idempotencyRecord.responseSnapshotJson) {
+        return idempotencyRecord.responseSnapshotJson as unknown as ClientSpiritMutationResponse;
+      }
+
+      const [resource, wallet, slot] = await Promise.all([
+        client.playerSpiritResource.findUnique({
+          where: { playerId },
+          select: {
+            spiritMarrow: true,
+            spiritJade: true,
+            resourceVersion: true,
+          },
+        }),
+        client.playerWallet.findUnique({
+          where: { playerId },
+          select: {
+            vaultGold: true,
+            balanceVersion: true,
+          },
+        }),
+        client.playerSpiritSlot.findUnique({
+          where: { playerId_slotIndex: { playerId, slotIndex: request.slotIndex } },
+          select: {
+            id: true,
+            level: true,
+            breakthroughStage: true,
+            slotVersion: true,
+            spiritDefinitionId: true,
+            spiritDefinition: { select: { label: true } },
+            traits: {
+              select: {
+                slotIndex: true,
+                traitCode: true,
+                traitValue: true,
+                sourceType: true,
+              },
+              orderBy: { slotIndex: 'asc' },
+            },
+          },
+        }),
+      ]);
+
+      if (!resource || !wallet || !slot || !slot.spiritDefinitionId) {
+        throw new BusinessError({ code: ErrorCode.NotFound, message: 'Spirit slot not found.', statusCode: 404 });
+      }
+
+      assertVersion('resourceVersion', request.resourceVersion, resource.resourceVersion);
+      assertVersion('walletVersion', request.walletVersion, wallet.balanceVersion);
+      assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
+
+      const unlockedSlots = getUnlockedTraitSlots(slot.breakthroughStage);
+      if (unlockedSlots <= 0) {
+        throw new BusinessError({ code: ErrorCode.BadRequest, message: 'No unlocked trait slots.', statusCode: 400 });
+      }
+
+      const cost = getRollCost(request.mode);
+      if (resource.spiritMarrow < cost.marrow || resource.spiritJade < cost.jade) {
+        throw new BusinessError({ code: ErrorCode.Conflict, message: 'Insufficient trait roll materials.', statusCode: 409 });
+      }
+      if (wallet.vaultGold < cost.gold) {
+        throw new BusinessError({ code: ErrorCode.InsufficientVaultGold, message: 'Insufficient vault gold.', statusCode: 409 });
+      }
+
+      const beforeTraits = normalizeTraitRows(slot.traits);
+      const candidates: Array<Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }>> = [];
+      let resultTraits: Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }>;
+
+      if (request.mode === 'batch_basic') {
+        for (let index = 0; index < 10; index += 1) {
+          candidates.push(randomTraits(unlockedSlots, true));
+        }
+        resultTraits = candidates[0] ?? randomTraits(unlockedSlots, true);
+      } else if (request.mode === 'advanced') {
+        if (typeof request.lockedSlotIndex !== 'number') {
+          throwBadRequest('lockedSlotIndex is required for advanced roll.');
+        }
+        const lockedTrait = beforeTraits.find((trait) => trait.slotIndex === request.lockedSlotIndex);
+        if (!lockedTrait) {
+          throwBadRequest('lockedSlotIndex must refer to an unlocked existing trait.');
+        }
+        resultTraits = randomTraits(unlockedSlots, true).map((trait) => (trait.slotIndex === lockedTrait.slotIndex ? lockedTrait : trait));
+      } else if (request.mode === 'ultimate') {
+        if (typeof request.targetSlotIndex !== 'number' || !request.targetTraitCode) {
+          throwBadRequest('targetSlotIndex and targetTraitCode are required for ultimate roll.');
+        }
+        if (request.targetSlotIndex < 1 || request.targetSlotIndex > unlockedSlots) {
+          throwBadRequest('targetSlotIndex must refer to an unlocked trait slot.');
+        }
+        assertKnownTraitCode(request.targetTraitCode);
+        resultTraits = mergeWithExistingTraits(beforeTraits, unlockedSlots).map((trait) =>
+          trait.slotIndex === request.targetSlotIndex ? { slotIndex: trait.slotIndex, traitCode: request.targetTraitCode as ClientSpiritTraitCode } : trait,
+        );
+      } else {
+        resultTraits = randomTraits(unlockedSlots, true);
+      }
+
+      await client.playerSpiritResource.update({
+        where: { playerId },
+        data: {
+          spiritMarrow: { decrement: cost.marrow },
+          spiritJade: { decrement: cost.jade },
+          resourceVersion: { increment: 1 },
+        },
+      });
+      if (cost.gold > 0) {
+        await client.playerWallet.update({
+          where: { playerId },
+          data: {
+            vaultGold: { decrement: cost.gold },
+            balanceVersion: { increment: 1 },
+          },
+        });
+        await this.auditService.createWalletChangeLog(client, {
+          playerId,
+          walletBucket: 'vault',
+          changeType: 'spirit-roll-traits',
+          deltaGold: -cost.gold,
+          beforeGold: wallet.vaultGold,
+          afterGold: wallet.vaultGold - cost.gold,
+          relatedEntityType: 'spirit-slot',
+          relatedEntityId: slot.id,
+          requestIdempotencyKey: idempotencyKey ?? null,
+          note: `Roll spirit traits in ${request.mode} mode.`,
+        });
+      }
+      await client.playerSpiritTrait.deleteMany({ where: { spiritSlotId: slot.id } });
+      for (const trait of resultTraits) {
+        const definition = getTraitDefinition(trait.traitCode);
+        await client.playerSpiritTrait.create({
+          data: {
+            spiritSlotId: slot.id,
+            slotIndex: trait.slotIndex,
+            traitCode: definition.code,
+            traitValue: definition.value,
+            sourceType: 'roll',
+          },
+        });
+      }
+      await client.playerSpiritSlot.update({
+        where: { id: slot.id },
+        data: { slotVersion: { increment: 1 } },
+      });
+      await client.spiritTraitRollLog.create({
+        data: {
+          playerId,
+          spiritSlotId: slot.id,
+          mode: request.mode,
+          lockedSlotIndex: request.lockedSlotIndex ?? null,
+          targetSlotIndex: request.targetSlotIndex ?? null,
+          targetTraitCode: request.targetTraitCode ?? null,
+          consumedJson: cost as unknown as Prisma.InputJsonValue,
+          beforeTraitsJson: beforeTraits as unknown as Prisma.InputJsonValue,
+          resultTraitsJson: resultTraits as unknown as Prisma.InputJsonValue,
+          candidateResultsJson: request.mode === 'batch_basic' ? candidates as unknown as Prisma.InputJsonValue : undefined,
+          requestIdempotencyKey: idempotencyKey ?? null,
+        },
+      });
+
+      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 词条已洗练。`);
+      await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
+      return response;
+    });
+  }
+
+  async buyShopItem(
+    playerId: string,
+    request: ClientBuySpiritShopItemRequest,
+    headerIdempotencyKey?: string,
+  ): Promise<ClientSpiritMutationResponse> {
+    validateBuyShopItemRequest(request);
+    const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
+    const item = SPIRIT_SHOP_ITEMS.find((entry) => entry.itemId === request.itemId);
+    if (!item) {
+      throwBadRequest('Unknown shop item.');
+    }
+
+    return this.prisma.transaction(async (client) => {
+      const requestHash = hashRequest({
+        endpoint: 'shop-buy',
+        itemId: request.itemId,
+        resourceVersion: request.resourceVersion ?? null,
+      });
+      const idempotencyRecord = await this.prepareIdempotencyRecord(client, playerId, 'spirit-shop-buy', idempotencyKey, requestHash);
+      if (idempotencyRecord?.status === 'completed' && idempotencyRecord.responseSnapshotJson) {
+        return idempotencyRecord.responseSnapshotJson as unknown as ClientSpiritMutationResponse;
+      }
+
+      const resource = await client.playerSpiritResource.findUnique({
+        where: { playerId },
+        select: {
+          tianjiTalisman: true,
+          resourceVersion: true,
+        },
+      });
+
+      if (!resource) {
+        throw new BusinessError({ code: ErrorCode.NotFound, message: 'Player spirit resource not found.', statusCode: 404 });
+      }
+
+      assertVersion('resourceVersion', request.resourceVersion, resource.resourceVersion);
+
+      if (resource.tianjiTalisman < item.priceTianjiTalisman) {
+        throw new BusinessError({ code: ErrorCode.Conflict, message: 'Insufficient Tianji talisman.', statusCode: 409 });
+      }
+
+      const periodKey = getShopLimitPeriodKey(item.itemId);
+      const limit = getShopLimit(item.itemId);
+      if (limit !== null && periodKey) {
+        const used = await client.spiritShopPurchaseLog.count({
+          where: { playerId, itemId: item.itemId, periodKey },
+        });
+        if (used >= limit) {
+          throw new BusinessError({ code: ErrorCode.Conflict, message: 'Shop item purchase limit reached.', statusCode: 409 });
+        }
+      }
+
+      await client.playerSpiritResource.update({
+        where: { playerId },
+        data: {
+          tianjiTalisman: { decrement: item.priceTianjiTalisman },
+          ...buildSpiritRewardUpdateData(item.rewards),
+          resourceVersion: { increment: 1 },
+        },
+      });
+      await client.spiritShopPurchaseLog.create({
+        data: {
+          playerId,
+          itemId: item.itemId,
+          periodKey,
+          consumedTianjiTalisman: item.priceTianjiTalisman,
+          rewardJson: item.rewards as unknown as Prisma.InputJsonValue,
+          requestIdempotencyKey: idempotencyKey ?? null,
+        },
+      });
+
+      const response = await this.buildSpiritMutationResponse(client, playerId, `已兑换 ${item.label}。`);
+      await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-shop-item', item.itemId);
+      return response;
+    });
+  }
+
+  async claimAdReward(
+    playerId: string,
+    request: ClientClaimSpiritAdRewardRequest,
+    headerIdempotencyKey?: string,
+  ): Promise<ClientSpiritMutationResponse> {
+    validateClaimAdRewardRequest(request);
+    const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
+
+    return this.prisma.transaction(async (client) => {
+      const requestHash = hashRequest({
+        endpoint: 'shop-ad-reward',
+        resourceVersion: request.resourceVersion ?? null,
+      });
+      const idempotencyRecord = await this.prepareIdempotencyRecord(client, playerId, 'spirit-shop-ad-reward', idempotencyKey, requestHash);
+      if (idempotencyRecord?.status === 'completed' && idempotencyRecord.responseSnapshotJson) {
+        return idempotencyRecord.responseSnapshotJson as unknown as ClientSpiritMutationResponse;
+      }
+
+      const resource = await client.playerSpiritResource.findUnique({
+        where: { playerId },
+        select: { resourceVersion: true },
+      });
+
+      if (!resource) {
+        throw new BusinessError({ code: ErrorCode.NotFound, message: 'Player spirit resource not found.', statusCode: 404 });
+      }
+
+      assertVersion('resourceVersion', request.resourceVersion, resource.resourceVersion);
+
+      const dateKey = getLocalDateKey();
+      const usedToday = await client.spiritAdRewardLog.count({ where: { playerId, dateKey } });
+      if (usedToday >= SPIRIT_AD_DAILY_LIMIT) {
+        throw new BusinessError({ code: ErrorCode.Conflict, message: 'Daily ad reward limit reached.', statusCode: 409 });
+      }
+
+      const bonus = Math.random() < 0.7
+        ? { kind: 'spirit-root' as const, label: '灵根', quantity: randomIntInclusive(8, 16) }
+        : { kind: 'spirit-marrow' as const, label: '灵髓', quantity: randomIntInclusive(1, 2) };
+
+      await client.playerSpiritResource.update({
+        where: { playerId },
+        data: {
+          tianjiTalisman: { increment: SPIRIT_AD_TALISMAN_REWARD },
+          ...buildSpiritRewardUpdateData([bonus]),
+          resourceVersion: { increment: 1 },
+        },
+      });
+      await client.spiritAdRewardLog.create({
+        data: {
+          playerId,
+          dateKey,
+          tianjiTalismanReward: SPIRIT_AD_TALISMAN_REWARD,
+          bonusRewardJson: bonus as unknown as Prisma.InputJsonValue,
+          requestIdempotencyKey: idempotencyKey ?? null,
+        },
+      });
+
+      const response = await this.buildSpiritMutationResponse(client, playerId, `已获得天机符 x${SPIRIT_AD_TALISMAN_REWARD}、${bonus.label} x${bonus.quantity}。`);
+      await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-ad-reward', dateKey);
       return response;
     });
   }
@@ -709,12 +1298,20 @@ export class SpiritService {
     playerId: string,
     client: Prisma.TransactionClient | PrismaClient,
   ) {
-    const [resource, slots, codex] = await Promise.all([
+    const dateKey = getLocalDateKey();
+    const weekKey = getWeekPeriodKey();
+    const [resource, slots, codex, shopPurchases, adRewardUsedToday] = await Promise.all([
       client.playerSpiritResource.findUnique({
         where: { playerId },
         select: {
           playerId: true,
           spiritSoul: true,
+          spiritRoot: true,
+          spiritMarrow: true,
+          spiritJade: true,
+          ordinarySoul: true,
+          rareSoul: true,
+          legendarySoul: true,
           tianjiTalisman: true,
           dailyRecoveryUsed: true,
           dailyRecoveryDateKey: true,
@@ -733,6 +1330,9 @@ export class SpiritService {
           isMain: true,
           level: true,
           exp: true,
+          breakthroughStage: true,
+          satiatedUntil: true,
+          lastExpSettledAt: true,
           element: true,
           currentHp: true,
           maxHp: true,
@@ -742,6 +1342,15 @@ export class SpiritService {
             select: {
               spiritId: true,
             },
+          },
+          traits: {
+            select: {
+              slotIndex: true,
+              traitCode: true,
+              traitValue: true,
+              sourceType: true,
+            },
+            orderBy: { slotIndex: 'asc' },
           },
         },
       }),
@@ -768,6 +1377,25 @@ export class SpiritService {
           },
         },
       }),
+      client.spiritShopPurchaseLog.findMany({
+        where: {
+          playerId,
+          OR: [
+            { periodKey: dateKey },
+            { periodKey: weekKey },
+          ],
+        },
+        select: {
+          itemId: true,
+          periodKey: true,
+        },
+      }),
+      client.spiritAdRewardLog.count({
+        where: {
+          playerId,
+          dateKey,
+        },
+      }),
     ]);
 
     if (!resource) {
@@ -778,7 +1406,38 @@ export class SpiritService {
       });
     }
 
-    return { resource, slots, codex };
+    return { resource, slots, codex, shopPurchases, adRewardUsedToday };
+  }
+
+  private async ensureNaturalTraitSlots(client: Prisma.TransactionClient, spiritSlotId: string, breakthroughStage: number): Promise<void> {
+    const unlockedSlots = getUnlockedTraitSlots(breakthroughStage);
+    if (unlockedSlots <= 0) {
+      return;
+    }
+
+    const existingTraits = await client.playerSpiritTrait.findMany({
+      where: { spiritSlotId },
+      select: { slotIndex: true, traitCode: true },
+      orderBy: { slotIndex: 'asc' },
+    });
+    const usedCodes = new Set(existingTraits.map((trait) => trait.traitCode));
+
+    for (let slotIndex = 1; slotIndex <= unlockedSlots; slotIndex += 1) {
+      if (existingTraits.some((trait) => trait.slotIndex === slotIndex)) {
+        continue;
+      }
+      const definition = randomTraitDefinition(false, usedCodes);
+      usedCodes.add(definition.code);
+      await client.playerSpiritTrait.create({
+        data: {
+          spiritSlotId,
+          slotIndex,
+          traitCode: definition.code,
+          traitValue: definition.value,
+          sourceType: 'natural',
+        },
+      });
+    }
   }
 
   private async prepareIdempotencyRecord(
@@ -863,10 +1522,13 @@ export class SpiritService {
       return;
     }
 
+    const dateKey = getLocalDateKey();
+    await this.dailyTaskLifecycleService.ensurePlayerDailyTasks(client, playerId, dateKey);
+
     const taskStates = await client.playerDailyTaskState.findMany({
       where: {
         playerId,
-        dateKey: getLocalDateKey(),
+        dateKey,
         taskId: { in: taskIds },
         status: 'IN_PROGRESS',
       },
@@ -897,6 +1559,9 @@ function buildSpiritState(
     isMain: boolean;
     level: number;
     exp: number;
+    breakthroughStage: number;
+    satiatedUntil: Date | null;
+    lastExpSettledAt: Date | null;
     element: SpiritElement | null;
     currentHp: number;
     maxHp: number;
@@ -905,6 +1570,7 @@ function buildSpiritState(
     spiritDefinition: {
       spiritId: string;
     } | null;
+    traits: SpiritReadTrait[];
   }>,
   codexEntries: Array<{
     hasSeen: boolean;
@@ -924,19 +1590,40 @@ function buildSpiritState(
       sortOrder: number;
     };
   }>,
+  shopPurchases: Array<{ itemId: string; periodKey: string | null }>,
+  adRewardUsedToday: number,
 ): ClientSpiritState {
-  const mappedSlots: ClientSpiritSlot[] = slots.map((slot) => ({
-    slotIndex: slot.slotIndex,
-    spiritId: slot.spiritDefinition?.spiritId ?? null,
-    isMain: slot.isMain,
-    level: slot.level,
-    exp: slot.exp,
-    element: slot.element ? toClientElement(slot.element) : null,
-    currentHp: slot.currentHp,
-    maxHp: slot.maxHp,
-    status: toClientStatus(slot.status),
-    slotVersion: slot.slotVersion,
-  }));
+  const now = new Date();
+  const mappedSlots: ClientSpiritSlot[] = slots.map((slot) => {
+    const settled = slot.spiritDefinition ? settleSpiritProgress(slot, now) : {
+      level: slot.level,
+      exp: slot.exp,
+      breakthroughStage: slot.breakthroughStage,
+      satiatedUntil: slot.satiatedUntil,
+      lastExpSettledAt: slot.lastExpSettledAt,
+    };
+    const unlockedTraitSlots = getUnlockedTraitSlots(settled.breakthroughStage);
+    return {
+      slotIndex: slot.slotIndex,
+      spiritId: slot.spiritDefinition?.spiritId ?? null,
+      isMain: slot.isMain,
+      level: settled.level,
+      exp: settled.exp,
+      currentLevelExpRequired: SPIRIT_LEVEL_EXP_REQUIRED,
+      isAtBreakthroughNode: isAtPendingBreakthrough(settled.level, settled.breakthroughStage),
+      breakthroughStage: settled.breakthroughStage,
+      satiatedUntil: settled.satiatedUntil?.toISOString() ?? null,
+      satiatedRemainingSeconds: Math.max(Math.floor(((settled.satiatedUntil?.getTime() ?? now.getTime()) - now.getTime()) / 1000), 0),
+      satiatedExpBonusPercent: settled.satiatedUntil && settled.satiatedUntil.getTime() > now.getTime() ? 50 : 0,
+      element: slot.element ? toClientElement(slot.element) : null,
+      currentHp: slot.currentHp,
+      maxHp: slot.maxHp,
+      status: toClientStatus(slot.status),
+      traits: mapTraits(slot.traits).filter((trait) => trait.slotIndex <= unlockedTraitSlots),
+      unlockedTraitSlots,
+      slotVersion: slot.slotVersion,
+    };
+  });
   const mappedCodex: ClientSpiritCodexEntry[] = codexEntries
     .sort((left, right) => left.spiritDefinition.sortOrder - right.spiritDefinition.sortOrder)
     .map((entry) => ({
@@ -949,17 +1636,35 @@ function buildSpiritState(
       definition: toClientDefinition(entry.spiritDefinition),
     }));
 
+  const mainSlot = mappedSlots.find((slot) => slot.isMain && slot.spiritId !== null) ?? null;
+
   return {
     spiritSoul: resource.spiritSoul,
+    spiritRoot: resource.spiritRoot,
+    spiritMarrow: resource.spiritMarrow,
+    spiritJade: resource.spiritJade,
+    ordinarySoul: resource.ordinarySoul,
+    rareSoul: resource.rareSoul,
+    legendarySoul: resource.legendarySoul,
     tianjiTalisman: resource.tianjiTalisman,
     dailyRecoveryUsed: getEffectiveDailyRecoveryUsed(resource),
     dailyIntelFreeUsed: getEffectiveDailyIntelFreeUsed(resource),
     dailyIntelTalismanUsed: getEffectiveDailyIntelTalismanUsed(resource),
     resourceVersion: resource.resourceVersion,
-    mainSlot: mappedSlots.find((slot) => slot.isMain && slot.spiritId !== null) ?? null,
+    mainSlot,
     slots: mappedSlots,
     codex: mappedCodex,
     readyToCompose: mappedCodex.filter((entry) => entry.readyToCompose),
+    breakthroughRequirement: buildBreakthroughRequirement(mainSlot, resource),
+    shop: {
+      items: buildShopItemsForState(shopPurchases),
+      adReward: {
+        dailyLimit: SPIRIT_AD_DAILY_LIMIT,
+        usedToday: Math.min(adRewardUsedToday, SPIRIT_AD_DAILY_LIMIT),
+        tianjiTalisman: SPIRIT_AD_TALISMAN_REWARD,
+        bonusPool: ['灵根', '灵髓'],
+      },
+    },
   };
 }
 
@@ -985,6 +1690,61 @@ function toClientDefinition(definition: {
   };
 }
 
+function buildBreakthroughRequirement(
+  slot: ClientSpiritSlot | null,
+  resource: SpiritReadResource,
+): ClientSpiritState['breakthroughRequirement'] {
+  if (!slot?.spiritId || !slot.isAtBreakthroughNode) {
+    return null;
+  }
+
+  const stage = Math.floor(slot.level / 10);
+  const cost = SPIRIT_BREAKTHROUGH_COSTS[stage];
+  if (!cost) {
+    return null;
+  }
+
+  const owned = getSoulCount(resource, cost.quality);
+
+  return {
+    stage,
+    level: slot.level,
+    quality: cost.quality,
+    label: getSoulQualityLabel(cost.quality),
+    required: cost.count,
+    owned,
+    canBreakthrough: owned >= cost.count,
+  };
+}
+
+function buildShopItemsForState(shopPurchases: Array<{ itemId: string; periodKey: string | null }>): ClientSpiritShopItem[] {
+  const currentDateKey = getLocalDateKey();
+  const currentWeekKey = getWeekPeriodKey();
+
+  return SPIRIT_SHOP_ITEMS.map((item) => {
+    const limit = getShopLimit(item.itemId);
+    const periodKey = getShopLimitPeriodKey(item.itemId, currentDateKey, currentWeekKey);
+    const used = limit === null || !periodKey
+      ? 0
+      : shopPurchases.filter((purchase) => purchase.itemId === item.itemId && purchase.periodKey === periodKey).length;
+
+    return {
+      ...item,
+      remainingPurchases: limit === null ? null : Math.max(limit - used, 0),
+    };
+  });
+}
+
+function getSoulQualityLabel(quality: 'ordinary' | 'rare' | 'legendary'): string {
+  if (quality === 'legendary') {
+    return '传说兽魂';
+  }
+  if (quality === 'rare') {
+    return '稀有兽魂';
+  }
+  return '普通兽魂';
+}
+
 function toClientElement(element: SpiritElement): ClientSpiritElement {
   return element.toLowerCase() as ClientSpiritElement;
 }
@@ -995,6 +1755,255 @@ function toPrismaElement(element: ClientSpiritElement): SpiritElement {
 
 function toClientStatus(status: PlayerSpiritStatus): ClientSpiritStatus {
   return status.toLowerCase() as ClientSpiritStatus;
+}
+
+function mapTraits(traits: SpiritReadTrait[]): ClientSpiritTrait[] {
+  return traits
+    .sort((left, right) => left.slotIndex - right.slotIndex)
+    .map((trait) => {
+      const definition = getTraitDefinition(trait.traitCode);
+      return {
+        slotIndex: trait.slotIndex,
+        traitCode: definition.code,
+        label: definition.label,
+        description: definition.description,
+        value: trait.traitValue,
+        sourceType: trait.sourceType,
+      };
+    });
+}
+
+function getUnlockedTraitSlots(breakthroughStage: number): number {
+  return Math.min(Math.max(Math.floor(breakthroughStage), 0), 5);
+}
+
+function isBreakthroughLevel(level: number): boolean {
+  return level > 0 && level % 10 === 0 && level <= SPIRIT_MAX_LEVEL;
+}
+
+function isAtPendingBreakthrough(level: number, breakthroughStage: number): boolean {
+  return isBreakthroughLevel(level) && breakthroughStage < Math.floor(level / 10);
+}
+
+function getPassiveExpPerMinute(level: number): number {
+  if (level <= 2) {
+    return 5000;
+  }
+  if (level <= 10) {
+    return 1000;
+  }
+  if (level <= 20) {
+    return 500;
+  }
+  if (level <= 30) {
+    return 250;
+  }
+  return 150;
+}
+
+function settleSpiritProgress(slot: {
+  level: number;
+  exp: number;
+  breakthroughStage: number;
+  satiatedUntil: Date | null;
+  lastExpSettledAt: Date | null;
+}, now: Date): {
+  level: number;
+  exp: number;
+  breakthroughStage: number;
+  satiatedUntil: Date | null;
+  lastExpSettledAt: Date | null;
+} {
+  if (isAtPendingBreakthrough(slot.level, slot.breakthroughStage)) {
+    return { ...slot, exp: Math.min(slot.exp, SPIRIT_LEVEL_EXP_REQUIRED), lastExpSettledAt: now };
+  }
+
+  const lastSettledAt = slot.lastExpSettledAt ?? now;
+  const elapsedSeconds = Math.max(Math.floor((now.getTime() - lastSettledAt.getTime()) / 1000), 0);
+  if (elapsedSeconds <= 0) {
+    return slot;
+  }
+
+  const satiated = slot.satiatedUntil && slot.satiatedUntil.getTime() > lastSettledAt.getTime();
+  const bonusBps = satiated ? SPIRIT_SATIATED_EXP_BONUS_BPS : 0;
+  const expGain = Math.floor(getPassiveExpPerMinute(slot.level) * elapsedSeconds * (10_000 + bonusBps) / 10_000 / 60);
+  return applyExpGain({ ...slot, lastExpSettledAt: now }, expGain);
+}
+
+function applyExpGain(state: {
+  level: number;
+  exp: number;
+  breakthroughStage: number;
+  satiatedUntil: Date | null;
+  lastExpSettledAt: Date | null;
+}, expGain: number) {
+  let level = state.level;
+  let exp = Math.max(state.exp + Math.max(expGain, 0), 0);
+
+  while (level < SPIRIT_MAX_LEVEL && exp >= SPIRIT_LEVEL_EXP_REQUIRED) {
+    exp -= SPIRIT_LEVEL_EXP_REQUIRED;
+    level += 1;
+    if (isAtPendingBreakthrough(level, state.breakthroughStage)) {
+      exp = 0;
+      break;
+    }
+  }
+
+  if (level >= SPIRIT_MAX_LEVEL) {
+    level = SPIRIT_MAX_LEVEL;
+    exp = Math.min(exp, SPIRIT_LEVEL_EXP_REQUIRED);
+  }
+
+  return {
+    ...state,
+    level,
+    exp,
+  };
+}
+
+function getRollCost(mode: ClientRollSpiritTraitsRequest['mode']): { marrow: number; jade: number; gold: number } {
+  switch (mode) {
+    case 'advanced':
+      return { marrow: 10, jade: 1, gold: 1000 };
+    case 'ultimate':
+      return { marrow: 20, jade: 5, gold: 0 };
+    case 'batch_basic':
+      return { marrow: 50, jade: 0, gold: 5000 };
+    case 'basic':
+    default:
+      return { marrow: 5, jade: 0, gold: 500 };
+  }
+}
+
+function normalizeTraitRows(traits: SpiritReadTrait[]): Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> {
+  return traits
+    .sort((left, right) => left.slotIndex - right.slotIndex)
+    .map((trait) => ({
+      slotIndex: trait.slotIndex,
+      traitCode: getTraitDefinition(trait.traitCode).code,
+    }));
+}
+
+function randomTraits(unlockedSlots: number, allowDuplicate: boolean): Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> {
+  const usedCodes = new Set<string>();
+  const result: Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> = [];
+  for (let slotIndex = 1; slotIndex <= unlockedSlots; slotIndex += 1) {
+    const definition = randomTraitDefinition(allowDuplicate, usedCodes);
+    usedCodes.add(definition.code);
+    result.push({ slotIndex, traitCode: definition.code });
+  }
+  return result;
+}
+
+function mergeWithExistingTraits(
+  traits: Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }>,
+  unlockedSlots: number,
+): Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> {
+  const merged: Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> = [];
+  for (let slotIndex = 1; slotIndex <= unlockedSlots; slotIndex += 1) {
+    merged.push(traits.find((trait) => trait.slotIndex === slotIndex) ?? { slotIndex, traitCode: 'claw' });
+  }
+  return merged;
+}
+
+function randomTraitDefinition(allowDuplicate: boolean, usedCodes: Set<string>) {
+  const pool = allowDuplicate ? SPIRIT_TRAIT_DEFINITIONS : SPIRIT_TRAIT_DEFINITIONS.filter((definition) => !usedCodes.has(definition.code));
+  return pool[Math.floor(Math.random() * pool.length)] ?? SPIRIT_TRAIT_DEFINITIONS[0];
+}
+
+function getTraitDefinition(code: string) {
+  const definition = SPIRIT_TRAIT_DEFINITIONS.find((trait) => trait.code === code);
+  if (!definition) {
+    return SPIRIT_TRAIT_DEFINITIONS[0];
+  }
+  return definition;
+}
+
+function assertKnownTraitCode(code: string): void {
+  if (!SPIRIT_TRAIT_DEFINITIONS.some((trait) => trait.code === code)) {
+    throwBadRequest('Unknown targetTraitCode.');
+  }
+}
+
+function getSoulField(quality: 'ordinary' | 'rare' | 'legendary'): 'ordinarySoul' | 'rareSoul' | 'legendarySoul' {
+  if (quality === 'rare') {
+    return 'rareSoul';
+  }
+  if (quality === 'legendary') {
+    return 'legendarySoul';
+  }
+  return 'ordinarySoul';
+}
+
+function getSoulCount(resource: { ordinarySoul: number; rareSoul: number; legendarySoul: number }, quality: 'ordinary' | 'rare' | 'legendary'): number {
+  return resource[getSoulField(quality)];
+}
+
+function buildSpiritRewardUpdateData(
+  rewards: ClientSpiritShopItem['rewards'],
+): Pick<Prisma.PlayerSpiritResourceUpdateInput, 'spiritRoot' | 'spiritMarrow' | 'spiritJade' | 'ordinarySoul' | 'rareSoul' | 'legendarySoul'> {
+  const data: Pick<Prisma.PlayerSpiritResourceUpdateInput, 'spiritRoot' | 'spiritMarrow' | 'spiritJade' | 'ordinarySoul' | 'rareSoul' | 'legendarySoul'> = {};
+
+  for (const reward of rewards) {
+    if (reward.kind === 'spirit-root') {
+      data.spiritRoot = { increment: reward.quantity };
+    } else if (reward.kind === 'spirit-marrow') {
+      data.spiritMarrow = { increment: reward.quantity };
+    } else if (reward.kind === 'spirit-jade') {
+      data.spiritJade = { increment: reward.quantity };
+    } else if (reward.kind === 'ordinary-soul') {
+      data.ordinarySoul = { increment: reward.quantity };
+    } else if (reward.kind === 'rare-soul') {
+      data.rareSoul = { increment: reward.quantity };
+    } else if (reward.kind === 'legendary-soul') {
+      data.legendarySoul = { increment: reward.quantity };
+    }
+  }
+
+  return data;
+}
+
+function getShopLimit(itemId: string): number | null {
+  if (itemId === 'spirit-root-100') {
+    return null;
+  }
+  if (itemId === 'spirit-marrow-5') {
+    return 5;
+  }
+  if (itemId === 'ordinary-soul-10') {
+    return 3;
+  }
+  if (itemId === 'rare-soul-1') {
+    return 2;
+  }
+  return 1;
+}
+
+function getShopLimitPeriodKey(itemId: string, dateKey = getLocalDateKey(), weekKey = getWeekPeriodKey()): string | null {
+  if (itemId === 'spirit-root-100') {
+    return null;
+  }
+  if (itemId === 'spirit-jade-1' || itemId === 'legendary-soul-1') {
+    return weekKey;
+  }
+  return dateKey;
+}
+
+function getWeekPeriodKey(source = new Date()): string {
+  const date = new Date(Date.UTC(source.getUTCFullYear(), source.getUTCMonth(), source.getUTCDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+function randomIntInclusive(min: number, max: number): number {
+  const lower = Math.ceil(min);
+  const upper = Math.floor(max);
+
+  return Math.floor(Math.random() * (upper - lower + 1)) + lower;
 }
 
 function calculateSpiritMaxHp(baseHp: number, growthHp: number, level: number): number {
@@ -1010,12 +2019,53 @@ function validateBuySpiritSoulRequest(request: ClientBuySpiritSoulRequest): void
   assertOptionalNumber(body.resourceVersion, 'resourceVersion');
 }
 
-function validateSlotRequest(request: { slotIndex?: number; slotVersion?: number; resourceVersion?: number }, fieldName: string): void {
+function validateSlotRequest(request: { slotIndex?: number; slotVersion?: number; walletVersion?: number; resourceVersion?: number }, fieldName: string): void {
   const body = assertRequestBody(request);
   if (typeof body[fieldName] !== 'number' || !Number.isInteger(body[fieldName]) || Number(body[fieldName]) <= 0) {
     throwBadRequest(`${fieldName} must be a positive integer.`);
   }
   assertOptionalNumber(body.slotVersion, 'slotVersion');
+  assertOptionalNumber(body.walletVersion, 'walletVersion');
+  assertOptionalNumber(body.resourceVersion, 'resourceVersion');
+}
+
+function validateFeedSpiritRequest(request: ClientFeedSpiritRequest): void {
+  validateSlotRequest(request, 'slotIndex');
+  if (!['feed_once', 'fill_full'].includes(String(request.actionType))) {
+    throwBadRequest('actionType must be feed_once or fill_full.');
+  }
+}
+
+function validateBreakthroughSpiritRequest(request: ClientBreakthroughSpiritRequest): void {
+  validateSlotRequest(request, 'slotIndex');
+  if (request.targetStage !== undefined && (!Number.isInteger(request.targetStage) || request.targetStage < 1 || request.targetStage > 5)) {
+    throwBadRequest('targetStage must be between 1 and 5.');
+  }
+}
+
+function validateRollSpiritTraitsRequest(request: ClientRollSpiritTraitsRequest): void {
+  validateSlotRequest(request, 'slotIndex');
+  if (!['basic', 'advanced', 'ultimate', 'batch_basic'].includes(String(request.mode))) {
+    throwBadRequest('mode must be basic, advanced, ultimate, or batch_basic.');
+  }
+  if (request.lockedSlotIndex !== undefined && (!Number.isInteger(request.lockedSlotIndex) || request.lockedSlotIndex <= 0)) {
+    throwBadRequest('lockedSlotIndex must be a positive integer.');
+  }
+  if (request.targetSlotIndex !== undefined && (!Number.isInteger(request.targetSlotIndex) || request.targetSlotIndex <= 0)) {
+    throwBadRequest('targetSlotIndex must be a positive integer.');
+  }
+}
+
+function validateBuyShopItemRequest(request: ClientBuySpiritShopItemRequest): void {
+  const body = assertRequestBody(request);
+  if (typeof body.itemId !== 'string' || body.itemId.trim().length <= 0) {
+    throwBadRequest('itemId is required.');
+  }
+  assertOptionalNumber(body.resourceVersion, 'resourceVersion');
+}
+
+function validateClaimAdRewardRequest(request: ClientClaimSpiritAdRewardRequest): void {
+  const body = assertRequestBody(request);
   assertOptionalNumber(body.resourceVersion, 'resourceVersion');
 }
 
@@ -1119,19 +2169,19 @@ function getSpiritRefundSoul(level: number): number {
   return total;
 }
 
-function getEffectiveDailyRecoveryUsed(resource: SpiritReadResource): number {
+function getEffectiveDailyRecoveryUsed(resource: { dailyRecoveryDateKey: string | null; dailyRecoveryUsed: number }): number {
   return resource.dailyRecoveryDateKey === getLocalDateKey() ? resource.dailyRecoveryUsed : 0;
 }
 
-function getEffectiveDailyIntelFreeUsed(resource: SpiritReadResource): number {
+function getEffectiveDailyIntelFreeUsed(resource: { dailyIntelDateKey: string | null; dailyIntelFreeUsed: number }): number {
   return resource.dailyIntelDateKey === getLocalDateKey() ? resource.dailyIntelFreeUsed : 0;
 }
 
-function getEffectiveDailyIntelTalismanUsed(resource: SpiritReadResource): number {
+function getEffectiveDailyIntelTalismanUsed(resource: { dailyIntelDateKey: string | null; dailyIntelTalismanUsed: number }): number {
   return resource.dailyIntelDateKey === getLocalDateKey() ? resource.dailyIntelTalismanUsed : 0;
 }
 
-function getNextDailyRecoveryUsed(resource: SpiritReadResource): number {
+function getNextDailyRecoveryUsed(resource: { dailyRecoveryDateKey: string | null; dailyRecoveryUsed: number }): number {
   const currentUsed = getEffectiveDailyRecoveryUsed(resource);
   return currentUsed + 1;
 }

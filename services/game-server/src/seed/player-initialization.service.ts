@@ -1,5 +1,5 @@
 import type { FieldStatus, Prisma, SpiritElement } from '@prisma/client';
-import { DAILY_TASK_CONFIG } from '../lib/game-balance.js';
+import { DAILY_TASK_CONFIG, LAND_DEED_CONFIG } from '../lib/game-balance.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { DEFAULT_STARTER_SPIRIT_ID, SPIRIT_SLOT_COUNT } from './seed-data/spirits.js';
 
@@ -65,6 +65,13 @@ export class PlayerInitializationService {
     const castleLevel = input.castleLevel ?? 1;
     const populationLevel = input.populationLevel ?? 1;
     const armyCapacity = input.army?.capacity ?? getInitialArmyCapacity(populationLevel);
+    const fields = input.fields ?? buildDefaultFields();
+    const unlockedFieldCount = fields.filter((field) => field.isUnlocked).length;
+
+    if (resetExisting) {
+      await client.playerFactionStipendState.deleteMany({ where: { playerId: input.playerId } });
+      await client.playerLandDeedProgress.deleteMany({ where: { playerId: input.playerId } });
+    }
 
     await client.playerWallet.upsert({
       where: { playerId: input.playerId },
@@ -75,8 +82,8 @@ export class PlayerInitializationService {
         walletGold: input.walletGold ?? 0,
         walletCapacity: 500,
         walletProtectedRatio: 20,
-        pendingTaxGold: input.pendingTaxGold ?? 0,
-        pendingDividendGold: input.pendingDividendGold ?? 0,
+        pendingTaxGold: 0,
+        pendingDividendGold: 0,
         pendingRaidOverflowGold: 0,
         balanceVersion: 1,
       },
@@ -87,8 +94,8 @@ export class PlayerInitializationService {
           walletGold: input.walletGold ?? 0,
           walletCapacity: 500,
           walletProtectedRatio: 20,
-          pendingTaxGold: input.pendingTaxGold ?? 0,
-          pendingDividendGold: input.pendingDividendGold ?? 0,
+          pendingTaxGold: 0,
+          pendingDividendGold: 0,
           pendingRaidOverflowGold: 0,
           pendingRaidOverflowExpiresAt: null,
           balanceVersion: { increment: 1 },
@@ -102,7 +109,7 @@ export class PlayerInitializationService {
         playerId: input.playerId,
         castleLevel,
         vaultLevel: input.vaultLevel ?? 1,
-        fieldSlotLevel: getUnlockedFieldCount(castleLevel),
+        fieldSlotLevel: unlockedFieldCount,
         populationLevel,
         watchtowerLevel: input.watchtowerLevel ?? 1,
         protectionTechLevel: input.protectionTechLevel ?? 0,
@@ -115,7 +122,7 @@ export class PlayerInitializationService {
         ? {
           castleLevel,
           vaultLevel: input.vaultLevel ?? 1,
-          fieldSlotLevel: getUnlockedFieldCount(castleLevel),
+          fieldSlotLevel: unlockedFieldCount,
           populationLevel,
           watchtowerLevel: input.watchtowerLevel ?? 1,
           protectionTechLevel: input.protectionTechLevel ?? 0,
@@ -155,7 +162,8 @@ export class PlayerInitializationService {
     });
     const seedIdToDefinitionId = new Map(seedDefinitions.map((seed) => [seed.seedId, seed.id]));
 
-    await this.initializeFields(client, input.playerId, input.fields ?? buildDefaultFields(castleLevel), seedIdToDefinitionId, now, resetExisting);
+    await this.initializeFields(client, input.playerId, fields, seedIdToDefinitionId, now, resetExisting);
+    await this.initializeLandDeeds(client, input.playerId, fields, now, resetExisting);
     await this.initializeSeedInventory(client, input.playerId, input.seedInventory ?? starterSeedInventory, seedDefinitions, now, resetExisting);
     await this.initializeSpiritState(client, input.playerId, input.spirit, now, resetExisting);
     await this.initializeFarmBoard(client, input.playerId, resetExisting);
@@ -259,6 +267,60 @@ export class PlayerInitializationService {
             quantity: entry.quantity,
             unlockedAt: entry.unlocked ? now : null,
             inventoryVersion: { increment: 1 },
+          }
+          : {},
+      });
+    }
+  }
+
+  private async initializeLandDeeds(
+    client: Prisma.TransactionClient,
+    playerId: string,
+    fields: PlayerFieldInitializationInput[],
+    now: Date,
+    resetExisting: boolean,
+  ): Promise<void> {
+    const fieldsBySlotIndex = new Map(fields.map((field) => [field.slotIndex, field]));
+
+    for (const deed of LAND_DEED_CONFIG) {
+      const targetField = fieldsBySlotIndex.get(deed.targetFieldSlotIndex);
+      const isClaimed = Boolean(targetField?.isUnlocked);
+      const progressJson = {
+        requirements: deed.requirements.map((requirement) => ({
+          key: requirement.key,
+          label: requirement.label,
+          current: isClaimed ? requirement.target : 0,
+          target: requirement.target,
+          completed: isClaimed,
+        })),
+        alternativeRequirements: (deed.alternativeRequirements ?? []).map((requirement) => ({
+          key: requirement.key,
+          label: requirement.label,
+          current: isClaimed ? requirement.target : 0,
+          target: requirement.target,
+          completed: isClaimed,
+        })),
+      } as unknown as Prisma.InputJsonValue;
+
+      await client.playerLandDeedProgress.upsert({
+        where: {
+          playerId_deedKey: {
+            playerId,
+            deedKey: deed.deedKey,
+          },
+        },
+        create: {
+          playerId,
+          deedKey: deed.deedKey,
+          status: isClaimed ? 'claimed' : 'in_progress',
+          progressJson,
+          claimedAt: isClaimed ? now : null,
+        },
+        update: resetExisting
+          ? {
+            status: isClaimed ? 'claimed' : 'in_progress',
+            progressJson,
+            claimedAt: isClaimed ? now : null,
           }
           : {},
       });
@@ -488,10 +550,10 @@ function calculateSpiritMaxHp(
   return definition.baseHp + Math.max(level - 1, 0) * definition.growthHp;
 }
 
-function buildDefaultFields(castleLevel: number): PlayerFieldInitializationInput[] {
+function buildDefaultFields(): PlayerFieldInitializationInput[] {
   return fieldUnlockMilestones.map((unlockCastleLevel, index) => {
     const slotIndex = index + 1;
-    const isUnlocked = castleLevel >= unlockCastleLevel;
+    const isUnlocked = slotIndex === 1;
 
     return {
       slotIndex,
@@ -500,10 +562,6 @@ function buildDefaultFields(castleLevel: number): PlayerFieldInitializationInput
       status: isUnlocked ? 'EMPTY' : 'LOCKED',
     };
   });
-}
-
-function getUnlockedFieldCount(castleLevel: number): number {
-  return fieldUnlockMilestones.filter((requiredLevel) => castleLevel >= requiredLevel).length;
 }
 
 function getInitialVaultCapacity(vaultLevel: number): number {

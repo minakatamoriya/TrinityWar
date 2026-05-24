@@ -8,17 +8,18 @@ import type {
   ClientRaidDeepIntelResponse,
   ClientFactionDonateRequest,
   ClientBuildingUpgradeId,
-  ClientClaimPendingRequest,
   ClientRaidTarget,
   ClientRaidTargetDetailResponse,
   ClientSceneAction,
   ClientSceneKey,
   ClientFarmBoardState,
   ClientSpiritElement,
+  ClientSpiritRollMode,
+  ClientSpiritTraitCode,
   ClientSpiritState,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { buySpiritSoul, claimDailyTaskReward, claimNotification, claimPendingEarnings, claimSpiritSoulItem, claimStarterSeedPack, claimTianjiTalismanItem, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, updateFarmBoard, upgradeClientBuilding, upgradeSpirit } from './api';
+import { breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, updateFarmBoard, upgradeClientBuilding } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
@@ -75,7 +76,7 @@ interface SeedCodexState {
 interface SeedRewardModalState {
   title: string;
   summary: string;
-  confirmAction?: 'claim-starter-seeds' | 'claim-tianji-talisman' | 'claim-spirit-soul';
+  confirmAction?: 'claim-faction-stipend';
   items: Array<{
     seedId?: string;
     itemId?: string;
@@ -87,28 +88,6 @@ interface SeedRewardModalState {
 interface SeedSelectionState {
   fieldId: string;
   fieldCode: string;
-}
-
-interface CollectOverflowState {
-  fieldId: string;
-  fieldCode: string;
-  collectMode: ClientCollectFieldRequest['collectMode'];
-  pendingYield: number;
-  overflowGold: number;
-}
-
-interface PendingClaimOverflowState {
-  source: ClientClaimPendingRequest['source'];
-  title: string;
-  pendingYield: number;
-  overflowGold: number;
-}
-
-interface TaskRewardOverflowState {
-  taskId: string;
-  taskTitle: string;
-  rewardGold: number;
-  overflowGold: number;
 }
 
 interface FarmCollectPresentationState {
@@ -123,18 +102,6 @@ interface FarmBoardEditorState {
   saving: boolean;
 }
 
-function getPendingClaimTitle(source: ClientClaimPendingRequest['source']): string {
-  if (source === 'tax') {
-    return '主城税收';
-  }
-
-  if (source === 'faction') {
-    return '阵营分红';
-  }
-
-  return '临时待领取';
-}
-
 interface FollowedRaidTargetSummary {
   id: string;
   name: string;
@@ -145,6 +112,28 @@ interface GlobalFeatureModalState {
   title: string;
   eyebrow?: string;
   description?: string;
+  contributionTiers?: FactionContributionTier[];
+  tianjiShop?: boolean;
+  seasonSignIn?: boolean;
+}
+
+interface FactionContributionTier {
+  threshold: string;
+  label: string;
+  rewards: string[];
+}
+
+interface SeasonSignInRecord {
+  claimedDays: number[];
+  totalTianjiReward: number;
+}
+
+interface SeasonSignInDay {
+  day: number;
+  reward: number;
+  claimed: boolean;
+  current: boolean;
+  future: boolean;
 }
 
 const seedCatalog: SeedCatalogItem[] = [
@@ -221,6 +210,8 @@ const sceneBackgroundMap: Record<Exclude<ClientSceneKey, 'home'>, string> = {
   faction: '/assets/backgrounds/zhenying.png',
 };
 
+const SEASON_SIGN_IN_STORAGE_KEY_PREFIX = 'trinitywar.seasonSignIn';
+
 function normalizeScene(scene: string): ClientSceneKey {
   if (scene === 'field') {
     return 'farm';
@@ -233,15 +224,6 @@ function normalizeScene(scene: string): ClientSceneKey {
   return 'home';
 }
 
-function parseHourlyTax(description?: string): number {
-  if (!description) {
-    return 0;
-  }
-
-  const match = description.match(/每小时(?:产出|可分到)\s([\d,]+)/);
-  return match ? Number(match[1].replace(/,/g, '')) : 0;
-}
-
 function formatServerTime(serverTime: string): string {
   return new Intl.DateTimeFormat('zh-CN', {
     hour: '2-digit',
@@ -249,6 +231,94 @@ function formatServerTime(serverTime: string): string {
     month: 'numeric',
     day: 'numeric',
   }).format(new Date(serverTime));
+}
+
+function getMillisecondsUntilNextChinaMidnight(): number {
+  const now = Date.now();
+  const chinaNow = new Date(now + 8 * 60 * 60 * 1000);
+  const nextMidnightUtc = Date.UTC(
+    chinaNow.getUTCFullYear(),
+    chinaNow.getUTCMonth(),
+    chinaNow.getUTCDate() + 1,
+    -8,
+    0,
+    2,
+  );
+
+  return Math.max(nextMidnightUtc - now, 1000);
+}
+
+function getSeasonSignInDay(): number {
+  const chinaNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const seasonStartUtc = Date.UTC(chinaNow.getUTCFullYear(), 0, 1);
+  const chinaTodayUtc = Date.UTC(chinaNow.getUTCFullYear(), chinaNow.getUTCMonth(), chinaNow.getUTCDate());
+  const dayOfYear = Math.floor((chinaTodayUtc - seasonStartUtc) / 86_400_000) + 1;
+
+  return ((dayOfYear - 1) % 28) + 1;
+}
+
+function getSeasonSignInReward(streakAfterClaim: number): number {
+  return Math.min(1 + Math.floor(Math.max(streakAfterClaim - 1, 0) / 7), 4);
+}
+
+function getConsecutiveSignInCount(claimedDays: number[], currentDay: number): number {
+  const claimed = new Set(claimedDays);
+  let count = 0;
+
+  for (let day = currentDay - 1; day >= 1; day -= 1) {
+    if (!claimed.has(day)) {
+      break;
+    }
+
+    count += 1;
+  }
+
+  return count;
+}
+
+function buildSeasonSignInDays(record: SeasonSignInRecord, currentDay: number): SeasonSignInDay[] {
+  const claimed = new Set(record.claimedDays);
+  return Array.from({ length: 28 }, (_, index) => {
+    const day = index + 1;
+    const streakBeforeClaim = getConsecutiveSignInCount(record.claimedDays, day);
+
+    return {
+      day,
+      reward: getSeasonSignInReward(streakBeforeClaim + 1),
+      claimed: claimed.has(day),
+      current: day === currentDay,
+      future: day > currentDay,
+    };
+  });
+}
+
+function getSeasonSignInStorageKey(playerId?: string): string {
+  return `${SEASON_SIGN_IN_STORAGE_KEY_PREFIX}:${playerId ?? 'anonymous'}`;
+}
+
+function readSeasonSignInRecord(playerId?: string): SeasonSignInRecord {
+  if (typeof window === 'undefined') {
+    return { claimedDays: [], totalTianjiReward: 0 };
+  }
+
+  try {
+    const raw = window.localStorage.getItem(getSeasonSignInStorageKey(playerId));
+    const parsed = raw ? JSON.parse(raw) as Partial<SeasonSignInRecord> : null;
+    const claimedDays = Array.isArray(parsed?.claimedDays)
+      ? Array.from(new Set(parsed.claimedDays.map((day) => Math.floor(Number(day))).filter((day) => day >= 1 && day <= 28))).sort((left, right) => left - right)
+      : [];
+
+    return {
+      claimedDays,
+      totalTianjiReward: Math.max(Math.floor(Number(parsed?.totalTianjiReward ?? 0)), 0),
+    };
+  } catch {
+    return { claimedDays: [], totalTianjiReward: 0 };
+  }
+}
+
+function writeSeasonSignInRecord(playerId: string | undefined, record: SeasonSignInRecord): void {
+  window.localStorage.setItem(getSeasonSignInStorageKey(playerId), JSON.stringify(record));
 }
 
 function buildSeasonProgress(status: ClientViewModel['bootstrap']['season']): {
@@ -289,6 +359,17 @@ function buildActionMessage(label: string, context?: string): string {
   return `${subject}该入口已经接入前端交互壳，后续可以继续补确认弹窗、接口联调和状态回写。`;
 }
 
+function buildFactionContributionTiers(): FactionContributionTier[] {
+  return [
+    { threshold: '0 贡献', label: '基础俸禄', rewards: ['金币 x20', '随机普通种子 x1', '普通兽魂 x2'] },
+    { threshold: '100 贡献', label: '小有供奉', rewards: ['金币 x30', '随机普通种子 x2', '普通兽魂 x5'] },
+    { threshold: '300 贡献', label: '稳定供奉', rewards: ['金币 x40', '随机普通种子 x2', '普通兽魂 x10'] },
+    { threshold: '600 贡献', label: '阵营骨干', rewards: ['金币 x50', '随机稀有种子 x1', '稀有兽魂 x4'] },
+    { threshold: '1000 贡献', label: '高阶供奉', rewards: ['金币 x60', '随机稀有种子 x2', '稀有兽魂 x8'] },
+    { threshold: '2000 贡献', label: '阵营重臣', rewards: ['金币 x80', '随机传说种子 x1', '传说兽魂 x2'] },
+  ];
+}
+
 function parseCapacityResourceValue(value: string): ResourceProgressValue {
   const parts = value.split('/').map((part) => Number(part.replace(/,/g, '').trim()));
   const current = parts[0] ?? 0;
@@ -302,14 +383,6 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value);
 }
 
-function getRemainingSeconds(dateText?: string | null): number {
-  if (!dateText) {
-    return 0;
-  }
-
-  return Math.max(Math.ceil((new Date(dateText).getTime() - Date.now()) / 1000), 0);
-}
-
 function formatProtectionCountdown(totalSeconds: number): string {
   const safeSeconds = Math.max(totalSeconds, 0);
   const hours = Math.floor(safeSeconds / 3600);
@@ -321,14 +394,6 @@ function formatProtectionCountdown(totalSeconds: number): string {
   }
 
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-function formatTemporaryClaimCountdown(totalSeconds: number): string {
-  const safeSeconds = Math.max(totalSeconds, 0);
-  const minutes = Math.floor(safeSeconds / 60);
-  const seconds = safeSeconds % 60;
-
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 function findResourceByTone(tone: HomeSummaryResponse['resources'][number]['tone'], resources: HomeSummaryResponse['resources']): HomeSummaryResponse['resources'][number] | undefined {
@@ -382,31 +447,24 @@ function App(): JSX.Element {
   const [raidTargetDetail, setRaidTargetDetail] = useState<ClientRaidTargetDetailResponse | null>(null);
   const [raidTargetDetailLoading, setRaidTargetDetailLoading] = useState(false);
   const [raidTargetDetailError, setRaidTargetDetailError] = useState<string | null>(null);
-  const [claimingSource, setClaimingSource] = useState<ClientClaimPendingRequest['source'] | null>(null);
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null);
   const [farmTick, setFarmTick] = useState(0);
   const [seedInventory, setSeedInventory] = useState<Record<string, number>>(emptySeedInventory);
   const [globalItemInventory, setGlobalItemInventory] = useState<Record<string, number>>(emptyGlobalItemInventory);
   const [unlockedSeedIds, setUnlockedSeedIds] = useState<string[]>(defaultUnlockedSeedIds);
-  const [starterSeedClaimed, setStarterSeedClaimed] = useState(false);
-  const [tianjiTalismanClaimed, setTianjiTalismanClaimed] = useState(false);
-  const [spiritSoulClaimed, setSpiritSoulClaimed] = useState(false);
-  const [dailySpiritSoulAmount, setDailySpiritSoulAmount] = useState(1);
   const [seedRewardModal, setSeedRewardModal] = useState<SeedRewardModalState | null>(null);
   const [seedSelectionState, setSeedSelectionState] = useState<SeedSelectionState | null>(null);
   const [seedCodexState, setSeedCodexState] = useState<SeedCodexState | null>(null);
   const [armyQueueRefreshReadyAt, setArmyQueueRefreshReadyAt] = useState<string | null>(null);
   const [selectedSeedId, setSelectedSeedId] = useState<string>('qinglingmai');
   const [fieldSeedAssignments, setFieldSeedAssignments] = useState<Record<string, string>>({});
-  const [collectOverflowState, setCollectOverflowState] = useState<CollectOverflowState | null>(null);
-  const [pendingClaimOverflowState, setPendingClaimOverflowState] = useState<PendingClaimOverflowState | null>(null);
-  const [taskRewardOverflowState, setTaskRewardOverflowState] = useState<TaskRewardOverflowState | null>(null);
   const [farmCollectPresentation, setFarmCollectPresentation] = useState<FarmCollectPresentationState | null>(null);
   const [farmBoard, setFarmBoard] = useState<ClientFarmBoardState | null>(null);
   const [farmBoardEditor, setFarmBoardEditor] = useState<FarmBoardEditorState | null>(null);
   const [followedTargetIds, setFollowedTargetIds] = useState<string[]>([]);
   const [raidTargetDetailsById, setRaidTargetDetailsById] = useState<Record<string, ClientRaidTargetDetailResponse>>({});
   const [globalFeatureModal, setGlobalFeatureModal] = useState<GlobalFeatureModalState | null>(null);
+  const [seasonSignInRecord, setSeasonSignInRecord] = useState<SeasonSignInRecord>(() => readSeasonSignInRecord(getStoredDevLoginSession()?.player.id));
   const characterDialog = useCharacterDialog();
   const { playDialogScene } = characterDialog;
   const characterDialogPortalRef = useRef<HTMLDivElement | null>(null);
@@ -525,10 +583,6 @@ function App(): JSX.Element {
       ...backpack.globalItemInventory,
     });
     setUnlockedSeedIds(mergedUnlockedSeedIds);
-    setStarterSeedClaimed(backpack.starterSeedClaimed);
-    setTianjiTalismanClaimed(backpack.tianjiTalismanClaimed);
-    setSpiritSoulClaimed(backpack.spiritSoulClaimed);
-    setDailySpiritSoulAmount(Math.max(backpack.dailySpiritSoulAmount, 1));
     if (!mergedUnlockedSeedIds.includes(selectedSeedId)) {
       setSelectedSeedId(mergedUnlockedSeedIds[0] ?? 'qinglingmai');
     }
@@ -541,8 +595,19 @@ function App(): JSX.Element {
   };
 
   const applyClientBundle = (data: { viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState }): void => {
+    const signInPlayerId = loginSession?.player.id ?? getStoredDevLoginSession()?.player.id;
+    const signInBonus = readSeasonSignInRecord(signInPlayerId).totalTianjiReward;
+    const spiritWithSignInBonus = {
+      ...data.spirit,
+      tianjiTalisman: data.spirit.tianjiTalisman + signInBonus,
+    };
+
     applyClientViewModel(data.viewModel);
-    setSpiritState(data.spirit);
+    setSpiritState(spiritWithSignInBonus);
+    setGlobalItemInventory((current) => ({
+      ...current,
+      tianjiTalisman: spiritWithSignInBonus.tianjiTalisman,
+    }));
     setFarmBoard(data.farmBoard);
   };
 
@@ -624,6 +689,10 @@ function App(): JSX.Element {
       setViewModel(nextViewModel);
       syncSeedBackpackState(nextViewModel.bootstrap.backpack);
       setSpiritState(nextSpirit);
+      setGlobalItemInventory((current) => ({
+        ...current,
+        tianjiTalisman: nextSpirit.tianjiTalisman,
+      }));
       showToast(result.summary, 'success');
     } catch (error) {
       showToast(error instanceof Error && error.message ? error.message : '当前无法领取附件，请稍后重试。', 'error');
@@ -680,6 +749,7 @@ function App(): JSX.Element {
     try {
       const session = await devLogin(mode);
       const data = await loadClientBundle();
+      setSeasonSignInRecord(readSeasonSignInRecord(session.player.id));
       setLoginSession(session);
       applyClientBundle(data);
     } catch {
@@ -693,6 +763,7 @@ function App(): JSX.Element {
     setSettingsOpen(false);
     clearDevLoginSession();
     setLoginSession(null);
+    setSeasonSignInRecord(readSeasonSignInRecord());
     setViewModel(null);
     setSpiritState(null);
     setFarmBoard(null);
@@ -707,13 +778,9 @@ function App(): JSX.Element {
     setSeedRewardModal(null);
     setSeedSelectionState(null);
     setSeedCodexState(null);
-    setCollectOverflowState(null);
-    setPendingClaimOverflowState(null);
-    setTaskRewardOverflowState(null);
     setFarmCollectPresentation(null);
     setGlobalFeatureModal(null);
     setPendingActionKey(null);
-    setClaimingSource(null);
     resetNotificationState();
     setLoginError(null);
     welcomeDialogSessionIdRef.current = null;
@@ -756,6 +823,43 @@ function App(): JSX.Element {
     }
 
     void refreshNotificationUnreadCount();
+  }, [loginSession]);
+
+  useEffect(() => {
+    if (!loginSession) {
+      return;
+    }
+
+    let active = true;
+    let timer: number | null = null;
+
+    const scheduleNextRefresh = (): void => {
+      timer = window.setTimeout(() => {
+        void loadClientBundle().then((data) => {
+          if (!active) {
+            return;
+          }
+
+          applyClientBundle(data);
+          scheduleNextRefresh();
+        }).catch(() => {
+          if (!active) {
+            return;
+          }
+
+          scheduleNextRefresh();
+        });
+      }, getMillisecondsUntilNextChinaMidnight());
+    };
+
+    scheduleNextRefresh();
+
+    return () => {
+      active = false;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+    };
   }, [loginSession]);
 
   useEffect(() => {
@@ -998,27 +1102,14 @@ function App(): JSX.Element {
   const vaultResource = findResourceByTone('vault', home.resources);
   const devLoginModeLabel = getDevLoginModeLabel(loginSession?.mode);
   const currentAccountName = loginSession?.player.nickname ?? home.playerName;
-  const pendingClaims = home.pendingClaims ?? [];
   const dailyTasks = home.dailyTasks ?? [];
-  const taxPending = pendingClaims.find((claim) => claim.source === 'tax');
-  const factionPending = pendingClaims.find((claim) => claim.source === 'faction');
-  const totalPending = pendingClaims.reduce((sum, claim) => sum + Number(claim.value.replace(/,/g, '')), 0);
-  const protectionRemainingSeconds = getRemainingSeconds(home.protectedUntil);
-  const isProtectionActive = protectionRemainingSeconds > 0;
   const vaultProgress = vaultResource ? parseCapacityResourceValue(vaultResource.value) : { current: 0, capacity: 0, ratio: 0 };
-  const mainSpiritSlot = spiritState?.mainSlot ?? spiritState?.slots.find((slot) => slot.isMain) ?? null;
-  const mainSpiritEntry = mainSpiritSlot && spiritState
-    ? spiritState.codex.find((entry) => entry.spiritId === mainSpiritSlot.spiritId) ?? null
-    : null;
-  const mainSpiritHealthRatio = mainSpiritSlot ? (mainSpiritSlot.maxHp > 0 ? Math.min(mainSpiritSlot.currentHp / mainSpiritSlot.maxHp, 1) : 0) : 0;
-  const mainSpiritHealthText = mainSpiritSlot
-    ? `${formatNumber(mainSpiritSlot.currentHp)} / ${formatNumber(mainSpiritSlot.maxHp)}`
-    : '--';
   const seasonProgress = buildSeasonProgress(bootstrap.season);
-  const hourlyTax = parseHourlyTax(taxPending?.description);
-  const temporaryClaim = home.temporaryClaim;
-  const temporaryClaimRemainingSeconds = getRemainingSeconds(temporaryClaim?.expiresAt);
-  const activeTemporaryClaim = temporaryClaim && temporaryClaim.goldAmount > 0 && temporaryClaimRemainingSeconds > 0 ? temporaryClaim : null;
+  const seasonSignInDay = getSeasonSignInDay();
+  const seasonSignInDays = buildSeasonSignInDays(seasonSignInRecord, seasonSignInDay);
+  const seasonSignInClaimedToday = seasonSignInRecord.claimedDays.includes(seasonSignInDay);
+  const seasonSignInStreakAfterClaim = getConsecutiveSignInCount(seasonSignInRecord.claimedDays, seasonSignInDay) + 1;
+  const seasonSignInTodayReward = getSeasonSignInReward(seasonSignInStreakAfterClaim);
   const seedCatalogMap = new Map(seedCatalog.map((seed) => [seed.id, seed]));
   const seedGroups = (['common', 'rare', 'legendary'] as const).map((rarity) => ({
     rarity,
@@ -1076,48 +1167,6 @@ function App(): JSX.Element {
       message,
       tone,
     });
-  };
-
-  const handleBuySpiritSoul = async (): Promise<void> => {
-    if (!spiritState || pendingActionKey === 'spirit:buy-soul') {
-      return;
-    }
-
-    setPendingActionKey('spirit:buy-soul');
-
-    try {
-      const result = await buySpiritSoul({
-        goldAmount: scenes.army.unitCostGold,
-        walletVersion: home.stateVersions.walletVersion,
-        resourceVersion: spiritState.resourceVersion,
-      });
-      applySpiritMutationResult(result);
-    } catch {
-      showToast('当前无法购买兽魂，请稍后重试。', 'error');
-    } finally {
-      setPendingActionKey(null);
-    }
-  };
-
-  const handleUpgradeSpiritAction = async (slotIndex: number, slotVersion: number): Promise<void> => {
-    if (!spiritState || pendingActionKey === `spirit:upgrade:${slotIndex}`) {
-      return;
-    }
-
-    setPendingActionKey(`spirit:upgrade:${slotIndex}`);
-
-    try {
-      const result = await upgradeSpirit({
-        slotIndex,
-        slotVersion,
-        resourceVersion: spiritState.resourceVersion,
-      });
-      applySpiritMutationResult(result);
-    } catch {
-      showToast('当前无法升级灵宠，请稍后重试。', 'error');
-    } finally {
-      setPendingActionKey(null);
-    }
   };
 
   const handleSetMainSpiritAction = async (slotIndex: number, slotVersion: number): Promise<void> => {
@@ -1223,134 +1272,227 @@ function App(): JSX.Element {
     }
   };
 
+  const handleFeedSpiritAction = async (slotIndex: number, slotVersion: number, actionType: 'feed_once' | 'fill_full'): Promise<void> => {
+    const actionKey = `spirit:feed:${slotIndex}:${actionType}`;
+    if (!spiritState || pendingActionKey === actionKey) {
+      return;
+    }
+
+    setPendingActionKey(actionKey);
+
+    try {
+      const result = await feedSpirit({
+        slotIndex,
+        actionType,
+        slotVersion,
+        resourceVersion: spiritState.resourceVersion,
+      });
+      applySpiritMutationResult(result);
+      showToast(result.summary, 'success');
+    } catch {
+      showToast('当前无法投喂灵宠，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleBreakthroughSpiritAction = async (slotIndex: number, slotVersion: number, targetStage?: number): Promise<void> => {
+    const actionKey = `spirit:breakthrough:${slotIndex}`;
+    if (!spiritState || pendingActionKey === actionKey) {
+      return;
+    }
+
+    setPendingActionKey(actionKey);
+
+    try {
+      const result = await breakthroughSpirit({
+        slotIndex,
+        targetStage,
+        slotVersion,
+        resourceVersion: spiritState.resourceVersion,
+      });
+      applySpiritMutationResult(result);
+      showToast(result.summary, 'success');
+    } catch {
+      showToast('当前无法突破灵宠，请确认兽魂是否足够。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleRollSpiritTraitsAction = async (
+    slotIndex: number,
+    slotVersion: number,
+    mode: ClientSpiritRollMode,
+    options: { lockedSlotIndex?: number; targetSlotIndex?: number; targetTraitCode?: ClientSpiritTraitCode } = {},
+  ): Promise<void> => {
+    const actionKey = `spirit:roll:${slotIndex}:${mode}`;
+    if (!spiritState || pendingActionKey === actionKey) {
+      return;
+    }
+
+    setPendingActionKey(actionKey);
+
+    try {
+      const result = await rollSpiritTraits({
+        slotIndex,
+        mode,
+        ...options,
+        slotVersion,
+        walletVersion: home.stateVersions.walletVersion,
+        resourceVersion: spiritState.resourceVersion,
+      });
+      applySpiritMutationResult(result);
+      showToast(result.summary, 'success');
+    } catch {
+      showToast('当前无法洗练词条，请确认材料是否足够。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleBuySpiritShopItemAction = async (itemId: string): Promise<void> => {
+    const actionKey = `spirit:shop:${itemId}`;
+    if (!spiritState || pendingActionKey === actionKey) {
+      return;
+    }
+
+    setPendingActionKey(actionKey);
+
+    try {
+      const result = await buySpiritShopItem({
+        itemId,
+        resourceVersion: spiritState.resourceVersion,
+      });
+      applySpiritMutationResult(result);
+      showToast(result.summary, 'success');
+    } catch {
+      showToast('当前无法兑换商品，请确认天机符或限购次数。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleClaimSeasonSignIn = (): void => {
+    if (!loginSession || seasonSignInClaimedToday) {
+      return;
+    }
+
+    const reward = seasonSignInTodayReward;
+    const nextRecord: SeasonSignInRecord = {
+      claimedDays: Array.from(new Set([...seasonSignInRecord.claimedDays, seasonSignInDay])).sort((left, right) => left - right),
+      totalTianjiReward: seasonSignInRecord.totalTianjiReward + reward,
+    };
+
+    writeSeasonSignInRecord(loginSession.player.id, nextRecord);
+    setSeasonSignInRecord(nextRecord);
+    setGlobalItemInventory((current) => ({
+      ...current,
+      tianjiTalisman: (current.tianjiTalisman ?? 0) + reward,
+    }));
+    setSpiritState((current) => current ? {
+      ...current,
+      tianjiTalisman: current.tianjiTalisman + reward,
+    } : current);
+    showToast(`签到成功，获得天机符 x${reward}。`, 'success');
+  };
+
+  const handleClaimSpiritAdRewardAction = async (): Promise<void> => {
+    const actionKey = 'spirit:ad-reward';
+    if (!spiritState || pendingActionKey === actionKey) {
+      return;
+    }
+
+    setPendingActionKey(actionKey);
+
+    try {
+      const result = await claimSpiritAdReward({
+        resourceVersion: spiritState.resourceVersion,
+      });
+      applySpiritMutationResult(result);
+      showToast(result.summary, 'success');
+    } catch {
+      showToast('当前无法领取广告奖励，可能今日次数已用完。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleClaimFactionStipend = (): void => {
+    const stipend = scenes.faction.stipend;
+
+    if (!stipend || stipend.status !== 'available') {
+      return;
+    }
+
+    setSeedRewardModal({
+      title: '领取阵营俸禄',
+      summary: `当前贡献 ${formatNumber(stipend.contribution)}，档位：${stipend.tierLabel}。确认后将以下奖励入账。`,
+      confirmAction: 'claim-faction-stipend',
+      items: stipend.rewards.map((reward) => ({
+        seedId: reward.seedId,
+        itemId: reward.kind,
+        label: reward.label,
+        quantity: reward.quantity,
+      })),
+    });
+  };
+
   const handleTransferFaction = (factionName: string): void => {
     showToast(`转阵营到${factionName}的功能待定，当前先保留入口。`);
   };
 
-  const handleClaimPending = async (source: ClientClaimPendingRequest['source'], acceptOverflowLoss = false): Promise<void> => {
-    if (claimingSource === source) {
+  const handleConfirmFactionStipendClaim = async (): Promise<void> => {
+    if (!seedRewardModal || seedRewardModal.confirmAction !== 'claim-faction-stipend') {
       return;
     }
 
-    setClaimingSource(source);
+    if (pendingActionKey === 'faction:stipend') {
+      return;
+    }
+
+    setPendingActionKey('faction:stipend');
 
     try {
-      const result = await claimPendingEarnings({
-        source,
-        acceptOverflowLoss,
+      const result = await claimFactionStipend({
         walletVersion: home.stateVersions.walletVersion,
       });
-      if (result.claimedGold <= 0 && result.remainingPendingGold > 0 && !acceptOverflowLoss) {
-        setPendingClaimOverflowState({
-          source,
-          title: getPendingClaimTitle(source),
-          pendingYield: result.remainingPendingGold,
-          overflowGold: result.remainingPendingGold,
-        });
-        return;
-      }
-
       applyMutationResult(result);
-    } catch {
-      showToast('当前无法完成收益入库，请稍后重试。', 'error');
-    } finally {
-      setClaimingSource(null);
-    }
-  };
-
-  const handleConfirmStarterSeedClaim = async (): Promise<void> => {
-    if (!seedRewardModal || seedRewardModal.confirmAction !== 'claim-starter-seeds') {
-      return;
-    }
-
-    if (pendingActionKey === 'home:claim-starter-seeds') {
-      return;
-    }
-
-    setPendingActionKey('home:claim-starter-seeds');
-
-    try {
-      const result = await claimStarterSeedPack();
-      applyMutationResult(result);
-      setSeedInventory((current) => ({
-        ...current,
-        qinglingmai: (current.qinglingmai ?? 0) + 3,
-        xunyamai: (current.xunyamai ?? 0) + 3,
-      }));
-      setUnlockedSeedIds((current) => {
-        const next = new Set(current);
-        next.add('qinglingmai');
-        next.add('xunyamai');
-        return Array.from(next);
+      setSeedInventory((current) => {
+        const nextInventory = { ...current };
+        result.rewards
+          .filter((reward) => reward.kind === 'seed' && reward.seedId)
+          .forEach((reward) => {
+            nextInventory[reward.seedId as string] = (nextInventory[reward.seedId as string] ?? 0) + reward.quantity;
+          });
+        return nextInventory;
       });
-      setStarterSeedClaimed(true);
+      setUnlockedSeedIds((current) => {
+        const nextIds = new Set(current);
+        result.rewards
+          .filter((reward) => reward.kind === 'seed' && reward.seedId)
+          .forEach((reward) => nextIds.add(reward.seedId as string));
+        return Array.from(nextIds);
+      });
+      setGlobalItemInventory((current) => {
+        const nextItems = { ...current };
+        result.rewards
+          .filter((reward) => reward.kind === 'ordinary-soul' || reward.kind === 'rare-soul' || reward.kind === 'legendary-soul')
+          .forEach((reward) => {
+            nextItems[reward.kind] = (nextItems[reward.kind] ?? 0) + reward.quantity;
+          });
+        return nextItems;
+      });
       setSeedRewardModal(null);
+      showToast(result.summary, 'success');
     } catch {
-      showToast('当前无法领取今日种子，请稍后重试。', 'error');
+      showToast('当前无法领取阵营俸禄，请稍后重试。', 'error');
     } finally {
       setPendingActionKey(null);
     }
   };
 
-  const handleConfirmTianjiTalismanClaim = async (): Promise<void> => {
-    if (!seedRewardModal || seedRewardModal.confirmAction !== 'claim-tianji-talisman') {
-      return;
-    }
-
-    if (pendingActionKey === 'home:claim-tianji-talisman') {
-      return;
-    }
-
-    setPendingActionKey('home:claim-tianji-talisman');
-
-    try {
-      const result = await claimTianjiTalismanItem();
-      applyMutationResult(result);
-      setGlobalItemInventory((current) => ({
-        ...current,
-        tianjiTalisman: (current.tianjiTalisman ?? 0) + 1,
-      }));
-      setTianjiTalismanClaimed(true);
-      setSeedRewardModal(null);
-    } catch {
-      showToast('当前无法领取今天天机符，请稍后重试。', 'error');
-    } finally {
-      setPendingActionKey(null);
-    }
-  };
-
-  const handleConfirmSpiritSoulClaim = async (): Promise<void> => {
-    if (!seedRewardModal || seedRewardModal.confirmAction !== 'claim-spirit-soul') {
-      return;
-    }
-
-    if (pendingActionKey === 'home:claim-spirit-soul') {
-      return;
-    }
-
-    setPendingActionKey('home:claim-spirit-soul');
-
-    try {
-      const result = await claimSpiritSoulItem();
-      applyMutationResult(result);
-      setSpiritState((current) => (current ? {
-        ...current,
-        spiritSoul: current.spiritSoul + dailySpiritSoulAmount,
-      } : current));
-      setGlobalItemInventory((current) => ({
-        ...current,
-        spiritSoul: (current.spiritSoul ?? 0) + dailySpiritSoulAmount,
-      }));
-      setSpiritSoulClaimed(true);
-      setSeedRewardModal(null);
-    } catch {
-      showToast('当前无法领取今日兽魂，请稍后重试。', 'error');
-    } finally {
-      setPendingActionKey(null);
-    }
-  };
-
-  const handleClaimDailyTask = async (taskId: string, acceptOverflowLoss = false): Promise<void> => {
+  const handleClaimDailyTask = async (taskId: string): Promise<void> => {
     const actionKey = `home:daily-task:${taskId}`;
     if (pendingActionKey === actionKey) {
       return;
@@ -1361,20 +1503,8 @@ function App(): JSX.Element {
     try {
       const result = await claimDailyTaskReward({
         taskId,
-        acceptOverflowLoss,
         walletVersion: home.stateVersions.walletVersion,
       });
-
-      if (result.overflowGold > 0 && !acceptOverflowLoss) {
-        const task = dailyTasks.find((item: { id: string; title: string; rewardGold: number }) => item.id === taskId);
-        setTaskRewardOverflowState({
-          taskId,
-          taskTitle: task?.title ?? '任务奖励',
-          rewardGold: result.rewardGold || task?.rewardGold || 0,
-          overflowGold: result.overflowGold,
-        });
-        return;
-      }
 
       applyMutationResult(result);
     } catch {
@@ -1414,8 +1544,6 @@ function App(): JSX.Element {
       setSeedInventory(emptySeedInventory);
       setGlobalItemInventory(emptyGlobalItemInventory);
       setUnlockedSeedIds(defaultUnlockedSeedIds);
-      setStarterSeedClaimed(false);
-      setTianjiTalismanClaimed(false);
       setSeedRewardModal(null);
       farmEnterDialogRef.current = null;
       setArmyQueueRefreshReadyAt(null);
@@ -1522,6 +1650,10 @@ function App(): JSX.Element {
   const applySpiritMutationResult = (result: { home: HomeSummaryResponse; scenes: ClientViewModel['scenes']; spirit: ClientSpiritState; summary: string }): void => {
     applyMutationResult(result);
     setSpiritState(result.spirit);
+    setGlobalItemInventory((current) => ({
+      ...current,
+      tianjiTalisman: result.spirit.tianjiTalisman,
+    }));
   };
 
   const navigateToScene = (scene: ClientSceneKey, nextRaidHubTab?: RaidHubTabKey): void => {
@@ -1589,19 +1721,6 @@ function App(): JSX.Element {
     if (action.label.includes('收取')) {
       const collectMode: ClientCollectFieldRequest['collectMode'] = action.label.includes('提前') ? 'early' : 'ripe';
       const field = farmFields.find((item) => item.id === fieldId);
-      const pendingYield = field?.yieldGold ?? 0;
-      const overflowGold = Math.max(vaultProgress.current + pendingYield - vaultProgress.capacity, 0);
-
-      if (pendingYield > 0 && overflowGold > 0 && !collectOverflowState) {
-        setCollectOverflowState({
-          fieldId,
-          fieldCode: context,
-          collectMode,
-          pendingYield,
-          overflowGold,
-        });
-        return;
-      }
 
       setPendingActionKey(actionKey);
 
@@ -1616,22 +1735,24 @@ function App(): JSX.Element {
         if (result.result.rewards.length > 0) {
           setSeedInventory((current) => {
             const nextInventory = { ...current };
-            result.result.rewards.forEach((reward) => {
-              nextInventory[reward.seedId] = (nextInventory[reward.seedId] ?? 0) + reward.quantity;
-            });
+            result.result.rewards
+              .filter((reward) => (reward.kind ?? 'seed') === 'seed' && reward.seedId)
+              .forEach((reward) => {
+                nextInventory[reward.seedId as string] = (nextInventory[reward.seedId as string] ?? 0) + reward.quantity;
+              });
             return nextInventory;
           });
           setUnlockedSeedIds((current) => {
             const nextIds = new Set(current);
-            result.result.rewards.forEach((reward) => nextIds.add(reward.seedId));
+            result.result.rewards
+              .filter((reward) => (reward.kind ?? 'seed') === 'seed' && reward.seedId)
+              .forEach((reward) => nextIds.add(reward.seedId as string));
             return Array.from(nextIds);
           });
         }
         const rewardModalPayload: SeedRewardModalState = {
           title: '收取所得',
-          summary: result.result.overflowGold > 0
-            ? `获得 ${formatNumber(result.result.collectedGold)} 金币，另有 ${formatNumber(result.result.overflowGold)} 因金币已满未能入账。`
-            : `获得 ${formatNumber(result.result.collectedGold)} 金币。`,
+          summary: `获得 ${formatNumber(result.result.collectedGold)} 金币。`,
           items: [
             {
               seedId: 'field-gold',
@@ -1658,7 +1779,6 @@ function App(): JSX.Element {
           delete nextAssignments[fieldId];
           return nextAssignments;
         });
-        setCollectOverflowState(null);
       } catch {
         showToast(`${context} 当前无法完成收取，请稍后重试。`, 'error');
       } finally {
@@ -1734,8 +1854,8 @@ function App(): JSX.Element {
             ...current,
             title: '掠夺所得',
             summary: response.result.overflowGold > 0
-              ? `本次掠夺 ${formatNumber(response.result.goldLoot)} 金币，其中 ${formatNumber(response.result.depositedGold)} 已入库，另有 ${formatNumber(response.result.overflowGold)} 转入待领取。${response.result.reportSummary}`
-              : `获得 ${formatNumber(response.result.goldLoot)} 金币。${response.result.reportSummary}`,
+              ? `本次掠夺 ${formatNumber(response.result.goldLoot)} 金币，其中 ${formatNumber(response.result.depositedGold)} 已入库，另有 ${formatNumber(response.result.overflowGold)} 转入待领取。${response.result.reportSummary}${response.result.battleEvents?.length ? ` 关键事件：${response.result.battleEvents.map((event) => event.label).join('、')}` : ''}`
+              : `获得 ${formatNumber(response.result.goldLoot)} 金币。${response.result.reportSummary}${response.result.battleEvents?.length ? ` 关键事件：${response.result.battleEvents.map((event) => event.label).join('、')}` : ''}`,
             items: current.items.map((item) => item.seedId === 'raid-gold' ? { ...item, label: '金币' } : item),
           } : current);
 
@@ -1792,47 +1912,6 @@ function App(): JSX.Element {
     }
 
     showToast(buildActionMessage(action.label, actionContext), 'info');
-  };
-
-  const handleClaimStarterSeeds = (): void => {
-    if (starterSeedClaimed) {
-      return;
-    }
-
-    setSeedRewardModal({
-      title: '领取今日种子',
-      summary: '确认后会把 青灵麦 x3 与 风云稻 x3 收进背包。',
-      confirmAction: 'claim-starter-seeds',
-      items: [{ seedId: 'qinglingmai', quantity: 3 }, { seedId: 'xunyamai', quantity: 3 }],
-    });
-  };
-
-  const handleClaimTianjiTalisman = (): void => {
-    if (tianjiTalismanClaimed) {
-      return;
-    }
-
-    const currentTianjiTalismanCount = globalItemInventory.tianjiTalisman ?? 0;
-
-    setSeedRewardModal({
-      title: '领取天机符',
-      summary: `当前库存 ${currentTianjiTalismanCount}，确认后会把 天机符 x1 收进全局物品。`,
-      confirmAction: 'claim-tianji-talisman',
-      items: [{ itemId: 'tianjiTalisman', label: '天机符', quantity: 1 }],
-    });
-  };
-
-  const handleClaimSpiritSoul = (): void => {
-    if (spiritSoulClaimed) {
-      return;
-    }
-
-    setSeedRewardModal({
-      title: '领取每日兽魂',
-      summary: `当前主城等级 ${dailySpiritSoulAmount}，确认后会把 兽魂 x${dailySpiritSoulAmount} 收进全局物品。`,
-      confirmAction: 'claim-spirit-soul',
-      items: [{ itemId: 'spiritSoul', label: '兽魂', quantity: dailySpiritSoulAmount }],
-    });
   };
 
   const handleOpenFarmBoardEditor = (): void => {
@@ -1949,7 +2028,7 @@ function App(): JSX.Element {
           <p className="card-label">当前阵营</p>
           <div className="faction-row">
             <span className="faction-badge">{home.factionName}</span>
-            <span className="soft-tag">主城 Lv.{home.castleLevel}</span>
+            <span className="soft-tag">领地经营</span>
           </div>
           <p className="muted">{home.playerName} · {home.staminaStatus}</p>
         </div>
@@ -1967,16 +2046,16 @@ function App(): JSX.Element {
           <p className="card-label">关键提醒</p>
           <div className="rail-note rail-note-stack">
             <div className="rail-note-row">
-              <strong>待领取总计</strong>
-              <span>{formatNumber(totalPending)}</span>
+              <strong>金币来源</strong>
+              <span>农作物</span>
             </div>
             <div className="rail-note-row">
-              <span>主城税收</span>
-              <em>{taxPending?.value ?? '0'}</em>
+              <span>开田方式</span>
+              <em>地契任务</em>
             </div>
             <div className="rail-note-row">
-              <span>阵营分红</span>
-              <em>{factionPending?.value ?? '0'}</em>
+              <span>阵营收益</span>
+              <em>每日俸禄</em>
             </div>
           </div>
           <button className="rail-alert" onClick={() => {
@@ -2014,24 +2093,6 @@ function App(): JSX.Element {
           className="phone-frame phone-frame-scene"
           style={{ ['--scene-bg-image' as string]: activeBackgroundImage } as React.CSSProperties}
         >
-          {taskRewardOverflowState ? (
-            <div className="modal-backdrop collect-overflow-backdrop">
-              <div className="modal-card transfer-card collect-overflow-card">
-                <div>
-                  <p className="eyebrow">金币将溢出</p>
-                  <h3>是否继续领取？</h3>
-                </div>
-                <p className="panel-text">{taskRewardOverflowState.taskTitle} 本次预计领取 {formatNumber(taskRewardOverflowState.rewardGold)} 金币，其中约 {formatNumber(taskRewardOverflowState.overflowGold)} 会因金币已满无法入账。确认后默认放弃溢出部分。</p>
-                <div className="transfer-foot-row">
-                  <button className="ghost-button" onClick={() => setTaskRewardOverflowState(null)} type="button">取消</button>
-                  <button className="secondary-button" onClick={() => {
-                    void handleClaimDailyTask(taskRewardOverflowState.taskId, true);
-                    setTaskRewardOverflowState(null);
-                  }} type="button">继续领取</button>
-                </div>
-              </div>
-            </div>
-          ) : null}
           <section className="top-dock">
             <header className="top-bar">
               <div className="top-action-group">
@@ -2041,15 +2102,21 @@ function App(): JSX.Element {
                 </div>
                 <button className="ghost-button top-action-button top-item-button" onClick={() => {
                   setGlobalFeatureModal({
-                    title: '天机符',
-                    eyebrow: '全局物品',
-                    description: '当前先预留二级弹框入口，后续会在这里接入看广告与奖券消耗逻辑。',
+                    title: '天机符商店',
+                    tianjiShop: true,
                   });
                 }} type="button">
                   <span className="top-item-icon" aria-hidden="true">符</span>
                   <span className="top-item-count">{formatNumber(globalItemInventory.tianjiTalisman ?? 0)}</span>
                 </button>
-                <button className="ghost-button top-action-button" onClick={() => showToast('签到得奖券，日常活动。')} type="button">
+                <button className="ghost-button top-action-button" onClick={() => {
+                  setGlobalFeatureModal({
+                    title: '赛季签到',
+                    eyebrow: '活动',
+                    description: '每个赛季 28 天，每日签到获得天机符；连续签到越久，当日领取越多。',
+                    seasonSignIn: true,
+                  });
+                }} type="button">
                   活动
                 </button>
                 <button className="ghost-button top-action-button top-notification-button" onClick={handleOpenNotifications} type="button">
@@ -2116,88 +2183,27 @@ function App(): JSX.Element {
           ) : null}
 
             <section className="global-resource-bar">
-              <section className="resource-dock resource-dock-global">
-                <div className={`resource-dock-card resource-dock-card-vault${isProtectionActive ? ' resource-dock-card-protected' : ''}`}>
-                  <div className="resource-dock-head">
-                    <span className="resource-name">
-                      金币
-                      {isProtectionActive ? <span className="resource-protection-tag">防护中</span> : null}
-                    </span>
-                    <span className="resource-dock-capacity">上限 {formatNumber(vaultProgress.capacity)}</span>
-                  </div>
-                  <strong className="resource-dock-amount">{formatNumber(vaultProgress.current)}</strong>
-                  <div className="resource-dock-progress" aria-hidden="true">
-                    <div className="resource-dock-progress-fill resource-dock-progress-fill-vault" style={{ width: `${vaultProgress.ratio * 100}%` }} />
-                  </div>
-                  <div className="resource-dock-foot">
-                    <span>{isProtectionActive ? '保护期' : '当前持有'}</span>
-                    <span>{isProtectionActive ? formatProtectionCountdown(protectionRemainingSeconds) : `${Math.round(vaultProgress.ratio * 100)}%`}</span>
-                  </div>
-                </div>
-                <div className="resource-dock-card resource-dock-card-spirit">
-                  <div className="resource-dock-head">
-                    <span className="resource-name">灵宠</span>
-                    <span className="resource-dock-level">{mainSpiritSlot ? `Lv.${formatNumber(mainSpiritSlot.level)}` : '未上阵'}</span>
-                  </div>
-                  <strong className="resource-dock-amount">{mainSpiritEntry?.definition.label ?? '暂无主战灵宠'}</strong>
-                  <div className="resource-dock-progress" aria-hidden="true">
-                    <div className="resource-dock-progress-fill resource-dock-progress-fill-army" style={{ width: `${mainSpiritHealthRatio * 100}%` }} />
-                  </div>
-                  <div className="resource-dock-foot">
-                    <span>血量</span>
-                    <span>{mainSpiritHealthText}</span>
-                  </div>
-                </div>
-              </section>
+              <div className="global-gold-pill">
+                <span className="global-gold-icon" aria-hidden="true">金</span>
+                <strong>{formatNumber(vaultProgress.current)}</strong>
+              </div>
             </section>
           </section>
 
           <section className={`screen-body scene-${activeScene}`}>
             {activeScene === 'home' ? (
               <HomeScene
-                claimingStarterSeeds={pendingActionKey === 'home:claim-starter-seeds'}
-                claimingTianjiTalisman={pendingActionKey === 'home:claim-tianji-talisman'}
-                claimingSpiritSoul={pendingActionKey === 'home:claim-spirit-soul'}
                 claimingTaskId={pendingActionKey?.startsWith('home:daily-task:') ? pendingActionKey.replace('home:daily-task:', '') : null}
-                claimingTax={claimingSource === 'tax'}
                 dailyTasks={dailyTasks}
-                dailySpiritSoulAmount={dailySpiritSoulAmount}
-                hourlyTax={hourlyTax}
-                onClaimTax={() => {
-                  const taxPendingAmount = taxPending ? Number(taxPending.value.replace(/,/g, '')) : 0;
-                  const overflowGold = Math.max(vaultProgress.current + taxPendingAmount - vaultProgress.capacity, 0);
-
-                  if (taxPendingAmount > 0 && overflowGold > 0) {
-                    setPendingClaimOverflowState({
-                      source: 'tax',
-                      title: '主城税收',
-                      pendingYield: taxPendingAmount,
-                      overflowGold,
-                    });
-                    return;
-                  }
-
-                  void handleClaimPending('tax');
-                }}
                 onClaimTask={(taskId) => {
                   void handleClaimDailyTask(taskId);
                 }}
-                onClaimStarterSeeds={handleClaimStarterSeeds}
-                onClaimTianjiTalisman={handleClaimTianjiTalisman}
-                onClaimSpiritSoul={handleClaimSpiritSoul}
-                farmBoardMessage={farmBoard?.farmBoardMessage ?? ''}
-                onOpenFarmBoard={handleOpenFarmBoardEditor}
                 onNavigate={navigateToScene}
-                spiritSoulClaimed={spiritSoulClaimed}
-                starterSeedClaimed={starterSeedClaimed}
-                tianjiTalismanClaimed={tianjiTalismanClaimed}
-                taxPending={taxPending}
               />
             ) : null}
 
             {activeScene === 'building' ? (
               <BuildingScene
-                castleLevel={home.castleLevel}
                 onUpgradeAction={(action, upgradeId, context, targetType) => {
                   void handleBuildingAction(action, upgradeId, context, targetType);
                 }}
@@ -2213,6 +2219,7 @@ function App(): JSX.Element {
                 farmBoardMessage={farmBoard?.farmBoardMessage ?? ''}
                 farmBoardUpdatedAt={farmBoard?.farmBoardUpdatedAt ?? null}
                 fields={farmFields}
+                landDeeds={scenes.farm.landDeeds ?? []}
                 onAction={(action, fieldId, fieldCode) => {
                   void handleFarmAction(action, fieldId, fieldCode);
                 }}
@@ -2227,11 +2234,7 @@ function App(): JSX.Element {
 
             {activeScene === 'raid' ? (
                 <ArmyScene
-                  currentGold={vaultProgress.current}
                 busy={pendingActionKey?.startsWith('spirit:') ?? false}
-                onBuySoul={() => {
-                  void handleBuySpiritSoul();
-                }}
                 onCompose={(spiritId, slotIndex, element) => {
                   void handleComposeSpiritAction(spiritId, slotIndex, element);
                 }}
@@ -2244,12 +2247,17 @@ function App(): JSX.Element {
                 onSetMain={(slotIndex, slotVersion) => {
                   void handleSetMainSpiritAction(slotIndex, slotVersion);
                 }}
-                onUpgrade={(slotIndex, slotVersion) => {
-                  void handleUpgradeSpiritAction(slotIndex, slotVersion);
+                onFeed={(slotIndex, slotVersion, actionType) => {
+                  void handleFeedSpiritAction(slotIndex, slotVersion, actionType);
+                }}
+                onBreakthrough={(slotIndex, slotVersion, targetStage) => {
+                  void handleBreakthroughSpiritAction(slotIndex, slotVersion, targetStage);
+                }}
+                onRollTraits={(slotIndex, slotVersion, mode, options) => {
+                  void handleRollSpiritTraitsAction(slotIndex, slotVersion, mode, options);
                 }}
                 playerFaction={home.factionName}
                 spirit={spiritState}
-                unitCostGold={scenes.army.unitCostGold}
               />
             ) : null}
 
@@ -2280,26 +2288,22 @@ function App(): JSX.Element {
                 currentGold={vaultProgress.current}
                 donate={scenes.faction.donate}
                 donating={pendingActionKey === 'faction:donate'}
-                factionPending={factionPending}
                 factionTab={factionTab}
                 hero={scenes.faction.hero}
                 onChangeTab={setFactionTab}
-                onClaim={() => {
-                  const factionPendingAmount = factionPending ? Number(factionPending.value.replace(/,/g, '')) : 0;
-                  const overflowGold = Math.max(vaultProgress.current + factionPendingAmount - vaultProgress.capacity, 0);
-
-                  if (factionPendingAmount > 0 && overflowGold > 0) {
-                    setPendingClaimOverflowState({
-                      source: 'faction',
-                      title: '阵营分红',
-                      pendingYield: factionPendingAmount,
-                      overflowGold,
-                    });
-                    return;
-                  }
-
-                  void handleClaimPending('faction');
+                onContributionGuide={() => {
+                  setGlobalFeatureModal({
+                    title: '贡献俸禄档位',
+                    eyebrow: '阵营贡献',
+                    description: '每日按当前个人贡献匹配一个档位；随机种子会在确认领取时抽取为具体整种子。',
+                    contributionTiers: buildFactionContributionTiers(),
+                  });
                 }}
+                onClaimStipend={() => {
+                  void handleClaimFactionStipend();
+                }}
+                claimingStipend={pendingActionKey === 'faction:stipend'}
+                stipend={scenes.faction.stipend}
                 onDonate={(goldAmount) => {
                   void handleFactionDonate(goldAmount);
                 }}
@@ -2356,55 +2360,97 @@ function App(): JSX.Element {
               selectedSeedId={selectedSeedId}
             />
           ) : null}
-          {collectOverflowState ? (
-            <div className="modal-backdrop collect-overflow-backdrop">
-              <div className="modal-card transfer-card collect-overflow-card">
-                <div>
-                  <p className="eyebrow">金币将溢出</p>
-                  <h3>是否继续收取？</h3>
-                </div>
-                <p className="panel-text">{collectOverflowState.fieldCode} 本次预计收取 {formatNumber(collectOverflowState.pendingYield)} 金币，其中约 {formatNumber(collectOverflowState.overflowGold)} 会因金币已满无法入账。你可以先去处理金币，再回来收取。</p>
-                <div className="transfer-foot-row">
-                  <button className="ghost-button" onClick={() => setCollectOverflowState(null)} type="button">取消</button>
-                  <button className="secondary-button" onClick={() => {
-                    const nextField = farmFields.find((item) => item.id === collectOverflowState.fieldId);
-                    const nextAction: ClientSceneAction = {
-                      label: collectOverflowState.collectMode === 'early' ? '提前收取' : '成熟收取',
-                      target: 'farm',
-                      tone: collectOverflowState.collectMode === 'early' ? 'secondary' : 'primary',
-                    };
-                    setCollectOverflowState(null);
-                    void handleFarmAction(nextAction, collectOverflowState.fieldId, nextField?.code ?? collectOverflowState.fieldCode);
-                  }} type="button">继续收取</button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-          {pendingClaimOverflowState ? (
-            <div className="modal-backdrop collect-overflow-backdrop">
-              <div className="modal-card transfer-card collect-overflow-card">
-                <div>
-                  <p className="eyebrow">金币将溢出</p>
-                  <h3>是否继续领取？</h3>
-                </div>
-                <p className="panel-text">{pendingClaimOverflowState.title} 本次预计领取 {formatNumber(pendingClaimOverflowState.pendingYield)} 金币，其中约 {formatNumber(pendingClaimOverflowState.overflowGold)} 会因金币已满无法入账。你可以先去处理金币，再回来领取。</p>
-                <div className="transfer-foot-row">
-                  <button className="ghost-button" onClick={() => setPendingClaimOverflowState(null)} type="button">取消</button>
-                  <button className="secondary-button" onClick={() => {
-                    void handleClaimPending(pendingClaimOverflowState.source, true);
-                    setPendingClaimOverflowState(null);
-                  }} type="button">继续领取</button>
-                </div>
-              </div>
-            </div>
-          ) : null}
           {globalFeatureModal ? (
             <GlobalFeatureModal
-              description={globalFeatureModal.description}
-              eyebrow={globalFeatureModal.eyebrow}
+              description={globalFeatureModal.tianjiShop ? undefined : globalFeatureModal.description}
+              eyebrow={globalFeatureModal.tianjiShop ? undefined : globalFeatureModal.eyebrow}
               onClose={() => setGlobalFeatureModal(null)}
-              title={globalFeatureModal.title}
-            />
+              title={globalFeatureModal.tianjiShop ? `天机符库存 x${formatNumber(spiritState?.tianjiTalisman ?? globalItemInventory.tianjiTalisman ?? 0)}` : globalFeatureModal.title}
+            >
+              {globalFeatureModal.contributionTiers ? (
+                <div className="contribution-tier-list">
+                  {globalFeatureModal.contributionTiers.map((tier) => (
+                    <article className="contribution-tier-card" key={tier.threshold}>
+                      <div>
+                        <span>{tier.threshold}</span>
+                        <strong>{tier.label}</strong>
+                      </div>
+                      <ul>
+                        {tier.rewards.map((reward) => (
+                          <li key={reward}>{reward}</li>
+                        ))}
+                      </ul>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+              {globalFeatureModal.seasonSignIn ? (
+                <div className="season-signin-panel">
+                  <div className="season-signin-summary">
+                    <span>今日第 {seasonSignInDay} 天</span>
+                    <strong>天机符 x{seasonSignInTodayReward}</strong>
+                  </div>
+                  <div className="season-signin-grid" aria-label="赛季签到日历">
+                    {seasonSignInDays.map((day) => (
+                      <div
+                        className={[
+                          'season-signin-day',
+                          day.claimed ? 'claimed' : '',
+                          day.current ? 'current' : '',
+                          day.future ? 'future' : '',
+                        ].filter(Boolean).join(' ')}
+                        key={day.day}
+                      >
+                        <span>{day.day}</span>
+                        <strong>符 x{day.reward}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <button className="secondary-button" disabled={seasonSignInClaimedToday} onClick={handleClaimSeasonSignIn} type="button">
+                    {seasonSignInClaimedToday ? '今日已签到' : '签到领取'}
+                  </button>
+                </div>
+              ) : null}
+              {globalFeatureModal.tianjiShop && spiritState?.shop ? (
+                <div className="tianji-shop-panel">
+                  <button
+                    className="secondary-button"
+                    disabled={pendingActionKey === 'spirit:ad-reward' || spiritState.shop.adReward.usedToday >= spiritState.shop.adReward.dailyLimit}
+                    onClick={() => {
+                      void handleClaimSpiritAdRewardAction();
+                    }}
+                    type="button"
+                  >
+                    看广告 +{spiritState.shop.adReward.tianjiTalisman} 天机符
+                  </button>
+                  <p className="panel-text">今日广告 {spiritState.shop.adReward.usedToday}/{spiritState.shop.adReward.dailyLimit}，额外随机给灵根或灵髓。</p>
+                  <div className="task-list tianji-shop-list">
+                    {spiritState.shop.items.map((item) => (
+                      <div className="task-row tianji-shop-row" key={item.itemId}>
+                        <span className="task-index">{item.priceTianjiTalisman}</span>
+                        <div>
+                          <div className="task-row-head">
+                            <strong>{item.label}</strong>
+                            <span className="task-state-badge">{item.limitLabel}{item.remainingPurchases === null ? '' : ` · 剩 ${item.remainingPurchases}`}</span>
+                          </div>
+                          <p>{item.description}</p>
+                        </div>
+                        <button
+                          className="secondary-button small"
+                          disabled={pendingActionKey === `spirit:shop:${item.itemId}` || spiritState.tianjiTalisman < item.priceTianjiTalisman || item.remainingPurchases === 0}
+                          onClick={() => {
+                            void handleBuySpiritShopItemAction(item.itemId);
+                          }}
+                          type="button"
+                        >
+                          兑换
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </GlobalFeatureModal>
           ) : null}
           {farmBoardEditor ? (
             <div className="modal-backdrop farm-board-backdrop" role="presentation">
@@ -2529,46 +2575,17 @@ function App(): JSX.Element {
                   })}
                 </div>
                 <div className="transfer-foot-row seed-reward-actions">
-                  <button className="secondary-button" disabled={pendingActionKey === 'home:claim-starter-seeds' || pendingActionKey === 'home:claim-tianji-talisman' || pendingActionKey === 'home:claim-spirit-soul'} onClick={() => {
-                    if (seedRewardModal.confirmAction === 'claim-starter-seeds') {
-                      void handleConfirmStarterSeedClaim();
-                      return;
-                    }
-
-                    if (seedRewardModal.confirmAction === 'claim-tianji-talisman') {
-                      void handleConfirmTianjiTalismanClaim();
-                      return;
-                    }
-
-                    if (seedRewardModal.confirmAction === 'claim-spirit-soul') {
-                      void handleConfirmSpiritSoulClaim();
+                  <button className="secondary-button" disabled={pendingActionKey === 'faction:stipend'} onClick={() => {
+                    if (seedRewardModal.confirmAction === 'claim-faction-stipend') {
+                      void handleConfirmFactionStipendClaim();
                       return;
                     }
 
                     setSeedRewardModal(null);
-                  }} type="button">{pendingActionKey === 'home:claim-starter-seeds' || pendingActionKey === 'home:claim-tianji-talisman' || pendingActionKey === 'home:claim-spirit-soul' ? '收取中...' : '确认'}</button>
+                  }} type="button">{pendingActionKey === 'faction:stipend' ? '收取中...' : '确认'}</button>
                 </div>
               </div>
             </div>
-          ) : null}
-          {activeTemporaryClaim ? (
-            <button
-              aria-label={`待领取 ${formatNumber(activeTemporaryClaim.goldAmount)} 金币，剩余 ${formatTemporaryClaimCountdown(temporaryClaimRemainingSeconds)}`}
-              className="temporary-claim-widget"
-              disabled={claimingSource === 'raid-overflow'}
-              onClick={() => {
-                void handleClaimPending('raid-overflow');
-              }}
-              type="button"
-            >
-              <span className="temporary-claim-countdown">{claimingSource === 'raid-overflow' ? '领取中' : formatTemporaryClaimCountdown(temporaryClaimRemainingSeconds)}</span>
-              <span className="temporary-claim-icon" aria-hidden="true">
-                <span className="temporary-claim-hand short" />
-                <span className="temporary-claim-hand long" />
-              </span>
-              <span className="temporary-claim-label">待领取</span>
-              <strong className="temporary-claim-amount">{formatNumber(activeTemporaryClaim.goldAmount)}</strong>
-            </button>
           ) : null}
         </div>
       </section>

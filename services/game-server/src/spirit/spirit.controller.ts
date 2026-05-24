@@ -6,10 +6,15 @@ import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
 import { createUnauthorizedError } from '../common/errors/index.js';
 import {
+  BreakthroughSpiritRequestDto,
   BuySpiritSoulRequestDto,
+  BuySpiritShopItemRequestDto,
+  ClaimSpiritAdRewardRequestDto,
   ComposeSpiritRequestDto,
   DissolveSpiritRequestDto,
+  FeedSpiritRequestDto,
   RecoverSpiritRequestDto,
+  RollSpiritTraitsRequestDto,
   SetMainSpiritRequestDto,
   UpgradeSpiritRequestDto,
 } from './dto.js';
@@ -64,6 +69,91 @@ export class SpiritController {
     }
 
     return this.spiritService.upgradeSpirit(currentPlayer.playerId, body, idempotencyKey);
+  }
+
+  @Post('feed')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: FeedSpiritRequestDto })
+  @ApiOkResponse({ description: 'Feed spirit root to gain exp and satiated time.' })
+  async feedSpirit(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: FeedSpiritRequestDto,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<ClientSpiritMutationResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.spiritService.feedSpirit(currentPlayer.playerId, body, idempotencyKey);
+  }
+
+  @Post('breakthrough')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: BreakthroughSpiritRequestDto })
+  @ApiOkResponse({ description: 'Manually breakthrough spirit node.' })
+  async breakthroughSpirit(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: BreakthroughSpiritRequestDto,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<ClientSpiritMutationResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.spiritService.breakthroughSpirit(currentPlayer.playerId, body, idempotencyKey);
+  }
+
+  @Post('roll-traits')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: RollSpiritTraitsRequestDto })
+  @ApiOkResponse({ description: 'Roll spirit traits.' })
+  async rollSpiritTraits(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: RollSpiritTraitsRequestDto,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<ClientSpiritMutationResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.spiritService.rollSpiritTraits(currentPlayer.playerId, body, idempotencyKey);
+  }
+
+  @Post('shop/buy')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: BuySpiritShopItemRequestDto })
+  @ApiOkResponse({ description: 'Buy a Tianji talisman shop item.' })
+  async buySpiritShopItem(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: BuySpiritShopItemRequestDto,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<ClientSpiritMutationResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.spiritService.buyShopItem(currentPlayer.playerId, body, idempotencyKey);
+  }
+
+  @Post('shop/ad-reward')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: ClaimSpiritAdRewardRequestDto })
+  @ApiOkResponse({ description: 'Claim rewarded-ad Tianji talisman reward.' })
+  async claimSpiritAdReward(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: ClaimSpiritAdRewardRequestDto,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<ClientSpiritMutationResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.spiritService.claimAdReward(currentPlayer.playerId, body, idempotencyKey);
   }
 
   @Post('set-main')
@@ -138,6 +228,11 @@ export class SpiritController {
 defineRouteParamTypes(SpiritController.prototype, 'getSpiritState', [Object]);
 defineRouteParamTypes(SpiritController.prototype, 'buySpiritSoul', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'upgradeSpirit', [Object, Object, String]);
+defineRouteParamTypes(SpiritController.prototype, 'feedSpirit', [Object, Object, String]);
+defineRouteParamTypes(SpiritController.prototype, 'breakthroughSpirit', [Object, Object, String]);
+defineRouteParamTypes(SpiritController.prototype, 'rollSpiritTraits', [Object, Object, String]);
+defineRouteParamTypes(SpiritController.prototype, 'buySpiritShopItem', [Object, Object, String]);
+defineRouteParamTypes(SpiritController.prototype, 'claimSpiritAdReward', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'setMainSpirit', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'recoverSpirit', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'dissolveSpirit', [Object, Object, String]);

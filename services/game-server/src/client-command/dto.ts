@@ -1,6 +1,7 @@
 import type {
   ClientClaimDailyTaskRequest,
   ClientClaimPendingRequest,
+  ClientClaimFactionStipendRequest,
   ClientCollectFieldRequest,
   ClientFactionDonateRequest,
   ClientBuildingUpgradeId,
@@ -20,6 +21,11 @@ export class ClaimPendingRequestDto implements ClientClaimPendingRequest {
 
 export class FactionDonateRequestDto implements ClientFactionDonateRequest {
   goldAmount!: number;
+}
+
+export class ClaimFactionStipendRequestDto implements ClientClaimFactionStipendRequest {
+  walletVersion?: number;
+  requestIdempotencyKey?: string;
 }
 
 export class ClaimDailyTaskRequestDto implements ClientClaimDailyTaskRequest {

@@ -3,6 +3,7 @@ import { AuditModule } from '../audit/audit.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { ClientReadModule } from '../client-read/client-read.module.js';
 import { ConfigModule } from '../config/config.module.js';
+import { LandDeedModule } from '../land-deed/land-deed.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { RaidController } from './raid.controller.js';
 import { RaidSettlementQueueService } from './raid-settlement-queue.service.js';
@@ -12,7 +13,7 @@ import { RaidTargetService } from './raid-target.service.js';
 import { RaidRepository } from './raid.repository.js';
 
 @Module({
-  imports: [AuditModule, AuthModule, ConfigModule, PrismaModule, ClientReadModule],
+  imports: [AuditModule, AuthModule, ConfigModule, PrismaModule, ClientReadModule, LandDeedModule],
   controllers: [RaidController],
   providers: [RaidRepository, RaidTargetService, RaidSettlementQueueService, RaidSettlementRuleService, RaidSettlementService],
   exports: [RaidRepository, RaidTargetService, RaidSettlementQueueService, RaidSettlementRuleService, RaidSettlementService],

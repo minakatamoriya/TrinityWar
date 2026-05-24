@@ -541,7 +541,7 @@ export class NotificationService {
     if (goldGrant > 0) {
       const wallet = await client.playerWallet.findUnique({
         where: { playerId },
-        select: { vaultGold: true, vaultCapacity: true },
+        select: { vaultGold: true },
       });
 
       if (!wallet) {
@@ -549,15 +549,6 @@ export class NotificationService {
           code: ErrorCode.NotFound,
           message: 'Player wallet state not found.',
           statusCode: 404,
-        });
-      }
-
-      const availableSpace = Math.max(wallet.vaultCapacity - wallet.vaultGold, 0);
-      if (goldGrant > availableSpace) {
-        throw new BusinessError({
-          code: ErrorCode.BadRequest,
-          message: `Insufficient vault capacity. Available space: ${availableSpace}.`,
-          statusCode: 400,
         });
       }
 

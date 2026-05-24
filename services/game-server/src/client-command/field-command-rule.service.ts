@@ -12,12 +12,12 @@ export interface FieldStateForCollect {
   seedDefinition: {
     seedId: string;
     label: string;
+    rarity: string;
   } | null;
 }
 
 export interface WalletStateForCollect {
   vaultGold: number;
-  vaultCapacity: number;
 }
 
 export interface CollectFieldResolution {
@@ -31,7 +31,7 @@ export interface CollectFieldResolution {
 export class FieldCommandRuleService {
   resolveCollectField(
     field: FieldStateForCollect,
-    wallet: WalletStateForCollect,
+    _wallet: WalletStateForCollect,
     request: ClientCollectFieldRequest,
   ): CollectFieldResolution {
     if (!field.isUnlocked || field.status === 'LOCKED') {
@@ -58,9 +58,8 @@ export class FieldCommandRuleService {
       });
     }
 
-    const availableVaultSpace = Math.max(wallet.vaultCapacity - wallet.vaultGold, 0);
-    const collectedGold = Math.min(field.currentClaimableGold, availableVaultSpace);
-    const overflowGold = Math.max(field.currentClaimableGold - collectedGold, 0);
+    const collectedGold = Math.max(field.currentClaimableGold, 0);
+    const overflowGold = 0;
     const rewards = buildFieldRewards(field, request.collectMode);
     const fieldCode = `田地 ${String(field.slotIndex).padStart(2, '0')}`;
     const rewardSummary = rewards.length > 0 ? `，并获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : '';
@@ -69,9 +68,7 @@ export class FieldCommandRuleService {
       collectedGold,
       overflowGold,
       rewards,
-      summary: overflowGold > 0
-        ? `${fieldCode} 已收取 ${formatNumber(collectedGold)} 金币，另有 ${formatNumber(overflowGold)} 因金币已满未能入账${rewardSummary}。`
-        : `${fieldCode} 已收取 ${formatNumber(collectedGold)} 金币${rewardSummary}，可以立即再投入新一轮培育。`,
+      summary: `${fieldCode} 已收取 ${formatNumber(collectedGold)} 金币${rewardSummary}，可以立即再投入新一轮培育。`,
     };
   }
 }
@@ -82,10 +79,45 @@ function buildFieldRewards(field: FieldStateForCollect, collectMode: ClientColle
   }
 
   return [{
+    kind: 'seed',
     seedId: field.seedDefinition.seedId,
     label: field.seedDefinition.label,
     quantity: 1,
-  }];
+  }, buildSpiritCropReward(field.seedDefinition.rarity)];
+}
+
+function buildSpiritCropReward(rarity: string): ClientCollectRewardItem {
+  if (rarity === 'legendary') {
+    return {
+      kind: 'spirit-jade',
+      seedId: 'spirit-jade',
+      label: '灵玉',
+      quantity: randomIntInclusive(1, 2),
+    };
+  }
+
+  if (rarity === 'rare') {
+    return {
+      kind: 'spirit-marrow',
+      seedId: 'spirit-marrow',
+      label: '灵髓',
+      quantity: randomIntInclusive(2, 4),
+    };
+  }
+
+  return {
+    kind: 'spirit-root',
+    seedId: 'spirit-root',
+    label: '灵根',
+    quantity: randomIntInclusive(5, 10),
+  };
+}
+
+function randomIntInclusive(min: number, max: number): number {
+  const lower = Math.ceil(min);
+  const upper = Math.floor(max);
+
+  return Math.floor(Math.random() * (upper - lower + 1)) + lower;
 }
 
 function formatNumber(value: number): string {

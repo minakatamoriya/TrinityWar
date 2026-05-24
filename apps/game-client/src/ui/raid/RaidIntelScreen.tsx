@@ -70,7 +70,7 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
         {detail && !loading ? (
           <>
             <div className="raid-detail-topline">
-              <span className="soft-tag">主城 Lv.{detail.level}</span>
+              <span className="soft-tag">领地 Lv.{detail.level}</span>
               <span className="soft-tag">{detail.faction}</span>
               <span className="soft-tag">默认仅见外观与等级</span>
             </div>

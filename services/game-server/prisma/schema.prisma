@@ -149,6 +149,11 @@ model Player {
   fieldSlots              PlayerFieldSlot[]
   seedInventory           PlayerSeedInventory[]
   spiritCodex             PlayerSpiritCodex[]
+  spiritFeedLogs          SpiritFeedLog[]
+  spiritBreakthroughLogs  SpiritBreakthroughLog[]
+  spiritTraitRollLogs     SpiritTraitRollLog[]
+  spiritShopPurchaseLogs  SpiritShopPurchaseLog[]
+  spiritAdRewardLogs      SpiritAdRewardLog[]
   spiritResource          PlayerSpiritResource?
   spiritSlots             PlayerSpiritSlot[]
   farmBoard               PlayerFarmBoard?
@@ -167,6 +172,8 @@ model Player {
   ownedBattleReports      BattleReport[]           @relation("BattleReportOwner")
   opponentBattleReports   BattleReport[]           @relation("BattleReportOpponent")
   notifications           PlayerNotification[]
+  landDeedProgress        PlayerLandDeedProgress[]
+  factionStipendStates    PlayerFactionStipendState[]
 
   @@index([factionId])
   @@index([lastLoginAt])
@@ -223,6 +230,42 @@ model FactionMember {
   @@unique([factionId, playerId])
   @@index([playerId])
   @@map("faction_member")
+}
+
+model PlayerLandDeedProgress {
+  id           String    @id @default(cuid())
+  playerId     String    @map("player_id")
+  deedKey      String    @map("deed_key")
+  status       String    @default("in_progress")
+  progressJson Json      @map("progress_json")
+  claimedAt    DateTime? @map("claimed_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, deedKey])
+  @@index([playerId, status])
+  @@map("player_land_deed_progress")
+}
+
+model PlayerFactionStipendState {
+  id                   String    @id @default(cuid())
+  playerId             String    @map("player_id")
+  dateKey              String    @map("date_key")
+  contributionSnapshot Int       @map("contribution_snapshot")
+  tierKey              String    @map("tier_key")
+  rewardJson           Json      @map("reward_json")
+  claimedAt            DateTime? @map("claimed_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, dateKey])
+  @@index([dateKey, claimedAt])
+  @@index([playerId, claimedAt])
+  @@map("player_faction_stipend_state")
 }
 
 model PlayerWallet {
@@ -358,6 +401,12 @@ model SpiritDefinition {
 model PlayerSpiritResource {
   playerId                         String   @id @map("player_id")
   spiritSoul                       Int      @default(0) @map("spirit_soul")
+  spiritRoot                       Int      @default(0) @map("spirit_root")
+  spiritMarrow                     Int      @default(0) @map("spirit_marrow")
+  spiritJade                       Int      @default(0) @map("spirit_jade")
+  ordinarySoul                     Int      @default(0) @map("ordinary_soul")
+  rareSoul                         Int      @default(0) @map("rare_soul")
+  legendarySoul                    Int      @default(0) @map("legendary_soul")
   tianjiTalisman                   Int      @default(0) @map("tianji_talisman")
   dailyStarterSeedClaimDateKey     String?  @map("daily_starter_seed_claim_date_key")
   dailyTianjiClaimDateKey          String?  @map("daily_tianji_claim_date_key")
@@ -384,6 +433,9 @@ model PlayerSpiritSlot {
   isMain             Boolean            @default(false) @map("is_main")
   level              Int                @default(1)
   exp                Int                @default(0)
+  breakthroughStage  Int                @default(0) @map("breakthrough_stage")
+  satiatedUntil      DateTime?          @map("satiated_until")
+  lastExpSettledAt   DateTime?          @map("last_exp_settled_at")
   element            SpiritElement?
   currentHp          Int                @default(0) @map("current_hp")
   maxHp              Int                @default(0) @map("max_hp")
@@ -396,11 +448,131 @@ model PlayerSpiritSlot {
 
   player           Player            @relation(fields: [playerId], references: [id], onDelete: Cascade)
   spiritDefinition SpiritDefinition? @relation(fields: [spiritDefinitionId], references: [id], onDelete: SetNull)
+  traits           PlayerSpiritTrait[]
+  feedLogs         SpiritFeedLog[]
+  breakthroughLogs SpiritBreakthroughLog[]
+  traitRollLogs    SpiritTraitRollLog[]
 
   @@unique([playerId, slotIndex])
   @@index([playerId, isMain])
   @@index([spiritDefinitionId])
   @@map("player_spirit_slot")
+}
+
+model PlayerSpiritTrait {
+  id          String   @id @default(cuid())
+  spiritSlotId String  @map("spirit_slot_id")
+  slotIndex   Int      @map("slot_index")
+  traitCode   String   @map("trait_code")
+  traitValue  Int      @map("trait_value")
+  sourceType  String   @map("source_type")
+  lockedAt    DateTime? @map("locked_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  spiritSlot PlayerSpiritSlot @relation(fields: [spiritSlotId], references: [id], onDelete: Cascade)
+
+  @@unique([spiritSlotId, slotIndex])
+  @@index([spiritSlotId])
+  @@index([traitCode])
+  @@map("player_spirit_trait")
+}
+
+model SpiritFeedLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  spiritSlotId          String   @map("spirit_slot_id")
+  actionType            String   @map("action_type")
+  feedCount             Int      @map("feed_count")
+  satiatedSecondsAdded  Int      @map("satiated_seconds_added")
+  immediateExpGain      Int      @map("immediate_exp_gain")
+  beforeSatiatedUntil   DateTime? @map("before_satiated_until")
+  afterSatiatedUntil    DateTime? @map("after_satiated_until")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player     Player           @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  spiritSlot PlayerSpiritSlot @relation(fields: [spiritSlotId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([spiritSlotId])
+  @@index([requestIdempotencyKey])
+  @@map("spirit_feed_log")
+}
+
+model SpiritBreakthroughLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  spiritSlotId          String   @map("spirit_slot_id")
+  fromStage             Int      @map("from_stage")
+  toStage               Int      @map("to_stage")
+  consumedSoulQuality   String   @map("consumed_soul_quality")
+  consumedSoulCount     Int      @map("consumed_soul_count")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player     Player           @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  spiritSlot PlayerSpiritSlot @relation(fields: [spiritSlotId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([spiritSlotId])
+  @@index([requestIdempotencyKey])
+  @@map("spirit_breakthrough_log")
+}
+
+model SpiritTraitRollLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  spiritSlotId          String   @map("spirit_slot_id")
+  mode                  String
+  lockedSlotIndex       Int?     @map("locked_slot_index")
+  targetSlotIndex       Int?     @map("target_slot_index")
+  targetTraitCode       String?  @map("target_trait_code")
+  consumedJson          Json     @map("consumed_json")
+  beforeTraitsJson      Json     @map("before_traits_json")
+  resultTraitsJson      Json     @map("result_traits_json")
+  candidateResultsJson  Json?    @map("candidate_results_json")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player     Player           @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  spiritSlot PlayerSpiritSlot @relation(fields: [spiritSlotId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([spiritSlotId])
+  @@index([requestIdempotencyKey])
+  @@map("spirit_trait_roll_log")
+}
+
+model SpiritShopPurchaseLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  itemId                String   @map("item_id")
+  periodKey             String?  @map("period_key")
+  consumedTianjiTalisman Int     @map("consumed_tianji_talisman")
+  rewardJson            Json     @map("reward_json")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, itemId, periodKey])
+  @@map("spirit_shop_purchase_log")
+}
+
+model SpiritAdRewardLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  dateKey               String   @map("date_key")
+  tianjiTalismanReward  Int      @map("tianji_talisman_reward")
+  bonusRewardJson       Json     @map("bonus_reward_json")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, dateKey])
+  @@map("spirit_ad_reward_log")
 }
 
 model PlayerSpiritCodex {

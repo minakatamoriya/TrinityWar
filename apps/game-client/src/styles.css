@@ -8,8 +8,8 @@
   --accent-soft: rgba(243, 181, 111, 0.14);
   --text-primary: #f7efe1;
   --text-secondary: #d7c8b1;
-  --button-height: 42px;
-  --button-radius: 14px;
+  --button-height: 24px;
+  --button-radius: 8px;
   color: #f5eddc;
   background:
     radial-gradient(circle at top left, rgba(199, 115, 54, 0.24), transparent 30%),
@@ -465,7 +465,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  min-height: 56px;
+  min-height: 44px;
   padding: 0;
 }
 
@@ -509,7 +509,40 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 0;
+  padding: 0 12px 6px;
+}
+
+.global-gold-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(118, 92, 58, 0.42), rgba(55, 43, 31, 0.78));
+  border: 1px solid rgba(255, 214, 107, 0.2);
+  color: #ffd66b;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
+}
+
+.global-gold-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #ffd66b;
+  color: #4d3216;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.global-gold-pill strong {
+  font-size: 18px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .resource-dock {
@@ -533,6 +566,12 @@ button {
   text-align: left;
   border: 1px solid rgba(255, 248, 234, 0.06);
   background: rgba(255, 248, 234, 0.04);
+}
+
+.resource-dock-card-vault {
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 12px;
 }
 
 .resource-dock-card-clickable:hover {
@@ -1514,13 +1553,34 @@ button {
 }
 
 .global-feature-card {
+  position: relative;
   display: grid;
   gap: 12px;
+  padding-top: 18px;
 }
 
 .global-feature-content {
   display: grid;
   gap: 10px;
+}
+
+.modal-close-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  background: rgba(255, 248, 234, 0.06);
+  color: #fff1d2;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .farm-scene-scroll {
@@ -2168,14 +2228,14 @@ button {
 
 .building-six-upgrade-grid {
   grid-template-columns: 1fr;
-  gap: 8px;
+  gap: 6px;
 }
 
 .building-mini-card {
   display: grid;
-  gap: 7px;
+  gap: 5px;
   min-height: 0;
-  padding: 10px 11px;
+  padding: 8px 10px;
 }
 
 .building-mini-card.active {
@@ -2219,12 +2279,12 @@ button {
 
 .building-mini-card-copy {
   display: grid;
-  gap: 3px;
+  gap: 2px;
 }
 
 .building-mini-card-copy p {
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: 10.5px;
+  line-height: 1.28;
 }
 
 .building-mini-card-unlock {
@@ -2240,9 +2300,9 @@ button {
 }
 
 .building-mini-card-footer .action-button {
-  min-width: 92px;
-  padding: 8px 12px;
-  min-height: 36px;
+  min-width: 78px;
+  padding: 6px 10px;
+  min-height: 32px;
 }
 
 .building-mini-card-price {
@@ -2540,7 +2600,7 @@ button {
 
 .spirit-top-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -2558,6 +2618,172 @@ button {
   align-content: center;
   gap: 6px;
   text-align: left;
+}
+
+.spirit-resource-icon-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.spirit-resource-chip {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 4px;
+  border-radius: 12px;
+  background: rgba(255, 248, 234, 0.05);
+  border: 1px solid rgba(255, 248, 234, 0.07);
+}
+
+.spirit-resource-chip span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(181, 239, 136, 0.16);
+  color: #e5ffc7;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.spirit-resource-chip strong {
+  max-width: 100%;
+  color: #fff1d2;
+  font-size: 12px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spirit-trait-row.is-natural {
+  animation: spiritTraitReveal 820ms cubic-bezier(.2, .8, .2, 1);
+  border-color: rgba(181, 239, 136, 0.28);
+}
+
+@keyframes spiritTraitReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+    box-shadow: 0 0 0 rgba(181, 239, 136, 0);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(0) scale(1.02);
+    box-shadow: 0 0 24px rgba(181, 239, 136, 0.22);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 0 0 rgba(181, 239, 136, 0);
+  }
+}
+
+.tianji-shop-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.tianji-shop-list {
+  gap: 6px;
+}
+
+.tianji-shop-row {
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.tianji-shop-row .secondary-button {
+  min-width: 56px;
+  min-height: 32px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.tianji-shop-row .task-row-head {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.season-signin-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.season-signin-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 248, 234, 0.05);
+  border: 1px solid rgba(255, 248, 234, 0.08);
+}
+
+.season-signin-summary span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.season-signin-summary strong {
+  color: #f8df9a;
+  font-size: 14px;
+}
+
+.season-signin-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.season-signin-day {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 6px 2px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 248, 234, 0.08);
+  background: rgba(255, 248, 234, 0.04);
+}
+
+.season-signin-day span {
+  color: rgba(247, 239, 225, 0.7);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.season-signin-day strong {
+  color: #fff1d2;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.season-signin-day.claimed {
+  border-color: rgba(181, 239, 136, 0.25);
+  background: rgba(181, 239, 136, 0.1);
+}
+
+.season-signin-day.claimed strong {
+  color: #dcffb9;
+}
+
+.season-signin-day.current {
+  border-color: rgba(248, 223, 154, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(248, 223, 154, 0.16);
+}
+
+.season-signin-day.future {
+  opacity: 0.48;
 }
 
 .spirit-codex-button-card span,
@@ -4031,7 +4257,7 @@ button.spirit-element-chip {
   align-self: stretch;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .faction-overview-column {
@@ -4088,9 +4314,13 @@ button.spirit-element-chip {
 }
 
 .faction-contribution-box {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
   width: 100%;
   min-width: 0;
-  min-height: 74px;
+  height: 78px;
+  min-height: 78px;
   padding: 10px 12px;
   border-radius: 18px;
   border: 1px solid rgba(255, 248, 234, 0.08);
@@ -4102,19 +4332,25 @@ button.spirit-element-chip {
   text-align: left;
 }
 
+.faction-contribution-box:hover {
+  border-color: rgba(242, 198, 120, 0.28);
+  background: rgba(255, 248, 234, 0.07);
+}
+
 .pending-claim-button-faction {
   width: 100%;
   min-width: 0;
-  min-height: 74px;
+  height: 78px;
+  min-height: 78px;
   padding: 10px 12px;
   gap: 2px;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  text-align: left;
+  text-align: center;
 }
 
 .pending-claim-button-faction strong {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 800;
   line-height: 1;
   color: #dcffb9;
@@ -4123,6 +4359,49 @@ button.spirit-element-chip {
 .pending-claim-button-faction em,
 .faction-contribution-description {
   font-size: 11px;
+}
+
+.contribution-tier-list {
+  display: grid;
+  gap: 8px;
+}
+
+.contribution-tier-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  background: rgba(255, 248, 234, 0.04);
+}
+
+.contribution-tier-card div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(247, 239, 225, 0.72);
+  font-size: 12px;
+}
+
+.contribution-tier-card strong {
+  color: #f8df9a;
+}
+
+.contribution-tier-card ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.contribution-tier-card li {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(133, 92, 57, 0.28);
+  font-size: 11px;
+  color: rgba(247, 239, 225, 0.86);
 }
 
 .faction-breakdown-line,

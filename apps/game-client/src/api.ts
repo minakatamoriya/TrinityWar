@@ -1,13 +1,19 @@
-import {
+﻿import {
   CLIENT_API_PREFIX,
   type ClientClaimNotificationResponse,
   type ClientDeleteNotificationResponse,
   type ClientBuySpiritSoulRequest,
+  type ClientBuySpiritShopItemRequest,
+  type ClientBreakthroughSpiritRequest,
   type ClientBootstrapResponse,
   type ClientArmyTrainingQueue,
   type ClientClaimDailyTaskRequest,
   type ClientClaimDailyTaskResponse,
+  type ClientClaimFactionStipendRequest,
+  type ClientClaimFactionStipendResponse,
+  type ClientClaimSpiritAdRewardRequest,
   type ClientComposeSpiritRequest,
+  type ClientFeedSpiritRequest,
   type ClientRaidActionRequest,
   type ClientRaidActionResponse,
   type ClientRaidDeepIntelResponse,
@@ -36,6 +42,7 @@ import {
   type ClientSpiritMutationResponse,
   type ClientSpiritState,
   type ClientSpiritStateResponse,
+  type ClientRollSpiritTraitsRequest,
   type ClientUpgradeBuildingRequest,
   type ClientUpgradeSpiritRequest,
   type HomeSummaryResponse,
@@ -134,9 +141,6 @@ let devLoginSession: DevLoginSession | null = readStoredDevLoginSession();
 const INITIAL_MOCK_FACTION_CONTRIBUTION = 40;
 const INITIAL_MOCK_FACTION_TREASURY_GOLD = 82400;
 const INITIAL_MOCK_FACTION_ARMY_POWER = 1260;
-const MOCK_FACTION_DIVIDEND_BASE_PER_HOUR = 8;
-const MOCK_FACTION_CONTRIBUTION_STEP = 10;
-const MOCK_FACTION_DIVIDEND_BONUS_PER_STEP_PER_HOUR = 3;
 const INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS: Record<string, string> = {
   'field-1': 'qinglingmai',
   'field-2': 'qinglingmai',
@@ -899,48 +903,46 @@ function settleMockTemporaryClaim(): void {
   }
 }
 
-function getMockFactionDividendPerHour(factionContribution: number): { base: number; bonus: number; total: number } {
-  const contributionTier = Math.floor(Math.max(Math.floor(factionContribution), 0) / MOCK_FACTION_CONTRIBUTION_STEP);
-  const base = MOCK_FACTION_DIVIDEND_BASE_PER_HOUR;
-  const bonus = contributionTier * MOCK_FACTION_DIVIDEND_BONUS_PER_STEP_PER_HOUR;
-  return {
-    base,
-    bonus,
-    total: base + bonus,
-  };
-}
-
 function syncMockFactionScene(): void {
-  const factionClaim = findMockPendingClaim('faction');
-  const { base: baseDividend, bonus: bonusDividend, total: totalDividend } = getMockFactionDividendPerHour(mockFactionContribution);
-
-  if (factionClaim) {
-    factionClaim.description = `当前每小时可分到 ${formatNumber(totalDividend)} 金币，其中基础分红 ${formatNumber(baseDividend)}，贡献加成 ${formatNumber(bonusDividend)}。`;
-  }
-
   mockSceneSnapshot.faction.hero = {
     eyebrow: '阵营面板',
     title: '人界阵营',
-    description: `当前每小时分红 ${formatNumber(totalDividend)}，先上缴再领取会更划算。`,
-    advantage: '人界优势：更擅长把上缴资源转成贡献与分红，适合平衡运营。',
-    breakdown: `金额构成：基础分红 ${formatNumber(baseDividend)}/小时 + 贡献加成 ${formatNumber(bonusDividend)}/小时`,
-    action: { label: '领取分红', target: 'faction', tone: 'primary' },
+    description: '上缴金币积累个人贡献，每日按贡献档位领取材料俸禄。',
+    advantage: '今日俸禄档位：入门俸禄',
+    breakdown: '预计每日俸禄：随机普通种子 x1、普通兽魂 x2、金币 x20',
+    action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
   };
   mockSceneSnapshot.faction.contribution = {
     title: '当前贡献值',
     value: formatNumber(mockFactionContribution),
-    description: '100 金币 = 1 贡献，捐献后会立刻反馈到贡献值与分红构成。',
+    description: '贡献用于提升每日俸禄档位，俸禄以种子和分档兽魂等材料为主。',
   };
   mockSceneSnapshot.faction.comparison = [
-    { faction: '人界', advantage: '贡献转化更稳，适合分红运营。', gold: formatNumber(mockFactionTreasuryGold), power: formatNumber(mockFactionArmyPower), isCurrent: true },
-    { faction: '仙界', advantage: '被掠损失减少 10%，更适合稳守。', gold: '79,600', power: '1,180' },
-    { faction: '魔界', advantage: '掠夺收益增加 10%，但战损更高。', gold: '85,300', power: '1,340' },
+    { faction: '人界', advantage: `总贡献 ${formatNumber(mockFactionArmyPower)}`, gold: formatNumber(mockFactionTreasuryGold), power: formatNumber(mockFactionArmyPower), isCurrent: true },
+    { faction: '仙界', advantage: '总贡献 1,180', gold: '79,600', power: '1,180' },
+    { faction: '魔界', advantage: '总贡献 1,340', gold: '85,300', power: '1,340' },
   ];
   mockSceneSnapshot.faction.donate = {
-    title: '捐钱捐灵宠',
-    description: '100 金币 = 1 贡献，确认后会立即从当前总金币和当前灵宠扣除。',
+    title: '捐献金币',
+    description: '100 金币 = 1 贡献，确认后会立即从当前金币扣除。',
     goldStep: 100,
-    contributionRule: '100 金币 = 1 贡献。',
+    contributionRule: '100 金币 = 1 贡献；贡献越高，每日俸禄材料越好。',
+  };
+  mockSceneSnapshot.faction.stipend = {
+    title: '每日阵营俸禄',
+    description: '每日可按当前贡献档位领取一次，材料为主、少量金币为辅。',
+    status: 'available',
+    dateKey: new Date().toISOString().slice(0, 10),
+    contribution: mockFactionContribution,
+    tierKey: 'contribution-0',
+    tierLabel: '入门俸禄',
+    rewards: [
+      { kind: 'seed', label: '随机普通种子', quantity: 1 },
+      { kind: 'ordinary-soul', label: '普通兽魂', quantity: 2 },
+      { kind: 'gold', label: '金币', quantity: 20 },
+    ],
+    claimedAt: null,
+    action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
   };
   mockSceneSnapshot.faction.rankings = [
     { label: '1. 烬牙', value: '86', note: '魔界' },
@@ -952,7 +954,6 @@ function syncMockFactionScene(): void {
     label: `${index + 1}. ${entry.label.replace(/^\d+\.\s*/, '')}`,
   }));
 }
-
 function applyMockClaimPending(input: ClientClaimPendingRequest): ClientClaimPendingResponse {
   const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
   settleMockTemporaryClaim();
@@ -1130,40 +1131,6 @@ function applyMockStartCultivation(input: ClientStartCultivationRequest): Client
   updateMockDailyTask('daily-start-cultivation');
 
   return buildMockMutation(`${field.code} 已播下 ${seedLabelMap[input.seedId] ?? input.seedId}，开始新一轮培育。`);
-}
-
-function applyMockClaimStarterSeeds(): ClientStateMutationResponse {
-  if (mockBootstrapSnapshot.backpack.starterSeedClaimed) {
-    return buildMockMutation('今日种子已经领取过了。');
-  }
-
-  mockBootstrapSnapshot.backpack.starterSeedClaimed = true;
-  applyMockSeedRewards([{ seedId: 'qinglingmai', quantity: 3 }, { seedId: 'xunyamai', quantity: 3 }]);
-
-  return buildMockMutation('今日种子已领取，获得 青灵麦 x3 与 风云稻 x3。');
-}
-
-function applyMockClaimTianjiTalisman(): ClientStateMutationResponse {
-  if (mockBootstrapSnapshot.backpack.tianjiTalismanClaimed) {
-    return buildMockMutation('今天天机符已经领取过了。');
-  }
-
-  mockBootstrapSnapshot.backpack.tianjiTalismanClaimed = true;
-  mockBootstrapSnapshot.backpack.globalItemInventory.tianjiTalisman = (mockBootstrapSnapshot.backpack.globalItemInventory.tianjiTalisman ?? 0) + 1;
-
-  return buildMockMutation('今天天机符已领取，获得 天机符 x1。');
-}
-
-function applyMockClaimSpiritSoul(): ClientStateMutationResponse {
-  if (mockBootstrapSnapshot.backpack.spiritSoulClaimed) {
-    return buildMockMutation('今天兽魂已经领取过了。');
-  }
-
-  const amount = Math.max(mockBootstrapSnapshot.backpack.dailySpiritSoulAmount ?? mockHomeSnapshot.castleLevel ?? 1, 1);
-  mockBootstrapSnapshot.backpack.spiritSoulClaimed = true;
-  mockBootstrapSnapshot.backpack.globalItemInventory.spiritSoul = (mockBootstrapSnapshot.backpack.globalItemInventory.spiritSoul ?? 0) + amount;
-
-  return buildMockMutation(`今日兽魂已领取，获得 兽魂 x${amount}。`);
 }
 
 function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutationResponse {
@@ -1463,46 +1430,23 @@ export async function donateFactionResources(input: ClientFactionDonateRequest):
   return response;
 }
 
-export async function claimStarterSeedPack(): Promise<ClientStateMutationResponse> {
-  if (forceMockCommands) {
-    return applyMockClaimStarterSeeds();
-  }
-
-  return fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/claim-starter-seeds`, {
+export async function claimFactionStipend(input: ClientClaimFactionStipendRequest = {}): Promise<ClientClaimFactionStipendResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('claim-faction-stipend');
+  const response = await fetchJson<ClientClaimFactionStipendResponse>(`${CLIENT_API_PREFIX}/actions/claim-faction-stipend`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
     },
-    body: '{}',
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
   });
-}
 
-export async function claimTianjiTalismanItem(): Promise<ClientStateMutationResponse> {
-  if (forceMockCommands) {
-    return applyMockClaimTianjiTalisman();
-  }
-
-  return fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/claim-tianji-talisman`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: '{}',
-  });
-}
-
-export async function claimSpiritSoulItem(): Promise<ClientStateMutationResponse> {
-  if (forceMockCommands) {
-    return applyMockClaimSpiritSoul();
-  }
-
-  return fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/claim-spirit-soul`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: '{}',
-  });
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return response;
 }
 
 export async function resetDemoExperimentState(): Promise<ClientResetDemoStateResponse> {
@@ -1664,6 +1608,91 @@ export async function upgradeSpirit(input: ClientUpgradeSpiritRequest): Promise<
 
   mockHomeSnapshot = cloneHomeSummary(response.home);
   mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return {
+    ...response,
+    spirit: cloneSpiritState(response.spirit),
+  };
+}
+
+export async function feedSpirit(input: ClientFeedSpiritRequest): Promise<ClientSpiritMutationResponse> {
+  const idempotencyKey = buildIdempotencyKey('spirit-feed');
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/feed`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ ...input, requestIdempotencyKey: idempotencyKey }),
+  });
+
+  return {
+    ...response,
+    spirit: cloneSpiritState(response.spirit),
+  };
+}
+
+export async function breakthroughSpirit(input: ClientBreakthroughSpiritRequest): Promise<ClientSpiritMutationResponse> {
+  const idempotencyKey = buildIdempotencyKey('spirit-breakthrough');
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/breakthrough`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ ...input, requestIdempotencyKey: idempotencyKey }),
+  });
+
+  return {
+    ...response,
+    spirit: cloneSpiritState(response.spirit),
+  };
+}
+
+export async function rollSpiritTraits(input: ClientRollSpiritTraitsRequest): Promise<ClientSpiritMutationResponse> {
+  const idempotencyKey = buildIdempotencyKey('spirit-roll-traits');
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/roll-traits`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ ...input, requestIdempotencyKey: idempotencyKey }),
+  });
+
+  return {
+    ...response,
+    spirit: cloneSpiritState(response.spirit),
+  };
+}
+
+export async function buySpiritShopItem(input: ClientBuySpiritShopItemRequest): Promise<ClientSpiritMutationResponse> {
+  const idempotencyKey = buildIdempotencyKey('spirit-shop-buy');
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/shop/buy`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ ...input, requestIdempotencyKey: idempotencyKey }),
+  });
+
+  return {
+    ...response,
+    spirit: cloneSpiritState(response.spirit),
+  };
+}
+
+export async function claimSpiritAdReward(input: ClientClaimSpiritAdRewardRequest): Promise<ClientSpiritMutationResponse> {
+  const idempotencyKey = buildIdempotencyKey('spirit-ad-reward');
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/shop/ad-reward`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ ...input, requestIdempotencyKey: idempotencyKey }),
+  });
+
   return {
     ...response,
     spirit: cloneSpiritState(response.spirit),
@@ -1865,3 +1894,4 @@ function buildDevLoginRequest(mode: DevLoginMode): { providerUserId: string; nic
     factionCode: 'demon',
   };
 }
+

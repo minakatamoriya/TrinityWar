@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type { AdminListResponse, AdminPlayerOverviewResponse, AdminPlayerSearchResponse } from '@trinitywar/shared';
 import { DataTable } from '../components/DataTable';
 import { InfoSection } from '../components/InfoSection';
@@ -42,7 +42,7 @@ export function PlayerInfoView(props: {
             { label: '昵称 / nickname', key: 'nickname' },
             { label: '玩家 ID / playerId', key: 'playerId' },
             { label: '阵营 / faction', key: 'faction' },
-            { label: '主城等级 / castleLevel', key: 'castleLevel' },
+            { label: '领地阶段 / castleLevel', key: 'castleLevel' },
             { label: '最近登录 / lastLoginAt', key: 'lastLoginAt' },
           ]}
           emptyText="输入关键词搜索玩家。"
@@ -132,11 +132,11 @@ export function PlayerDetailTables(props: { overview: AdminPlayerOverviewRespons
           <div className="two-column">
             <InfoSection
               title="钱包状态"
-              rows={recordRows(props.overview.wallet, ['playerId', 'vaultGold', 'vaultCapacity', 'walletGold', 'walletCapacity', 'pendingTaxGold', 'pendingDividendGold', 'pendingRaidOverflowGold', 'balanceVersion'])}
+              rows={recordRows(props.overview.wallet, ['playerId', 'vaultGold', 'walletGold', 'walletProtectedRatio', 'balanceVersion'])}
             />
             <InfoSection
               title="建筑状态"
-              rows={recordRows(props.overview.building, ['playerId', 'castleLevel', 'vaultLevel', 'fieldSlotLevel', 'watchtowerLevel', 'protectionTechLevel', 'farmYieldTechLevel', 'ripeWindowTechLevel', 'pendingClaimTechLevel', 'buildingVersion'])}
+              rows={recordRows(props.overview.building, ['playerId', 'protectionTechLevel', 'farmYieldTechLevel', 'ripeWindowTechLevel', 'buildingVersion'])}
             />
           </div>
         </div>
@@ -326,3 +326,4 @@ export function PlayerRaidContent(props: {
     </div>
   );
 }
+

@@ -1,19 +1,17 @@
 ﻿import { Injectable } from '@nestjs/common';
-import { APP_NAME, type ClientFarmField, type ClientRaidSpiritPreview, type ClientSceneContentResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientFactionStipendReward, type ClientFarmField, type ClientRaidSpiritPreview, type ClientSceneContentResponse } from '@trinitywar/shared';
 import type { FieldStatus } from '@prisma/client';
 import {
   GAME_BALANCE,
-  getBuildingUpgradeCost,
   getCastleExtensionLevelConfig,
   getCastleExtensionTrack,
-  getFactionDividendPerHour,
+  getFactionStipendTier,
+  getLandDeedConfig,
   getSeedStageSeconds,
-  getVaultCapacityGain,
 } from '../lib/game-balance.js';
 import type { SceneContentReadModel } from './client-read.repository.js';
 
-type BuildingKey = 'castle' | 'vault' | 'field-slot' | 'watchtower';
-type ExtensionKey = 'protectionTech' | 'farmYieldTech' | 'ripeWindowTech' | 'pendingClaimTech';
+type ExtensionKey = 'protectionTech' | 'farmYieldTech' | 'ripeWindowTech' | 'factionOfferingTech';
 
 const FIELD_STATUS_COPY: Record<FieldStatus, { title: string; badge: string; tone: ClientFarmField['tone'] }> = {
   LOCKED: { title: '未解锁', badge: '待解锁', tone: 'locked' },
@@ -32,18 +30,19 @@ export class SceneContentAssembler {
     return {
       app: APP_NAME,
       building: {
-        upgrades: this.buildBuildingUpgrades(readModel),
+        upgrades: this.buildBuildingUpgrades(),
         extensions: this.buildExtensions(readModel),
       },
       army: this.buildArmy(readModel, now),
       farm: {
         hero: this.buildFarmHero(readModel),
         fields: readModel.fieldSlots.map((field) => this.buildFarmField(field, now)),
+        landDeeds: this.buildLandDeeds(readModel),
         guide: {
           title: '农场经营',
-          description: '田地状态已从数据库读取，播种与收取命令会在后续写链路阶段接入。',
+          description: '田地状态已从数据库读取，后续将通过地契任务逐步开启更多田地。',
           actions: [
-            { label: '打开主城页', target: 'building', tone: 'secondary' },
+            { label: '打开领地工坊', target: 'building', tone: 'secondary' },
             { label: '返回首页', target: 'home', tone: 'ghost' },
           ],
         },
@@ -177,77 +176,24 @@ export class SceneContentAssembler {
       });
   }
 
-  private buildBuildingUpgrades(readModel: SceneContentReadModel): ClientSceneContentResponse['building']['upgrades'] {
-    const buildings = readModel.buildings;
-    const castleLevel = buildings?.castleLevel ?? readModel.player.castleLevelCache;
-    const vaultLevel = buildings?.vaultLevel ?? 1;
-    const watchtowerLevel = buildings?.watchtowerLevel ?? 1;
-
-    const items: Array<{ id: BuildingKey; title: string; level: number; locked?: boolean; description: string; costText: string; actionLabel: string }> = [
-      {
-        id: 'castle',
-        title: '主城',
-        level: castleLevel,
-        description: `Lv.${castleLevel} -> Lv.${castleLevel + 1}，提升税收与后续田地解锁里程碑。`,
-        costText: this.buildUpgradeCostText('castle', castleLevel),
-        actionLabel: '升级主城',
-      },
-      {
-        id: 'vault',
-        title: '金库',
-        level: vaultLevel,
-        description: `Lv.${vaultLevel} -> Lv.${vaultLevel + 1}，金库容量预计提升 ${formatNumber(getVaultCapacityGain(vaultLevel))}。`,
-        costText: this.buildUpgradeCostText('vault', vaultLevel),
-        actionLabel: '升级金库',
-      },
-      {
-        id: 'field-slot',
-        title: '田地',
-        level: buildings?.fieldSlotLevel ?? readModel.fieldSlots.filter((field) => field.isUnlocked).length,
-        locked: true,
-        description: `当前已解锁 ${readModel.fieldSlots.filter((field) => field.isUnlocked).length} 块田地，田地位随主城等级自动开启。`,
-        costText: '随主城等级自动解锁',
-        actionLabel: '查看条件',
-      },
-      {
-        id: 'watchtower',
-        title: '防御',
-        level: watchtowerLevel,
-        description: `Lv.${watchtowerLevel} -> Lv.${watchtowerLevel + 1}，强化被掠夺时的基础防守表现。`,
-        costText: this.buildUpgradeCostText('watchtower', watchtowerLevel),
-        actionLabel: '升级防御',
-      },
-    ];
-
-    return items.map((item) => ({
-      id: item.id,
-      title: item.title,
-      description: item.description,
-      costText: item.costText,
-      locked: item.locked,
-      action: {
-        label: item.locked ? '查看条件' : item.actionLabel,
-        target: 'building',
-        tone: item.locked ? 'ghost' : 'secondary',
-      },
-    }));
+  private buildBuildingUpgrades(): ClientSceneContentResponse['building']['upgrades'] {
+    return [];
   }
 
   private buildExtensions(readModel: SceneContentReadModel): ClientSceneContentResponse['building']['extensions'] {
     const buildings = readModel.buildings;
-    const castleLevel = buildings?.castleLevel ?? readModel.player.castleLevelCache;
     const levels: Record<ExtensionKey, number> = {
       protectionTech: buildings?.protectionTechLevel ?? 0,
       farmYieldTech: buildings?.farmYieldTechLevel ?? 0,
       ripeWindowTech: buildings?.ripeWindowTechLevel ?? 0,
-      pendingClaimTech: buildings?.pendingClaimTechLevel ?? 0,
+      factionOfferingTech: buildings?.pendingClaimTechLevel ?? 0,
     };
 
     return (Object.keys(levels) as ExtensionKey[]).map((trackId) => {
       const currentLevel = levels[trackId];
       const track = getCastleExtensionTrack(trackId);
       const nextConfig = getCastleExtensionLevelConfig(trackId, currentLevel + 1);
-      const locked = !nextConfig || castleLevel < nextConfig.requiredCastleLevel;
+      const locked = !nextConfig;
       const title = track?.title ?? trackId;
       const effectUnit = getExtensionEffectUnit(trackId);
 
@@ -260,9 +206,7 @@ export class SceneContentAssembler {
           ? `当前 ${formatNumber(getCurrentExtensionEffect(trackId, currentLevel))}${effectUnit}，升级后 ${formatNumber(nextConfig.effectValue)}${effectUnit}。`
           : '已达到当前配置上限。',
         costText: nextConfig
-          ? locked
-            ? `需要主城 Lv.${nextConfig.requiredCastleLevel}`
-            : `消耗 ${formatNumber(nextConfig.upgradeCost)} 金币`
+          ? `消耗 ${formatNumber(nextConfig.upgradeCost)} 金币`
           : '已满级',
         locked,
         action: {
@@ -304,7 +248,7 @@ export class SceneContentAssembler {
     return {
       eyebrow: '田地经营',
       title: `成熟 ${mature} 块 · 培育中 ${growing} 块 · 空地 ${empty} 块`,
-      description: `当前 ${unlocked.length}/${readModel.fieldSlots.length} 块田地已解锁，字段来自 player_field_slot 与 seed_definition。`,
+      description: `当前 ${unlocked.length}/${readModel.fieldSlots.length} 块田地已解锁，后续田地通过地契任务开启。`,
       action: { label: empty > 0 ? '开始培育' : '查看田地', target: 'farm', tone: empty > 0 ? 'primary' : 'secondary' },
     };
   }
@@ -329,13 +273,34 @@ export class SceneContentAssembler {
     };
   }
 
+  private buildLandDeeds(readModel: SceneContentReadModel): NonNullable<ClientSceneContentResponse['farm']['landDeeds']> {
+    return readModel.landDeedProgress.map((progress) => {
+      const config = getLandDeedConfig(progress.deedKey);
+      const progressJson = normalizeLandDeedProgressJson(progress.progressJson);
+
+      return {
+        deedKey: normalizeLandDeedKey(progress.deedKey),
+        title: config?.title ?? progress.deedKey,
+        description: config?.description ?? '完成地契任务后开启新田地。',
+        status: normalizeLandDeedStatus(progress.status),
+        targetFieldSlotIndex: config?.targetFieldSlotIndex ?? 0,
+        requirements: progressJson.requirements,
+        alternativeRequirements: progressJson.alternativeRequirements,
+        canClaim: progress.status === 'completed',
+        claimedAt: progress.claimedAt?.toISOString() ?? null,
+      };
+    });
+  }
+
   private buildFaction(readModel: SceneContentReadModel): ClientSceneContentResponse['faction'] {
     const currentFaction = readModel.player.faction;
     const contribution = readModel.player.factionMembers[0]?.contributionScore ?? 0;
-    const dividend = getFactionDividendPerHour(contribution);
+    const stipendTier = getFactionStipendTier(contribution);
+    const stipendState = readModel.factionStipendStates[0] ?? null;
     const donateGoldStep = GAME_BALANCE.faction.donateGoldStep;
     const contributionPerDonateStep = GAME_BALANCE.faction.contributionPerDonateStep;
-    const dividendBonusPerStep = GAME_BALANCE.faction.dividendBonusPerStepPerHour;
+    const stipendRewards = toPublicFactionStipendRewards((stipendTier?.rewards ?? []) as ClientFactionStipendReward[]);
+    const stipendRewardText = stipendRewards.map((reward) => `${reward.label} x${formatNumber(reward.quantity)}`).join('、') || '暂无俸禄';
 
     return {
       hero: {
@@ -344,14 +309,14 @@ export class SceneContentAssembler {
         description: currentFaction
           ? `阵营金库 ${formatNumber(currentFaction.treasuryGold)}，阵营总贡献 ${formatNumber(currentFaction.contributionScore)}。`
           : '当前账号没有阵营关系，后续命令阶段再接入转换阵营。',
-        advantage: currentFaction ? `当前每小时阵营分红 ${formatNumber(dividend.total)} 金币` : '暂无阵营加成',
-        breakdown: `每小时 ${formatNumber(dividend.total)} = 基础 ${formatNumber(dividend.base)} + 贡献加成 ${formatNumber(dividend.bonus)} 金币`,
+        advantage: currentFaction ? `今日俸禄档位：${stipendTier?.label ?? '基础俸禄'}` : '暂无阵营俸禄',
+        breakdown: `预计每日俸禄：${stipendRewardText}`,
         action: { label: '查看阵营', target: 'faction', tone: currentFaction ? 'secondary' : 'ghost' },
       },
       contribution: {
         title: '个人阵营贡献',
         value: formatNumber(contribution),
-        description: `每 ${formatNumber(dividend.contributionStep)} 贡献提高 1 档分红，每档 +${formatNumber(dividendBonusPerStep)} 金币/小时；当前第 ${formatNumber(dividend.contributionTier)} 档。`,
+        description: `贡献用于提升每日俸禄档位，俸禄以种子和分档兽魂等材料为主。当前档位：${stipendTier?.label ?? '基础俸禄'}。`,
       },
       comparison: readModel.factions.map((faction) => ({
         faction: faction.name,
@@ -362,10 +327,24 @@ export class SceneContentAssembler {
       })),
       donate: {
         title: '阵营上缴',
-        description: `上缴金币可增加个人贡献，贡献会提高每小时阵营分红。当前规则：每 ${formatNumber(donateGoldStep)} 金币 = ${formatNumber(contributionPerDonateStep)} 贡献。`,
+        description: `上缴金币可增加个人贡献，贡献会提升每日俸禄档位。当前规则：每 ${formatNumber(donateGoldStep)} 金币 = ${formatNumber(contributionPerDonateStep)} 贡献。`,
         goldStep: donateGoldStep,
-        contributionRule: `每上缴 ${formatNumber(donateGoldStep)} 金币获得 ${formatNumber(contributionPerDonateStep)} 贡献；每 ${formatNumber(dividend.contributionStep)} 贡献让分红 +${formatNumber(dividendBonusPerStep)} 金币/小时。`,
+        contributionRule: `每上缴 ${formatNumber(donateGoldStep)} 金币获得 ${formatNumber(contributionPerDonateStep)} 贡献；贡献越高，每日俸禄材料越好。`,
       },
+      stipend: currentFaction
+        ? {
+          title: '每日阵营俸禄',
+          description: '每日可按当前贡献档位领取一次，材料为主、少量金币为辅。',
+          status: stipendState?.claimedAt ? 'claimed' : 'available',
+          dateKey: stipendState?.dateKey ?? getLocalDateKeyForAssembler(),
+          contribution: stipendState?.contributionSnapshot ?? contribution,
+          tierKey: stipendState?.tierKey ?? stipendTier?.tierKey ?? 'contribution-0',
+          tierLabel: stipendTier?.label ?? '基础俸禄',
+          rewards: normalizeFactionStipendRewards(stipendState?.rewardJson) ?? stipendRewards,
+          claimedAt: stipendState?.claimedAt?.toISOString() ?? null,
+          action: stipendState?.claimedAt ? null : { label: '领取俸禄', target: 'faction', tone: 'primary' },
+        }
+        : undefined,
       rankings: readModel.factions.map((faction, index) => ({
         label: `${index + 1}. ${faction.name}`,
         value: `${formatNumber(faction.contributionScore)} 贡献`,
@@ -373,11 +352,42 @@ export class SceneContentAssembler {
       })),
     };
   }
+}
 
-  private buildUpgradeCostText(buildingId: BuildingKey, currentLevel: number): string {
-    const cost = getBuildingUpgradeCost(buildingId, currentLevel);
-    return typeof cost === 'number' ? `消耗 ${formatNumber(cost)} 金币` : '已达到当前配置上限';
+function normalizeFactionStipendRewards(value: unknown): ClientFactionStipendReward[] | null {
+  if (!Array.isArray(value)) {
+    return null;
   }
+
+  return value
+    .map((item) => item && typeof item === 'object' && !Array.isArray(item) ? item as Partial<ClientFactionStipendReward> : null)
+    .filter((item): item is Partial<ClientFactionStipendReward> => Boolean(item && typeof item.kind === 'string' && typeof item.label === 'string' && typeof item.quantity === 'number'))
+    .map((item) => ({
+      kind: item.kind as ClientFactionStipendReward['kind'],
+      label: item.label ?? '',
+      quantity: Math.max(Math.floor(item.quantity ?? 0), 0),
+      seedId: item.seedId,
+    }));
+}
+
+function toPublicFactionStipendRewards(rewards: ClientFactionStipendReward[]): ClientFactionStipendReward[] {
+  return rewards
+    .map((item) => ({
+      kind: item.kind,
+      label: item.label,
+      quantity: Math.max(Math.floor(item.quantity), 0),
+      seedId: item.seedId,
+    }))
+    .filter((item) => item.label.trim().length > 0 && item.quantity > 0);
+}
+
+function getLocalDateKeyForAssembler(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }
 
 function getFieldTiming(field: SceneContentReadModel['fieldSlots'][number], now: Date): { totalSeconds: number; remainingSeconds: number } {
@@ -436,7 +446,7 @@ function addSeconds(source: Date | null, seconds: number): Date | null {
 
 function buildFieldDescription(field: SceneContentReadModel['fieldSlots'][number]): string {
   if (!field.isUnlocked) {
-    return `主城 Lv.${field.unlockCastleLevel} 自动解锁。`;
+    return '完成对应地契任务后自动解锁。';
   }
 
   if (field.status === 'EMPTY') {
@@ -470,6 +480,65 @@ function buildFieldActions(status: FieldStatus): ClientFarmField['actions'] {
   return [];
 }
 
+function normalizeLandDeedProgressJson(value: unknown): {
+  requirements: NonNullable<ClientSceneContentResponse['farm']['landDeeds']>[number]['requirements'];
+  alternativeRequirements: NonNullable<ClientSceneContentResponse['farm']['landDeeds']>[number]['alternativeRequirements'];
+} {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { requirements: [], alternativeRequirements: [] };
+  }
+
+  const record = value as {
+    requirements?: unknown;
+    alternativeRequirements?: unknown;
+  };
+
+  return {
+    requirements: normalizeRequirementProgressList(record.requirements),
+    alternativeRequirements: normalizeRequirementProgressList(record.alternativeRequirements),
+  };
+}
+
+function normalizeRequirementProgressList(value: unknown): NonNullable<ClientSceneContentResponse['farm']['landDeeds']>[number]['requirements'] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => {
+    const record = item && typeof item === 'object' && !Array.isArray(item) ? item as Record<string, unknown> : {};
+    const current = typeof record.current === 'number' ? record.current : 0;
+    const target = typeof record.target === 'number' ? record.target : 0;
+
+    return {
+      key: typeof record.key === 'string' ? record.key : 'unknown',
+      label: typeof record.label === 'string' ? record.label : '进度',
+      current,
+      target,
+      completed: typeof record.completed === 'boolean' ? record.completed : current >= target,
+    };
+  });
+}
+
+function normalizeLandDeedKey(value: string): NonNullable<ClientSceneContentResponse['farm']['landDeeds']>[number]['deedKey'] {
+  if (value === 'field-2' || value === 'field-3' || value === 'field-4') {
+    return value;
+  }
+
+  return 'field-2';
+}
+
+function normalizeLandDeedStatus(value: string): NonNullable<ClientSceneContentResponse['farm']['landDeeds']>[number]['status'] {
+  if (value === 'locked' || value === 'in-progress' || value === 'completed' || value === 'claimed') {
+    return value;
+  }
+
+  if (value === 'in_progress') {
+    return 'in-progress';
+  }
+
+  return 'in-progress';
+}
+
 function getCurrentExtensionEffect(trackId: ExtensionKey, currentLevel: number): number {
   if (currentLevel <= 0) {
     return 0;
@@ -483,8 +552,8 @@ function getExtensionEffectUnit(trackId: ExtensionKey): string {
     return '%';
   }
 
-  if (trackId === 'pendingClaimTech') {
-    return '小时';
+  if (trackId === 'factionOfferingTech') {
+    return '%';
   }
 
   return '分钟';

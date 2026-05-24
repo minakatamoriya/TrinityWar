@@ -2,7 +2,7 @@
  * Trinity War 首发数值总表。
  *
  * 设计目的：
- * 1. 把会频繁改动的金币产出、金币消耗、容量、时间等规则参数集中到一个地方。
+ * 1. 把会频繁改动的金币产出、金币消耗、时间、地契和阵营俸禄等规则参数集中到一个地方。
  * 2. 让服务端结算优先读取这里，后续做数值回放、压测和赛季调参时只改这一份。
  * 3. 把“已经接入逻辑的正式参数”和“还没接入逻辑的草案曲线”分开，避免改草案时误伤线上结算。
  *
@@ -90,7 +90,7 @@ const WATCHTOWER_LEVEL_CONFIG = [
   { level: 10, upgradeCost: 2400 },
 ];
 
-// 田地位不作为独立付费升级线处理，而是随主城里程碑自动赠送开启。
+// Legacy only. New first-release field unlocks are driven by LAND_DEED_CONFIG.
 const FIELD_SLOT_UNLOCK_CONFIG = [
   { level: 1, requiredCastleLevel: 1, unlockFieldIndex: 1 },
   { level: 2, requiredCastleLevel: 5, unlockFieldIndex: 2 },
@@ -185,23 +185,142 @@ const SEED_LEVEL_CONFIG = {
   },
 };
 
-export const CASTLE_EXTENSION_TRACKS = {
+/**
+ * @typedef {{ key: string; label: string; target: number }} LandDeedRequirement
+ */
+
+/**
+ * @type {Array<{
+ *   deedKey: string;
+ *   targetFieldSlotIndex: number;
+ *   title: string;
+ *   description: string;
+ *   requirements: LandDeedRequirement[];
+ *   alternativeRequirements?: LandDeedRequirement[];
+ * }>}
+ */
+export const LAND_DEED_CONFIG = [
+  {
+    deedKey: 'field-2',
+    targetFieldSlotIndex: 2,
+    title: '二号地契',
+    description: '完成基础收菜和首次掠夺后开启第二块田。',
+    requirements: [
+      { key: 'harvestCount', label: '累计收菜', target: 3 },
+      { key: 'successfulRaidCount', label: '成功掠夺', target: 1 },
+    ],
+    alternativeRequirements: [],
+  },
+  {
+    deedKey: 'field-3',
+    targetFieldSlotIndex: 3,
+    title: '三号地契',
+    description: '通过稳定收菜、掠夺和阵营上缴开启第三块田。',
+    requirements: [
+      { key: 'harvestCount', label: '累计收菜', target: 10 },
+      { key: 'successfulRaidCount', label: '成功掠夺', target: 8 },
+      { key: 'factionDonateCount', label: '阵营上缴次数', target: 3 },
+    ],
+    alternativeRequirements: [],
+  },
+  {
+    deedKey: 'field-4',
+    targetFieldSlotIndex: 4,
+    title: '四号地契',
+    description: '完成更高强度的收菜、掠夺、阵营上缴和升级后开启第四块田。',
+    requirements: [
+      { key: 'harvestCount', label: '累计收菜', target: 30 },
+      { key: 'successfulRaidCount', label: '成功掠夺', target: 20 },
+      { key: 'factionDonateCount', label: '阵营上缴次数', target: 8 },
+      { key: 'buildingUpgradeCount', label: '完成升级次数', target: 5 },
+    ],
+    alternativeRequirements: [],
+  },
+];
+
+export const FACTION_STIPEND_CONFIG = {
+  dateKeyTimezone: 'Asia/Shanghai',
+  tiers: [
+    {
+      tierKey: 'contribution-0',
+      minContribution: 0,
+      label: '基础俸禄',
+      rewards: [
+        { kind: 'gold', quantity: 20, label: '金币' },
+        { kind: 'seed', seedPoolIds: ['qinglingmai', 'xunyamai', 'ninglucao'], quantity: 1, label: '随机普通种子' },
+        { kind: 'ordinary-soul', quantity: 2, label: '普通兽魂' },
+      ],
+    },
+    {
+      tierKey: 'contribution-100',
+      minContribution: 100,
+      label: '小有供奉',
+      rewards: [
+        { kind: 'gold', quantity: 30, label: '金币' },
+        { kind: 'seed', seedPoolIds: ['qinglingmai', 'xunyamai', 'ninglucao', 'suixinhua', 'baiyulian', 'yingyuezhu'], quantity: 2, label: '随机普通种子' },
+        { kind: 'ordinary-soul', quantity: 5, label: '普通兽魂' },
+      ],
+    },
+    {
+      tierKey: 'contribution-300',
+      minContribution: 300,
+      label: '稳定供奉',
+      rewards: [
+        { kind: 'gold', quantity: 40, label: '金币' },
+        { kind: 'seed', seedPoolIds: ['suixinhua', 'baiyulian', 'yingyuezhu', 'qianjiteng'], quantity: 2, label: '随机普通种子' },
+        { kind: 'ordinary-soul', quantity: 10, label: '普通兽魂' },
+      ],
+    },
+    {
+      tierKey: 'contribution-600',
+      minContribution: 600,
+      label: '阵营骨干',
+      rewards: [
+        { kind: 'gold', quantity: 50, label: '金币' },
+        { kind: 'seed', seedPoolIds: ['huichuncao', 'xueyuehua', 'jingdaosong', 'hundunguo'], quantity: 1, label: '随机稀有种子' },
+        { kind: 'rare-soul', quantity: 4, label: '稀有兽魂' },
+      ],
+    },
+    {
+      tierKey: 'contribution-1000',
+      minContribution: 1000,
+      label: '高阶供奉',
+      rewards: [
+        { kind: 'gold', quantity: 60, label: '金币' },
+        { kind: 'seed', seedPoolIds: ['xueyuehua', 'jingdaosong', 'hundunguo'], quantity: 2, label: '随机稀有种子' },
+        { kind: 'rare-soul', quantity: 8, label: '稀有兽魂' },
+      ],
+    },
+    {
+      tierKey: 'contribution-2000',
+      minContribution: 2000,
+      label: '阵营重臣',
+      rewards: [
+        { kind: 'gold', quantity: 80, label: '金币' },
+        { kind: 'seed', seedPoolIds: ['zhanqingsi', 'wangchuanying', 'zhaoyouming'], quantity: 1, label: '随机传说种子' },
+        { kind: 'legendary-soul', quantity: 2, label: '传说兽魂' },
+      ],
+    },
+  ],
+};
+
+export const TERRITORY_TECH_TRACKS = {
   protectionTech: {
     id: 'protectionTech',
     title: '护山结界',
     description: '延长被成功掠夺后的保护期，优先降低中后段连续受击疲劳。',
     effectKey: 'protectionMinutes',
     levels: [
-      { level: 1, requiredCastleLevel: 5, upgradeCost: 320, effectValue: 10 },
-      { level: 2, requiredCastleLevel: 8, upgradeCost: 460, effectValue: 20 },
-      { level: 3, requiredCastleLevel: 10, upgradeCost: 620, effectValue: 30 },
-      { level: 4, requiredCastleLevel: 12, upgradeCost: 820, effectValue: 40 },
-      { level: 5, requiredCastleLevel: 14, upgradeCost: 1040, effectValue: 50 },
-      { level: 6, requiredCastleLevel: 15, upgradeCost: 1280, effectValue: 60 },
-      { level: 7, requiredCastleLevel: 16, upgradeCost: 1560, effectValue: 75 },
-      { level: 8, requiredCastleLevel: 17, upgradeCost: 1880, effectValue: 90 },
-      { level: 9, requiredCastleLevel: 18, upgradeCost: 2240, effectValue: 105 },
-      { level: 10, requiredCastleLevel: 20, upgradeCost: 2640, effectValue: 120 },
+      { level: 1, upgradeCost: 320, effectValue: 10 },
+      { level: 2, upgradeCost: 460, effectValue: 20 },
+      { level: 3, upgradeCost: 620, effectValue: 30 },
+      { level: 4, upgradeCost: 820, effectValue: 40 },
+      { level: 5, upgradeCost: 1040, effectValue: 50 },
+      { level: 6, upgradeCost: 1280, effectValue: 60 },
+      { level: 7, upgradeCost: 1560, effectValue: 75 },
+      { level: 8, upgradeCost: 1880, effectValue: 90 },
+      { level: 9, upgradeCost: 2240, effectValue: 105 },
+      { level: 10, upgradeCost: 2640, effectValue: 120 },
     ],
   },
   farmYieldTech: {
@@ -210,16 +329,16 @@ export const CASTLE_EXTENSION_TRACKS = {
     description: '提升田地成熟与丰熟产出，只影响田地金币，不抬税收、分红与任务金币。',
     effectKey: 'yieldBonusPercent',
     levels: [
-      { level: 1, requiredCastleLevel: 5, upgradeCost: 400, effectValue: 2 },
-      { level: 2, requiredCastleLevel: 8, upgradeCost: 560, effectValue: 4 },
-      { level: 3, requiredCastleLevel: 10, upgradeCost: 760, effectValue: 6 },
-      { level: 4, requiredCastleLevel: 12, upgradeCost: 980, effectValue: 8 },
-      { level: 5, requiredCastleLevel: 14, upgradeCost: 1240, effectValue: 10 },
-      { level: 6, requiredCastleLevel: 15, upgradeCost: 1540, effectValue: 12 },
-      { level: 7, requiredCastleLevel: 16, upgradeCost: 1880, effectValue: 14 },
-      { level: 8, requiredCastleLevel: 17, upgradeCost: 2260, effectValue: 16 },
-      { level: 9, requiredCastleLevel: 18, upgradeCost: 2680, effectValue: 18 },
-      { level: 10, requiredCastleLevel: 20, upgradeCost: 3140, effectValue: 20 },
+      { level: 1, upgradeCost: 400, effectValue: 2 },
+      { level: 2, upgradeCost: 560, effectValue: 4 },
+      { level: 3, upgradeCost: 760, effectValue: 6 },
+      { level: 4, upgradeCost: 980, effectValue: 8 },
+      { level: 5, upgradeCost: 1240, effectValue: 10 },
+      { level: 6, upgradeCost: 1540, effectValue: 12 },
+      { level: 7, upgradeCost: 1880, effectValue: 14 },
+      { level: 8, upgradeCost: 2260, effectValue: 16 },
+      { level: 9, upgradeCost: 2680, effectValue: 18 },
+      { level: 10, upgradeCost: 3140, effectValue: 20 },
     ],
   },
   ripeWindowTech: {
@@ -228,31 +347,36 @@ export const CASTLE_EXTENSION_TRACKS = {
     description: '延长成熟到丰熟的有效操作窗口，降低错过高价值收取的挫败感。',
     effectKey: 'ripeWindowMinutes',
     levels: [
-      { level: 1, requiredCastleLevel: 8, upgradeCost: 360, effectValue: 5 },
-      { level: 2, requiredCastleLevel: 10, upgradeCost: 520, effectValue: 10 },
-      { level: 3, requiredCastleLevel: 12, upgradeCost: 720, effectValue: 15 },
-      { level: 4, requiredCastleLevel: 14, upgradeCost: 960, effectValue: 20 },
-      { level: 5, requiredCastleLevel: 15, upgradeCost: 1240, effectValue: 25 },
-      { level: 6, requiredCastleLevel: 16, upgradeCost: 1560, effectValue: 30 },
-      { level: 7, requiredCastleLevel: 18, upgradeCost: 1940, effectValue: 35 },
-      { level: 8, requiredCastleLevel: 20, upgradeCost: 2380, effectValue: 40 },
+      { level: 1, upgradeCost: 360, effectValue: 5 },
+      { level: 2, upgradeCost: 520, effectValue: 10 },
+      { level: 3, upgradeCost: 720, effectValue: 15 },
+      { level: 4, upgradeCost: 960, effectValue: 20 },
+      { level: 5, upgradeCost: 1240, effectValue: 25 },
+      { level: 6, upgradeCost: 1560, effectValue: 30 },
+      { level: 7, upgradeCost: 1940, effectValue: 35 },
+      { level: 8, upgradeCost: 2380, effectValue: 40 },
     ],
   },
-  pendingClaimTech: {
-    id: 'pendingClaimTech',
-    title: '庶务司',
-    description: '提高待领取金币的保留时长与调度容错，降低忙碌玩家的静默损失。',
-    effectKey: 'pendingRetentionHours',
+  factionOfferingTech: {
+    id: 'factionOfferingTech',
+    title: '阵营供奉台',
+    description: '提升阵营每日俸禄中的材料质量，不放大金币返还。',
+    effectKey: 'stipendMaterialBonusPercent',
     levels: [
-      { level: 1, requiredCastleLevel: 8, upgradeCost: 300, effectValue: 26 },
-      { level: 2, requiredCastleLevel: 10, upgradeCost: 420, effectValue: 28 },
-      { level: 3, requiredCastleLevel: 12, upgradeCost: 580, effectValue: 30 },
-      { level: 4, requiredCastleLevel: 14, upgradeCost: 780, effectValue: 32 },
-      { level: 5, requiredCastleLevel: 16, upgradeCost: 1020, effectValue: 34 },
-      { level: 6, requiredCastleLevel: 20, upgradeCost: 1300, effectValue: 36 },
+      { level: 1, upgradeCost: 360, effectValue: 3 },
+      { level: 2, upgradeCost: 520, effectValue: 6 },
+      { level: 3, upgradeCost: 720, effectValue: 9 },
+      { level: 4, upgradeCost: 960, effectValue: 12 },
+      { level: 5, upgradeCost: 1240, effectValue: 15 },
+      { level: 6, upgradeCost: 1560, effectValue: 18 },
+      { level: 7, upgradeCost: 1940, effectValue: 21 },
+      { level: 8, upgradeCost: 2380, effectValue: 24 },
     ],
   },
 };
+
+// Backward-compatible export name for migration tasks. New code should use TERRITORY_TECH_TRACKS.
+export const CASTLE_EXTENSION_TRACKS = TERRITORY_TECH_TRACKS;
 
 export const DAILY_TASK_CONFIG = {
   structure: {
@@ -289,7 +413,7 @@ export const DAILY_TASK_CONFIG = {
     },
     {
       id: 'daily-faction-touch',
-      title: '领取 1 次分红或完成 1 次上缴',
+      title: '领取 1 次阵营俸禄或完成 1 次上缴',
       category: '阵营',
       objective: { type: 'faction-interaction', count: 1 },
       rewards: [{ type: 'gold', amount: 18 }],
@@ -298,9 +422,9 @@ export const DAILY_TASK_CONFIG = {
   randomTasks: [
     {
       id: 'daily-upgrade-building',
-      title: '完成 1 次建筑升级',
+      title: '完成 1 次领地科技升级',
       category: '经营',
-      objective: { type: 'upgrade-building', count: 1 },
+      objective: { type: 'upgrade-territory-tech', count: 1 },
       rewards: [{ type: 'gold', amount: 22 }],
     },
     {
@@ -319,7 +443,7 @@ export const DAILY_TASK_CONFIG = {
     },
     {
       id: 'daily-upgrade-core-line',
-      title: '?? 1 ?????????',
+      title: '完成 1 次核心成长投入',
       category: '经营',
       objective: { type: 'upgrade-core-line', count: 1 },
       rewards: [{ type: 'gold', amount: 22 }],
@@ -328,9 +452,9 @@ export const DAILY_TASK_CONFIG = {
   catchupTasks: [
     {
       id: 'catchup-first-upgrade',
-      title: '完成 1 次主城或金库升级',
+      title: '完成 1 次领地科技升级',
       category: '追赶',
-      objective: { type: 'upgrade-core-building', count: 1 },
+      objective: { type: 'upgrade-territory-tech', count: 1 },
       rewards: [{ type: 'gold', amount: 45 }, { type: 'seed-pack', packId: 'starter-common', amount: 1 }],
     },
     {
@@ -358,6 +482,9 @@ export const GAME_DESIGN_CONFIG = {
   fieldSlotUnlockLevels: FIELD_SLOT_UNLOCK_CONFIG,
   seedLevels: SEED_LEVEL_CONFIG,
   castleExtensions: CASTLE_EXTENSION_TRACKS,
+  territoryTechs: TERRITORY_TECH_TRACKS,
+  landDeeds: LAND_DEED_CONFIG,
+  factionStipends: FACTION_STIPEND_CONFIG,
   dailyTasks: DAILY_TASK_CONFIG,
 };
 
@@ -381,40 +508,45 @@ export const SEASON_WEEK_PLAN = [
     week: 2,
     phase: '均衡发展',
     completionRate: 0.58,
-    focus: '开始在主城、金库、田地位、人口和阵营贡献之间做取舍。',
+    focus: '开始在地契开田、领地科技、灵宠培养和阵营贡献之间做取舍。',
   },
   {
     week: 3,
     phase: '高峰成型',
     completionRate: 0.82,
-    focus: '达到主体成长的 80% 左右，同时把掠夺、防守、榜单与分红差距拉开。',
+    focus: '达到主体成长的 80% 左右，同时把掠夺、防守、榜单与阵营俸禄差距拉开。',
   },
   {
     week: 4,
     phase: '冲刺收官',
     completionRate: 1,
-    focus: '以冲榜、冲分红、冲阵营结果和冲最后升级为主，不再只靠建筑线提供驱动力。',
+    focus: '以冲榜、冲阵营俸禄、冲阵营结果和冲最后科技为主，不再只靠建筑线提供驱动力。',
   },
 ];
 
 /**
  * 已经接入服务端结算的正式参数。
  *
- * 这些字段改动后，会直接影响当前 demo 的税收、分红、建造、培育、造兵和金库逻辑。
+ * 这些字段改动后，会直接影响当前 demo 的建造、培育、造兵、阵营上缴和部分兼容逻辑。
+ * 税收、小时分红、金库容量和临时待领取已在 2026-05-24 轻量化方案中退场。
  */
 export const GAME_BALANCE = {
   tax: {
-    incomeByCastleLevel: buildLevelValueTable(CASTLE_LEVEL_CONFIG, 'taxPerHour'),
+    incomeByCastleLevel: buildLevelValueTable(
+      CASTLE_LEVEL_CONFIG.map((config) => ({ ...config, taxPerHour: 0 })),
+      'taxPerHour',
+    ),
   },
   faction: {
-    dividendBasePerHour: 8,
+    dividendBasePerHour: 0,
     contributionStep: 10,
-    dividendBonusPerStepPerHour: 3,
+    dividendBonusPerStepPerHour: 0,
     donateGoldStep: 100,
     contributionPerDonateStep: 1,
+    stipendTiers: FACTION_STIPEND_CONFIG.tiers,
   },
   raid: {
-    temporaryClaimMinutes: 5,
+    temporaryClaimMinutes: 0,
     freeRaidCountPerDay: 3,
     protectionHoursAfterRaid: 1,
   },
@@ -439,9 +571,16 @@ export const GAME_BALANCE = {
       'field-slot': {},
       population: buildUpgradeCostTable(POPULATION_LEVEL_CONFIG),
       watchtower: buildUpgradeCostTable(WATCHTOWER_LEVEL_CONFIG),
+      protectionTech: buildUpgradeCostTable(TERRITORY_TECH_TRACKS.protectionTech.levels),
+      farmYieldTech: buildUpgradeCostTable(TERRITORY_TECH_TRACKS.farmYieldTech.levels),
+      ripeWindowTech: buildUpgradeCostTable(TERRITORY_TECH_TRACKS.ripeWindowTech.levels),
+      factionOfferingTech: buildUpgradeCostTable(TERRITORY_TECH_TRACKS.factionOfferingTech.levels),
     },
     effects: {
-      vaultCapacityGainPerUpgradeLevel: buildLevelValueTable(VAULT_LEVEL_CONFIG, 'capacityGain'),
+      vaultCapacityGainPerUpgradeLevel: buildLevelValueTable(
+        VAULT_LEVEL_CONFIG.map((config) => ({ ...config, capacityGain: 0 })),
+        'capacityGain',
+      ),
     },
   },
 };
@@ -460,13 +599,16 @@ export const GAME_BALANCE_DRAFT = {
     petUpgradeGoldByLevel: buildUpgradeCostTable(POPULATION_LEVEL_CONFIG),
   },
   castleExtensions: CASTLE_EXTENSION_TRACKS,
+  territoryTechs: TERRITORY_TECH_TRACKS,
+  landDeeds: LAND_DEED_CONFIG,
+  factionStipends: FACTION_STIPEND_CONFIG,
   dailyTasks: DAILY_TASK_CONFIG,
 };
 
 /**
- * 读取主城固定小时税收。
+ * Legacy compatibility: main city hourly tax is retired and returns 0.
  *
- * 超出显式配置的等级时，默认沿用当前已配置的最高等级值，避免新等级接入前出现 0 收益断层。
+ * 后续 TW-LITE-005/006 会移除业务侧调用。
  */
 export function getTaxIncomePerHour(level) {
   const normalizedLevel = Math.max(Math.floor(level), 1);
@@ -484,9 +626,9 @@ export function getTaxIncomePerHour(level) {
 }
 
 /**
- * 读取阵营分红。
+ * Legacy compatibility: hourly faction dividend is retired and returns 0 total.
  *
- * 当前版本采用“基础分红 + 贡献线性加成”的最轻量模型，方便你之后先调基线，再调上缴价值。
+ * 后续 TW-LITE-008 会接入每日阵营俸禄。
  */
 export function getFactionDividendPerHour(factionContribution) {
   const base = GAME_BALANCE.faction.dividendBasePerHour;
@@ -515,6 +657,10 @@ export function getCastleExtensionTrack(trackId) {
   return CASTLE_EXTENSION_TRACKS[trackId] ?? null;
 }
 
+export function getTerritoryTechTrack(trackId) {
+  return TERRITORY_TECH_TRACKS[trackId] ?? null;
+}
+
 export function getCastleExtensionLevelConfig(trackId, level) {
   const track = getCastleExtensionTrack(trackId);
   if (!track) {
@@ -522,6 +668,26 @@ export function getCastleExtensionLevelConfig(trackId, level) {
   }
 
   return findLevelConfig(track.levels, level);
+}
+
+export function getTerritoryTechLevelConfig(trackId, level) {
+  const track = getTerritoryTechTrack(trackId);
+  if (!track) {
+    return null;
+  }
+
+  return findLevelConfig(track.levels, level);
+}
+
+export function getLandDeedConfig(deedKey) {
+  return LAND_DEED_CONFIG.find((config) => config.deedKey === deedKey) ?? null;
+}
+
+export function getFactionStipendTier(factionContribution) {
+  const contribution = Math.max(Math.floor(factionContribution), 0);
+  return [...FACTION_STIPEND_CONFIG.tiers]
+    .sort((left, right) => right.minContribution - left.minContribution)
+    .find((tier) => contribution >= tier.minContribution) ?? FACTION_STIPEND_CONFIG.tiers[0] ?? null;
 }
 
 export function getDailyTaskRewardBudget(week) {
@@ -626,7 +792,7 @@ export function getPopulationCapacityGain(currentLevel) {
  * 用途：
  * 1. 反推某个阶段一天能稳定拿到多少安全金币。
  * 2. 对比同阶段的升级成本，判断是否会让玩家“天天都能点一点”。
- * 3. 判断金库容量有没有被动收入压穿的风险。
+ * 3. 兼容旧模拟入口；2026-05-24 后税收与小时分红均返回 0。
  */
 export function estimateDailyPassiveGold({ castleLevel, factionContribution, hours = 24 }) {
   const safeHours = Math.max(hours, 0);

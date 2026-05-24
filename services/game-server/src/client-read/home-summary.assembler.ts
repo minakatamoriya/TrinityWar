@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { APP_NAME, type ClientDailyTaskStatus, type ClientSceneKey, type HomeSummaryResponse } from '@trinitywar/shared';
-import { getActiveDailyTaskIds, getDailyTaskDefinition, getFactionDividendPerHour, getTaxIncomePerHour } from '../lib/game-balance.js';
+import { getActiveDailyTaskIds, getDailyTaskDefinition } from '../lib/game-balance.js';
 import type { HomeSummaryReadModel } from './client-read.repository.js';
 
 @Injectable()
@@ -8,13 +8,8 @@ export class HomeSummaryAssembler {
   assemble(readModel: HomeSummaryReadModel, now: Date = new Date()): HomeSummaryResponse {
     const castleLevel = readModel.buildings?.castleLevel ?? readModel.player.castleLevelCache;
     const vaultGold = readModel.wallet?.vaultGold ?? 0;
-    const vaultCapacity = readModel.wallet?.vaultCapacity ?? 0;
     const armyCount = readModel.army?.availableCount ?? readModel.army?.totalCount ?? 0;
     const armyCapacity = readModel.army?.capacity ?? 0;
-    const pendingRaidOverflowGold = readModel.wallet?.pendingRaidOverflowGold ?? 0;
-    const pendingRaidOverflowExpiresAt = readModel.wallet?.pendingRaidOverflowExpiresAt ?? null;
-    const factionContribution = readModel.player.factionMembers[0]?.contributionScore ?? 0;
-    const factionDividend = getFactionDividendPerHour(factionContribution);
     const activeTrainingQueue = readModel.trainingQueues.find((queue) => queue.finishAt.getTime() > now.getTime());
     const activeDailyTaskIds = getActiveDailyTaskIds();
 
@@ -37,7 +32,7 @@ export class HomeSummaryAssembler {
       resources: [
         {
           label: '金币',
-          value: `${formatNumber(vaultGold)} / ${formatNumber(vaultCapacity)}`,
+          value: formatNumber(vaultGold),
           tone: 'vault',
         },
         {
@@ -46,29 +41,8 @@ export class HomeSummaryAssembler {
           tone: 'army',
         },
       ],
-      pendingClaims: [
-        {
-          source: 'tax',
-          label: '主城税收',
-          value: formatNumber(readModel.wallet?.pendingTaxGold ?? 0),
-          description: `当前每小时产出 ${formatNumber(getTaxIncomePerHour(castleLevel))} 金币，领取后直接入库。`,
-        },
-        {
-          source: 'faction',
-          label: '阵营分红',
-          value: formatNumber(readModel.wallet?.pendingDividendGold ?? 0),
-          description: `当前每小时可分到 ${formatNumber(factionDividend.total)} 金币，来自阵营结算与贡献加成。`,
-        },
-      ],
-      temporaryClaim: pendingRaidOverflowGold > 0 && pendingRaidOverflowExpiresAt
-        ? {
-          source: 'raid-overflow',
-          label: '待领取',
-          goldAmount: pendingRaidOverflowGold,
-          expiresAt: pendingRaidOverflowExpiresAt.toISOString(),
-          description: '掠夺时金库已满，超出的金币会临时保留在这里，过期后消失。',
-        }
-        : null,
+      pendingClaims: [],
+      temporaryClaim: null,
       dailyTasks: readModel.taskStates.filter((taskState) => activeDailyTaskIds.has(taskState.taskId)).map((taskState) => ({
         id: taskState.taskId,
         title: getDailyTaskDefinition(taskState.taskId)?.title ?? taskState.taskId,
@@ -81,11 +55,11 @@ export class HomeSummaryAssembler {
         actionScene: mapActionScene(taskState.actionScene),
       })),
       primaryActions: [
-        { key: 'building', title: '主城', description: '升级主城与金币容量' },
+        { key: 'building', title: '领地工坊', description: '升级领地科技' },
         { key: 'farm', title: '农场', description: '收成熟田地' },
         { key: 'raid', title: '部队', description: '征召兵力并查看训练队列' },
         { key: 'report', title: '掠夺', description: '查看目标、战报与通缉令' },
-        { key: 'faction', title: '阵营', description: '上缴并查看分红' },
+        { key: 'faction', title: '阵营', description: '上缴并领取每日俸禄' },
       ],
     };
   }

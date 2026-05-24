@@ -5,22 +5,28 @@ import type {
   ClientSpiritElement,
   ClientSpiritRarity,
   ClientSpiritRole,
+  ClientSpiritRollMode,
   ClientSpiritSlot,
   ClientSpiritState,
+  ClientSpiritTraitCode,
 } from '@trinitywar/shared';
 
 interface ArmySceneProps {
-  currentGold: number;
   playerFaction: string;
   spirit: ClientSpiritState;
-  unitCostGold: number;
   busy: boolean;
-  onBuySoul: () => void;
-  onUpgrade: (slotIndex: number, slotVersion: number) => void;
   onSetMain: (slotIndex: number, slotVersion: number) => void;
   onRecover: (slotIndex: number, slotVersion: number) => void;
   onDissolve: (slotIndex: number, slotVersion: number) => void;
   onCompose: (spiritId: string, slotIndex: number, element: ClientSpiritElement) => void;
+  onFeed: (slotIndex: number, slotVersion: number, actionType: 'feed_once' | 'fill_full') => void;
+  onBreakthrough: (slotIndex: number, slotVersion: number, targetStage?: number) => void;
+  onRollTraits: (
+    slotIndex: number,
+    slotVersion: number,
+    mode: ClientSpiritRollMode,
+    options?: { lockedSlotIndex?: number; targetSlotIndex?: number; targetTraitCode?: ClientSpiritTraitCode },
+  ) => void;
 }
 
 type DisplayRarity = '普通' | '稀有' | '传说';
@@ -41,10 +47,71 @@ const codexRarityGroups = [
 ];
 
 const MAX_QUICK_RECOVERY_PER_DAY = 3;
+const traitChoices: Array<{ code: ClientSpiritTraitCode; label: string }> = [
+  { code: 'claw', label: '利爪' },
+  { code: 'thick_skin', label: '厚皮' },
+  { code: 'hard_armor', label: '硬甲' },
+  { code: 'crit', label: '暴击' },
+  { code: 'crit_damage', label: '爆伤' },
+  { code: 'dodge', label: '闪避' },
+  { code: 'counter', label: '反击' },
+  { code: 'lifesteal', label: '吸血' },
+  { code: 'armor_break', label: '破甲' },
+  { code: 'tenacity', label: '韧性' },
+];
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value);
 }
+
+function formatDuration(seconds: number): string {
+  const safeSeconds = Math.max(Math.floor(seconds), 0);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+
+  return `${hours}小时${String(minutes).padStart(2, '0')}分`;
+}
+
+function getPassiveExpPerMinute(level: number): number {
+  if (level <= 2) {
+    return 5000;
+  }
+  if (level <= 10) {
+    return 1000;
+  }
+  if (level <= 20) {
+    return 500;
+  }
+  if (level <= 30) {
+    return 250;
+  }
+  return 150;
+}
+
+function getLevelRemainingText(slot: ClientSpiritSlot): string {
+  if (slot.isAtBreakthroughNode) {
+    return '等待突破';
+  }
+
+  const required = Math.max(slot.currentLevelExpRequired ?? 1, 1);
+  const remainingExp = Math.max(required - slot.exp, 0);
+  if (remainingExp <= 0) {
+    return '即将升级';
+  }
+
+  const bonusRate = (slot.satiatedRemainingSeconds ?? 0) > 0 ? 1.5 : 1;
+  const expPerMinute = Math.max(getPassiveExpPerMinute(slot.level) * bonusRate, 1);
+  return `约 ${formatDuration(Math.ceil(remainingExp / expPerMinute) * 60)} 后升级`;
+}
+
+const spiritResourceItems = [
+  { key: 'spiritRoot', icon: '根', label: '灵根' },
+  { key: 'spiritMarrow', icon: '髓', label: '灵髓' },
+  { key: 'spiritJade', icon: '玉', label: '灵玉' },
+  { key: 'ordinarySoul', icon: '普', label: '普通兽魂' },
+  { key: 'rareSoul', icon: '稀', label: '稀有兽魂' },
+  { key: 'legendarySoul', icon: '传', label: '传说兽魂' },
+] as const;
 
 function getElementLabel(element: ClientSpiritElement | null): DisplayElement | '' {
   if (element === 'metal') {
@@ -146,55 +213,6 @@ function getPhaseForLevel(level: number): string {
   return '灵胎期';
 }
 
-function getUpgradeCost(level: number): number | null {
-  if (level >= 50) {
-    return null;
-  }
-  const fixedCosts: Record<number, number> = {
-    1: 1,
-    2: 2,
-    3: 3,
-    4: 4,
-    5: 5,
-    6: 6,
-    7: 8,
-    8: 10,
-    9: 12,
-    10: 15,
-    41: 290,
-    42: 300,
-    43: 320,
-    44: 340,
-    45: 360,
-    46: 390,
-    47: 420,
-    48: 450,
-    49: 490,
-  };
-  if (fixedCosts[level]) {
-    return fixedCosts[level];
-  }
-  if (level >= 11 && level <= 15) {
-    return 18 + (level - 11) * 3;
-  }
-  if (level >= 16 && level <= 20) {
-    return 35 + (level - 16) * 5;
-  }
-  if (level >= 21 && level <= 25) {
-    return 63 + (level - 21) * 8;
-  }
-  if (level >= 26 && level <= 30) {
-    return 105 + (level - 26) * 10;
-  }
-  if (level >= 31 && level <= 35) {
-    return 160 + (level - 31) * 15;
-  }
-  if (level >= 36 && level <= 40) {
-    return 240 + (level - 36) * 20;
-  }
-  return 1;
-}
-
 function getHealthRatio(slot: ClientSpiritSlot): number {
   if (slot.maxHp <= 0) {
     return 0;
@@ -276,12 +294,15 @@ function SpiritStageCard(props: {
 }
 
 export function ArmyScene(props: ArmySceneProps): JSX.Element {
-  const { currentGold, playerFaction, spirit, unitCostGold, busy, onBuySoul, onUpgrade, onSetMain, onRecover, onDissolve, onCompose } = props;
+  const { playerFaction, spirit, busy, onSetMain, onRecover, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits } = props;
   const [codexOpen, setCodexOpen] = useState(false);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [selectedCodexSpiritId, setSelectedCodexSpiritId] = useState<string | null>(() => spirit.codex.find((entry) => isDiscovered(entry))?.spiritId ?? spirit.codex[0]?.spiritId ?? null);
   const [selectedComposeSpiritId, setSelectedComposeSpiritId] = useState<string>(() => spirit.readyToCompose.find((entry) => !entry.ownedCurrent)?.spiritId ?? '');
   const [composeElement, setComposeElement] = useState<ClientSpiritElement>('wood');
+  const [lockedTraitSlot, setLockedTraitSlot] = useState(1);
+  const [targetTraitSlot, setTargetTraitSlot] = useState(1);
+  const [targetTraitCode, setTargetTraitCode] = useState<ClientSpiritTraitCode>('crit');
 
   const portalTarget = typeof document === 'undefined' ? null : document.querySelector('.phone-frame');
   const slots = useMemo(() => [...spirit.slots].sort((left, right) => left.slotIndex - right.slotIndex), [spirit.slots]);
@@ -296,10 +317,8 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const selectedComposeEntry = availableComposePets.find((entry) => entry.spiritId === selectedComposeSpiritId) ?? availableComposePets[0] ?? null;
   const occupiedCount = slots.filter((slot) => slot.spiritId).length;
   const isStableFull = occupiedCount >= slots.length;
-  const availableSoul = spirit.spiritSoul;
   const availableTianjiTalisman = spirit.tianjiTalisman;
   const quickRecoverRemaining = Math.max(MAX_QUICK_RECOVERY_PER_DAY - spirit.dailyRecoveryUsed, 0);
-  const selectedUpgradeCost = selectedSlot && selectedSlotEntry ? getUpgradeCost(selectedSlot.level) : null;
   const codexGroups = codexRarityGroups.map((group) => ({
     ...group,
     pets: spirit.codex.filter((entry) => entry.definition.rarity === group.rarity),
@@ -313,17 +332,21 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
             <span>灵宠图鉴</span>
             <strong>打开图鉴</strong>
           </button>
-          <article className="spirit-soul-quick-card">
-            <div>
-              <span>兽魂库存</span>
-              <strong>{formatNumber(availableSoul)}</strong>
+        </section>
 
-            </div>
-            <button className="primary-button small" disabled={busy || currentGold < unitCostGold} onClick={onBuySoul} type="button">
-              {busy ? '购买中' : '购买兽魂'}
-            </button>
-            <small>100金=1兽魂</small>
-          </article>
+        <section className="panel-card spirit-growth-card">
+          <div className="panel-head">
+            <h4>养成资源</h4>
+            <span className="soft-tag">种田养成 · 掠夺突破</span>
+          </div>
+          <div className="spirit-resource-icon-row">
+            {spiritResourceItems.map((item) => (
+              <div className="spirit-resource-chip" key={item.key} title={item.label}>
+                <span aria-hidden="true">{item.icon}</span>
+                <strong>{formatNumber(spirit[item.key] ?? 0)}</strong>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="spirit-main-row">
@@ -411,8 +434,8 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                   <div className="seed-codex-stats">
                     <div className="seed-codex-stat-row"><strong>稀有度</strong><span>{getRarityLabel(selectedSlotEntry.definition.rarity)}</span></div>
                     <div className="seed-codex-stat-row"><strong>阵营加成</strong><span>{getFactionLabel(selectedSlotEntry.definition.factionAffinity) === playerFaction ? `已触发 ${getFactionBonusLabel(getFactionLabel(selectedSlotEntry.definition.factionAffinity))}` : `未触发，当前阵营为${playerFaction}`}</span></div>
-                    <div className="seed-codex-stat-row"><strong>升级需求</strong><span>{selectedUpgradeCost ? `${selectedUpgradeCost} 兽魂` : '已满级'}</span></div>
-                    <div className="seed-codex-stat-row"><strong>剩余兽魂</strong><span>{formatNumber(availableSoul)}</span></div>
+                    <div className="seed-codex-stat-row"><strong>升级方式</strong><span>挂机经验自动升级</span></div>
+                    <div className="seed-codex-stat-row"><strong>突破材料</strong><span>只消耗普通/稀有/传说兽魂</span></div>
                     <div className="seed-codex-stat-row"><strong>天机符</strong><span>{formatNumber(availableTianjiTalisman)}</span></div>
                     <div className="seed-codex-stat-row"><strong>当前血量</strong><span>{getHealthText(selectedSlot)}</span></div>
                     <div className="seed-codex-stat-row"><strong>当前状态</strong><span>{getHealthStatus(selectedSlot)}</span></div>
@@ -427,9 +450,97 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                       <div className="spirit-progress-fill spirit-progress-fill-health" style={{ width: `${getHealthRatio(selectedSlot)}%` }} />
                     </div>
                   </div>
+                  <section className="panel-card spirit-growth-panel">
+                    <div className="panel-head">
+                      <h4>成长</h4>
+                      <span className="soft-tag">{selectedSlot.isAtBreakthroughNode ? '待突破' : '挂机成长中'}</span>
+                    </div>
+                    <div className="spirit-progress-block">
+                      <div className="spirit-progress-head">
+                        <span>经验</span>
+                        <strong>{selectedSlot.isAtBreakthroughNode ? '待突破' : `${Math.floor((selectedSlot.exp / Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1)) * 100)}%`}</strong>
+                      </div>
+                      <div className="spirit-progress-track" aria-hidden="true">
+                        <div className="spirit-progress-fill" style={{ width: `${selectedSlot.isAtBreakthroughNode ? 100 : Math.min((selectedSlot.exp / Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1)) * 100, 100)}%` }} />
+                      </div>
+                    </div>
+                    <div className="seed-codex-stats">
+                      <div className="seed-codex-stat-row"><strong>灵根库存</strong><span>{formatNumber(spirit.spiritRoot ?? 0)}</span></div>
+                      <div className="seed-codex-stat-row"><strong>升级预估</strong><span>{getLevelRemainingText(selectedSlot)}</span></div>
+                      <div className="seed-codex-stat-row"><strong>饱食剩余</strong><span>{formatDuration(selectedSlot.satiatedRemainingSeconds ?? 0)}</span></div>
+                      <div className="seed-codex-stat-row"><strong>投喂一次</strong><span>最多 10 灵根 · 经验 +5%</span></div>
+                      <div className="seed-codex-stat-row"><strong>补满</strong><span>每小时 5 灵根 · 上限 8 小时</span></div>
+                    </div>
+                    {selectedSlot.isAtBreakthroughNode ? <p className="panel-text">突破后继续获得经验，当前投喂只补饱食时间。</p> : null}
+                    <div className="spirit-pet-action-grid">
+                      <button className="secondary-button" disabled={busy || (spirit.spiritRoot ?? 0) <= 0 || (selectedSlot.satiatedRemainingSeconds ?? 0) >= 8 * 60 * 60} onClick={() => onFeed(selectedSlot.slotIndex, selectedSlot.slotVersion, 'feed_once')} type="button">投喂一次</button>
+                      <button className="secondary-button" disabled={busy || (spirit.spiritRoot ?? 0) <= 0 || (selectedSlot.satiatedRemainingSeconds ?? 0) >= 8 * 60 * 60} onClick={() => onFeed(selectedSlot.slotIndex, selectedSlot.slotVersion, 'fill_full')} type="button">补满</button>
+                    </div>
+                  </section>
+                  <section className="panel-card spirit-growth-panel">
+                    <div className="panel-head">
+                      <h4>突破</h4>
+                      <span className="soft-tag">只消耗兽魂</span>
+                    </div>
+                    {selectedSlot.isAtBreakthroughNode && spirit.breakthroughRequirement ? (
+                      <>
+                        <p className="panel-text">Lv.{spirit.breakthroughRequirement.level} 突破需要 {spirit.breakthroughRequirement.label} x{spirit.breakthroughRequirement.required}，当前 {spirit.breakthroughRequirement.owned}。</p>
+                        <button className="primary-button spirit-full-button" disabled={busy || !spirit.breakthroughRequirement.canBreakthrough} onClick={() => onBreakthrough(selectedSlot.slotIndex, selectedSlot.slotVersion, spirit.breakthroughRequirement?.stage)} type="button">手动突破</button>
+                      </>
+                    ) : (
+                      <p className="panel-text">未到突破节点。每 10 级需要手动突破，经验不会缓存溢出。</p>
+                    )}
+                  </section>
+                  <section className="panel-card spirit-growth-panel">
+                    <div className="panel-head">
+                      <h4>词条洗练</h4>
+                      <span className="soft-tag">重复叠加不衰减</span>
+                    </div>
+                    <div className="task-list">
+                      {Array.from({ length: 5 }, (_, index) => index + 1).map((slotIndex) => {
+                        const trait = selectedSlot.traits?.find((item) => item.slotIndex === slotIndex);
+                        const unlocked = slotIndex <= (selectedSlot.unlockedTraitSlots ?? 0);
+                        const unlockLevel = slotIndex * 10;
+                        return (
+                          <div className={`task-row spirit-trait-row${trait?.sourceType === 'natural' ? ' is-natural' : ''}`} key={slotIndex}>
+                            <span className="task-index">{slotIndex}</span>
+                            <div>
+                              <div className="task-row-head">
+                                <strong>{trait ? trait.label : unlocked ? '待洗练' : `Lv.${unlockLevel} 突破解锁`}</strong>
+                                <span className="task-state-badge">{unlocked ? '已解锁' : '未解锁'}</span>
+                              </div>
+                              <p>{trait?.description ?? (unlocked ? '洗练后生成词条' : `达到 Lv.${unlockLevel} 并完成突破后解锁`)}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {(selectedSlot.unlockedTraitSlots ?? 0) <= 0 ? <p className="panel-text">第一个词条会在 Lv.10 完成突破后随机生成。</p> : null}
+                    <div className="spirit-element-picker">
+                      {Array.from({ length: selectedSlot.unlockedTraitSlots ?? 0 }, (_, index) => index + 1).map((slotIndex) => (
+                        <button className={`spirit-element-chip ${lockedTraitSlot === slotIndex ? ' is-selected' : ''}`} key={`lock-${slotIndex}`} onClick={() => setLockedTraitSlot(slotIndex)} type="button">锁 {slotIndex}</button>
+                      ))}
+                    </div>
+                    <div className="spirit-element-picker">
+                      {Array.from({ length: selectedSlot.unlockedTraitSlots ?? 0 }, (_, index) => index + 1).map((slotIndex) => (
+                        <button className={`spirit-element-chip ${targetTraitSlot === slotIndex ? ' is-selected' : ''}`} key={`target-${slotIndex}`} onClick={() => setTargetTraitSlot(slotIndex)} type="button">槽 {slotIndex}</button>
+                      ))}
+                    </div>
+                    <div className="spirit-element-picker">
+                      {traitChoices.map((trait) => (
+                        <button className={`spirit-element-chip ${targetTraitCode === trait.code ? ' is-selected' : ''}`} key={trait.code} onClick={() => setTargetTraitCode(trait.code)} type="button">{trait.label}</button>
+                      ))}
+                    </div>
+                    <div className="spirit-pet-action-grid">
+                      <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 5} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'basic')} type="button">基础洗练 5 灵髓 + 金币</button>
+                      <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 50} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'batch_basic')} type="button">连续洗练 10 次</button>
+                      <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 10 || (spirit.spiritJade ?? 0) < 1} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'advanced', { lockedSlotIndex: lockedTraitSlot })} type="button">高级洗练 锁 1 条</button>
+                      <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 20 || (spirit.spiritJade ?? 0) < 5} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'ultimate', { targetSlotIndex: targetTraitSlot, targetTraitCode })} type="button">终极洗练 定向</button>
+                    </div>
+                  </section>
                   <div className="spirit-pet-action-grid">
                     <button className="primary-button" disabled={busy || selectedSlot.isMain} onClick={() => onSetMain(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">设为主位</button>
-                    <button className="secondary-button" disabled={busy || !selectedUpgradeCost || availableSoul < selectedUpgradeCost} onClick={() => onUpgrade(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">{selectedUpgradeCost ? `升级（需 ${selectedUpgradeCost} 兽魂）` : '已满级'}</button>
+                    <button className="secondary-button" disabled type="button">挂机升级中</button>
                     <button className="secondary-button" disabled={busy || getHealthRatio(selectedSlot) >= 100 || quickRecoverRemaining <= 0 || availableTianjiTalisman <= 0} onClick={() => onRecover(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">天机符恢复</button>
                     <button className="ghost-button" disabled={busy || selectedSlot.isMain} onClick={() => onDissolve(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">解散（返还 35% 兽魂）</button>
                   </div>

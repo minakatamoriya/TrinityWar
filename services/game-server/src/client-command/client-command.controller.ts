@@ -5,6 +5,8 @@ import type {
   ClientClaimDailyTaskResponse,
   ClientClaimPendingRequest,
   ClientClaimPendingResponse,
+  ClientClaimFactionStipendRequest,
+  ClientClaimFactionStipendResponse,
   ClientCollectFieldRequest,
   ClientFactionDonateRequest,
   ClientCollectFieldResponse,
@@ -19,7 +21,7 @@ import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
 import { createUnauthorizedError } from '../common/errors/index.js';
 import { ClientCommandService } from './client-command.service.js';
-import { ClaimDailyTaskRequestDto, ClaimPendingRequestDto, CollectFieldRequestDto, FactionDonateRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UpgradeBuildingRequestDto } from './dto.js';
+import { ClaimDailyTaskRequestDto, ClaimPendingRequestDto, CollectFieldRequestDto, FactionDonateRequestDto, ClaimFactionStipendRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UpgradeBuildingRequestDto } from './dto.js';
 
 @ApiTags('client')
 @Controller('client/actions')
@@ -171,51 +173,24 @@ export class ClientCommandController {
     });
   }
 
-  @Post('claim-tianji-talisman')
+  @Post('claim-faction-stipend')
   @UseGuards(AuthPlaceholderGuard)
   @ApiBearerAuth()
-  @ApiOkResponse({ description: 'Claim one daily Tianji talisman into spirit resource inventory.' })
-  async claimTianjiTalisman(
+  @ApiBody({ type: ClaimFactionStipendRequestDto })
+  @ApiOkResponse({ description: 'Claim daily faction stipend rewards.' })
+  async claimFactionStipend(
     @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
-  ): Promise<ClientStateMutationResponse> {
+    @Body() body: ClientClaimFactionStipendRequest,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<ClientClaimFactionStipendResponse> {
     if (!currentPlayer) {
       throw createUnauthorizedError('Current player context is required.');
     }
 
-    return this.clientCommandService.claimTianjiTalisman({
+    return this.clientCommandService.claimFactionStipend({
       playerId: currentPlayer.playerId,
-    });
-  }
-
-  @Post('claim-starter-seeds')
-  @UseGuards(AuthPlaceholderGuard)
-  @ApiBearerAuth()
-  @ApiOkResponse({ description: 'Claim starter seed pack into backpack inventory.' })
-  async claimStarterSeeds(
-    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
-  ): Promise<ClientStateMutationResponse> {
-    if (!currentPlayer) {
-      throw createUnauthorizedError('Current player context is required.');
-    }
-
-    return this.clientCommandService.claimStarterSeeds({
-      playerId: currentPlayer.playerId,
-    });
-  }
-
-  @Post('claim-spirit-soul')
-  @UseGuards(AuthPlaceholderGuard)
-  @ApiBearerAuth()
-  @ApiOkResponse({ description: 'Claim daily spirit soul by castle level.' })
-  async claimSpiritSoul(
-    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
-  ): Promise<ClientStateMutationResponse> {
-    if (!currentPlayer) {
-      throw createUnauthorizedError('Current player context is required.');
-    }
-
-    return this.clientCommandService.claimDailySpiritSoul({
-      playerId: currentPlayer.playerId,
+      request: body as ClaimFactionStipendRequestDto,
+      idempotencyKey,
     });
   }
 
@@ -243,9 +218,7 @@ defineRouteParamTypes(ClientCommandController.prototype, 'startCultivation', [Ob
 defineRouteParamTypes(ClientCommandController.prototype, 'recruitArmy', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'upgradeBuilding', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'donateFaction', [Object, Object]);
-defineRouteParamTypes(ClientCommandController.prototype, 'claimTianjiTalisman', [Object]);
-defineRouteParamTypes(ClientCommandController.prototype, 'claimStarterSeeds', [Object]);
-defineRouteParamTypes(ClientCommandController.prototype, 'claimSpiritSoul', [Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'claimFactionStipend', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'resetDemoState', [Object]);
 
 function defineRouteParamTypes(target: object, methodName: string, paramTypes: unknown[]): void {

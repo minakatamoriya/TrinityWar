@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
-import type { ClientPendingClaimSummary, ClientSceneContentResponse } from '@trinitywar/shared';
+import type { ClientFactionStipendSummary, ClientSceneContentResponse } from '@trinitywar/shared';
 
 interface FactionSceneProps {
   hero: ClientSceneContentResponse['faction']['hero'];
   contribution: ClientSceneContentResponse['faction']['contribution'];
-  factionPending: ClientPendingClaimSummary | undefined;
+  stipend: ClientFactionStipendSummary | undefined;
+  claimingStipend: boolean;
   donating: boolean;
   currentGold: number;
   factionTab: 'overview' | 'donate' | 'rank';
   comparison: ClientSceneContentResponse['faction']['comparison'];
   donate: ClientSceneContentResponse['faction']['donate'];
   rankings: ClientSceneContentResponse['faction']['rankings'];
-  onClaim: () => void;
+  onClaimStipend: () => void;
   onChangeTab: (tab: 'overview' | 'donate' | 'rank') => void;
+  onContributionGuide: () => void;
   onDonate: (goldAmount: number) => void;
   onTransferFaction: (factionName: string) => void;
 }
@@ -21,21 +23,25 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
   const {
     hero,
     contribution,
-    factionPending,
+    stipend,
+    claimingStipend,
     donating,
     currentGold,
     factionTab,
     comparison,
     donate,
     rankings,
-    onClaim,
+    onClaimStipend,
     onChangeTab,
+    onContributionGuide,
     onDonate,
     onTransferFaction,
   } = props;
   const [donateGoldAmount, setDonateGoldAmount] = useState(0);
   const maxDonateGoldAmount = Math.floor(currentGold / donate.goldStep) * donate.goldStep;
   const contributionGain = donateGoldAmount / donate.goldStep;
+  const canClaimStipend = stipend?.status === 'available';
+  const stipendButtonLabel = stipend?.status === 'claimed' ? '已领取' : '领取俸禄';
 
   useEffect(() => {
     setDonateGoldAmount((current) => Math.min(current, maxDonateGoldAmount));
@@ -46,9 +52,8 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
       <section className="hero-panel parchment compact-hero faction-overview-card">
         <div className="faction-overview-grid">
           <div className="faction-overview-column">
-            <button className="pending-claim-button pending-claim-button-faction" onClick={onClaim} type="button">
-              <span>领取阵营分红</span>
-              <strong>{factionPending?.value ?? '0'}</strong>
+            <button className="pending-claim-button pending-claim-button-faction" disabled={!canClaimStipend || claimingStipend} onClick={onClaimStipend} type="button">
+              <strong>{stipendButtonLabel}</strong>
             </button>
             <div className="faction-overview-note-block">
               <p className="faction-breakdown-line">{hero.advantage}</p>
@@ -57,10 +62,10 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
           </div>
 
           <div className="faction-overview-column faction-overview-column-right">
-            <div className="faction-contribution-box">
+            <button className="faction-contribution-box" onClick={onContributionGuide} type="button">
               <span className="faction-contribution-title">贡献值</span>
               <strong className="faction-contribution-value">{contribution.value}</strong>
-            </div>
+            </button>
             <div className="faction-overview-note-block">
               <p className="faction-contribution-description">{contribution.description}</p>
             </div>

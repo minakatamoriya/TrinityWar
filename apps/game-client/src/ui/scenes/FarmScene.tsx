@@ -1,4 +1,4 @@
-import type { ClientFarmField, ClientSceneAction } from '@trinitywar/shared';
+import type { ClientFarmField, ClientSceneAction, ClientSceneContentResponse } from '@trinitywar/shared';
 import { buildFarmFieldStatusView, FarmStatusCard } from '../farm/FarmStatusCard';
 
 interface FarmCollectPresentationState {
@@ -22,6 +22,7 @@ function isHarvestAction(action: ClientSceneAction | undefined): boolean {
 interface FarmSceneProps {
   collectPresentation: FarmCollectPresentationState | null;
   fields: ClientFarmField[];
+  landDeeds: NonNullable<ClientSceneContentResponse['farm']['landDeeds']>;
   farmTick: number;
   farmBoardMessage: string;
   farmBoardUpdatedAt: string | null;
@@ -34,6 +35,7 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
   const {
     collectPresentation,
     fields,
+    landDeeds,
     farmTick,
     farmBoardMessage,
     farmBoardUpdatedAt,
@@ -96,6 +98,33 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
             );
           })}
         </div>
+
+        {landDeeds.length > 0 ? (
+          <article className="panel-card">
+            <div className="panel-head">
+              <h4>地契任务</h4>
+            </div>
+            <div className="task-list">
+              {landDeeds.map((deed) => (
+                <div className={`task-row task-row-${deed.status === 'claimed' ? 'claimed' : deed.status === 'completed' ? 'completed' : 'in-progress'}`} key={deed.deedKey}>
+                  <span className="task-index">{deed.targetFieldSlotIndex}</span>
+                  <div>
+                    <div className="task-row-head">
+                      <strong>{deed.title}</strong>
+                      <span className="task-state-badge">{deed.status === 'claimed' ? '已开启' : deed.status === 'completed' ? '已完成' : '进行中'}</span>
+                    </div>
+                    <p>{deed.description}</p>
+                    {[...deed.requirements, ...(deed.alternativeRequirements ?? [])].map((requirement) => (
+                      <p className="task-progress-line" key={`${deed.deedKey}-${requirement.key}`}>
+                        {requirement.label} {requirement.current}/{requirement.target}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
+        ) : null}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+﻿import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type {
   AdminDeletePlayerResponse,
@@ -172,16 +172,41 @@ export class AdminReadonlyService {
   }
 
   async listCastleLevels(): Promise<AdminListResponse<Record<string, unknown>>> {
-    const items = GAME_DESIGN_CONFIG.castleLevels.map((levelConfig: Record<string, unknown>) => ({
-      ...levelConfig,
-      unlocks: Array.isArray(levelConfig['unlocks']) ? levelConfig['unlocks'].join('；') : '',
+    const landDeeds = GAME_DESIGN_CONFIG.landDeeds.map((deed: Record<string, unknown>) => ({
+      type: 'land-deed',
+      key: deed['deedKey'],
+      title: deed['title'],
+      requirements: formatRuleRequirements(deed['requirements'], deed['alternativeRequirements']),
+      cost: '-',
+      effect: `unlock field ${deed['targetFieldSlotIndex']}`,
+      rewards: '-',
     }));
+    const territoryTechs = Object.entries(GAME_DESIGN_CONFIG.territoryTechs as Record<string, { title?: string; levels?: Array<Record<string, unknown>> }>)
+      .flatMap(([key, track]) => (track.levels ?? []).map((level) => ({
+        type: 'territory-tech',
+        key: `${key}-lv-${level['level']}`,
+        title: track.title ?? key,
+        requirements: 'no castle-level requirement',
+        cost: level['upgradeCost'],
+        effect: level['effectValue'],
+        rewards: '-',
+      })));
+    const factionStipends = ((GAME_DESIGN_CONFIG.factionStipends as { tiers?: Array<Record<string, unknown>> }).tiers ?? [])
+      .map((tier) => ({
+        type: 'faction-stipend',
+        key: tier['tierKey'],
+        title: tier['label'],
+        requirements: `contribution >= ${tier['minContribution']}`,
+        cost: 'daily claim',
+        effect: '-',
+        rewards: formatRuleRewards(tier['rewards']),
+      }));
+    const items = [...landDeeds, ...territoryTechs, ...factionStipends];
     return {
       items,
       pagination: { page: 1, pageSize: items.length, total: items.length },
     };
   }
-
   async searchPlayers(query: Record<string, string | undefined>): Promise<AdminPlayerSearchResponse> {
     const keyword = query.keyword?.trim();
     const { page, pageSize, skip, take } = parsePagination(query);
@@ -739,6 +764,38 @@ function normalizeDates<T extends Record<string, unknown>>(record: T): Record<st
   );
 }
 
+function formatRuleRequirements(requirements: unknown, alternativeRequirements: unknown): string {
+  const main = formatRequirementList(requirements);
+  const alternative = formatRequirementList(alternativeRequirements);
+  return alternative ? `${main} OR ${alternative}` : main;
+}
+
+function formatRequirementList(requirements: unknown): string {
+  if (!Array.isArray(requirements)) {
+    return '';
+  }
+
+  return requirements
+    .map((requirement) => {
+      const record = requirement && typeof requirement === 'object' ? requirement as Record<string, unknown> : {};
+      return `${record['label'] ?? record['key'] ?? 'requirement'} >= ${record['target'] ?? 0}`;
+    })
+    .join(' + ');
+}
+
+function formatRuleRewards(rewards: unknown): string {
+  if (!Array.isArray(rewards)) {
+    return '';
+  }
+
+  return rewards
+    .map((reward) => {
+      const record = reward && typeof reward === 'object' ? reward as Record<string, unknown> : {};
+      return `${record['label'] ?? record['kind'] ?? 'reward'} x${record['quantity'] ?? 0}`;
+    })
+    .join(', ');
+}
+
 function normalizeSpiritSlot(slot: {
   id: string;
   playerId: string;
@@ -813,3 +870,4 @@ function toIso(value: Date | null): string | null {
 function parseBoolean(value: string | undefined): boolean {
   return value === '1' || value?.toLowerCase() === 'true';
 }
+

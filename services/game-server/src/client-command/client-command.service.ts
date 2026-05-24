@@ -1,20 +1,25 @@
-import { createHash } from 'node:crypto';
+﻿import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   APP_NAME,
   type ClientClaimDailyTaskResponse,
+  type ClientClaimFactionStipendResponse,
   type ClientClaimPendingResponse,
   type ClientCollectFieldResponse,
+  type ClientCollectRewardItem,
+  type ClientFactionStipendReward,
   type ClientFactionDonateRequest,
   type ClientResetDemoStateResponse,
   type ClientStateMutationResponse,
 } from '@trinitywar/shared';
 import type { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service.js';
+import { DailyTaskLifecycleService } from '../client-read/daily-task-lifecycle.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
+import { LandDeedService } from '../land-deed/land-deed.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
-import { DAILY_TASK_CONFIG, GAME_BALANCE, getSeedStageGold, getSeedStageSeconds } from '../lib/game-balance.js';
+import { DAILY_TASK_CONFIG, GAME_BALANCE, getFactionStipendTier, getSeedStageGold, getSeedStageSeconds } from '../lib/game-balance.js';
 import { getVaultCapacityGain } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PlayerInitializationService } from '../seed/player-initialization.service.js';
@@ -27,7 +32,7 @@ import {
   type PlayerBuildingStateForUpgrade,
 } from './building-upgrade-rule.service.js';
 import { FieldCommandRuleService } from './field-command-rule.service.js';
-import type { ClaimDailyTaskRequestDto, ClaimPendingRequestDto, CollectFieldRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UpgradeBuildingRequestDto } from './dto.js';
+import type { ClaimDailyTaskRequestDto, ClaimFactionStipendRequestDto, ClaimPendingRequestDto, CollectFieldRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UpgradeBuildingRequestDto } from './dto.js';
 
 interface ClaimPendingCommandInput {
   playerId: string;
@@ -70,17 +75,15 @@ interface FactionDonateCommandInput {
   request: ClientFactionDonateRequest;
 }
 
-interface ClaimTianjiTalismanCommandInput {
+interface ClaimFactionStipendCommandInput {
   playerId: string;
+  request: ClaimFactionStipendRequestDto;
+  idempotencyKey?: string;
 }
 
-interface ClaimSpiritSoulCommandInput {
-  playerId: string;
-}
-
-interface ClaimStarterSeedsCommandInput {
-  playerId: string;
-}
+type ResolvableStipendReward = ClientFactionStipendReward & {
+  seedPoolIds?: string[];
+};
 
 @Injectable()
 export class ClientCommandService {
@@ -93,7 +96,9 @@ export class ClientCommandService {
     @Inject(ArmyTrainingLifecycleService) private readonly armyTrainingLifecycleService: ArmyTrainingLifecycleService,
     @Inject(FieldLifecycleService) private readonly fieldLifecycleService: FieldLifecycleService,
     @Inject(ClientReadService) private readonly clientReadService: ClientReadService,
+    @Inject(DailyTaskLifecycleService) private readonly dailyTaskLifecycleService: DailyTaskLifecycleService,
     @Inject(PlayerInitializationService) private readonly playerInitializationService: PlayerInitializationService,
+    @Inject(LandDeedService) private readonly landDeedService: LandDeedService,
   ) {}
 
   async claimPending(input: ClaimPendingCommandInput): Promise<ClientClaimPendingResponse> {
@@ -143,34 +148,11 @@ export class ClientCommandService {
         });
       }
 
-      const availableVaultSpace = Math.max(wallet.vaultCapacity - wallet.vaultGold, 0);
-      const claimedGold = Math.min(pendingGold, availableVaultSpace);
-      const overflowGold = Math.max(pendingGold - claimedGold, 0);
-      const acceptOverflowLoss = Boolean(input.request.acceptOverflowLoss);
-
-      if (overflowGold > 0 && !acceptOverflowLoss) {
-        const responseSnapshot = await this.buildClaimPendingResponse(client, input.playerId, {
-          summary: `${getPendingClaimSourceLabel(input.request.source)}本次预计入账 ${overflowGold + claimedGold} 金币，其中约 ${overflowGold} 会因金币已满无法入账。确认后默认放弃溢出部分。`,
-          source: input.request.source,
-          claimedGold: 0,
-          remainingPendingGold: pendingGold,
-          ledger: wallet,
-        });
-
-        if (idempotencyRecord?.id) {
-          await this.idempotencyService.markCompleted(client, {
-            id: idempotencyRecord.id,
-            responseSnapshotJson: responseSnapshot as unknown as Prisma.InputJsonValue,
-            businessEntityType: 'pending-claim',
-            businessEntityId: input.request.source,
-          });
-        }
-
-        return responseSnapshot;
-      }
+      const claimedGold = pendingGold;
+      const overflowGold = 0;
 
       const nextVaultGold = wallet.vaultGold + claimedGold;
-      const nextPendingGold = acceptOverflowLoss ? 0 : overflowGold;
+      const nextPendingGold = 0;
       const walletUpdateData = buildPendingClaimWalletUpdate(input.request.source, nextVaultGold, nextPendingGold);
       const nextBalanceVersion = claimedGold > 0 ? wallet.balanceVersion + 1 : wallet.balanceVersion;
 
@@ -195,7 +177,7 @@ export class ClientCommandService {
       }
 
       const responseSnapshot = await this.buildClaimPendingResponse(client, input.playerId, {
-        summary: buildClaimPendingSummary(input.request.source, claimedGold, nextPendingGold, overflowGold, acceptOverflowLoss),
+        summary: buildClaimPendingSummary(input.request.source, claimedGold, nextPendingGold, overflowGold),
         source: input.request.source,
         claimedGold,
         remainingPendingGold: nextPendingGold,
@@ -245,7 +227,6 @@ export class ClientCommandService {
           wallet: {
             select: {
               vaultGold: true,
-              vaultCapacity: true,
               balanceVersion: true,
             },
           },
@@ -302,31 +283,8 @@ export class ClientCommandService {
       }
 
       const rewardGold = taskState.rewardGold;
-      const availableVaultSpace = Math.max(playerState.wallet.vaultCapacity - playerState.wallet.vaultGold, 0);
-      const claimedGold = Math.min(rewardGold, availableVaultSpace);
-      const overflowGold = Math.max(rewardGold - claimedGold, 0);
-      const acceptOverflowLoss = Boolean(input.request.acceptOverflowLoss);
-
-      if (overflowGold > 0 && !acceptOverflowLoss) {
-        const responseSnapshot = await this.buildClaimDailyTaskResponse(client, input.playerId, {
-          summary: `${getDailyTaskTitle(taskState.taskId)} 奖励共 ${rewardGold} 金币，其中约 ${overflowGold} 会因金币已满无法入账。确认后将默认放弃溢出部分。`,
-          taskId: taskState.taskId,
-          rewardGold,
-          claimedGold: 0,
-          overflowGold,
-        });
-
-        if (idempotencyRecord?.id) {
-          await this.idempotencyService.markCompleted(client, {
-            id: idempotencyRecord.id,
-            responseSnapshotJson: responseSnapshot as unknown as Prisma.InputJsonValue,
-            businessEntityType: 'daily-task',
-            businessEntityId: taskState.taskId,
-          });
-        }
-
-        return responseSnapshot;
-      }
+      const claimedGold = Math.max(rewardGold, 0);
+      const overflowGold = 0;
 
       const nextVaultGold = playerState.wallet.vaultGold + claimedGold;
       await client.playerDailyTaskState.update({
@@ -369,9 +327,7 @@ export class ClientCommandService {
       });
 
       const responseSnapshot = await this.buildClaimDailyTaskResponse(client, input.playerId, {
-        summary: overflowGold > 0
-          ? `${getDailyTaskTitle(taskState.taskId)} 已结算，入账 ${claimedGold} 金币，另有 ${overflowGold} 已确认放弃。`
-          : `${getDailyTaskTitle(taskState.taskId)} 已结算，入账 ${claimedGold} 金币。`,
+        summary: `${getDailyTaskTitle(taskState.taskId)} 已结算，入账 ${claimedGold} 金币。`,
         taskId: taskState.taskId,
         rewardGold,
         claimedGold,
@@ -414,7 +370,6 @@ export class ClientCommandService {
           wallet: {
             select: {
               vaultGold: true,
-              vaultCapacity: true,
               balanceVersion: true,
             },
           },
@@ -429,14 +384,15 @@ export class ClientCommandService {
               statusVersion: true,
               currentClaimableGold: true,
               harvestedGoldTotal: true,
-              seedDefinition: {
-                select: {
-                  seedId: true,
-                  label: true,
+                seedDefinition: {
+                  select: {
+                    seedId: true,
+                    label: true,
+                    rarity: true,
+                  },
                 },
               },
             },
-          },
         },
       });
 
@@ -505,6 +461,8 @@ export class ClientCommandService {
         });
       }
 
+      await applySpiritCropRewards(client, input.playerId, resolution.rewards);
+
       await this.auditService.createFieldHarvestLog(client, {
         playerId: input.playerId,
         fieldSlotId: field.id,
@@ -517,6 +475,8 @@ export class ClientCommandService {
       if (input.request.collectMode === 'ripe' && (field.status === 'MATURE' || field.status === 'WITHERED')) {
         await this.recordDailyTaskProgress(client, input.playerId, 'collect-field');
       }
+
+      await this.landDeedService.reconcilePlayerLandDeeds(client, input.playerId);
 
       const responseSnapshot: ClientCollectFieldResponse = {
         app: APP_NAME,
@@ -970,6 +930,7 @@ export class ClientCommandService {
       if (target.key === 'castle' || target.key === 'vault') {
         await this.recordDailyTaskProgress(client, input.playerId, 'upgrade-core-building');
       }
+      await this.landDeedService.reconcilePlayerLandDeeds(client, input.playerId);
 
       const responseSnapshot: ClientStateMutationResponse = {
         app: APP_NAME,
@@ -1103,6 +1064,7 @@ export class ClientCommandService {
 
       await this.recordDailyTaskProgress(client, input.playerId, 'faction-interaction');
       await this.recordDailyTaskProgress(client, input.playerId, 'faction-donate');
+      await this.landDeedService.reconcilePlayerLandDeeds(client, input.playerId);
 
       return {
         app: APP_NAME,
@@ -1113,162 +1075,137 @@ export class ClientCommandService {
     });
   }
 
-  async claimTianjiTalisman(input: ClaimTianjiTalismanCommandInput): Promise<ClientStateMutationResponse> {
-    return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
+  async claimFactionStipend(input: ClaimFactionStipendCommandInput): Promise<ClientClaimFactionStipendResponse> {
+    validateClaimFactionStipendRequest(input.request);
+    const endpointKey = 'client.actions.claim-faction-stipend';
+    const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
+    const requestHash = hashClaimFactionStipendRequest(input.request);
+
+    return this.prisma.transaction<ClientClaimFactionStipendResponse>(async (client) => {
+      const idempotencyRecord = idempotencyKey
+        ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
+        : null;
+
+      if (idempotencyRecord?.status === 'completed') {
+        return idempotencyRecord.responseSnapshotJson as unknown as ClientClaimFactionStipendResponse;
+      }
+
       const dateKey = getLocalDateKey();
-      const resource = await client.playerSpiritResource.findUnique({
-        where: { playerId: input.playerId },
+      const playerState = await client.player.findUnique({
+        where: { id: input.playerId },
         select: {
-          dailyTianjiClaimDateKey: true,
+          factionId: true,
+          wallet: { select: { vaultGold: true, balanceVersion: true } },
+          factionMembers: {
+            take: 1,
+            select: {
+              contributionScore: true,
+            },
+          },
         },
       });
 
-      if (!resource) {
+      if (!playerState?.wallet) {
         throw new BusinessError({
           code: ErrorCode.NotFound,
-          message: 'Player spirit resource not found.',
+          message: 'Player wallet state not found.',
           statusCode: 404,
         });
       }
 
-      if (resource.dailyTianjiClaimDateKey === dateKey) {
-        throw new BusinessError({
-          code: ErrorCode.Conflict,
-          message: 'Daily Tianji talisman has already been claimed.',
-          statusCode: 409,
-        });
-      }
-
-      await client.playerSpiritResource.update({
-        where: { playerId: input.playerId },
-        data: {
-          tianjiTalisman: { increment: 1 },
-          dailyTianjiClaimDateKey: dateKey,
-          resourceVersion: { increment: 1 },
-        },
-      });
-
-      return {
-        app: APP_NAME,
-        summary: '今天天机符已领取，获得 天机符 x1。',
-        home: await this.clientReadService.getHomeSummary(input.playerId, client),
-        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
-      };
-    });
-  }
-
-  async claimDailySpiritSoul(input: ClaimSpiritSoulCommandInput): Promise<ClientStateMutationResponse> {
-    return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
-      const dateKey = getLocalDateKey();
-      const player = await client.player.findUnique({
-        where: { id: input.playerId },
-        select: { id: true, castleLevelCache: true },
-      });
-
-      if (!player) {
+      if (!playerState.factionId || playerState.factionMembers.length <= 0) {
         throw new BusinessError({
           code: ErrorCode.NotFound,
-          message: 'Player not found.',
+          message: 'Player faction membership not found.',
           statusCode: 404,
         });
       }
 
-      const resource = await client.playerSpiritResource.findUnique({
-        where: { playerId: input.playerId },
-        select: { dailySpiritSoulClaimDateKey: true },
+      assertVersion('walletVersion', input.request.walletVersion, playerState.wallet.balanceVersion);
+
+      const existingClaim = await client.playerFactionStipendState.findUnique({
+        where: {
+          playerId_dateKey: {
+            playerId: input.playerId,
+            dateKey,
+          },
+        },
       });
 
-      if (resource?.dailySpiritSoulClaimDateKey === dateKey) {
+      if (existingClaim?.claimedAt) {
         throw new BusinessError({
           code: ErrorCode.Conflict,
-          message: 'Daily spirit soul has already been claimed.',
+          message: 'Daily faction stipend has already been claimed.',
           statusCode: 409,
         });
       }
 
-      const spiritSoulAmount = Math.max(Math.floor(player.castleLevelCache), 1);
-      await client.playerSpiritResource.upsert({
-        where: { playerId: input.playerId },
-        create: {
+      const contribution = playerState.factionMembers[0]?.contributionScore ?? 0;
+      const tier = getFactionStipendTier(contribution);
+      const rewards = await resolveStipendRewards(client, (tier?.rewards ?? []) as ResolvableStipendReward[]);
+      const now = new Date();
+      const goldReward = sumRewardQuantity(rewards, 'gold');
+      const ordinarySoulReward = sumRewardQuantity(rewards, 'ordinary-soul');
+      const rareSoulReward = sumRewardQuantity(rewards, 'rare-soul');
+      const legendarySoulReward = sumRewardQuantity(rewards, 'legendary-soul');
+
+      if (goldReward > 0) {
+        const nextVaultGold = playerState.wallet.vaultGold + goldReward;
+
+        await client.playerWallet.update({
+          where: { playerId: input.playerId },
+          data: {
+            vaultGold: nextVaultGold,
+            balanceVersion: { increment: 1 },
+          },
+        });
+
+        await this.auditService.createWalletChangeLog(client, {
           playerId: input.playerId,
-          spiritSoul: spiritSoulAmount,
-          dailySpiritSoulClaimDateKey: dateKey,
-          dailyRecoveryUsed: 0,
-        },
-        update: {
-          spiritSoul: { increment: spiritSoulAmount },
-          dailySpiritSoulClaimDateKey: dateKey,
-          resourceVersion: { increment: 1 },
-        },
-      });
-
-      return {
-        app: APP_NAME,
-        summary: `今日兽魂已领取，获得 兽魂 x${spiritSoulAmount}。`,
-        home: await this.clientReadService.getHomeSummary(input.playerId, client),
-        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
-      };
-    });
-  }
-
-  async claimStarterSeeds(input: ClaimStarterSeedsCommandInput): Promise<ClientStateMutationResponse> {
-    return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
-      const dateKey = getLocalDateKey();
-      const player = await client.player.findUnique({
-        where: { id: input.playerId },
-        select: { id: true },
-      });
-
-      if (!player) {
-        throw new BusinessError({
-          code: ErrorCode.NotFound,
-          message: 'Player not found.',
-          statusCode: 404,
+          walletBucket: 'vault',
+          changeType: 'faction-stipend',
+          deltaGold: goldReward,
+          beforeGold: playerState.wallet.vaultGold,
+          afterGold: nextVaultGold,
+          relatedEntityType: 'faction-stipend',
+          relatedEntityId: dateKey,
+          requestIdempotencyKey: idempotencyKey,
+          note: 'Claim daily faction stipend gold.',
         });
       }
 
-      const marker = await client.playerSpiritResource.findUnique({
-        where: { playerId: input.playerId },
-        select: { dailyStarterSeedClaimDateKey: true },
-      });
-
-      if (marker?.dailyStarterSeedClaimDateKey === dateKey) {
-        throw new BusinessError({
-          code: ErrorCode.Conflict,
-          message: 'Daily starter seeds have already been claimed.',
-          statusCode: 409,
+      if (ordinarySoulReward > 0 || rareSoulReward > 0 || legendarySoulReward > 0) {
+        await client.playerSpiritResource.upsert({
+          where: { playerId: input.playerId },
+          create: {
+            playerId: input.playerId,
+            ordinarySoul: ordinarySoulReward,
+            rareSoul: rareSoulReward,
+            legendarySoul: legendarySoulReward,
+          },
+          update: {
+            ordinarySoul: ordinarySoulReward > 0 ? { increment: ordinarySoulReward } : undefined,
+            rareSoul: rareSoulReward > 0 ? { increment: rareSoulReward } : undefined,
+            legendarySoul: legendarySoulReward > 0 ? { increment: legendarySoulReward } : undefined,
+            resourceVersion: { increment: 1 },
+          },
         });
       }
 
-      await client.playerSpiritResource.upsert({
-        where: { playerId: input.playerId },
-        create: {
-          playerId: input.playerId,
-          spiritSoul: 0,
-          dailyRecoveryUsed: 0,
-          dailyStarterSeedClaimDateKey: dateKey,
-        },
-        update: {
-          dailyStarterSeedClaimDateKey: dateKey,
-          resourceVersion: { increment: 1 },
-        },
-      });
+      for (const reward of rewards.filter((entry) => entry.kind === 'seed')) {
+        if (!reward.seedId) {
+          continue;
+        }
 
-      const starterSeedDefinitions = await client.seedDefinition.findMany({
-        where: { seedId: { in: ['qinglingmai', 'xunyamai'] } },
-        orderBy: [{ sortOrder: 'asc' }, { seedId: 'asc' }],
-        select: { seedId: true, id: true },
-      });
-
-      if (starterSeedDefinitions.length < 2) {
-        throw new BusinessError({
-          code: ErrorCode.NotFound,
-          message: 'Starter seed definition not found. Please seed seed definitions first.',
-          statusCode: 404,
+        const seedDefinition = await client.seedDefinition.findUnique({
+          where: { seedId: reward.seedId },
+          select: { id: true },
         });
-      }
 
-      for (const seedDefinition of starterSeedDefinitions) {
+        if (!seedDefinition) {
+          continue;
+        }
+
         await client.playerSeedInventory.upsert({
           where: {
             playerId_seedDefinitionId: {
@@ -1279,22 +1216,72 @@ export class ClientCommandService {
           create: {
             playerId: input.playerId,
             seedDefinitionId: seedDefinition.id,
-            quantity: 3,
-            unlockedAt: new Date(),
+            quantity: reward.quantity,
+            unlockedAt: now,
           },
           update: {
-            quantity: { increment: 3 },
-            unlockedAt: new Date(),
+            quantity: { increment: reward.quantity },
+            unlockedAt: now,
+            inventoryVersion: { increment: 1 },
           },
         });
       }
 
-      return {
+      const stipendState = await client.playerFactionStipendState.upsert({
+        where: {
+          playerId_dateKey: {
+            playerId: input.playerId,
+            dateKey,
+          },
+        },
+        create: {
+          playerId: input.playerId,
+          dateKey,
+          contributionSnapshot: contribution,
+          tierKey: tier?.tierKey ?? 'contribution-0',
+          rewardJson: rewards as unknown as Prisma.InputJsonValue,
+          claimedAt: now,
+        },
+        update: {
+          contributionSnapshot: contribution,
+          tierKey: tier?.tierKey ?? 'contribution-0',
+          rewardJson: rewards as unknown as Prisma.InputJsonValue,
+          claimedAt: now,
+        },
+      });
+
+      await this.recordDailyTaskProgress(client, input.playerId, 'faction-interaction');
+
+      const responseSnapshot: ClientClaimFactionStipendResponse = {
         app: APP_NAME,
-        summary: '今日种子已领取，获得 青灵麦 x3 与 风云稻 x3。',
+        summary: `阵营俸禄已领取：${formatRewardSummary(rewards)}。`,
+        stipend: {
+          title: '每日阵营俸禄',
+          description: '每日按当前个人贡献领取一次，随机种子已抽取为具体整种子。',
+          status: 'claimed',
+          dateKey,
+          contribution,
+          tierKey: stipendState.tierKey,
+          tierLabel: tier?.label ?? '基础俸禄',
+          rewards,
+          claimedAt: stipendState.claimedAt?.toISOString() ?? now.toISOString(),
+          action: null,
+        },
+        rewards,
         home: await this.clientReadService.getHomeSummary(input.playerId, client),
         scenes: await this.clientReadService.getSceneContent(input.playerId, client),
       };
+
+      if (idempotencyRecord?.id) {
+        await this.idempotencyService.markCompleted(client, {
+          id: idempotencyRecord.id,
+          responseSnapshotJson: responseSnapshot as unknown as Prisma.InputJsonValue,
+          businessEntityType: 'faction-stipend',
+          businessEntityId: dateKey,
+        });
+      }
+
+      return responseSnapshot;
     });
   }
 
@@ -1392,7 +1379,15 @@ export class ClientCommandService {
       if (error instanceof Error && error.message === 'FIELD_SLOT_AUTO_UNLOCK') {
         throw new BusinessError({
           code: ErrorCode.BadRequest,
-          message: 'Field slots are unlocked automatically by castle level.',
+          message: 'Field slots are unlocked by land deed tasks.',
+          statusCode: 400,
+        });
+      }
+
+      if (error instanceof Error && error.message === 'LEGACY_BUILDING_UPGRADE_RETIRED') {
+        throw new BusinessError({
+          code: ErrorCode.BadRequest,
+          message: 'Legacy building upgrades are retired. Use territory technology upgrades.',
           statusCode: 400,
         });
       }
@@ -1492,10 +1487,13 @@ export class ClientCommandService {
       return;
     }
 
+    const dateKey = getLocalDateKey();
+    await this.dailyTaskLifecycleService.ensurePlayerDailyTasks(client, playerId, dateKey);
+
     const taskStates = await client.playerDailyTaskState.findMany({
       where: {
         playerId,
-        dateKey: getLocalDateKey(),
+        dateKey,
         taskId: { in: taskIds },
         status: 'IN_PROGRESS',
       },
@@ -1560,6 +1558,11 @@ function validateRecruitArmyRequest(request: RecruitArmyRequestDto): void {
 function validateFactionDonateRequest(request: ClientFactionDonateRequest): void {
   const body = assertRequestBody(request);
   assertPositiveInteger(body.goldAmount, 'goldAmount');
+}
+
+function validateClaimFactionStipendRequest(request: ClaimFactionStipendRequestDto): void {
+  const body = assertRequestBody(request);
+  assertOptionalNumber(body.walletVersion, 'walletVersion');
 }
 
 function assertRequestBody(request: unknown): Record<string, unknown> {
@@ -1645,6 +1648,14 @@ function hashStartCultivationRequest(request: StartCultivationRequestDto): strin
     .digest('hex');
 }
 
+function hashClaimFactionStipendRequest(request: ClaimFactionStipendRequestDto): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      walletVersion: request.walletVersion ?? null,
+    }))
+    .digest('hex');
+}
+
 function addSeconds(source: Date, seconds: number): Date {
   return new Date(source.getTime() + Math.max(Math.floor(seconds), 0) * 1000);
 }
@@ -1715,20 +1726,139 @@ function buildClaimPendingSummary(
   source: ClaimPendingRequestDto['source'],
   claimedGold: number,
   remainingPendingGold: number,
-  overflowGold: number,
-  acceptOverflowLoss: boolean,
+  _overflowGold: number,
 ): string {
   const sourceLabel = getPendingClaimSourceLabel(source);
-
-  if (acceptOverflowLoss && overflowGold > 0) {
-    return `${sourceLabel}本次入账 ${claimedGold} 金币，另有 ${overflowGold} 已确认放弃。`;
-  }
 
   if (claimedGold > 0) {
     return `${sourceLabel}本次入账 ${claimedGold} 金币，剩余待领取 ${remainingPendingGold}。`;
   }
 
-  return `金币空间不足，当前没有可入账的${sourceLabel}。`;
+  return `当前没有可入账的${sourceLabel}。`;
+}
+
+function normalizeStipendRewards(rewards: ClientFactionStipendReward[]): ClientFactionStipendReward[] {
+  return rewards
+    .map((reward) => ({
+      kind: reward.kind,
+      label: reward.label,
+      quantity: Math.max(Math.floor(reward.quantity), 0),
+      seedId: reward.seedId,
+    }))
+    .filter((reward) => reward.label.trim().length > 0 && reward.quantity > 0);
+}
+
+async function resolveStipendRewards(
+  client: Prisma.TransactionClient,
+  rewards: ResolvableStipendReward[],
+): Promise<ClientFactionStipendReward[]> {
+  const normalizedRewards = normalizeStipendRewards(rewards);
+  const seedPoolIds = Array.from(new Set(
+    rewards
+      .flatMap((reward) => reward.kind === 'seed' ? reward.seedPoolIds ?? [] : [])
+      .filter((seedId) => typeof seedId === 'string' && seedId.trim().length > 0),
+  ));
+
+  if (seedPoolIds.length <= 0) {
+    return normalizedRewards;
+  }
+
+  const seedDefinitions = await client.seedDefinition.findMany({
+    where: { seedId: { in: seedPoolIds } },
+    select: { seedId: true, label: true },
+  });
+  const seedLabelById = new Map(seedDefinitions.map((seed) => [seed.seedId, seed.label]));
+  const resolvedRewards: ClientFactionStipendReward[] = [];
+
+  for (const reward of rewards) {
+    const quantity = Math.max(Math.floor(reward.quantity), 0);
+
+    if (quantity <= 0) {
+      continue;
+    }
+
+    if (reward.kind !== 'seed' || !reward.seedPoolIds?.length) {
+      resolvedRewards.push(...normalizeStipendRewards([reward]));
+      continue;
+    }
+
+    const availablePool = reward.seedPoolIds.filter((seedId) => seedLabelById.has(seedId));
+    if (availablePool.length <= 0) {
+      throw new BusinessError({
+        code: ErrorCode.NotFound,
+        message: 'Faction stipend seed pool definitions not found. Please seed seed definitions first.',
+        statusCode: 404,
+      });
+    }
+
+    const groupedSeeds = new Map<string, ClientFactionStipendReward>();
+    for (let index = 0; index < quantity; index += 1) {
+      const seedId = availablePool[Math.floor(Math.random() * availablePool.length)];
+      const existing = groupedSeeds.get(seedId);
+
+      if (existing) {
+        existing.quantity += 1;
+      } else {
+        groupedSeeds.set(seedId, {
+          kind: 'seed',
+          seedId,
+          label: seedLabelById.get(seedId) ?? seedId,
+          quantity: 1,
+        });
+      }
+    }
+
+    resolvedRewards.push(...groupedSeeds.values());
+  }
+
+  return normalizeStipendRewards(resolvedRewards);
+}
+
+function sumRewardQuantity(rewards: ClientFactionStipendReward[], kind: ClientFactionStipendReward['kind']): number {
+  return rewards
+    .filter((reward) => reward.kind === kind)
+    .reduce((sum, reward) => sum + reward.quantity, 0);
+}
+
+function formatRewardSummary(rewards: ClientFactionStipendReward[]): string {
+  const summary = rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、');
+  return summary || '暂无奖励';
+}
+
+async function applySpiritCropRewards(
+  client: Prisma.TransactionClient,
+  playerId: string,
+  rewards: ClientCollectRewardItem[],
+): Promise<void> {
+  const spiritRoot = sumCollectRewardQuantity(rewards, 'spirit-root');
+  const spiritMarrow = sumCollectRewardQuantity(rewards, 'spirit-marrow');
+  const spiritJade = sumCollectRewardQuantity(rewards, 'spirit-jade');
+
+  if (spiritRoot <= 0 && spiritMarrow <= 0 && spiritJade <= 0) {
+    return;
+  }
+
+  await client.playerSpiritResource.upsert({
+    where: { playerId },
+    create: {
+      playerId,
+      spiritRoot,
+      spiritMarrow,
+      spiritJade,
+    },
+    update: {
+      spiritRoot: spiritRoot > 0 ? { increment: spiritRoot } : undefined,
+      spiritMarrow: spiritMarrow > 0 ? { increment: spiritMarrow } : undefined,
+      spiritJade: spiritJade > 0 ? { increment: spiritJade } : undefined,
+      resourceVersion: { increment: 1 },
+    },
+  });
+}
+
+function sumCollectRewardQuantity(rewards: ClientCollectRewardItem[], kind: NonNullable<ClientCollectRewardItem['kind']>): number {
+  return rewards
+    .filter((reward) => reward.kind === kind)
+    .reduce((sum, reward) => sum + Math.max(Math.floor(reward.quantity), 0), 0);
 }
 
 function getDailyTaskTitle(taskId: string): string {
@@ -1804,9 +1934,10 @@ function buildBuildingUpdateData(target: BuildingUpgradeTarget): Prisma.PlayerBu
     data.farmYieldTechLevel = target.nextLevel;
   } else if (target.key === 'ripeWindowTech') {
     data.ripeWindowTechLevel = target.nextLevel;
-  } else if (target.key === 'pendingClaimTech') {
+  } else if (target.key === 'factionOfferingTech' || target.key === 'pendingClaimTech') {
     data.pendingClaimTechLevel = target.nextLevel;
   }
 
   return data;
 }
+

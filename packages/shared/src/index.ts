@@ -10,6 +10,19 @@ export type ClientSpiritRarity = 'common' | 'rare' | 'legendary';
 export type ClientSpiritRole = 'attack' | 'defense' | 'balanced' | 'health';
 export type ClientSpiritElement = 'metal' | 'wood' | 'water' | 'fire' | 'earth';
 export type ClientSpiritStatus = 'active' | 'wounded' | 'resting' | 'dissolved';
+export type ClientSpiritTraitCode =
+  | 'claw'
+  | 'thick_skin'
+  | 'hard_armor'
+  | 'crit'
+  | 'crit_damage'
+  | 'dodge'
+  | 'counter'
+  | 'lifesteal'
+  | 'armor_break'
+  | 'tenacity';
+export type ClientSpiritRollMode = 'basic' | 'advanced' | 'ultimate' | 'batch_basic';
+export type ClientSpiritFeedActionType = 'feed_once' | 'fill_full';
 
 export interface ClientSpiritDefinition {
   spiritId: string;
@@ -28,11 +41,52 @@ export interface ClientSpiritSlot {
   isMain: boolean;
   level: number;
   exp: number;
+  currentLevelExpRequired?: number;
+  isAtBreakthroughNode?: boolean;
+  breakthroughStage?: number;
+  satiatedUntil?: string | null;
+  satiatedRemainingSeconds?: number;
+  satiatedExpBonusPercent?: number;
   element: ClientSpiritElement | null;
   currentHp: number;
   maxHp: number;
   status: ClientSpiritStatus;
+  traits?: ClientSpiritTrait[];
+  unlockedTraitSlots?: number;
   slotVersion: number;
+}
+
+export interface ClientSpiritTrait {
+  slotIndex: number;
+  traitCode: ClientSpiritTraitCode;
+  label: string;
+  description: string;
+  value: number;
+  sourceType: string;
+}
+
+export interface ClientSpiritBreakthroughRequirement {
+  stage: number;
+  level: number;
+  quality: 'ordinary' | 'rare' | 'legendary';
+  label: string;
+  required: number;
+  owned: number;
+  canBreakthrough: boolean;
+}
+
+export interface ClientSpiritShopItem {
+  itemId: string;
+  label: string;
+  description: string;
+  priceTianjiTalisman: number;
+  limitLabel: string;
+  remainingPurchases: number | null;
+  rewards: Array<{
+    kind: 'spirit-root' | 'spirit-marrow' | 'spirit-jade' | 'ordinary-soul' | 'rare-soul' | 'legendary-soul';
+    label: string;
+    quantity: number;
+  }>;
 }
 
 export interface ClientSpiritCodexEntry {
@@ -47,6 +101,12 @@ export interface ClientSpiritCodexEntry {
 
 export interface ClientSpiritState {
   spiritSoul: number;
+  spiritRoot?: number;
+  spiritMarrow?: number;
+  spiritJade?: number;
+  ordinarySoul?: number;
+  rareSoul?: number;
+  legendarySoul?: number;
   tianjiTalisman: number;
   dailyRecoveryUsed: number;
   dailyIntelFreeUsed: number;
@@ -56,6 +116,16 @@ export interface ClientSpiritState {
   slots: ClientSpiritSlot[];
   codex: ClientSpiritCodexEntry[];
   readyToCompose: ClientSpiritCodexEntry[];
+  breakthroughRequirement?: ClientSpiritBreakthroughRequirement | null;
+  shop?: {
+    items: ClientSpiritShopItem[];
+    adReward: {
+      dailyLimit: number;
+      usedToday: number;
+      tianjiTalisman: number;
+      bonusPool: string[];
+    };
+  };
 }
 
 export interface ClientSpiritStateResponse {
@@ -198,6 +268,45 @@ export interface ClientSeedBackpack {
   tianjiTalismanClaimed: boolean;
   spiritSoulClaimed: boolean;
   dailySpiritSoulAmount: number;
+}
+
+export interface ClientFeedSpiritRequest {
+  slotIndex: number;
+  actionType: ClientSpiritFeedActionType;
+  slotVersion?: number;
+  resourceVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientBreakthroughSpiritRequest {
+  slotIndex: number;
+  targetStage?: number;
+  slotVersion?: number;
+  resourceVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientRollSpiritTraitsRequest {
+  slotIndex: number;
+  mode: ClientSpiritRollMode;
+  lockedSlotIndex?: number;
+  targetSlotIndex?: number;
+  targetTraitCode?: ClientSpiritTraitCode;
+  slotVersion?: number;
+  walletVersion?: number;
+  resourceVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientBuySpiritShopItemRequest {
+  itemId: string;
+  resourceVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientClaimSpiritAdRewardRequest {
+  resourceVersion?: number;
+  requestIdempotencyKey?: string;
 }
 
 export interface ClientSeasonStatus {
@@ -393,10 +502,18 @@ export interface HomeResourceSummary {
   label: string;
   value: string;
   tone: HomeResourceTone;
+  capacityValue?: string | null;
 }
 
+/**
+ * @deprecated Gold capacity, tax pending and raid overflow claims are being retired
+ * in the 2026-05-24 lightweight economy redesign.
+ */
 export type ClientPendingClaimSource = 'tax' | 'faction' | 'raid-overflow';
 
+/**
+ * @deprecated Raid overflow temporary claims are retired. Raid gold should deposit directly.
+ */
 export interface ClientTemporaryClaimSummary {
   source: 'raid-overflow';
   label: string;
@@ -410,6 +527,53 @@ export interface ClientPendingClaimSummary {
   label: string;
   value: string;
   description: string;
+}
+
+export type ClientLandDeedKey = 'field-2' | 'field-3' | 'field-4';
+export type ClientLandDeedStatus = 'locked' | 'in-progress' | 'completed' | 'claimed';
+
+export interface ClientLandDeedRequirementProgress {
+  key: string;
+  label: string;
+  current: number;
+  target: number;
+  completed: boolean;
+}
+
+export interface ClientLandDeedProgress {
+  deedKey: ClientLandDeedKey;
+  title: string;
+  description: string;
+  status: ClientLandDeedStatus;
+  targetFieldSlotIndex: number;
+  requirements: ClientLandDeedRequirementProgress[];
+  alternativeRequirements?: ClientLandDeedRequirementProgress[];
+  canClaim: boolean;
+  claimedAt: string | null;
+}
+
+export type ClientFactionStipendStatus = 'available' | 'claimed' | 'unavailable';
+
+export type ClientFactionStipendRewardKind = 'gold' | 'seed' | 'ordinary-soul' | 'rare-soul' | 'legendary-soul';
+
+export interface ClientFactionStipendReward {
+  kind: ClientFactionStipendRewardKind;
+  label: string;
+  quantity: number;
+  seedId?: string;
+}
+
+export interface ClientFactionStipendSummary {
+  title: string;
+  description: string;
+  status: ClientFactionStipendStatus;
+  dateKey: string;
+  contribution: number;
+  tierKey: string;
+  tierLabel: string;
+  rewards: ClientFactionStipendReward[];
+  claimedAt: string | null;
+  action: ClientSceneAction | null;
 }
 
 export interface HomeActionItem {
@@ -436,6 +600,9 @@ export interface HomeSummaryResponse {
   app: string;
   playerName: string;
   factionName: string;
+  /**
+   * @deprecated Main city level is no longer a core feature gate.
+   */
   castleLevel: number;
   stateVersions: ClientStateVersions;
   staminaStatus: string;
@@ -443,7 +610,13 @@ export interface HomeSummaryResponse {
   reportStatus: string;
   protectedUntil: string | null;
   resources: HomeResourceSummary[];
+  /**
+   * @deprecated Tax, hourly faction dividend and raid-overflow pending claims are retired.
+   */
   pendingClaims: ClientPendingClaimSummary[];
+  /**
+   * @deprecated Raid overflow temporary claims are retired.
+   */
   temporaryClaim: ClientTemporaryClaimSummary | null;
   dailyTasks: ClientDailyTaskSummary[];
   primaryActions: HomeActionItem[];
@@ -457,11 +630,24 @@ export interface ClientStateVersions {
 
 export interface ClientResourceLedger {
   vaultGold: number;
+  /**
+   * @deprecated Gold storage is unlimited in the lightweight economy redesign.
+   */
   vaultCapacity: number;
+  /**
+   * @deprecated Main city tax is retired.
+   */
   taxPendingGold: number;
+  /**
+   * @deprecated Hourly faction dividend is retired. Use faction stipend DTOs.
+   */
   factionDividendGold: number;
 }
 
+/**
+ * @deprecated Pending gold claim flow is retired for tax and raid overflow.
+ * Faction rewards should use daily stipend claim.
+ */
 export interface ClientClaimPendingRequest {
   source: ClientPendingClaimSource;
   acceptOverflowLoss?: boolean;
@@ -482,6 +668,9 @@ export interface ClientClaimPendingResponse {
 
 export interface ClientClaimDailyTaskRequest {
   taskId: string;
+  /**
+   * @deprecated Gold capacity overflow is retired.
+   */
   acceptOverflowLoss?: boolean;
   taskDateKey?: string;
   walletVersion?: number;
@@ -494,14 +683,26 @@ export interface ClientClaimDailyTaskResponse {
   taskId: string;
   rewardGold: number;
   claimedGold: number;
+  /**
+   * @deprecated Gold capacity overflow is retired and should remain 0 during migration.
+   */
   overflowGold: number;
   home: HomeSummaryResponse;
   scenes: ClientSceneContentResponse;
 }
 
+/**
+ * @deprecated Main city, vault and field-slot upgrades are retired from the first release.
+ * Use territory tech upgrades instead.
+ */
 export type ClientBuildingUpgradeId = 'castle' | 'vault' | 'field-slot' | 'watchtower';
-export type ClientCastleExtensionUpgradeId = 'protectionTech' | 'farmYieldTech' | 'ripeWindowTech' | 'pendingClaimTech';
-export type ClientUpgradeTargetType = 'building' | 'castle-extension';
+export type ClientTerritoryUpgradeId = 'protectionTech' | 'farmYieldTech' | 'ripeWindowTech' | 'factionOfferingTech';
+/**
+ * @deprecated Castle extension naming is kept temporarily for compatibility.
+ * `pendingClaimTech` is retired; new code should use ClientTerritoryUpgradeId.
+ */
+export type ClientCastleExtensionUpgradeId = ClientTerritoryUpgradeId | 'pendingClaimTech';
+export type ClientUpgradeTargetType = 'building' | 'castle-extension' | 'territory-tech';
 
 export interface ClientStateMutationResponse {
   app: string;
@@ -518,8 +719,11 @@ export interface ClientCollectFieldRequest {
   requestIdempotencyKey?: string;
 }
 
+export type ClientCollectRewardKind = 'seed' | 'spirit-root' | 'spirit-marrow' | 'spirit-jade';
+
 export interface ClientCollectRewardItem {
-  seedId: string;
+  kind?: ClientCollectRewardKind;
+  seedId?: string;
   label: string;
   quantity: number;
 }
@@ -531,6 +735,9 @@ export interface ClientCollectFieldResponse {
   scenes: ClientSceneContentResponse;
   result: {
     collectedGold: number;
+    /**
+     * @deprecated Gold capacity overflow is retired and should remain 0 during migration.
+     */
     overflowGold: number;
     rewards: ClientCollectRewardItem[];
   };
@@ -561,6 +768,12 @@ export interface ClientRaidRewardItem {
   quantity: number;
 }
 
+export interface ClientRaidBattleEvent {
+  type: 'dodge' | 'execute' | 'element' | 'critical' | 'lifesteal' | 'counter' | 'damage' | 'soul-drop';
+  label: string;
+  description: string;
+}
+
 export interface ClientRaidActionResponse {
   app: string;
   summary: string;
@@ -574,10 +787,19 @@ export interface ClientRaidActionResponse {
     targetName: string;
     goldLoot: number;
     depositedGold: number;
+    /**
+     * @deprecated Gold capacity overflow is retired and should remain 0 during migration.
+     */
     overflowGold: number;
+    /**
+     * @deprecated Raid overflow temporary claims are retired.
+     */
     temporaryClaimExpiresAt: string | null;
     casualties: number;
     rewards: ClientRaidRewardItem[];
+    battleEvents?: ClientRaidBattleEvent[];
+    attackerHpAfter?: number | null;
+    defenderHpAfter?: number | null;
     protectedUntil: string;
     reportSummary: string;
   };
@@ -587,9 +809,24 @@ export interface ClientUpgradeBuildingRequest {
   targetType: ClientUpgradeTargetType;
   buildingId?: ClientBuildingUpgradeId;
   extensionId?: ClientCastleExtensionUpgradeId;
+  territoryUpgradeId?: ClientTerritoryUpgradeId;
   buildingVersion?: number;
   walletVersion?: number;
   requestIdempotencyKey?: string;
+}
+
+export interface ClientClaimFactionStipendRequest {
+  walletVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientClaimFactionStipendResponse {
+  app: string;
+  summary: string;
+  stipend: ClientFactionStipendSummary;
+  rewards: ClientFactionStipendReward[];
+  home: HomeSummaryResponse;
+  scenes: ClientSceneContentResponse;
 }
 
 export interface ClientResetDemoStateResponse {
@@ -624,6 +861,21 @@ export interface ClientBuildingUpgrade {
   locked?: boolean;
 }
 
+export interface ClientTerritoryUpgrade {
+  id: ClientTerritoryUpgradeId;
+  title: string;
+  levelText: string;
+  description: string;
+  effectText: string;
+  costText: string;
+  action: ClientSceneAction;
+  locked?: boolean;
+}
+
+/**
+ * @deprecated Castle extension naming is kept temporarily for compatibility.
+ * Use ClientTerritoryUpgrade for new code.
+ */
 export interface ClientCastleExtensionUpgrade {
   id: ClientCastleExtensionUpgradeId;
   title: string;
@@ -789,6 +1041,7 @@ export interface ClientSceneContentResponse {
   farm: {
     hero: ClientFarmHero;
     fields: ClientFarmField[];
+    landDeeds?: ClientLandDeedProgress[];
     guide: ClientGuideSection;
   };
   raid: {
@@ -807,6 +1060,7 @@ export interface ClientSceneContentResponse {
     contribution: ClientFactionContributionSummary;
     comparison: ClientFactionComparisonEntry[];
     donate: ClientFactionDonatePanel;
+    stipend?: ClientFactionStipendSummary;
     rankings: ClientFactionLeaderboardEntry[];
   };
 }
