@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { LandDeedService } from '../land-deed/land-deed.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { buildRaidBattleReplay } from './raid-battle-replay.js';
 import { RaidRepository } from './raid.repository.js';
 import { RaidSettlementRuleService, type SpiritBattleSnapshot } from './raid-settlement-rule.service.js';
 
@@ -81,6 +82,24 @@ export class RaidSettlementService {
       await this.applyDefenderLootConsumption(client, raidOrder, settlementResult.lootGold, now);
       const defenderProtectedUntil = new Date(now.getTime() + 60 * 60 * 1000);
 
+      const rewardItemsJson = [
+        ...settlementResult.rewardItems,
+        ...settlementResult.battleEvents.map((event) => ({ ...event, type: 'battleEvent' })),
+      ];
+      const battleReplay = buildRaidBattleReplay(raidOrder.id, {
+        result: settlementResult.result,
+        lootGold: settlementResult.lootGold,
+        attackerLoss: settlementResult.attackerHpLossPercent,
+        defenderLoss: settlementResult.defenderHpLossPercent,
+        reportSummary: settlementResult.reportSummary,
+        rewardItemsJson,
+      }, {
+        attackerSnapshotJson: raidOrder.attackerSnapshotJson,
+        defenderSnapshotJson: raidOrder.defenderSnapshotJson,
+        attacker: { nickname: raidOrder.attacker.nickname },
+        defender: { nickname: raidOrder.defender.nickname },
+      });
+
       const settlement = await this.raidRepository.createRaidSettlement({
         raidOrder: { connect: { id: raidOrder.id } },
         result: settlementResult.result,
@@ -90,10 +109,8 @@ export class RaidSettlementService {
         temporaryClaimExpiresAt: null,
         attackerLoss: settlementResult.attackerHpLossPercent,
         defenderLoss: settlementResult.defenderHpLossPercent,
-        rewardItemsJson: [
-          ...settlementResult.rewardItems,
-          ...settlementResult.battleEvents.map((event) => ({ ...event, type: 'battleEvent' })),
-        ] as Prisma.InputJsonValue,
+        rewardItemsJson: rewardItemsJson as Prisma.InputJsonValue,
+        battleReplayJson: battleReplay as unknown as Prisma.InputJsonValue,
         reportSummary: settlementResult.reportSummary,
       }, client);
 

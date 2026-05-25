@@ -1,5 +1,5 @@
 ﻿import { Injectable } from '@nestjs/common';
-import { APP_NAME, type ClientFactionStipendReward, type ClientFarmField, type ClientRaidSpiritPreview, type ClientSceneContentResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientFactionStipendReward, type ClientFarmField, type ClientRaidSpiritPreview, type ClientSceneAction, type ClientSceneContentResponse } from '@trinitywar/shared';
 import type { FieldStatus } from '@prisma/client';
 import {
   GAME_BALANCE,
@@ -143,7 +143,18 @@ export class SceneContentAssembler {
           ? settlement?.defenderLoss
           : settlement?.attackerLoss;
 
+        const actions: ClientSceneAction[] = [
+          ...(report.raidOrder.settlement?.battleReplayJson ? [{ label: '战斗回放', target: 'report', tone: 'secondary', context: report.raidOrderId } satisfies ClientSceneAction] : []),
+          ...(report.revengeAvailable
+            ? [
+              { label: '复仇', target: 'report', tone: 'primary', context: report.opponentPlayerId } satisfies ClientSceneAction,
+              { label: '查看详情', target: 'report', tone: 'ghost', context: report.opponentPlayerId } satisfies ClientSceneAction,
+            ]
+            : [{ label: '查看详情', target: 'report', tone: 'ghost', context: report.opponentPlayerId } satisfies ClientSceneAction]),
+        ];
+
         return {
+          orderId: report.raidOrderId,
           title: report.title,
           tag: report.title,
           tone: report.result === 'WIN' ? 'success' : report.result === 'LOSS' ? 'danger' : 'neutral',
@@ -166,12 +177,8 @@ export class SceneContentAssembler {
               messageTextSnapshot: report.raidOrder.raidMessage.textSnapshot,
             }
             : null,
-          actions: report.revengeAvailable
-            ? [
-              { label: '复仇', target: 'report', tone: 'primary', context: report.opponentPlayerId },
-              { label: '查看详情', target: 'report', tone: 'ghost', context: report.opponentPlayerId },
-            ]
-            : [{ label: '查看详情', target: 'report', tone: 'ghost', context: report.opponentPlayerId }],
+          battleReplayAvailable: Boolean(report.raidOrder.settlement?.battleReplayJson),
+          actions,
         };
       });
   }

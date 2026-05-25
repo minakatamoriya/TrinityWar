@@ -147,9 +147,16 @@ interface SpiritPanel {
   defense: number;
   maxHp: number;
   currentHp: number;
+  healthStatus: BattleHealthStatus;
   element: Element | null;
   traits: TraitTotals;
 }
+
+type BattleHealthStatus = {
+  code: 'normal' | 'low' | 'injured' | 'down';
+  label: string;
+  attackDefenseCoefficient: number;
+};
 
 function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string | null): SpiritPanel {
   if (!snapshot) {
@@ -159,6 +166,7 @@ function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string |
       defense: 50,
       maxHp: 120,
       currentHp: 120,
+      healthStatus: resolveBattleHealthStatus(120, 120),
       element: null,
       traits: emptyTraits(),
     };
@@ -185,13 +193,18 @@ function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string |
   attack *= 1 + traits.claw / 100;
   defense *= 1 + traits.hardArmor / 100;
   maxHp *= 1 + traits.thickSkin / 100;
+  const currentHp = Math.min(Math.max(snapshot.currentHp, 0), Math.max(snapshot.maxHp, 1));
+  const healthStatus = resolveBattleHealthStatus(currentHp, snapshot.maxHp);
+  attack *= healthStatus.attackDefenseCoefficient;
+  defense *= healthStatus.attackDefenseCoefficient;
 
   return {
     label: snapshot.spiritDefinition.label,
     attack,
     defense,
     maxHp,
-    currentHp: Math.min(Math.max(snapshot.currentHp, 0), Math.max(snapshot.maxHp, 1)),
+    currentHp,
+    healthStatus,
     element: snapshot.element,
     traits,
   };
@@ -209,6 +222,16 @@ function resolveSingleClash(attacker: SpiritPanel, defender: SpiritPanel): {
   const relation = resolveElementAdvantage(attacker.element, defender.element);
   const attackerMultiplier = relation === 'attacker' ? 2 : 1;
   const defenderMultiplier = relation === 'defender' ? 2 : 1;
+
+  for (const [sideLabel, panel] of [['进攻方', attacker], ['防守方', defender]] as const) {
+    if (panel.healthStatus.code !== 'normal') {
+      events.push({
+        type: 'status',
+        label: `${sideLabel}${panel.healthStatus.label}`,
+        description: `${sideLabel}开战血量状态为${panel.healthStatus.label}，攻击和防御按 ${Math.round(panel.healthStatus.attackDefenseCoefficient * 100)}% 结算，词条效果不受影响。`,
+      });
+    }
+  }
 
   if (relation !== 'none') {
     events.push({
@@ -254,6 +277,20 @@ function resolveSingleClash(attacker: SpiritPanel, defender: SpiritPanel): {
     defenderMaxHp: defender.maxHp * defenderMultiplier,
     events,
   };
+}
+
+function resolveBattleHealthStatus(currentHp: number, maxHp: number): BattleHealthStatus {
+  const ratio = maxHp > 0 ? currentHp / maxHp : 0;
+  if (currentHp <= 0 || ratio <= 0) {
+    return { code: 'down', label: '不可出战', attackDefenseCoefficient: 0 };
+  }
+  if (ratio < 0.3) {
+    return { code: 'injured', label: '重伤：攻防 30%', attackDefenseCoefficient: 0.3 };
+  }
+  if (ratio < 0.7) {
+    return { code: 'low', label: '低迷：攻防 70%', attackDefenseCoefficient: 0.7 };
+  }
+  return { code: 'normal', label: '正常：攻防 100%', attackDefenseCoefficient: 1 };
 }
 
 function resolveAttack(

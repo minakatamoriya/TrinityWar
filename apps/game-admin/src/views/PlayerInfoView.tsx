@@ -131,12 +131,12 @@ export function PlayerDetailTables(props: { overview: AdminPlayerOverviewRespons
           />
           <div className="two-column">
             <InfoSection
-              title="钱包状态"
-              rows={recordRows(props.overview.wallet, ['playerId', 'vaultGold', 'walletGold', 'walletProtectedRatio', 'balanceVersion'])}
+              title="玩家基础资源"
+              rows={recordRows(props.overview.resources, ['playerId', 'gold', 'tianjiTalisman', 'resourceStateVersion', 'spiritResourceStateVersion'])}
             />
             <InfoSection
               title="法术状态"
-              rows={recordRows(props.overview.building, ['playerId', 'protectionTechLevel', 'farmYieldTechLevel', 'ripeWindowTechLevel', 'buildingVersion'])}
+              rows={recordRows(props.overview.spell, ['playerId', 'protectionTechLevel', 'farmYieldTechLevel', 'ripeWindowTechLevel', 'pendingClaimTechLevel', 'spellStateVersion'])}
             />
           </div>
         </div>
@@ -147,7 +147,7 @@ export function PlayerDetailTables(props: { overview: AdminPlayerOverviewRespons
           <div className="two-column">
             <InfoSection
               title="灵宠资源"
-              rows={recordRows(spirit?.resource, ['playerId', 'spiritSoul', 'tianjiTalisman', 'dailyRecoveryUsed', 'dailyIntelFreeUsed', 'dailyIntelTalismanUsed', 'resourceVersion'])}
+              rows={recordRows(spirit?.resource, ['playerId', 'spiritSoul', 'dailyRecoveryUsed', 'dailyIntelFreeUsed', 'dailyIntelTalismanUsed', 'resourceVersion'])}
             />
             <InfoSection
               title="灵宠配置"

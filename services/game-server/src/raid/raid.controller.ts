@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger'
 import type {
   ClientRaidActionRequest,
   ClientRaidActionResponse,
+  ClientRaidBattleReplayResponse,
   ClientRaidDeepIntelResponse,
   ClientRaidOrderMessageRequest,
   ClientRaidOrderMessageResponse,
@@ -91,12 +92,31 @@ export class RaidController {
       messageTemplateId: body.messageTemplateId,
     });
   }
+
+  @Get('raid-orders/:orderId/battle-replay')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Readonly raid battle replay payload.' })
+  async getRaidBattleReplay(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Param('orderId') orderId: string,
+  ): Promise<ClientRaidBattleReplayResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.raidTargetService.getRaidBattleReplay({
+      playerId: currentPlayer.playerId,
+      raidOrderId: orderId,
+    });
+  }
 }
 
 defineRouteParamTypes(RaidController.prototype, 'getRaidTargetDetail', [Object, String]);
 defineRouteParamTypes(RaidController.prototype, 'getRaidTargetDeepIntel', [Object, String]);
 defineRouteParamTypes(RaidController.prototype, 'raidTarget', [Object, Object, Object]);
 defineRouteParamTypes(RaidController.prototype, 'createRaidOrderMessage', [Object, String, Object]);
+defineRouteParamTypes(RaidController.prototype, 'getRaidBattleReplay', [Object, String]);
 
 function defineRouteParamTypes(target: object, methodName: string, paramTypes: unknown[]): void {
   const defineMetadata = Reflect.defineMetadata as

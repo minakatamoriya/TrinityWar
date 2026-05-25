@@ -272,6 +272,11 @@ async function verifyRaidAndMessage(user1: DevLoginResult, user2: DevLoginResult
   });
   const orderId = raidResponse.result.orderId;
   assert(orderId, 'raid order id should be returned');
+  assert(raidResponse.result.battleReplay, 'raid response should include battle replay');
+  assertEqual(raidResponse.result.battleReplay.orderId, orderId, 'battle replay order id');
+  assert(raidResponse.result.battleReplay.steps.length >= 5, 'battle replay should include playback steps');
+  assertAtLeast(raidResponse.result.battleReplay.attacker.maxHp, 1, 'battle replay attacker max hp');
+  assertAtLeast(raidResponse.result.battleReplay.defender.maxHp, 1, 'battle replay defender max hp');
 
   const orderBeforeSettlement = await prisma.raidOrder.findUniqueOrThrow({
     where: { id: orderId },
@@ -298,8 +303,17 @@ async function verifyRaidAndMessage(user1: DevLoginResult, user2: DevLoginResult
 
   const settlement = await prisma.raidSettlement.findUniqueOrThrow({
     where: { raidOrderId: orderId },
-    select: { lootGold: true, reportSummary: true },
+    select: { lootGold: true, reportSummary: true, battleReplayJson: true },
   });
+  const savedReplay = settlement.battleReplayJson as { orderId?: string; steps?: unknown[] } | null;
+  assert(savedReplay, 'raid settlement should persist battle replay json');
+  assertEqual(savedReplay.orderId, orderId, 'persisted battle replay order id');
+  assert(Array.isArray(savedReplay.steps) && savedReplay.steps.length >= 5, 'persisted battle replay should include playback steps');
+  const replayResponse = await fetchJson<{ replay: { orderId: string; steps: unknown[] } }>(`${CLIENT_API_PREFIX}/raid-orders/${orderId}/battle-replay`, {
+    headers: authHeaders(user1),
+  });
+  assertEqual(replayResponse.replay.orderId, orderId, 'readonly battle replay order id');
+  assert(replayResponse.replay.steps.length >= 5, 'readonly battle replay should include playback steps');
   const orderAfterSettlement = await prisma.raidOrder.findUniqueOrThrow({
     where: { id: orderId },
     select: { status: true },

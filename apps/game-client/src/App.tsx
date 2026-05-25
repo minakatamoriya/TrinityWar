@@ -6,6 +6,7 @@ import type {
   ClientCollectFieldResponse,
   ClientRaidActionRequest,
   ClientRaidDeepIntelResponse,
+  ClientRaidBattleReplay,
   ClientFactionDonateRequest,
   ClientBuildingUpgradeId,
   ClientRaidTarget,
@@ -22,7 +23,7 @@ import type {
   ClientUpgradeBuildingRequest,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, updateFarmBoard, upgradeClientBuilding } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidBattleReplay, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, updateFarmBoard, upgradeClientBuilding } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
@@ -33,8 +34,12 @@ import { HomeScene } from './ui/scenes/HomeScene';
 import { ReportScene } from './ui/scenes/ReportScene';
 import { SeedSelectionScreen } from './ui/scenes/SeedSelectionScreen';
 import { GlobalFeatureModal } from './ui/common/GlobalFeatureModal';
+import { FarmBoardEditorModal } from './ui/common/FarmBoardEditorModal';
+import { GlobalFeatureModalContent } from './ui/common/GlobalFeatureModalContent';
+import { SeedRewardModal, type SeedRewardModalItem } from './ui/common/SeedRewardModal';
 import { CharacterDialogProvider } from './dialog/CharacterDialogProvider';
 import { useCharacterDialog } from './dialog/useCharacterDialog';
+import { RaidBattleScreen } from './battle/RaidBattleScreen';
 
 type RaidHubTabKey = 'targets' | 'follows' | 'reports' | 'warrants';
 type FactionTabKey = 'overview' | 'donate' | 'rank';
@@ -80,12 +85,7 @@ interface SeedRewardModalState {
   title: string;
   summary: string;
   confirmAction?: 'claim-faction-stipend' | 'claim-spirit-ad-reward';
-  items: Array<{
-    seedId?: string;
-    itemId?: string;
-    quantity: number;
-    label?: string;
-  }>;
+  items: SeedRewardModalItem[];
 }
 
 interface SeedSelectionState {
@@ -530,6 +530,9 @@ function App(): JSX.Element {
   const [globalItemInventory, setGlobalItemInventory] = useState<Record<string, number>>(emptyGlobalItemInventory);
   const [unlockedSeedIds, setUnlockedSeedIds] = useState<string[]>(defaultUnlockedSeedIds);
   const [seedRewardModal, setSeedRewardModal] = useState<SeedRewardModalState | null>(null);
+  const [pendingRaidRewardModal, setPendingRaidRewardModal] = useState<SeedRewardModalState | null>(null);
+  const [raidBattleReplay, setRaidBattleReplay] = useState<ClientRaidBattleReplay | null>(null);
+  const [raidBattleAutoStart, setRaidBattleAutoStart] = useState(true);
   const [seedSelectionState, setSeedSelectionState] = useState<SeedSelectionState | null>(null);
   const [seedCodexState, setSeedCodexState] = useState<SeedCodexState | null>(null);
   const [armyQueueRefreshReadyAt, setArmyQueueRefreshReadyAt] = useState<string | null>(null);
@@ -1394,8 +1397,24 @@ function App(): JSX.Element {
       });
       applySpiritMutationResult(result);
       showToast(result.summary, 'success');
-    } catch {
-      showToast('当前无法突破灵宠，请确认兽魂是否足够。', 'error');
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'STATE_VERSION_CONFLICT') {
+        const nextSpirit = await loadSpiritState().catch(() => null);
+        if (nextSpirit) {
+          setSpiritState(nextSpirit);
+          setGlobalItemInventory((current) => ({
+            ...current,
+            tianjiTalisman: nextSpirit.tianjiTalisman,
+          }));
+        }
+        showToast('灵宠状态刚刚发生变化，已刷新数据。请重新点击突破。', 'error');
+      } else if (error instanceof ApiError && error.code === 'CONFLICT') {
+        showToast('当前兽魂不足，暂时无法突破。', 'error');
+      } else if (error instanceof ApiError && error.message) {
+        showToast(error.message, 'error');
+      } else {
+        showToast('当前无法突破灵宠，请确认兽魂是否足够。', 'error');
+      }
     } finally {
       setPendingActionKey(null);
     }
@@ -1921,7 +1940,7 @@ function App(): JSX.Element {
 
         try {
           const response = await raidClientTarget(input);
-          const nextSpiritState = await loadSpiritState();
+          const nextSpiritState = await loadSpiritState().catch(() => null);
           setViewModel((current) => {
             if (!current) {
               return current;
@@ -1933,10 +1952,16 @@ function App(): JSX.Element {
               scenes: response.scenes,
             };
           });
-          setSpiritState(nextSpiritState);
+          if (nextSpiritState) {
+            setSpiritState(nextSpiritState);
+            setGlobalItemInventory((current) => ({
+              ...current,
+              tianjiTalisman: nextSpiritState.tianjiTalisman,
+            }));
+          }
           setSelectedRaidTargetId(response.scenes.raid.targets[0]?.id ?? '');
 
-          setSeedRewardModal({
+          const raidRewardModal: SeedRewardModalState = {
             title: '掠夺所得',
             summary: response.result.overflowGold > 0
               ? `本次掠夺 ${formatNumber(response.result.goldLoot)} 金币，其中 ${formatNumber(response.result.depositedGold)} 已入库，另有 ${formatNumber(response.result.overflowGold)} 转入待领取，战损 ${formatNumber(response.result.casualties)} 兵。`
@@ -1953,16 +1978,15 @@ function App(): JSX.Element {
                 label: reward.label,
               })),
             ],
-          });
-
-          setSeedRewardModal((current) => current ? {
-            ...current,
+          };
+          const settledRaidRewardModal: SeedRewardModalState = {
+            ...raidRewardModal,
             title: '掠夺所得',
             summary: response.result.overflowGold > 0
               ? `本次掠夺 ${formatNumber(response.result.goldLoot)} 金币，其中 ${formatNumber(response.result.depositedGold)} 已入库，另有 ${formatNumber(response.result.overflowGold)} 转入待领取。${response.result.reportSummary}${response.result.battleEvents?.length ? ` 关键事件：${response.result.battleEvents.map((event) => event.label).join('、')}` : ''}`
               : `获得 ${formatNumber(response.result.goldLoot)} 金币。${response.result.reportSummary}${response.result.battleEvents?.length ? ` 关键事件：${response.result.battleEvents.map((event) => event.label).join('、')}` : ''}`,
-            items: current.items.map((item) => item.seedId === 'raid-gold' ? { ...item, label: '金币' } : item),
-          } : current);
+            items: raidRewardModal.items.map((item) => item.seedId === 'raid-gold' ? { ...item, label: '金币' } : item),
+          };
 
           if (response.result.rewards.length > 0) {
             setSeedInventory((current) => {
@@ -1982,14 +2006,48 @@ function App(): JSX.Element {
           }
 
           setRaidTargetModal(null);
-        } catch {
-          showToast(`${actionContext} 当前无法完成掠夺，请稍后重试。`, 'error');
+          if (response.result.battleReplay) {
+            setPendingRaidRewardModal(settledRaidRewardModal);
+            setRaidBattleAutoStart(true);
+            setRaidBattleReplay(response.result.battleReplay);
+          } else {
+            setSeedRewardModal(settledRaidRewardModal);
+          }
+        } catch (error) {
+          if (error instanceof ApiError && error.code === 'RAID_NOT_ALLOWED') {
+            showToast(error.message, 'error');
+          } else {
+            showToast(`${actionContext} 当前无法完成掠夺，请稍后重试。`, 'error');
+          }
         } finally {
           setPendingActionKey(null);
         }
       };
 
       void runRaid();
+      return;
+    }
+
+    if (action.label === '战斗回放' && action.context) {
+      const runReplay = async (): Promise<void> => {
+        if (pendingActionKey === 'raid:battle-replay') {
+          return;
+        }
+
+        setPendingActionKey('raid:battle-replay');
+        try {
+          const response = await loadRaidBattleReplay(action.context ?? '');
+          setPendingRaidRewardModal(null);
+          setRaidBattleAutoStart(false);
+          setRaidBattleReplay(response.replay);
+        } catch {
+          showToast('当前无法读取战斗回放，请稍后重试。', 'error');
+        } finally {
+          setPendingActionKey(null);
+        }
+      };
+
+      void runReplay();
       return;
     }
 
@@ -2280,12 +2338,6 @@ function App(): JSX.Element {
             </div>
           ) : null}
 
-          {toast ? (
-            <div className={`top-toast top-toast-${toast.tone}`}>
-              <span>{toast.message}</span>
-            </div>
-          ) : null}
-
             <section className="global-resource-bar">
               <div className="global-resource-pill global-gold-pill">
                 <span className="global-gold-icon" aria-hidden="true">金</span>
@@ -2475,134 +2527,36 @@ function App(): JSX.Element {
               onClose={() => setGlobalFeatureModal(null)}
               title={globalFeatureModal.tianjiShop ? `天机符库存 x${formatNumber(tianjiTalismanCount)}` : globalFeatureModal.title}
             >
-              {globalFeatureModal.contributionTiers ? (
-                <div className="contribution-tier-list">
-                  {globalFeatureModal.contributionTiers.map((tier) => (
-                    <article className="contribution-tier-card" key={tier.threshold}>
-                      <div>
-                        <span>{tier.threshold}</span>
-                        <strong>{tier.label}</strong>
-                      </div>
-                      <ul>
-                        {tier.rewards.map((reward) => (
-                          <li key={reward}>{reward}</li>
-                        ))}
-                      </ul>
-                    </article>
-                  ))}
-                </div>
-              ) : null}
-              {globalFeatureModal.seasonSignIn ? (
-                <div className="season-signin-panel">
-                  <div className="season-signin-summary">
-                    <span>累计 {seasonSignInRecord.claimedDays.length}/28 天</span>
-                    <strong>今日 x{seasonSignInTodayReward}</strong>
-                  </div>
-                  <div className="season-signin-milestones" aria-label="累计签到宝箱">
-                    {seasonSignInMilestones.map((milestone) => (
-                      <div className={`season-signin-milestone ${milestone.reached ? 'reached' : ''}`} key={milestone.dayCount}>
-                        <span className="season-signin-milestone-icon" aria-hidden="true">箱</span>
-                        <div>
-                          <strong>{milestone.title}</strong>
-                          <span>累计 {milestone.dayCount} 天</span>
-                        </div>
-                        <em>{milestone.reached ? '已达成' : `差 ${milestone.remainingDays} 天`}</em>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="season-signin-rule">1-6 天 x1，7-13 天 x2，14-20 天 x3，21 天后 x4；宝箱奖励待定。</p>
-                  <div className="season-signin-grid" aria-label="赛季签到日历">
-                    {seasonSignInDays.map((day) => (
-                      <div
-                        className={[
-                          'season-signin-day',
-                          day.claimed ? 'claimed' : '',
-                          day.current ? 'current' : '',
-                          day.future ? 'future' : '',
-                          day.missed ? 'missed' : '',
-                        ].filter(Boolean).join(' ')}
-                        key={day.day}
-                      >
-                        <span>{day.day}</span>
-                        <strong>{day.missed ? '未签' : `符 x${day.reward}`}</strong>
-                      </div>
-                    ))}
-                  </div>
-                  <button className="secondary-button" disabled={seasonSignInClaimedToday} onClick={handleClaimSeasonSignIn} type="button">
-                    {seasonSignInClaimedToday ? '今日已签到' : '签到领取'}
-                  </button>
-                </div>
-              ) : null}
-              {globalFeatureModal.tianjiShop && spiritState?.shop ? (
-                <div className="tianji-shop-panel">
-                  <button
-                    className="secondary-button"
-                    disabled={pendingActionKey === 'spirit:ad-reward' || spiritState.shop.adReward.usedToday >= spiritState.shop.adReward.dailyLimit}
-                    onClick={() => {
-                      void handleClaimSpiritAdRewardAction();
-                    }}
-                    type="button"
-                  >
-                    看广告 +{spiritState.shop.adReward.tianjiTalisman} 天机符
-                  </button>
-                  <p className="panel-text">今日广告 {spiritState.shop.adReward.usedToday}/{spiritState.shop.adReward.dailyLimit}，完成后会先弹出统一领奖框，确认后才入账天机符。</p>
-                  <div className="task-list tianji-shop-list">
-                    {spiritState.shop.items.map((item) => (
-                      <div className="task-row tianji-shop-row" key={item.itemId}>
-                        <span className="task-index">{item.priceTianjiTalisman}</span>
-                        <div>
-                          <div className="task-row-head">
-                            <strong>{item.label}</strong>
-                            <span className="task-state-badge">{item.limitLabel}{item.remainingPurchases === null ? '' : ` · 剩 ${item.remainingPurchases}`}</span>
-                          </div>
-                          <p>{item.description}</p>
-                        </div>
-                        <button
-                          className="secondary-button small"
-                          disabled={pendingActionKey === `spirit:shop:${item.itemId}` || spiritState.tianjiTalisman < item.priceTianjiTalisman || item.remainingPurchases === 0}
-                          onClick={() => {
-                            void handleBuySpiritShopItemAction(item.itemId);
-                          }}
-                          type="button"
-                        >
-                          兑换
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
+              <GlobalFeatureModalContent
+                contributionTiers={globalFeatureModal.contributionTiers}
+                seasonSignIn={globalFeatureModal.seasonSignIn ? {
+                  record: seasonSignInRecord,
+                  todayReward: seasonSignInTodayReward,
+                  milestones: seasonSignInMilestones,
+                  days: seasonSignInDays,
+                  claimedToday: seasonSignInClaimedToday,
+                  onClaim: handleClaimSeasonSignIn,
+                } : undefined}
+                tianjiShop={globalFeatureModal.tianjiShop && spiritState?.shop ? {
+                  spirit: { ...spiritState, shop: spiritState.shop },
+                  pendingActionKey,
+                  onClaimAdReward: () => {
+                    void handleClaimSpiritAdRewardAction();
+                  },
+                  onBuyItem: (itemId) => {
+                    void handleBuySpiritShopItemAction(itemId);
+                  },
+                } : undefined}
+              />
             </GlobalFeatureModal>
           ) : null}
           {farmBoardEditor ? (
-            <div className="modal-backdrop farm-board-backdrop" role="presentation">
-              <div className="modal-card transfer-card farm-board-modal" role="dialog" aria-modal="true" aria-label="农场留言板">
-                <div>
-                  <div>
-                    <p className="eyebrow">农场留言板</p>
-                    <h3>修改留言</h3>
-                  </div>
-                </div>
-                <textarea
-                  className="farm-board-textarea"
-                  maxLength={40}
-                  onChange={(event) => setFarmBoardEditor((current) => current ? { ...current, message: event.target.value } : current)}
-                  placeholder="写一句给来访者看的农场留言"
-                  value={farmBoardEditor.message}
-                />
-                <div className="transfer-foot-row farm-board-modal-foot">
-                  <span>{Array.from(farmBoardEditor.message).length}/40</span>
-                  <button
-                    className="secondary-button"
-                    disabled={farmBoardEditor.saving}
-                    onClick={handleCloseFarmBoardEditor}
-                    type="button"
-                  >
-                    {farmBoardEditor.saving ? '保存中...' : '关闭'}
-                  </button>
-                </div>
-              </div>
-            </div>
+            <FarmBoardEditorModal
+              message={farmBoardEditor.message}
+              onChangeMessage={(message) => setFarmBoardEditor((current) => current ? { ...current, message } : current)}
+              onClose={handleCloseFarmBoardEditor}
+              saving={farmBoardEditor.saving}
+            />
           ) : null}
           {seedCodexState && selectedSeedCodexItem ? (
             <section className="seed-codex-screen" role="dialog" aria-modal="true" aria-label="灵植图鉴">
@@ -2680,37 +2634,46 @@ function App(): JSX.Element {
             </section>
           ) : null}
           {seedRewardModal ? (
-            <div className="seed-reward-modal" role="status" aria-live="polite">
-              <div className="seed-reward-card">
-                <p className="eyebrow">{seedRewardModal.title}</p>
-                <h3>{seedRewardModal.title}</h3>
-                {seedRewardModal.summary ? <p>{seedRewardModal.summary}</p> : null}
-                <div className="seed-reward-list">
-                  {seedRewardModal.items.map((item) => {
-                    const seed = item.seedId ? seedCatalogMap.get(item.seedId) : undefined;
-                    return (
-                      <div className="seed-reward-item" key={`${item.seedId ?? item.itemId ?? item.label ?? 'default'}-${item.quantity}`}>
-                        <strong>{seed?.name ?? item.label ?? item.itemId ?? item.seedId ?? '奖励'}</strong>
-                        <span>x {item.quantity}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="transfer-foot-row seed-reward-actions">
-                  <button className="secondary-button" disabled={pendingActionKey === 'faction:stipend'} onClick={() => {
-                    if (seedRewardModal.confirmAction === 'claim-faction-stipend') {
-                      void handleConfirmFactionStipendClaim();
-                      return;
-                    }
-                    if (seedRewardModal.confirmAction === 'claim-spirit-ad-reward') {
-                      void handleConfirmSpiritAdRewardClaim();
-                      return;
-                    }
+            <SeedRewardModal
+              confirming={pendingActionKey === 'faction:stipend' || pendingActionKey === 'spirit:ad-reward'}
+              getItemLabel={(item) => {
+                const seed = item.seedId ? seedCatalogMap.get(item.seedId) : undefined;
+                return seed?.name ?? item.label ?? item.itemId ?? item.seedId ?? '奖励';
+              }}
+              items={seedRewardModal.items}
+              onConfirm={() => {
+                if (seedRewardModal.confirmAction === 'claim-faction-stipend') {
+                  void handleConfirmFactionStipendClaim();
+                  return;
+                }
+                if (seedRewardModal.confirmAction === 'claim-spirit-ad-reward') {
+                  void handleConfirmSpiritAdRewardClaim();
+                  return;
+                }
 
-                    setSeedRewardModal(null);
-                  }} type="button">{pendingActionKey === 'faction:stipend' || pendingActionKey === 'spirit:ad-reward' ? '收取中...' : '确认'}</button>
-                </div>
-              </div>
+                setSeedRewardModal(null);
+              }}
+              summary={seedRewardModal.summary}
+              title={seedRewardModal.title}
+            />
+          ) : null}
+          {raidBattleReplay ? (
+            <RaidBattleScreen
+              autoStart={raidBattleAutoStart}
+              onComplete={() => {
+                setRaidBattleReplay(null);
+                if (pendingRaidRewardModal) {
+                  setSeedRewardModal(pendingRaidRewardModal);
+                }
+                setPendingRaidRewardModal(null);
+                setRaidBattleAutoStart(true);
+              }}
+              replay={raidBattleReplay}
+            />
+          ) : null}
+          {toast ? (
+            <div className={`top-toast top-toast-${toast.tone}`}>
+              <span>{toast.message}</span>
             </div>
           ) : null}
         </div>

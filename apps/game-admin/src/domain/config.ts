@@ -10,6 +10,7 @@ export const seedConfigFields: ConfigField[] = [
   { key: 'ripeWindowSeconds', label: '丰熟窗口秒数 / ripeWindowSeconds', inputType: 'number' },
   { key: 'baseYieldGold', label: '基础产金 / baseYieldGold', inputType: 'number' },
   { key: 'harvestSeedReturn', label: '收获返种 / harvestSeedReturn', inputType: 'number' },
+  { key: 'sortOrder', label: '排序 / sortOrder', inputType: 'number' },
   { key: 'strategyNote', label: '策略说明 / strategyNote', inputType: 'textarea', nullable: true },
   { key: 'lore', label: '背景 / lore', inputType: 'textarea', nullable: true },
 ];

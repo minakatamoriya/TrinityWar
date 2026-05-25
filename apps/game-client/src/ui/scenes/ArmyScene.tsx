@@ -46,7 +46,9 @@ const codexRarityGroups = [
   { key: 'legend', label: '传说', rarity: 'legendary' as const },
 ];
 
-const MAX_QUICK_RECOVERY_PER_DAY = 3;
+const DAILY_FREE_RECOVERY_LIMIT = 3;
+const DAILY_TALISMAN_RECOVERY_LIMIT = 3;
+const MAX_QUICK_RECOVERY_PER_DAY = DAILY_FREE_RECOVERY_LIMIT + DAILY_TALISMAN_RECOVERY_LIMIT;
 const SPIRIT_MAX_LEVEL = 50;
 const traitChoices: Array<{ code: ClientSpiritTraitCode; label: string }> = [
   { code: 'claw', label: '利爪' },
@@ -69,16 +71,9 @@ function formatDuration(seconds: number): string {
   const safeSeconds = Math.max(Math.floor(seconds), 0);
   const hours = Math.floor(safeSeconds / 3600);
   const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainingSeconds = safeSeconds % 60;
 
-  return `${hours}小时${String(minutes).padStart(2, '0')}分`;
-}
-
-function formatClockTime(timestampMs: number): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date(timestampMs));
+  return `${hours}小时${String(minutes).padStart(2, '0')}分${String(remainingSeconds).padStart(2, '0')}秒`;
 }
 
 function getPassiveExpPerMinute(level: number): number {
@@ -323,13 +318,51 @@ function getHealthText(slot: ClientSpiritSlot): string {
 
 function getHealthStatus(slot: ClientSpiritSlot): string {
   const ratio = getHealthRatio(slot);
+  if (ratio <= 0) {
+    return '不可出战';
+  }
   if (ratio >= 70) {
-    return '状态正常';
+    return '正常：攻防 100%';
   }
   if (ratio >= 30) {
-    return '可出战，但会明显吃亏';
+    return '低迷：攻防 70%';
   }
-  return '重伤作战，建议先恢复';
+  return '重伤：攻防 30%';
+}
+
+function getRecoveryPlan(dailyRecoveryUsed: number): {
+  freeRemaining: number;
+  talismanRemaining: number;
+  nextTalismanCost: number;
+  totalRemaining: number;
+} {
+  const used = Math.min(Math.max(Math.floor(dailyRecoveryUsed), 0), MAX_QUICK_RECOVERY_PER_DAY);
+  const freeRemaining = Math.max(DAILY_FREE_RECOVERY_LIMIT - used, 0);
+  const talismanUsed = Math.max(used - DAILY_FREE_RECOVERY_LIMIT, 0);
+  const talismanRemaining = Math.max(DAILY_TALISMAN_RECOVERY_LIMIT - talismanUsed, 0);
+  const nextTalismanCost = freeRemaining > 0 || talismanRemaining <= 0 ? 0 : talismanUsed + 1;
+
+  return {
+    freeRemaining,
+    talismanRemaining,
+    nextTalismanCost,
+    totalRemaining: freeRemaining + talismanRemaining,
+  };
+}
+
+function getRecoveryStatusText(plan: ReturnType<typeof getRecoveryPlan>, isFullHp: boolean): string {
+  const nextCost = plan.nextTalismanCost > 0 ? ` / 下次消耗 ${plan.nextTalismanCost} 天机符` : '';
+  return `${isFullHp ? '已满血 / ' : ''}免费恢复剩余 ${plan.freeRemaining} 次 / 天机符恢复剩余 ${plan.talismanRemaining} 次${nextCost}`;
+}
+
+function getRecoveryButtonText(plan: ReturnType<typeof getRecoveryPlan>): string {
+  if (plan.freeRemaining > 0) {
+    return '免费恢复';
+  }
+  if (plan.nextTalismanCost > 0) {
+    return `天机符恢复 x${plan.nextTalismanCost}`;
+  }
+  return '今日恢复已用完';
 }
 
 function getFactionBonusLabel(faction: string): string {
@@ -438,16 +471,12 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const occupiedCount = slots.filter((slot) => slot.spiritId).length;
   const isStableFull = occupiedCount >= slots.length;
   const availableTianjiTalisman = spirit.tianjiTalisman;
-  const quickRecoverRemaining = Math.max(MAX_QUICK_RECOVERY_PER_DAY - spirit.dailyRecoveryUsed, 0);
+  const recoveryPlan = getRecoveryPlan(spirit.dailyRecoveryUsed);
   const codexGroups = codexRarityGroups.map((group) => ({
     ...group,
     pets: spirit.codex.filter((entry) => entry.definition.rarity === group.rarity),
   }));
   const isLevelFlashActive = Date.now() - levelFlashToken < 700;
-  const selectedSlotAccelerationEndsAt = selectedSlot?.satiatedRemainingSeconds
-    ? liveNowMs + selectedSlot.satiatedRemainingSeconds * 1000
-    : null;
-
   useEffect(() => {
     if (!selectedSlot?.spiritId) {
       previousSelectedSlotRef.current = selectedSlot ?? null;
@@ -635,7 +664,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                     <div className="seed-codex-stat-row"><strong>天机符</strong><span>{formatNumber(availableTianjiTalisman)}</span></div>
                     <div className="seed-codex-stat-row"><strong>当前血量</strong><span>{getHealthText(selectedSlot)}</span></div>
                     <div className="seed-codex-stat-row"><strong>当前状态</strong><span>{getHealthStatus(selectedSlot)}</span></div>
-                    <div className="seed-codex-stat-row"><strong>恢复情况</strong><span>{getHealthRatio(selectedSlot) >= 100 ? `自然满血 / 今日快速恢复剩余 ${quickRecoverRemaining} 次` : `今日快速恢复剩余 ${quickRecoverRemaining} 次`}</span></div>
+                    <div className="seed-codex-stat-row"><strong>恢复情况</strong><span>{getRecoveryStatusText(recoveryPlan, getHealthRatio(selectedSlot) >= 100)}</span></div>
                   </div>
                   <div className="spirit-progress-block">
                     <div className="spirit-progress-head">
@@ -671,7 +700,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                       <div className="seed-codex-stat-row"><strong>当前经验速度</strong><span>{getExpGainText(selectedSlot)}</span></div>
                       <div className="seed-codex-stat-row"><strong>自动加速</strong><span>{(selectedSlot.satiatedRemainingSeconds ?? 0) > 0 ? '自动加速中' : '未加速'}</span></div>
                       <div className="seed-codex-stat-row"><strong>剩余加速时间</strong><span>{formatDuration(selectedSlot.satiatedRemainingSeconds ?? 0)}</span></div>
-                      <div className="seed-codex-stat-row"><strong>粮尽时间</strong><span>{selectedSlotAccelerationEndsAt ? formatClockTime(selectedSlotAccelerationEndsAt) : '当前未安排'}</span></div>
                       <div className="seed-codex-stat-row"><strong>每次投喂</strong><span>固定消耗 10 灵根，追加 2 小时自动加速，可重复叠加</span></div>
                     </div>
                     {selectedSlot.isAtBreakthroughNode ? <p className="panel-text">突破后会立刻恢复挂机。投喂现在只负责续上自动加速，不再瞬间增加经验。</p> : <p className="panel-text">灵根只负责续上自动加速，经验按时间持续增长。粮食快用完时再来补就行。</p>}
@@ -743,7 +771,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                   <div className="spirit-pet-action-grid">
                     <button className="primary-button" disabled={busy || selectedSlot.isMain} onClick={() => onSetMain(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">设为主位</button>
                     <button className="secondary-button" disabled type="button">挂机升级中</button>
-                    <button className="secondary-button" disabled={busy || getHealthRatio(selectedSlot) >= 100 || quickRecoverRemaining <= 0 || availableTianjiTalisman <= 0} onClick={() => onRecover(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">天机符恢复</button>
+                    <button className="secondary-button" disabled={busy || getHealthRatio(selectedSlot) >= 100 || recoveryPlan.totalRemaining <= 0 || availableTianjiTalisman < recoveryPlan.nextTalismanCost} onClick={() => onRecover(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">{getRecoveryButtonText(recoveryPlan)}</button>
                     <button className="ghost-button" disabled={busy || selectedSlot.isMain} onClick={() => onDissolve(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">解散（返还 35% 兽魂）</button>
                   </div>
                 </>

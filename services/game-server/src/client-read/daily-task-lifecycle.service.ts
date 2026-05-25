@@ -33,7 +33,7 @@ export class DailyTaskLifecycleService {
           target: taskDefinition.objective.count,
           status: 'IN_PROGRESS',
           rewardGold: getDailyTaskGoldReward(taskId),
-          actionScene: DAILY_TASK_SCENE_MAP[taskDefinition.objective.type] ?? 'home',
+          actionScene: getDailyTaskActionScene(taskDefinition.objective.type),
           claimedAt: null,
         },
         update: {},
@@ -73,8 +73,17 @@ const DAILY_TASK_SCENE_MAP: Record<string, string> = {
   'faction-interaction': 'faction',
   'faction-donate': 'faction',
   'upgrade-spirit': 'raid',
+  'upgrade-territory-tech': 'building',
   'upgrade-building': 'building',
   'upgrade-core-line': 'building',
   'upgrade-core-building': 'building',
   'farm-cycle': 'farm',
 };
+
+export function getDailyTaskActionScene(objectiveType: string | undefined, fallback = 'home'): string {
+  if (!objectiveType) {
+    return fallback;
+  }
+
+  return DAILY_TASK_SCENE_MAP[objectiveType] ?? fallback;
+}

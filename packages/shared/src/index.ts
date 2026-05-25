@@ -475,6 +475,8 @@ export interface AdminListResponse<T> {
 
 export interface AdminPlayerOverviewResponse {
   identity: Record<string, unknown>;
+  resources?: Record<string, unknown> | null;
+  spell?: Record<string, unknown> | null;
   wallet: Record<string, unknown> | null;
   building: Record<string, unknown> | null;
   army: Record<string, unknown> | null;
@@ -770,9 +772,61 @@ export interface ClientRaidRewardItem {
 }
 
 export interface ClientRaidBattleEvent {
-  type: 'dodge' | 'execute' | 'element' | 'critical' | 'lifesteal' | 'counter' | 'damage' | 'soul-drop';
+  type: 'dodge' | 'execute' | 'element' | 'critical' | 'lifesteal' | 'counter' | 'damage' | 'soul-drop' | 'status';
   label: string;
   description: string;
+}
+
+export type ClientRaidBattleSide = 'attacker' | 'defender';
+export type ClientRaidBattleFloatingTone = 'damage' | 'miss' | 'crit' | 'buff';
+
+export interface ClientRaidBattleUnitSnapshot {
+  side: ClientRaidBattleSide;
+  playerName: string;
+  spiritId: string | null;
+  spiritName: string;
+  rarity: string | null;
+  element: ClientSpiritElement | null;
+  level: number;
+  hpBefore: number;
+  hpAfter: number;
+  maxHp: number;
+  attack: number;
+  defense: number;
+  healthStatus?: 'normal' | 'low' | 'injured' | 'down';
+  healthStatusLabel?: string;
+  attackDefenseCoefficient?: number;
+  traits?: Array<{
+    code: string;
+    label: string;
+    value: number;
+    valueType: 'percent' | 'flat' | 'ratio';
+    source: 'spirit' | 'equipment' | 'buff' | 'faction' | 'temporary';
+    visible: boolean;
+  }>;
+}
+
+export type ClientRaidBattleStep =
+  | { type: 'enter'; durationMs: number }
+  | { type: 'clash'; durationMs: number }
+  | { type: 'floatingText'; side: ClientRaidBattleSide; text: string; tone: ClientRaidBattleFloatingTone; durationMs: number }
+  | { type: 'hpChange'; side: ClientRaidBattleSide; from: number; to: number; max: number; durationMs: number }
+  | { type: 'return'; durationMs: number }
+  | { type: 'result'; title: string; summary: string; durationMs: number };
+
+export interface ClientRaidBattleReplay {
+  orderId: string;
+  result: 'WIN' | 'LOSS' | 'DRAW';
+  title: string;
+  summary: string;
+  attacker: ClientRaidBattleUnitSnapshot;
+  defender: ClientRaidBattleUnitSnapshot;
+  events: ClientRaidBattleEvent[];
+  steps: ClientRaidBattleStep[];
+  rewardsPreview: {
+    goldLoot: number;
+    items: ClientRaidRewardItem[];
+  };
 }
 
 export interface ClientRaidActionResponse {
@@ -799,6 +853,7 @@ export interface ClientRaidActionResponse {
     casualties: number;
     rewards: ClientRaidRewardItem[];
     battleEvents?: ClientRaidBattleEvent[];
+    battleReplay?: ClientRaidBattleReplay;
     attackerHpAfter?: number | null;
     defenderHpAfter?: number | null;
     protectedUntil: string;
@@ -959,6 +1014,7 @@ export interface ClientRaidDetail {
 }
 
 export interface ClientReportEntry {
+  orderId?: string;
   title: string;
   tag: string;
   tone: 'danger' | 'success' | 'neutral';
@@ -974,7 +1030,13 @@ export interface ClientReportEntry {
   unread?: boolean;
   revengeable?: boolean;
   raidMessage?: ClientRaidMessageSnapshot | null;
+  battleReplayAvailable?: boolean;
   actions: ClientSceneAction[];
+}
+
+export interface ClientRaidBattleReplayResponse {
+  app: string;
+  replay: ClientRaidBattleReplay;
 }
 
 export interface ClientFactionHero {

@@ -17,6 +17,7 @@ export function SeedConfigView(props: ConfigViewProps): JSX.Element {
           { label: '种子 ID', key: 'seedId' },
           { label: '名称', key: 'label' },
           { label: '稀有度', key: 'rarity' },
+          { label: '排序', key: 'sortOrder' },
           { label: '播种秒', key: 'seedSeconds' },
           { label: '生长秒', key: 'growSeconds' },
           { label: '成熟秒', key: 'matureSeconds' },

@@ -173,6 +173,7 @@ export interface SceneContentReadModel {
     text: string;
   }>;
   battleReports: Array<{
+    raidOrderId: string;
     title: string;
     summary: string;
     opponentPlayerId: string;
@@ -188,6 +189,7 @@ export interface SceneContentReadModel {
         lootGold: number;
         attackerLoss: number;
         defenderLoss: number;
+        battleReplayJson: unknown;
       } | null;
       raidMessage: {
         templateId: string;
@@ -517,6 +519,7 @@ export class ClientReadRepository {
       take: 10,
       select: {
         title: true,
+        raidOrderId: true,
         summary: true,
         opponentPlayerId: true,
         reportType: true,
@@ -535,6 +538,7 @@ export class ClientReadRepository {
                 lootGold: true,
                 attackerLoss: true,
                 defenderLoss: true,
+                battleReplayJson: true,
               },
             },
             raidMessage: {

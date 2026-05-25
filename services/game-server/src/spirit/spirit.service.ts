@@ -13,10 +13,11 @@ import { PrismaService } from '../prisma/prisma.service.js';
 
 const SPIRIT_SOUL_GOLD_PRICE = 100;
 const SPIRIT_MAX_LEVEL = 50;
-const SPIRIT_DAILY_RECOVERY_LIMIT = 3;
+const SPIRIT_DAILY_FREE_RECOVERY_LIMIT = 3;
+const SPIRIT_DAILY_TALISMAN_RECOVERY_LIMIT = 3;
+const SPIRIT_DAILY_RECOVERY_LIMIT = SPIRIT_DAILY_FREE_RECOVERY_LIMIT + SPIRIT_DAILY_TALISMAN_RECOVERY_LIMIT;
 const SPIRIT_DISSOLVE_REFUND_RATIO = 0.35;
 const SPIRIT_LEVEL_EXP_REQUIRED = 10_000;
-const SPIRIT_ROOT_EXP_BPS = 50;
 const SPIRIT_ROOT_PER_SATIATED_HOUR = 5;
 const SPIRIT_FEED_ONCE_SECONDS = 2 * 60 * 60;
 const SPIRIT_SATIATED_EXP_BONUS_BPS = 5000;
@@ -465,7 +466,10 @@ export class SpiritService {
           select: {
             id: true,
             level: true,
+            exp: true,
             breakthroughStage: true,
+            satiatedUntil: true,
+            lastExpSettledAt: true,
             slotVersion: true,
             spiritDefinitionId: true,
             spiritDefinition: { select: { label: true } },
@@ -480,8 +484,10 @@ export class SpiritService {
       assertVersion('resourceVersion', request.resourceVersion, resource.resourceVersion);
       assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
 
-      const targetStage = request.targetStage ?? Math.floor(slot.level / 10);
-      if (!isBreakthroughLevel(slot.level) || targetStage !== Math.floor(slot.level / 10) || slot.breakthroughStage >= targetStage) {
+      const now = new Date();
+      const settled = settleSpiritProgress(slot, now);
+      const targetStage = request.targetStage ?? Math.floor(settled.level / 10);
+      if (!isBreakthroughLevel(settled.level) || targetStage !== Math.floor(settled.level / 10) || settled.breakthroughStage >= targetStage) {
         throw new BusinessError({ code: ErrorCode.BadRequest, message: 'Spirit is not at a pending breakthrough node.', statusCode: 400 });
       }
 
@@ -505,8 +511,11 @@ export class SpiritService {
       await client.playerSpiritSlot.update({
         where: { id: slot.id },
         data: {
+          level: settled.level,
+          exp: settled.exp,
           breakthroughStage: targetStage,
-          lastExpSettledAt: new Date(),
+          satiatedUntil: settled.satiatedUntil,
+          lastExpSettledAt: now,
           slotVersion: { increment: 1 },
         },
       });
@@ -1001,7 +1010,8 @@ export class SpiritService {
         });
       }
 
-      if (resource.tianjiTalisman <= 0) {
+      const talismanCost = getSpiritRecoveryTalismanCost(nextRecoveryUsed);
+      if (resource.tianjiTalisman < talismanCost) {
         throw new BusinessError({
           code: ErrorCode.Conflict,
           message: 'Insufficient Tianji talisman.',
@@ -1012,7 +1022,7 @@ export class SpiritService {
       await client.playerSpiritResource.update({
         where: { playerId },
         data: {
-          tianjiTalisman: { decrement: 1 },
+          tianjiTalisman: talismanCost > 0 ? { decrement: talismanCost } : undefined,
           dailyRecoveryUsed: nextRecoveryUsed,
           dailyRecoveryDateKey: getLocalDateKey(),
           resourceVersion: { increment: 1 },
@@ -1027,7 +1037,8 @@ export class SpiritService {
         },
       });
 
-      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 已恢复至满血。`);
+      const costText = talismanCost > 0 ? `，消耗天机符 x${talismanCost}` : '，本次使用免费恢复';
+      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 已恢复至满血${costText}。`);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
     });
@@ -1993,13 +2004,6 @@ function getWeekPeriodKey(source = new Date()): string {
   return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
-function randomIntInclusive(min: number, max: number): number {
-  const lower = Math.ceil(min);
-  const upper = Math.floor(max);
-
-  return Math.floor(Math.random() * (upper - lower + 1)) + lower;
-}
-
 function calculateSpiritMaxHp(baseHp: number, growthHp: number, level: number): number {
   return baseHp + Math.max(level - 1, 0) * growthHp;
 }
@@ -2178,6 +2182,14 @@ function getEffectiveDailyIntelTalismanUsed(resource: { dailyIntelDateKey: strin
 function getNextDailyRecoveryUsed(resource: { dailyRecoveryDateKey: string | null; dailyRecoveryUsed: number }): number {
   const currentUsed = getEffectiveDailyRecoveryUsed(resource);
   return currentUsed + 1;
+}
+
+function getSpiritRecoveryTalismanCost(nextRecoveryUsed: number): number {
+  if (nextRecoveryUsed <= SPIRIT_DAILY_FREE_RECOVERY_LIMIT) {
+    return 0;
+  }
+
+  return nextRecoveryUsed - SPIRIT_DAILY_FREE_RECOVERY_LIMIT;
 }
 
 function assertVersion(label: string, expected: number | undefined, actual: number): void {

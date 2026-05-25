@@ -1,4 +1,5 @@
 import type { FieldStatus, Prisma, SpiritElement } from '@prisma/client';
+import { getDailyTaskActionScene } from '../client-read/daily-task-lifecycle.service.js';
 import { DAILY_TASK_CONFIG, LAND_DEED_CONFIG } from '../lib/game-balance.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { DEFAULT_STARTER_SPIRIT_ID, SPIRIT_SLOT_COUNT } from './seed-data/spirits.js';
@@ -369,7 +370,7 @@ export class PlayerInitializationService {
           target,
           status,
           rewardGold: getDailyTaskGoldReward(taskId),
-          actionScene: DAILY_TASK_SCENE_MAP[taskDefinition.objective.type] ?? 'home',
+          actionScene: getDailyTaskActionScene(taskDefinition.objective.type),
           claimedAt: status === 'CLAIMED' ? new Date() : null,
         },
         update: resetExisting
@@ -378,7 +379,7 @@ export class PlayerInitializationService {
             target,
             status,
             rewardGold: getDailyTaskGoldReward(taskId),
-            actionScene: DAILY_TASK_SCENE_MAP[taskDefinition.objective.type] ?? 'home',
+            actionScene: getDailyTaskActionScene(taskDefinition.objective.type),
             claimedAt: status === 'CLAIMED' ? new Date() : null,
           }
           : {},
@@ -614,14 +615,3 @@ function getDailyTaskGoldReward(taskId: string): number {
   return typeof goldReward?.amount === 'number' ? goldReward.amount : 0;
 }
 
-const DAILY_TASK_SCENE_MAP: Record<string, string> = {
-  'collect-field': 'farm',
-  'start-cultivation': 'farm',
-  'faction-interaction': 'faction',
-  'faction-donate': 'faction',
-  'upgrade-spirit': 'raid',
-  'upgrade-building': 'building',
-  'upgrade-core-line': 'building',
-  'upgrade-core-building': 'building',
-  'farm-cycle': 'farm',
-};

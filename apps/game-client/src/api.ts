@@ -16,6 +16,7 @@
   type ClientFeedSpiritRequest,
   type ClientRaidActionRequest,
   type ClientRaidActionResponse,
+  type ClientRaidBattleReplayResponse,
   type ClientRaidDeepIntelResponse,
   type ClientDissolveSpiritRequest,
   type ClientFactionDonateRequest,
@@ -415,6 +416,33 @@ function buildApiUrl(path: string): string {
   return path.startsWith('/') ? `${apiBaseUrl}${path}` : `${apiBaseUrl}/${path}`;
 }
 
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly details?: unknown;
+
+  constructor(message: string, status: number, code?: string, details?: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+function toUserFacingApiMessage(message: string, code?: string): string {
+  if (code === 'RAID_NOT_ALLOWED') {
+    if (message.includes('no health')) {
+      return '主位灵宠当前 0 血，无法出战。请先恢复血量，或更换主位灵宠后再发起掠夺。';
+    }
+    if (message.includes('Main spirit is required')) {
+      return '当前没有可出战的主位灵宠。请先设置主位灵宠后再发起掠夺。';
+    }
+  }
+
+  return message;
+}
+
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers ?? {});
   if (!headers.has('Accept')) {
@@ -430,8 +458,17 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { message?: string } | null;
-    throw new Error(payload?.message?.trim() || `HTTP ${response.status}`);
+    const payload = await response.json().catch(() => null) as {
+      message?: string;
+      error?: {
+        code?: string;
+        message?: string;
+        details?: unknown;
+      };
+    } | null;
+    const code = payload?.error?.code;
+    const message = payload?.error?.message?.trim() || payload?.message?.trim() || `HTTP ${response.status}`;
+    throw new ApiError(toUserFacingApiMessage(message, code), response.status, code, payload?.error?.details);
   }
 
   return (await response.json()) as T;
@@ -1612,6 +1649,10 @@ export async function upgradeSpirit(input: ClientUpgradeSpiritRequest): Promise<
     ...response,
     spirit: cloneSpiritState(response.spirit),
   };
+}
+
+export async function loadRaidBattleReplay(orderId: string): Promise<ClientRaidBattleReplayResponse> {
+  return fetchJson<ClientRaidBattleReplayResponse>(`${CLIENT_API_PREFIX}/raid-orders/${encodeURIComponent(orderId)}/battle-replay`);
 }
 
 export async function feedSpirit(input: ClientFeedSpiritRequest): Promise<ClientSpiritMutationResponse> {

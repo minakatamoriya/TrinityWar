@@ -960,7 +960,7 @@ export class ClientCommandService {
         requestIdempotencyKey: idempotencyKey,
       });
 
-      await this.recordDailyTaskProgress(client, input.playerId, 'upgrade-building');
+      await this.recordDailyTaskProgress(client, input.playerId, target.isExtension ? 'upgrade-territory-tech' : 'upgrade-building');
       if (target.key === 'castle' || target.key === 'vault' || target.key === 'watchtower') {
         await this.recordDailyTaskProgress(client, input.playerId, 'upgrade-core-line');
       }

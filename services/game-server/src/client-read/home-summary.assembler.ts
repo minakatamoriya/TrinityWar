@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { APP_NAME, type ClientDailyTaskStatus, type ClientSceneKey, type HomeSummaryResponse } from '@trinitywar/shared';
 import { getActiveDailyTaskIds, getDailyTaskDefinition } from '../lib/game-balance.js';
 import type { HomeSummaryReadModel } from './client-read.repository.js';
+import { getDailyTaskActionScene } from './daily-task-lifecycle.service.js';
 
 @Injectable()
 export class HomeSummaryAssembler {
@@ -52,7 +53,7 @@ export class HomeSummaryAssembler {
         progressText: buildDailyTaskProgressText(taskState.progress, taskState.target, taskState.status),
         rewardGold: taskState.rewardGold,
         status: mapTaskStatus(taskState.status),
-        actionScene: mapActionScene(taskState.actionScene),
+        actionScene: mapActionScene(getDailyTaskActionScene(getDailyTaskDefinition(taskState.taskId)?.objective.type, taskState.actionScene)),
       })),
       primaryActions: [
         { key: 'building', title: '法术阁', description: '修习法术强化经营' },

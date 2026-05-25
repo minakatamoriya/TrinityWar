@@ -982,6 +982,7 @@ model RaidSettlement {
   attackerLoss            Int                  @default(0) @map("attacker_loss")
   defenderLoss            Int                  @default(0) @map("defender_loss")
   rewardItemsJson         Json?                @map("reward_items_json")
+  battleReplayJson        Json?                @map("battle_replay_json")
   reportSummary           String               @map("report_summary")
   createdAt               DateTime             @default(now()) @map("created_at")
 
