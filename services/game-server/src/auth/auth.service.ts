@@ -74,6 +74,9 @@ const DEV_VERIFICATION_ACCOUNTS: DevVerificationAccount[] = [
       ],
       spirit: {
         spiritSoul: 30,
+        ordinarySoul: 999,
+        rareSoul: 999,
+        legendarySoul: 999,
         tianjiTalisman: 3,
         starterSpiritId: 'canglang',
         starterElement: 'FIRE',
@@ -111,6 +114,9 @@ const DEV_VERIFICATION_ACCOUNTS: DevVerificationAccount[] = [
       ],
       spirit: {
         spiritSoul: 30,
+        ordinarySoul: 999,
+        rareSoul: 999,
+        legendarySoul: 999,
         tianjiTalisman: 3,
         starterSpiritId: 'xuanhu',
         starterElement: 'METAL',

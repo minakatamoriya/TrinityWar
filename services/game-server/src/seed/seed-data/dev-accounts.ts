@@ -43,6 +43,16 @@ export interface DevAccountSeedData {
     progress: number;
     status?: 'IN_PROGRESS' | 'COMPLETED' | 'CLAIMED';
   }>;
+  spirit?: {
+    spiritSoul?: number;
+    ordinarySoul?: number;
+    rareSoul?: number;
+    legendarySoul?: number;
+    tianjiTalisman?: number;
+    starterSpiritId?: string;
+    starterElement?: 'METAL' | 'WOOD' | 'WATER' | 'FIRE' | 'EARTH';
+    starterLevel?: number;
+  };
 }
 
 export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
@@ -123,6 +133,15 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
     taskOverrides: [
       { taskId: 'daily-start-cultivation', progress: 1, status: 'COMPLETED' },
     ],
+    spirit: {
+      ordinarySoul: 999,
+      rareSoul: 999,
+      legendarySoul: 999,
+      tianjiTalisman: 3,
+      starterSpiritId: 'canglang',
+      starterElement: 'WOOD',
+      starterLevel: 10,
+    },
   },
   {
     providerUserId: 'dev-raid-target-a',

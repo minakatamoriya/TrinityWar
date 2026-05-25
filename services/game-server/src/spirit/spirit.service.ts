@@ -19,7 +19,6 @@ const SPIRIT_LEVEL_EXP_REQUIRED = 10_000;
 const SPIRIT_ROOT_EXP_BPS = 50;
 const SPIRIT_ROOT_PER_SATIATED_HOUR = 5;
 const SPIRIT_FEED_ONCE_SECONDS = 2 * 60 * 60;
-const SPIRIT_SATIATED_MAX_SECONDS = 8 * 60 * 60;
 const SPIRIT_SATIATED_EXP_BONUS_BPS = 5000;
 const SPIRIT_AD_DAILY_LIMIT = 3;
 const SPIRIT_AD_TALISMAN_REWARD = 5;
@@ -383,22 +382,13 @@ export class SpiritService {
       const now = new Date();
       const settled = settleSpiritProgress(slot, now);
       const satiatedRemainingSeconds = Math.max(Math.floor(((settled.satiatedUntil?.getTime() ?? now.getTime()) - now.getTime()) / 1000), 0);
-      const availableSatiatedSeconds = Math.max(SPIRIT_SATIATED_MAX_SECONDS - satiatedRemainingSeconds, 0);
-      if (availableSatiatedSeconds <= 0) {
-        throw new BusinessError({ code: ErrorCode.Conflict, message: 'Spirit satiated time is already full.', statusCode: 409 });
-      }
-
-      const requestedSeconds = request.actionType === 'feed_once' ? SPIRIT_FEED_ONCE_SECONDS : availableSatiatedSeconds;
-      const satiatedSecondsAdded = Math.min(requestedSeconds, availableSatiatedSeconds);
-      const feedCount = Math.ceil(satiatedSecondsAdded / 3600 * SPIRIT_ROOT_PER_SATIATED_HOUR);
+      const satiatedSecondsAdded = SPIRIT_FEED_ONCE_SECONDS;
+      const feedCount = Math.ceil(SPIRIT_FEED_ONCE_SECONDS / 3600 * SPIRIT_ROOT_PER_SATIATED_HOUR);
 
       if (resource.spiritRoot < feedCount) {
         throw new BusinessError({ code: ErrorCode.Conflict, message: 'Insufficient spirit root.', statusCode: 409 });
       }
 
-      const isAtBreakthrough = isAtPendingBreakthrough(settled.level, settled.breakthroughStage);
-      const immediateExpGain = isAtBreakthrough ? 0 : feedCount * SPIRIT_ROOT_EXP_BPS;
-      const progressed = applyExpGain(settled, immediateExpGain);
       const nextSatiatedUntil = new Date(now.getTime() + (satiatedRemainingSeconds + satiatedSecondsAdded) * 1000);
 
       await client.playerSpiritResource.update({
@@ -411,9 +401,9 @@ export class SpiritService {
       await client.playerSpiritSlot.update({
         where: { id: slot.id },
         data: {
-          level: progressed.level,
-          exp: progressed.exp,
-          breakthroughStage: progressed.breakthroughStage,
+          level: settled.level,
+          exp: settled.exp,
+          breakthroughStage: settled.breakthroughStage,
           satiatedUntil: nextSatiatedUntil,
           lastExpSettledAt: now,
           slotVersion: { increment: 1 },
@@ -426,14 +416,14 @@ export class SpiritService {
           actionType: request.actionType,
           feedCount,
           satiatedSecondsAdded,
-          immediateExpGain,
+          immediateExpGain: 0,
           beforeSatiatedUntil: slot.satiatedUntil,
           afterSatiatedUntil: nextSatiatedUntil,
           requestIdempotencyKey: idempotencyKey ?? null,
         },
       });
 
-      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 已投喂灵根。`);
+      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 已安排 2 小时自动加速。`);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
     });
@@ -836,15 +826,10 @@ export class SpiritService {
         throw new BusinessError({ code: ErrorCode.Conflict, message: 'Daily ad reward limit reached.', statusCode: 409 });
       }
 
-      const bonus = Math.random() < 0.7
-        ? { kind: 'spirit-root' as const, label: '灵根', quantity: randomIntInclusive(8, 16) }
-        : { kind: 'spirit-marrow' as const, label: '灵髓', quantity: randomIntInclusive(1, 2) };
-
       await client.playerSpiritResource.update({
         where: { playerId },
         data: {
           tianjiTalisman: { increment: SPIRIT_AD_TALISMAN_REWARD },
-          ...buildSpiritRewardUpdateData([bonus]),
           resourceVersion: { increment: 1 },
         },
       });
@@ -853,12 +838,12 @@ export class SpiritService {
           playerId,
           dateKey,
           tianjiTalismanReward: SPIRIT_AD_TALISMAN_REWARD,
-          bonusRewardJson: bonus as unknown as Prisma.InputJsonValue,
+          bonusRewardJson: [] as unknown as Prisma.InputJsonValue,
           requestIdempotencyKey: idempotencyKey ?? null,
         },
       });
 
-      const response = await this.buildSpiritMutationResponse(client, playerId, `已获得天机符 x${SPIRIT_AD_TALISMAN_REWARD}、${bonus.label} x${bonus.quantity}。`);
+      const response = await this.buildSpiritMutationResponse(client, playerId, `已获得天机符 x${SPIRIT_AD_TALISMAN_REWARD}。`);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-ad-reward', dateKey);
       return response;
     });
@@ -1612,6 +1597,7 @@ function buildSpiritState(
       currentLevelExpRequired: SPIRIT_LEVEL_EXP_REQUIRED,
       isAtBreakthroughNode: isAtPendingBreakthrough(settled.level, settled.breakthroughStage),
       breakthroughStage: settled.breakthroughStage,
+      lastExpSettledAt: settled.lastExpSettledAt?.toISOString() ?? null,
       satiatedUntil: settled.satiatedUntil?.toISOString() ?? null,
       satiatedRemainingSeconds: Math.max(Math.floor(((settled.satiatedUntil?.getTime() ?? now.getTime()) - now.getTime()) / 1000), 0),
       satiatedExpBonusPercent: settled.satiatedUntil && settled.satiatedUntil.getTime() > now.getTime() ? 50 : 0,
@@ -1662,7 +1648,7 @@ function buildSpiritState(
         dailyLimit: SPIRIT_AD_DAILY_LIMIT,
         usedToday: Math.min(adRewardUsedToday, SPIRIT_AD_DAILY_LIMIT),
         tianjiTalisman: SPIRIT_AD_TALISMAN_REWARD,
-        bonusPool: ['灵根', '灵髓'],
+        bonusPool: ['天机符'],
       },
     },
   };
@@ -1824,9 +1810,17 @@ function settleSpiritProgress(slot: {
     return slot;
   }
 
-  const satiated = slot.satiatedUntil && slot.satiatedUntil.getTime() > lastSettledAt.getTime();
-  const bonusBps = satiated ? SPIRIT_SATIATED_EXP_BONUS_BPS : 0;
-  const expGain = Math.floor(getPassiveExpPerMinute(slot.level) * elapsedSeconds * (10_000 + bonusBps) / 10_000 / 60);
+  const satiatedUntilMs = slot.satiatedUntil?.getTime() ?? 0;
+  const lastSettledAtMs = lastSettledAt.getTime();
+  const nowMs = now.getTime();
+  const satiatedSeconds = satiatedUntilMs > lastSettledAtMs
+    ? Math.max(Math.floor((Math.min(satiatedUntilMs, nowMs) - lastSettledAtMs) / 1000), 0)
+    : 0;
+  const normalSeconds = Math.max(elapsedSeconds - satiatedSeconds, 0);
+  const passiveExpPerMinute = getPassiveExpPerMinute(slot.level);
+  const normalExpGain = Math.floor(passiveExpPerMinute * normalSeconds / 60);
+  const satiatedExpGain = Math.floor(passiveExpPerMinute * satiatedSeconds * (10_000 + SPIRIT_SATIATED_EXP_BONUS_BPS) / 10_000 / 60);
+  const expGain = normalExpGain + satiatedExpGain;
   return applyExpGain({ ...slot, lastExpSettledAt: now }, expGain);
 }
 

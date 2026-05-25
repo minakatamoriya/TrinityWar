@@ -79,7 +79,7 @@ interface SeedCodexState {
 interface SeedRewardModalState {
   title: string;
   summary: string;
-  confirmAction?: 'claim-faction-stipend';
+  confirmAction?: 'claim-faction-stipend' | 'claim-spirit-ad-reward';
   items: Array<{
     seedId?: string;
     itemId?: string;
@@ -1479,8 +1479,25 @@ function App(): JSX.Element {
   };
 
   const handleClaimSpiritAdRewardAction = async (): Promise<void> => {
+    if (!spiritState) {
+      return;
+    }
+
+    setSeedRewardModal({
+      title: '领取广告奖励',
+      summary: `观看完成后，确认领取天机符 x${spiritState.shop?.adReward.tianjiTalisman ?? 0}。点击确认后才会正式入账。`,
+      confirmAction: 'claim-spirit-ad-reward',
+      items: [{
+        itemId: 'tianji-talisman',
+        label: '天机符',
+        quantity: spiritState.shop?.adReward.tianjiTalisman ?? 0,
+      }],
+    });
+  };
+
+  const handleConfirmSpiritAdRewardClaim = async (): Promise<void> => {
     const actionKey = 'spirit:ad-reward';
-    if (!spiritState || pendingActionKey === actionKey) {
+    if (!spiritState || !seedRewardModal || seedRewardModal.confirmAction !== 'claim-spirit-ad-reward' || pendingActionKey === actionKey) {
       return;
     }
 
@@ -1491,6 +1508,7 @@ function App(): JSX.Element {
         resourceVersion: spiritState.resourceVersion,
       });
       applySpiritMutationResult(result);
+      setSeedRewardModal(null);
       showToast(result.summary, 'success');
     } catch {
       showToast('当前无法领取广告奖励，可能今日次数已用完。', 'error');
@@ -2527,7 +2545,7 @@ function App(): JSX.Element {
                   >
                     看广告 +{spiritState.shop.adReward.tianjiTalisman} 天机符
                   </button>
-                  <p className="panel-text">今日广告 {spiritState.shop.adReward.usedToday}/{spiritState.shop.adReward.dailyLimit}，额外随机给灵根或灵髓。</p>
+                  <p className="panel-text">今日广告 {spiritState.shop.adReward.usedToday}/{spiritState.shop.adReward.dailyLimit}，完成后会先弹出统一领奖框，确认后才入账天机符。</p>
                   <div className="task-list tianji-shop-list">
                     {spiritState.shop.items.map((item) => (
                       <div className="task-row tianji-shop-row" key={item.itemId}>
@@ -2684,9 +2702,13 @@ function App(): JSX.Element {
                       void handleConfirmFactionStipendClaim();
                       return;
                     }
+                    if (seedRewardModal.confirmAction === 'claim-spirit-ad-reward') {
+                      void handleConfirmSpiritAdRewardClaim();
+                      return;
+                    }
 
                     setSeedRewardModal(null);
-                  }} type="button">{pendingActionKey === 'faction:stipend' ? '收取中...' : '确认'}</button>
+                  }} type="button">{pendingActionKey === 'faction:stipend' || pendingActionKey === 'spirit:ad-reward' ? '收取中...' : '确认'}</button>
                 </div>
               </div>
             </div>

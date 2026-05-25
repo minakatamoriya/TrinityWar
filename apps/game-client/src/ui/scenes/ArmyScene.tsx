@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   ClientSpiritCodexEntry,
@@ -47,6 +47,7 @@ const codexRarityGroups = [
 ];
 
 const MAX_QUICK_RECOVERY_PER_DAY = 3;
+const SPIRIT_MAX_LEVEL = 50;
 const traitChoices: Array<{ code: ClientSpiritTraitCode; label: string }> = [
   { code: 'claw', label: '利爪' },
   { code: 'thick_skin', label: '厚皮' },
@@ -72,6 +73,14 @@ function formatDuration(seconds: number): string {
   return `${hours}小时${String(minutes).padStart(2, '0')}分`;
 }
 
+function formatClockTime(timestampMs: number): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(timestampMs));
+}
+
 function getPassiveExpPerMinute(level: number): number {
   if (level <= 2) {
     return 5000;
@@ -88,6 +97,83 @@ function getPassiveExpPerMinute(level: number): number {
   return 150;
 }
 
+function isBreakthroughLevel(level: number): boolean {
+  return level > 0 && level % 10 === 0 && level <= SPIRIT_MAX_LEVEL;
+}
+
+function isAtPendingBreakthrough(level: number, breakthroughStage: number): boolean {
+  return isBreakthroughLevel(level) && breakthroughStage < Math.floor(level / 10);
+}
+
+function applyExpGain(level: number, exp: number, breakthroughStage: number, expGain: number, currentLevelExpRequired: number): Pick<ClientSpiritSlot, 'level' | 'exp' | 'breakthroughStage' | 'isAtBreakthroughNode'> {
+  let nextLevel = level;
+  let nextExp = Math.max(exp + Math.max(expGain, 0), 0);
+
+  while (nextLevel < SPIRIT_MAX_LEVEL && nextExp >= currentLevelExpRequired) {
+    nextExp -= currentLevelExpRequired;
+    nextLevel += 1;
+    if (isAtPendingBreakthrough(nextLevel, breakthroughStage)) {
+      nextExp = 0;
+      break;
+    }
+  }
+
+  if (nextLevel >= SPIRIT_MAX_LEVEL) {
+    nextLevel = SPIRIT_MAX_LEVEL;
+    nextExp = Math.min(nextExp, currentLevelExpRequired);
+  }
+
+  return {
+    level: nextLevel,
+    exp: nextExp,
+    breakthroughStage,
+    isAtBreakthroughNode: isAtPendingBreakthrough(nextLevel, breakthroughStage),
+  };
+}
+
+function getLiveSpiritSlot(slot: ClientSpiritSlot, nowMs: number): ClientSpiritSlot {
+  const currentLevelExpRequired = Math.max(slot.currentLevelExpRequired ?? 1, 1);
+  const satiatedUntilMs = slot.satiatedUntil ? new Date(slot.satiatedUntil).getTime() : 0;
+  const lastExpSettledAtMs = slot.lastExpSettledAt ? new Date(slot.lastExpSettledAt).getTime() : 0;
+  const satiatedRemainingSeconds = satiatedUntilMs > 0
+    ? Math.max(Math.floor((satiatedUntilMs - nowMs) / 1000), 0)
+    : 0;
+
+  if (!lastExpSettledAtMs || slot.isAtBreakthroughNode) {
+    return {
+      ...slot,
+      exp: Math.min(slot.exp, currentLevelExpRequired),
+      satiatedRemainingSeconds,
+      satiatedExpBonusPercent: satiatedRemainingSeconds > 0 ? 50 : 0,
+    };
+  }
+
+  const elapsedSeconds = Math.max(Math.floor((nowMs - lastExpSettledAtMs) / 1000), 0);
+  if (elapsedSeconds <= 0) {
+    return {
+      ...slot,
+      satiatedRemainingSeconds,
+      satiatedExpBonusPercent: satiatedRemainingSeconds > 0 ? 50 : 0,
+    };
+  }
+
+  const satiatedSeconds = satiatedUntilMs > lastExpSettledAtMs
+    ? Math.max(Math.floor((Math.min(satiatedUntilMs, nowMs) - lastExpSettledAtMs) / 1000), 0)
+    : 0;
+  const normalSeconds = Math.max(elapsedSeconds - satiatedSeconds, 0);
+  const passiveExpPerMinute = getPassiveExpPerMinute(slot.level);
+  const normalExpGain = Math.floor(passiveExpPerMinute * normalSeconds / 60);
+  const satiatedExpGain = Math.floor(passiveExpPerMinute * satiatedSeconds * 15000 / 10000 / 60);
+  const progressed = applyExpGain(slot.level, slot.exp, slot.breakthroughStage ?? 0, normalExpGain + satiatedExpGain, currentLevelExpRequired);
+
+  return {
+    ...slot,
+    ...progressed,
+    satiatedRemainingSeconds,
+    satiatedExpBonusPercent: satiatedRemainingSeconds > 0 ? 50 : 0,
+  };
+}
+
 function getLevelRemainingText(slot: ClientSpiritSlot): string {
   if (slot.isAtBreakthroughNode) {
     return '等待突破';
@@ -102,6 +188,17 @@ function getLevelRemainingText(slot: ClientSpiritSlot): string {
   const bonusRate = (slot.satiatedRemainingSeconds ?? 0) > 0 ? 1.5 : 1;
   const expPerMinute = Math.max(getPassiveExpPerMinute(slot.level) * bonusRate, 1);
   return `约 ${formatDuration(Math.ceil(remainingExp / expPerMinute) * 60)} 后升级`;
+}
+
+function getExpGainText(slot: ClientSpiritSlot): string {
+  if (slot.isAtBreakthroughNode) {
+    return '当前待突破，突破后恢复增长';
+  }
+
+  const bonusRate = (slot.satiatedRemainingSeconds ?? 0) > 0 ? 1.5 : 1;
+  const expPerMinute = Math.max(Math.floor(getPassiveExpPerMinute(slot.level) * bonusRate), 1);
+  const expPerTenSeconds = Math.max(Math.floor(expPerMinute / 6), 1);
+  return `每 10 秒约 +${formatNumber(expPerTenSeconds)} 经验`;
 }
 
 const spiritResourceItems = [
@@ -272,11 +369,12 @@ function SpiritStageCard(props: {
   level: number;
   element?: DisplayElement;
   rarity: DisplayRarity;
+  flash?: boolean;
 }): JSX.Element {
-  const { name, phase, level, element, rarity } = props;
+  const { name, phase, level, element, rarity, flash = false } = props;
 
   return (
-    <div className="spirit-stage-card">
+    <div className={`spirit-stage-card${flash ? ' is-level-up-flash' : ''}`}>
       <div className="spirit-stage-art" aria-hidden="true">
         <span>{name.slice(0, 1)}</span>
       </div>
@@ -303,9 +401,31 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const [lockedTraitSlot, setLockedTraitSlot] = useState(1);
   const [targetTraitSlot, setTargetTraitSlot] = useState(1);
   const [targetTraitCode, setTargetTraitCode] = useState<ClientSpiritTraitCode>('crit');
+  const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
+  const [expFloat, setExpFloat] = useState<{ id: number; text: string } | null>(null);
+  const [levelFlashToken, setLevelFlashToken] = useState(0);
+  const [resumeHint, setResumeHint] = useState<{ id: number; text: string } | null>(null);
+  const previousSelectedSlotRef = useRef<ClientSpiritSlot | null>(null);
+  const pendingExpGainRef = useRef(0);
+  const lastExpFloatAtRef = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setLiveNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const portalTarget = typeof document === 'undefined' ? null : document.querySelector('.phone-frame');
-  const slots = useMemo(() => [...spirit.slots].sort((left, right) => left.slotIndex - right.slotIndex), [spirit.slots]);
+  const slots = useMemo(
+    () => [...spirit.slots]
+      .map((slot) => getLiveSpiritSlot(slot, liveNowMs))
+      .sort((left, right) => left.slotIndex - right.slotIndex),
+    [liveNowMs, spirit.slots],
+  );
   const codexById = useMemo(() => new Map(spirit.codex.map((entry) => [entry.spiritId, entry])), [spirit.codex]);
   const mainSlot = spirit.mainSlot;
   const mainEntry = mainSlot?.spiritId ? codexById.get(mainSlot.spiritId) ?? null : null;
@@ -323,6 +443,80 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
     ...group,
     pets: spirit.codex.filter((entry) => entry.definition.rarity === group.rarity),
   }));
+  const isLevelFlashActive = Date.now() - levelFlashToken < 700;
+  const selectedSlotAccelerationEndsAt = selectedSlot?.satiatedRemainingSeconds
+    ? liveNowMs + selectedSlot.satiatedRemainingSeconds * 1000
+    : null;
+
+  useEffect(() => {
+    if (!selectedSlot?.spiritId) {
+      previousSelectedSlotRef.current = selectedSlot ?? null;
+      pendingExpGainRef.current = 0;
+      return;
+    }
+
+    const previousSlot = previousSelectedSlotRef.current;
+    if (!previousSlot || previousSlot.slotIndex !== selectedSlot.slotIndex) {
+      previousSelectedSlotRef.current = selectedSlot;
+      pendingExpGainRef.current = 0;
+      return;
+    }
+
+    const currentLevelExpRequired = Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1);
+    const levelGain = selectedSlot.level - previousSlot.level;
+    const expGain = levelGain > 0
+      ? levelGain * currentLevelExpRequired + selectedSlot.exp - previousSlot.exp
+      : selectedSlot.exp - previousSlot.exp;
+
+    if (expGain > 0) {
+      pendingExpGainRef.current += expGain;
+      const now = Date.now();
+      if (pendingExpGainRef.current >= 80 || now - lastExpFloatAtRef.current >= 1800) {
+        setExpFloat({ id: now, text: `+${formatNumber(pendingExpGainRef.current)} 经验` });
+        lastExpFloatAtRef.current = now;
+        pendingExpGainRef.current = 0;
+      }
+    }
+
+    if (levelGain > 0) {
+      setLevelFlashToken(Date.now());
+      setResumeHint({ id: Date.now(), text: `升级成功，当前 Lv.${selectedSlot.level}` });
+    }
+
+    if (previousSlot.isAtBreakthroughNode && !selectedSlot.isAtBreakthroughNode) {
+      setResumeHint({ id: Date.now(), text: '突破成功，继续挂机中' });
+    }
+
+    previousSelectedSlotRef.current = selectedSlot;
+  }, [selectedSlot]);
+
+  useEffect(() => {
+    if (!expFloat) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setExpFloat((current) => current?.id === expFloat.id ? null : current);
+    }, 1100);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [expFloat]);
+
+  useEffect(() => {
+    if (!resumeHint) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setResumeHint((current) => current?.id === resumeHint.id ? null : current);
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [resumeHint]);
 
   return (
     <div className="scene-shell">
@@ -426,11 +620,13 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                   </div>
                   <SpiritStageCard
                     element={getElementLabel(selectedSlot.element) || undefined}
+                    flash={isLevelFlashActive}
                     level={selectedSlot.level}
                     name={selectedSlotEntry.definition.label}
                     phase={getPhaseForLevel(selectedSlot.level)}
                     rarity={getRarityLabel(selectedSlotEntry.definition.rarity)}
                   />
+                  {resumeHint ? <p className="spirit-live-hint">{resumeHint.text}</p> : null}
                   <div className="seed-codex-stats">
                     <div className="seed-codex-stat-row"><strong>稀有度</strong><span>{getRarityLabel(selectedSlotEntry.definition.rarity)}</span></div>
                     <div className="seed-codex-stat-row"><strong>阵营加成</strong><span>{getFactionLabel(selectedSlotEntry.definition.factionAffinity) === playerFaction ? `已触发 ${getFactionBonusLabel(getFactionLabel(selectedSlotEntry.definition.factionAffinity))}` : `未触发，当前阵营为${playerFaction}`}</span></div>
@@ -455,26 +651,32 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                       <h4>成长</h4>
                       <span className="soft-tag">{selectedSlot.isAtBreakthroughNode ? '待突破' : '挂机成长中'}</span>
                     </div>
-                    <div className="spirit-progress-block">
+                    <div className="spirit-progress-block spirit-progress-block-live">
                       <div className="spirit-progress-head">
                         <span>经验</span>
-                        <strong>{selectedSlot.isAtBreakthroughNode ? '待突破' : `${Math.floor((selectedSlot.exp / Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1)) * 100)}%`}</strong>
+                        <strong>
+                          {selectedSlot.isAtBreakthroughNode
+                            ? '待突破'
+                            : `${formatNumber(selectedSlot.exp)} / ${formatNumber(Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1))} · ${Math.floor((selectedSlot.exp / Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1)) * 100)}%`}
+                        </strong>
                       </div>
                       <div className="spirit-progress-track" aria-hidden="true">
                         <div className="spirit-progress-fill" style={{ width: `${selectedSlot.isAtBreakthroughNode ? 100 : Math.min((selectedSlot.exp / Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1)) * 100, 100)}%` }} />
                       </div>
+                      {expFloat ? <span className="spirit-exp-float">{expFloat.text}</span> : null}
                     </div>
                     <div className="seed-codex-stats">
                       <div className="seed-codex-stat-row"><strong>灵根库存</strong><span>{formatNumber(spirit.spiritRoot ?? 0)}</span></div>
                       <div className="seed-codex-stat-row"><strong>升级预估</strong><span>{getLevelRemainingText(selectedSlot)}</span></div>
-                      <div className="seed-codex-stat-row"><strong>饱食剩余</strong><span>{formatDuration(selectedSlot.satiatedRemainingSeconds ?? 0)}</span></div>
-                      <div className="seed-codex-stat-row"><strong>投喂一次</strong><span>最多 10 灵根 · 经验 +5%</span></div>
-                      <div className="seed-codex-stat-row"><strong>补满</strong><span>每小时 5 灵根 · 上限 8 小时</span></div>
+                      <div className="seed-codex-stat-row"><strong>当前经验速度</strong><span>{getExpGainText(selectedSlot)}</span></div>
+                      <div className="seed-codex-stat-row"><strong>自动加速</strong><span>{(selectedSlot.satiatedRemainingSeconds ?? 0) > 0 ? '自动加速中' : '未加速'}</span></div>
+                      <div className="seed-codex-stat-row"><strong>剩余加速时间</strong><span>{formatDuration(selectedSlot.satiatedRemainingSeconds ?? 0)}</span></div>
+                      <div className="seed-codex-stat-row"><strong>粮尽时间</strong><span>{selectedSlotAccelerationEndsAt ? formatClockTime(selectedSlotAccelerationEndsAt) : '当前未安排'}</span></div>
+                      <div className="seed-codex-stat-row"><strong>每次投喂</strong><span>固定消耗 10 灵根，追加 2 小时自动加速，可重复叠加</span></div>
                     </div>
-                    {selectedSlot.isAtBreakthroughNode ? <p className="panel-text">突破后继续获得经验，当前投喂只补饱食时间。</p> : null}
+                    {selectedSlot.isAtBreakthroughNode ? <p className="panel-text">突破后会立刻恢复挂机。投喂现在只负责续上自动加速，不再瞬间增加经验。</p> : <p className="panel-text">灵根只负责续上自动加速，经验按时间持续增长。粮食快用完时再来补就行。</p>}
                     <div className="spirit-pet-action-grid">
-                      <button className="secondary-button" disabled={busy || (spirit.spiritRoot ?? 0) <= 0 || (selectedSlot.satiatedRemainingSeconds ?? 0) >= 8 * 60 * 60} onClick={() => onFeed(selectedSlot.slotIndex, selectedSlot.slotVersion, 'feed_once')} type="button">投喂一次</button>
-                      <button className="secondary-button" disabled={busy || (spirit.spiritRoot ?? 0) <= 0 || (selectedSlot.satiatedRemainingSeconds ?? 0) >= 8 * 60 * 60} onClick={() => onFeed(selectedSlot.slotIndex, selectedSlot.slotVersion, 'fill_full')} type="button">补满</button>
+                      <button className="secondary-button" disabled={busy || (spirit.spiritRoot ?? 0) < 10} onClick={() => onFeed(selectedSlot.slotIndex, selectedSlot.slotVersion, 'feed_once')} type="button">投喂 10 灵根</button>
                     </div>
                   </section>
                   <section className="panel-card spirit-growth-panel">

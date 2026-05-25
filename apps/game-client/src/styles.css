@@ -3007,6 +3007,12 @@ button {
     linear-gradient(155deg, rgba(45, 61, 38, 0.72), rgba(24, 18, 16, 0.9));
 }
 
+.spirit-stage-card.is-level-up-flash {
+  animation: spiritLevelUpFlash 680ms ease-out;
+  border-color: rgba(215, 245, 127, 0.48);
+  box-shadow: 0 0 0 1px rgba(215, 245, 127, 0.18), 0 0 26px rgba(215, 245, 127, 0.18);
+}
+
 .spirit-stage-art {
   display: grid;
   place-items: center;
@@ -3140,6 +3146,10 @@ button.spirit-element-chip {
   gap: 8px;
 }
 
+.spirit-progress-block-live {
+  position: relative;
+}
+
 .spirit-progress-head {
   color: var(--text-secondary);
   font-size: 12px;
@@ -3163,10 +3173,81 @@ button.spirit-element-chip {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #d7f57f 0%, #6cb556 100%);
+  transition: width 1s linear;
 }
 
 .spirit-progress-fill-health {
   background: linear-gradient(90deg, #78d694 0%, #d3ef8b 100%);
+}
+
+.spirit-live-hint {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(215, 245, 127, 0.22);
+  border-radius: 14px;
+  background: rgba(98, 144, 72, 0.16);
+  color: #e7ffc6;
+  font-size: 12px;
+  font-weight: 700;
+  animation: spiritHintReveal 220ms ease-out;
+}
+
+.spirit-exp-float {
+  position: absolute;
+  right: 0;
+  bottom: 6px;
+  color: #d8ffb7;
+  font-size: 12px;
+  font-weight: 800;
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.26);
+  pointer-events: none;
+  animation: spiritExpFloatUp 1.05s ease-out forwards;
+}
+
+@keyframes spiritExpFloatUp {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+
+  18% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-26px) scale(1.02);
+  }
+}
+
+@keyframes spiritHintReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spiritLevelUpFlash {
+  0% {
+    transform: scale(0.985);
+    filter: saturate(1);
+  }
+
+  38% {
+    transform: scale(1.018);
+    filter: saturate(1.18);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: saturate(1);
+  }
 }
 
 .spirit-side-stack {

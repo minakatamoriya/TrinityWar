@@ -175,6 +175,7 @@ async function seedDevAccounts(
       pendingClaimTechLevel: account.building.pendingClaimTechLevel,
       army: account.army,
       seedInventory: account.seedInventory,
+      spirit: account.spirit,
       fields: account.fields,
       taskOverrides: account.taskOverrides,
     });

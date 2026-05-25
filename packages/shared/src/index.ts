@@ -44,6 +44,7 @@ export interface ClientSpiritSlot {
   currentLevelExpRequired?: number;
   isAtBreakthroughNode?: boolean;
   breakthroughStage?: number;
+  lastExpSettledAt?: string | null;
   satiatedUntil?: string | null;
   satiatedRemainingSeconds?: number;
   satiatedExpBonusPercent?: number;

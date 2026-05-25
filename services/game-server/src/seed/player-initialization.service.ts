@@ -28,6 +28,9 @@ export interface PlayerInitializationInput {
   seedInventory?: Record<string, { quantity: number; unlocked: boolean }>;
   spirit?: {
     spiritSoul?: number;
+    ordinarySoul?: number;
+    rareSoul?: number;
+    legendarySoul?: number;
     tianjiTalisman?: number;
     starterSpiritId?: string;
     starterElement?: SpiritElement;
@@ -393,6 +396,9 @@ export class PlayerInitializationService {
     const starterSpiritId = spirit?.starterSpiritId ?? DEFAULT_STARTER_SPIRIT_ID;
     const starterElement = spirit?.starterElement ?? 'WOOD';
     const spiritSoul = spirit?.spiritSoul ?? 0;
+    const ordinarySoul = spirit?.ordinarySoul ?? 0;
+    const rareSoul = spirit?.rareSoul ?? 0;
+    const legendarySoul = spirit?.legendarySoul ?? 0;
     const tianjiTalisman = spirit?.tianjiTalisman ?? 0;
     const starterLevel = Math.max(Math.floor(spirit?.starterLevel ?? 1), 1);
     const spiritDefinitions = await client.spiritDefinition.findMany({
@@ -412,6 +418,9 @@ export class PlayerInitializationService {
       create: {
         playerId,
         spiritSoul,
+        ordinarySoul,
+        rareSoul,
+        legendarySoul,
         tianjiTalisman,
         dailyTianjiClaimDateKey: null,
         dailySpiritSoulClaimDateKey: null,
@@ -425,6 +434,9 @@ export class PlayerInitializationService {
       update: resetExisting
         ? {
           spiritSoul,
+          ordinarySoul,
+          rareSoul,
+          legendarySoul,
           tianjiTalisman,
           dailyTianjiClaimDateKey: null,
           dailySpiritSoulClaimDateKey: null,
