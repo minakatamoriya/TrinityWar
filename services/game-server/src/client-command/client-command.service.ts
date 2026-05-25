@@ -19,7 +19,7 @@ import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { LandDeedService } from '../land-deed/land-deed.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
-import { DAILY_TASK_CONFIG, GAME_BALANCE, getFactionStipendTier, getSeedStageGold, getSeedStageSeconds } from '../lib/game-balance.js';
+import { DAILY_TASK_CONFIG, GAME_BALANCE, getCastleExtensionLevelConfig, getFactionStipendTier, getSeedStageGold, getSeedStageSeconds } from '../lib/game-balance.js';
 import { getVaultCapacityGain } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PlayerInitializationService } from '../seed/player-initialization.service.js';
@@ -847,6 +847,12 @@ export class ClientCommandService {
           id: true,
           buildings: true,
           wallet: true,
+          spiritResource: {
+            select: {
+              tianjiTalisman: true,
+              resourceVersion: true,
+            },
+          },
         },
       });
 
@@ -858,10 +864,8 @@ export class ClientCommandService {
         });
       }
 
-      assertVersion('buildingVersion', input.request.buildingVersion, playerState.buildings.buildingVersion);
-      assertVersion('walletVersion', input.request.walletVersion, playerState.wallet.balanceVersion);
-
       const target = this.resolveTarget(playerState.buildings, input.request);
+      assertVersion('buildingVersion', input.request.buildingVersion, playerState.buildings.buildingVersion);
 
       if (playerState.buildings.castleLevel < target.requiredCastleLevel) {
         throw new BusinessError({
@@ -871,29 +875,74 @@ export class ClientCommandService {
         });
       }
 
-      if (playerState.wallet.vaultGold < target.costGold) {
-        throw new BusinessError({
-          code: ErrorCode.InsufficientVaultGold,
-          message: 'Insufficient vault gold.',
-          statusCode: 409,
-        });
-      }
-
-      const nextVaultGold = playerState.wallet.vaultGold - target.costGold;
       await client.playerBuilding.update({
         where: { playerId: input.playerId },
         data: buildBuildingUpdateData(target),
       });
-      await client.playerWallet.update({
-        where: { playerId: input.playerId },
-        data: {
-          vaultGold: nextVaultGold,
-          vaultCapacity: target.key === 'vault'
-            ? playerState.wallet.vaultCapacity + getVaultCapacityGain(target.currentLevel)
-            : playerState.wallet.vaultCapacity,
-          balanceVersion: { increment: 1 },
-        },
-      });
+
+      if (target.costResource === 'gold') {
+        assertVersion('walletVersion', input.request.walletVersion, playerState.wallet.balanceVersion);
+
+        if (playerState.wallet.vaultGold < target.costAmount) {
+          throw new BusinessError({
+            code: ErrorCode.InsufficientVaultGold,
+            message: 'Insufficient vault gold.',
+            statusCode: 409,
+          });
+        }
+
+        const nextVaultGold = playerState.wallet.vaultGold - target.costAmount;
+        await client.playerWallet.update({
+          where: { playerId: input.playerId },
+          data: {
+            vaultGold: nextVaultGold,
+            vaultCapacity: target.key === 'vault'
+              ? playerState.wallet.vaultCapacity + getVaultCapacityGain(target.currentLevel)
+              : playerState.wallet.vaultCapacity,
+            balanceVersion: { increment: 1 },
+          },
+        });
+
+        await this.auditService.createWalletChangeLog(client, {
+          playerId: input.playerId,
+          walletBucket: 'vault',
+          changeType: 'upgrade-building',
+          deltaGold: -target.costAmount,
+          beforeGold: playerState.wallet.vaultGold,
+          afterGold: nextVaultGold,
+          relatedEntityType: target.isExtension ? 'territory-tech' : 'building',
+          relatedEntityId: target.key,
+          requestIdempotencyKey: idempotencyKey,
+          note: `Upgrade ${target.key} from Lv.${target.currentLevel} to Lv.${target.nextLevel}.`,
+        });
+      } else {
+        if (!playerState.spiritResource) {
+          throw new BusinessError({
+            code: ErrorCode.NotFound,
+            message: 'Player spirit resource not found.',
+            statusCode: 404,
+          });
+        }
+
+        const talismanSpend = await client.playerSpiritResource.updateMany({
+          where: {
+            playerId: input.playerId,
+            tianjiTalisman: { gte: target.costAmount },
+          },
+          data: {
+            tianjiTalisman: { decrement: target.costAmount },
+            resourceVersion: { increment: 1 },
+          },
+        });
+
+        if (talismanSpend.count !== 1) {
+          throw new BusinessError({
+            code: ErrorCode.Conflict,
+            message: 'Insufficient Tianji talisman.',
+            statusCode: 409,
+          });
+        }
+      }
 
       if (target.key === 'castle') {
         await client.player.update({
@@ -902,18 +951,6 @@ export class ClientCommandService {
         });
       }
 
-      await this.auditService.createWalletChangeLog(client, {
-        playerId: input.playerId,
-        walletBucket: 'vault',
-        changeType: 'upgrade-building',
-        deltaGold: -target.costGold,
-        beforeGold: playerState.wallet.vaultGold,
-        afterGold: nextVaultGold,
-        relatedEntityType: target.isExtension ? 'castle-extension' : 'building',
-        relatedEntityId: target.key,
-        requestIdempotencyKey: idempotencyKey,
-        note: `Upgrade ${target.key} from Lv.${target.currentLevel} to Lv.${target.nextLevel}.`,
-      });
       await this.auditService.createBuildingUpgradeLog(client, {
         playerId: input.playerId,
         buildingKey: target.key,
@@ -934,7 +971,7 @@ export class ClientCommandService {
 
       const responseSnapshot: ClientStateMutationResponse = {
         app: APP_NAME,
-        summary: `已升级 ${target.key}：Lv.${target.currentLevel} -> Lv.${target.nextLevel}`,
+        summary: `已修习 ${target.title}：Lv.${target.currentLevel} -> Lv.${target.nextLevel}`,
         home: await this.clientReadService.getHomeSummary(input.playerId, client),
         scenes: await this.clientReadService.getSceneContent(input.playerId, client),
       };
@@ -943,7 +980,7 @@ export class ClientCommandService {
         await this.idempotencyService.markCompleted(client, {
           id: idempotencyRecord.id,
           responseSnapshotJson: responseSnapshot as unknown as Prisma.InputJsonValue,
-          businessEntityType: target.isExtension ? 'castle-extension' : 'building',
+          businessEntityType: target.isExtension ? 'territory-tech' : 'building',
           businessEntityId: target.key,
         });
       }
@@ -959,6 +996,11 @@ export class ClientCommandService {
         where: { id: input.playerId },
         select: {
           factionId: true,
+          buildings: {
+            select: {
+              pendingClaimTechLevel: true,
+            },
+          },
           wallet: {
             select: {
               vaultGold: true,
@@ -997,6 +1039,7 @@ export class ClientCommandService {
       const donateStep = Math.max(Math.floor(GAME_BALANCE.faction.donateGoldStep), 1);
       const contributionPerStep = Math.max(Math.floor(GAME_BALANCE.faction.contributionPerDonateStep), 1);
       const normalizedGoldAmount = Math.max(Math.floor(input.request.goldAmount / donateStep) * donateStep, 0);
+      const contributionBonusPercent = getCastleExtensionLevelConfig('factionOfferingTech', playerState.buildings?.pendingClaimTechLevel ?? 0)?.effectValue ?? 0;
 
       if (normalizedGoldAmount <= 0) {
         throw new BusinessError({
@@ -1014,7 +1057,8 @@ export class ClientCommandService {
         });
       }
 
-      const contributionGain = Math.floor(normalizedGoldAmount / donateStep) * contributionPerStep;
+      const baseContributionGain = Math.floor(normalizedGoldAmount / donateStep) * contributionPerStep;
+      const contributionGain = Math.floor(baseContributionGain * (100 + contributionBonusPercent) / 100);
       const nextVaultGold = playerState.wallet.vaultGold - normalizedGoldAmount;
 
       await client.playerWallet.update({
@@ -1369,7 +1413,16 @@ export class ClientCommandService {
       return this.wrapRuleError(() => this.buildingUpgradeRuleService.resolveExtensionTarget(buildings, extensionId));
     }
 
-    throwBadRequest('targetType must be building or castle-extension.');
+    if (request.targetType === 'territory-tech') {
+      const territoryUpgradeId = request.territoryUpgradeId ?? request.extensionId;
+      if (!territoryUpgradeId) {
+        throwBadRequest('territoryUpgradeId is required.');
+      }
+
+      return this.wrapRuleError(() => this.buildingUpgradeRuleService.resolveExtensionTarget(buildings, territoryUpgradeId));
+    }
+
+    throwBadRequest('targetType must be building, castle-extension or territory-tech.');
   }
 
   private wrapRuleError(handler: () => BuildingUpgradeTarget): BuildingUpgradeTarget {
@@ -1387,7 +1440,7 @@ export class ClientCommandService {
       if (error instanceof Error && error.message === 'LEGACY_BUILDING_UPGRADE_RETIRED') {
         throw new BusinessError({
           code: ErrorCode.BadRequest,
-          message: 'Legacy building upgrades are retired. Use territory technology upgrades.',
+          message: 'Legacy building upgrades are retired. Use spell study upgrades.',
           statusCode: 400,
         });
       }
@@ -1602,6 +1655,7 @@ function hashRequest(request: UpgradeBuildingRequestDto): string {
       targetType: request.targetType,
       buildingId: request.buildingId ?? null,
       extensionId: request.extensionId ?? null,
+      territoryUpgradeId: request.territoryUpgradeId ?? null,
       buildingVersion: request.buildingVersion ?? null,
       walletVersion: request.walletVersion ?? null,
     }))
@@ -1865,7 +1919,7 @@ function getDailyTaskTitle(taskId: string): string {
   const titleMap: Record<string, string> = {
     'daily-harvest-once': '收一次田地',
     'daily-start-cultivation': '开始一次培育',
-    'daily-upgrade-building': '升级一次建筑',
+    'daily-upgrade-building': '修习一次法术',
     'daily-upgrade-spirit': '升级一次灵宠',
     'daily-donate-faction': '上缴一次阵营资源',
   };

@@ -18,6 +18,9 @@ import type {
   ClientSpiritTraitCode,
   ClientSpiritState,
   HomeSummaryResponse,
+  ClientTerritoryUpgradeId,
+  ClientUpgradeBuildingRequest,
+  ClientUpgradeTargetType,
 } from '@trinitywar/shared';
 import { breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, updateFarmBoard, upgradeClientBuilding } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
@@ -134,6 +137,14 @@ interface SeasonSignInDay {
   claimed: boolean;
   current: boolean;
   future: boolean;
+  missed: boolean;
+}
+
+interface SeasonSignInMilestone {
+  dayCount: number;
+  title: string;
+  reached: boolean;
+  remainingDays: number;
 }
 
 const seedCatalog: SeedCatalogItem[] = [
@@ -187,7 +198,7 @@ interface ResourceProgressValue {
 
 const sceneNavLabels: Record<ClientSceneKey, string> = {
   home: '首页',
-  building: '主城',
+  building: '法术',
   farm: '农场',
   raid: '灵宠',
   report: '掠夺',
@@ -211,6 +222,11 @@ const sceneBackgroundMap: Record<Exclude<ClientSceneKey, 'home'>, string> = {
 };
 
 const SEASON_SIGN_IN_STORAGE_KEY_PREFIX = 'trinitywar.seasonSignIn';
+const SEASON_SIGN_IN_MILESTONES: Array<Pick<SeasonSignInMilestone, 'dayCount' | 'title'>> = [
+  { dayCount: 7, title: '七日宝箱' },
+  { dayCount: 14, title: '十四日宝箱' },
+  { dayCount: 21, title: '二十一日宝箱' },
+];
 
 function normalizeScene(scene: string): ClientSceneKey {
   if (scene === 'field') {
@@ -231,6 +247,47 @@ function formatServerTime(serverTime: string): string {
     month: 'numeric',
     day: 'numeric',
   }).format(new Date(serverTime));
+}
+
+function buildUpgradeRequest(
+  targetType: ClientUpgradeTargetType,
+  upgradeId: ClientBuildingUpgradeId | ClientCastleExtensionUpgradeId,
+  buildingVersion: number,
+  walletVersion: number,
+): ClientUpgradeBuildingRequest {
+  if (targetType === 'building') {
+    return {
+      targetType,
+      buildingId: upgradeId as ClientBuildingUpgradeId,
+      buildingVersion,
+      walletVersion,
+    };
+  }
+
+  if (targetType === 'territory-tech') {
+    return {
+      targetType,
+      territoryUpgradeId: upgradeId as ClientTerritoryUpgradeId,
+      buildingVersion,
+      walletVersion,
+    };
+  }
+
+  return {
+    targetType,
+    extensionId: upgradeId as ClientCastleExtensionUpgradeId,
+    buildingVersion,
+    walletVersion,
+  };
+}
+
+function parseTianjiCostText(costText: string): number {
+  const match = costText.match(/^消耗\s*([\d,，]+)\s*天机符/);
+  if (!match) {
+    return 0;
+  }
+
+  return Math.max(Number(match[1].replace(/[，,]/g, '')) || 0, 0);
 }
 
 function getMillisecondsUntilNextChinaMidnight(): number {
@@ -257,39 +314,59 @@ function getSeasonSignInDay(): number {
   return ((dayOfYear - 1) % 28) + 1;
 }
 
-function getSeasonSignInReward(streakAfterClaim: number): number {
-  return Math.min(1 + Math.floor(Math.max(streakAfterClaim - 1, 0) / 7), 4);
-}
-
-function getConsecutiveSignInCount(claimedDays: number[], currentDay: number): number {
-  const claimed = new Set(claimedDays);
-  let count = 0;
-
-  for (let day = currentDay - 1; day >= 1; day -= 1) {
-    if (!claimed.has(day)) {
-      break;
-    }
-
-    count += 1;
+function getSeasonSignInReward(cumulativeClaimCount: number): number {
+  if (cumulativeClaimCount >= 21) {
+    return 4;
   }
 
-  return count;
+  if (cumulativeClaimCount >= 14) {
+    return 3;
+  }
+
+  if (cumulativeClaimCount >= 7) {
+    return 2;
+  }
+
+  return 1;
+}
+
+function getSeasonSignInClaimOrder(claimedDays: number[], day: number): number {
+  return claimedDays.filter((claimedDay) => claimedDay <= day).length;
 }
 
 function buildSeasonSignInDays(record: SeasonSignInRecord, currentDay: number): SeasonSignInDay[] {
   const claimed = new Set(record.claimedDays);
+  let projectedClaimCount = record.claimedDays.length;
+
   return Array.from({ length: 28 }, (_, index) => {
     const day = index + 1;
-    const streakBeforeClaim = getConsecutiveSignInCount(record.claimedDays, day);
+    const isClaimed = claimed.has(day);
+    const future = day > currentDay;
+    const missed = day < currentDay && !isClaimed;
+    let claimOrder = isClaimed ? getSeasonSignInClaimOrder(record.claimedDays, day) : getSeasonSignInClaimOrder(record.claimedDays, day - 1) + 1;
+
+    if (!isClaimed && day >= currentDay) {
+      projectedClaimCount += 1;
+      claimOrder = projectedClaimCount;
+    }
 
     return {
       day,
-      reward: getSeasonSignInReward(streakBeforeClaim + 1),
-      claimed: claimed.has(day),
+      reward: getSeasonSignInReward(claimOrder),
+      claimed: isClaimed,
       current: day === currentDay,
-      future: day > currentDay,
+      future,
+      missed,
     };
   });
+}
+
+function buildSeasonSignInMilestones(claimedDayCount: number): SeasonSignInMilestone[] {
+  return SEASON_SIGN_IN_MILESTONES.map((milestone) => ({
+    ...milestone,
+    reached: claimedDayCount >= milestone.dayCount,
+    remainingDays: Math.max(milestone.dayCount - claimedDayCount, 0),
+  }));
 }
 
 function getSeasonSignInStorageKey(playerId?: string): string {
@@ -340,12 +417,12 @@ function buildActionMessage(label: string, context?: string): string {
     return `${subject}该操作会先走收益确认，再把可承接的部分并入当前库存。`;
   }
 
-  if (label.includes('升级')) {
+  if (label.includes('升级') || label.includes('修习')) {
     return `${subject}验证版先只确认入口、消耗文案和收益预期，具体数值以后端结算为准。`;
   }
 
   if (label.includes('上缴')) {
-    return `${subject}上缴后会立即累积贡献值，分红收益通过后续小时结算回流。`;
+    return `${subject}上缴后会立即累积贡献值，并影响每日俸禄档位。`;
   }
 
   if (label.includes('说明') || label.includes('详情')) {
@@ -1108,8 +1185,12 @@ function App(): JSX.Element {
   const seasonSignInDay = getSeasonSignInDay();
   const seasonSignInDays = buildSeasonSignInDays(seasonSignInRecord, seasonSignInDay);
   const seasonSignInClaimedToday = seasonSignInRecord.claimedDays.includes(seasonSignInDay);
-  const seasonSignInStreakAfterClaim = getConsecutiveSignInCount(seasonSignInRecord.claimedDays, seasonSignInDay) + 1;
-  const seasonSignInTodayReward = getSeasonSignInReward(seasonSignInStreakAfterClaim);
+  const seasonSignInTodayClaimOrder = seasonSignInClaimedToday
+    ? getSeasonSignInClaimOrder(seasonSignInRecord.claimedDays, seasonSignInDay)
+    : seasonSignInRecord.claimedDays.length + 1;
+  const seasonSignInTodayReward = getSeasonSignInReward(seasonSignInTodayClaimOrder);
+  const seasonSignInMilestones = buildSeasonSignInMilestones(seasonSignInRecord.claimedDays.length);
+  const tianjiTalismanCount = spiritState?.tianjiTalisman ?? globalItemInventory.tianjiTalisman ?? 0;
   const seedCatalogMap = new Map(seedCatalog.map((seed) => [seed.id, seed]));
   const seedGroups = (['common', 'rare', 'legendary'] as const).map((rarity) => ({
     rarity,
@@ -1656,6 +1737,23 @@ function App(): JSX.Element {
     }));
   };
 
+  const applyLocalTianjiSpend = (costText: string): void => {
+    const tianjiCost = parseTianjiCostText(costText);
+    if (tianjiCost <= 0) {
+      return;
+    }
+
+    setSpiritState((current) => current ? {
+      ...current,
+      tianjiTalisman: Math.max(current.tianjiTalisman - tianjiCost, 0),
+      resourceVersion: current.resourceVersion + 1,
+    } : current);
+    setGlobalItemInventory((current) => ({
+      ...current,
+      tianjiTalisman: Math.max((current.tianjiTalisman ?? 0) - tianjiCost, 0),
+    }));
+  };
+
   const navigateToScene = (scene: ClientSceneKey, nextRaidHubTab?: RaidHubTabKey): void => {
     setActiveScene(scene);
 
@@ -1668,8 +1766,8 @@ function App(): JSX.Element {
     }
   };
 
-  const handleBuildingAction = async (action: ClientSceneAction, upgradeId: ClientBuildingUpgradeId | ClientCastleExtensionUpgradeId, context: string, targetType: 'building' | 'castle-extension'): Promise<void> => {
-    if (action.label.includes('升级')) {
+  const handleBuildingAction = async (action: ClientSceneAction, upgradeId: ClientBuildingUpgradeId | ClientCastleExtensionUpgradeId, context: string, targetType: ClientUpgradeTargetType, costText: string): Promise<void> => {
+    if (action.label.includes('升级') || action.label.includes('修习')) {
       const actionKey = `${targetType}:${upgradeId}`;
       if (pendingActionKey === actionKey) {
         return;
@@ -1678,22 +1776,11 @@ function App(): JSX.Element {
       setPendingActionKey(actionKey);
 
       try {
-        const result = await upgradeClientBuilding(targetType === 'building'
-          ? {
-            targetType,
-            buildingId: upgradeId as ClientBuildingUpgradeId,
-            buildingVersion: home.stateVersions.buildingVersion,
-            walletVersion: home.stateVersions.walletVersion,
-          }
-          : {
-            targetType,
-            extensionId: upgradeId as ClientCastleExtensionUpgradeId,
-            buildingVersion: home.stateVersions.buildingVersion,
-            walletVersion: home.stateVersions.walletVersion,
-          });
+        const result = await upgradeClientBuilding(buildUpgradeRequest(targetType, upgradeId, home.stateVersions.buildingVersion, home.stateVersions.walletVersion));
         applyMutationResult(result);
+        applyLocalTianjiSpend(costText);
       } catch {
-        showToast(`${context} 当前升级失败，请稍后重试。`, 'error');
+        showToast(`${context} 当前修习失败，请稍后重试。`, 'error');
       } finally {
         setPendingActionKey(null);
       }
@@ -2106,18 +2193,17 @@ function App(): JSX.Element {
                     tianjiShop: true,
                   });
                 }} type="button">
-                  <span className="top-item-icon" aria-hidden="true">符</span>
-                  <span className="top-item-count">{formatNumber(globalItemInventory.tianjiTalisman ?? 0)}</span>
+                  商店
                 </button>
                 <button className="ghost-button top-action-button" onClick={() => {
                   setGlobalFeatureModal({
                     title: '赛季签到',
                     eyebrow: '活动',
-                    description: '每个赛季 28 天，每日签到获得天机符；连续签到越久，当日领取越多。',
+                    description: '每个赛季 28 天，累计签到推进每日档位和阶段宝箱；漏签不清零。',
                     seasonSignIn: true,
                   });
                 }} type="button">
-                  活动
+                  签到
                 </button>
                 <button className="ghost-button top-action-button top-notification-button" onClick={handleOpenNotifications} type="button">
                   消息
@@ -2183,9 +2269,13 @@ function App(): JSX.Element {
           ) : null}
 
             <section className="global-resource-bar">
-              <div className="global-gold-pill">
+              <div className="global-resource-pill global-gold-pill">
                 <span className="global-gold-icon" aria-hidden="true">金</span>
                 <strong>{formatNumber(vaultProgress.current)}</strong>
+              </div>
+              <div className="global-resource-pill global-tianji-pill">
+                <span className="global-tianji-icon" aria-hidden="true">符</span>
+                <strong>{formatNumber(tianjiTalismanCount)}</strong>
               </div>
             </section>
           </section>
@@ -2204,8 +2294,8 @@ function App(): JSX.Element {
 
             {activeScene === 'building' ? (
               <BuildingScene
-                onUpgradeAction={(action, upgradeId, context, targetType) => {
-                  void handleBuildingAction(action, upgradeId, context, targetType);
+                onUpgradeAction={(action, upgradeId, context, targetType, costText) => {
+                  void handleBuildingAction(action, upgradeId, context, targetType, costText);
                 }}
                 extensions={scenes.building.extensions}
                 upgrades={scenes.building.upgrades}
@@ -2365,7 +2455,7 @@ function App(): JSX.Element {
               description={globalFeatureModal.tianjiShop ? undefined : globalFeatureModal.description}
               eyebrow={globalFeatureModal.tianjiShop ? undefined : globalFeatureModal.eyebrow}
               onClose={() => setGlobalFeatureModal(null)}
-              title={globalFeatureModal.tianjiShop ? `天机符库存 x${formatNumber(spiritState?.tianjiTalisman ?? globalItemInventory.tianjiTalisman ?? 0)}` : globalFeatureModal.title}
+              title={globalFeatureModal.tianjiShop ? `天机符库存 x${formatNumber(tianjiTalismanCount)}` : globalFeatureModal.title}
             >
               {globalFeatureModal.contributionTiers ? (
                 <div className="contribution-tier-list">
@@ -2387,9 +2477,22 @@ function App(): JSX.Element {
               {globalFeatureModal.seasonSignIn ? (
                 <div className="season-signin-panel">
                   <div className="season-signin-summary">
-                    <span>今日第 {seasonSignInDay} 天</span>
-                    <strong>天机符 x{seasonSignInTodayReward}</strong>
+                    <span>累计 {seasonSignInRecord.claimedDays.length}/28 天</span>
+                    <strong>今日 x{seasonSignInTodayReward}</strong>
                   </div>
+                  <div className="season-signin-milestones" aria-label="累计签到宝箱">
+                    {seasonSignInMilestones.map((milestone) => (
+                      <div className={`season-signin-milestone ${milestone.reached ? 'reached' : ''}`} key={milestone.dayCount}>
+                        <span className="season-signin-milestone-icon" aria-hidden="true">箱</span>
+                        <div>
+                          <strong>{milestone.title}</strong>
+                          <span>累计 {milestone.dayCount} 天</span>
+                        </div>
+                        <em>{milestone.reached ? '已达成' : `差 ${milestone.remainingDays} 天`}</em>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="season-signin-rule">1-6 天 x1，7-13 天 x2，14-20 天 x3，21 天后 x4；宝箱奖励待定。</p>
                   <div className="season-signin-grid" aria-label="赛季签到日历">
                     {seasonSignInDays.map((day) => (
                       <div
@@ -2398,11 +2501,12 @@ function App(): JSX.Element {
                           day.claimed ? 'claimed' : '',
                           day.current ? 'current' : '',
                           day.future ? 'future' : '',
+                          day.missed ? 'missed' : '',
                         ].filter(Boolean).join(' ')}
                         key={day.day}
                       >
                         <span>{day.day}</span>
-                        <strong>符 x{day.reward}</strong>
+                        <strong>{day.missed ? '未签' : `符 x${day.reward}`}</strong>
                       </div>
                     ))}
                   </div>
@@ -2538,7 +2642,7 @@ function App(): JSX.Element {
                         </div>
                         <div className="seed-codex-stat-row">
                           <strong>丰熟窗口</strong>
-                          <span>基础 30 分钟，可被时序观象台延长</span>
+                          <span>基础 30 分钟，可被观星术延长</span>
                         </div>
                         <div className="seed-codex-stat-row">
                           <strong>收益</strong>

@@ -57,7 +57,7 @@ const DEV_VERIFICATION_ACCOUNTS: DevVerificationAccount[] = [
       vaultLevel: 8,
       populationLevel: 5,
       watchtowerLevel: 5,
-      protectionTechLevel: 2,
+      protectionTechLevel: 5,
       farmYieldTechLevel: 2,
       ripeWindowTechLevel: 2,
       pendingClaimTechLevel: 2,
@@ -94,7 +94,7 @@ const DEV_VERIFICATION_ACCOUNTS: DevVerificationAccount[] = [
       vaultLevel: 8,
       populationLevel: 5,
       watchtowerLevel: 5,
-      protectionTechLevel: 2,
+      protectionTechLevel: 5,
       farmYieldTechLevel: 2,
       ripeWindowTechLevel: 2,
       pendingClaimTechLevel: 2,
@@ -368,7 +368,7 @@ export class AuthService {
     await this.playerInitializationService.initialize(client, {
       ...account.initialization,
       playerId: player.id,
-      resetExisting: !existingIdentity,
+      resetExisting: true,
     });
 
     return player.id;

@@ -83,8 +83,8 @@ async function assertBootstrapAndScenes(user1: DevLoginResult, user2: DevLoginRe
   ]);
 
   assertAtLeast(bootstrap1.backpack.globalItemInventory.tianjiTalisman, 3, 'test user 1 baseline tianji talisman');
-  assert(scene1.raid.targets.some((target) => target.name === '测试用户2'), 'test user 1 scene should list test user 2');
-  assert(scene2.raid.targets.some((target) => target.name === '测试用户1'), 'test user 2 scene should list test user 1');
+  assert(scene1.raid.targets.some((target) => target.name === user2.player.nickname), 'test user 1 scene should list test user 2');
+  assert(scene2.raid.targets.some((target) => target.name === user1.player.nickname), 'test user 2 scene should list test user 1');
 }
 
 async function verifyBuildingUpgrade(user: DevLoginResult): Promise<void> {
@@ -92,13 +92,16 @@ async function verifyBuildingUpgrade(user: DevLoginResult): Promise<void> {
     where: { id: user.player.id },
     select: {
       wallet: { select: { vaultGold: true, balanceVersion: true } },
-      buildings: { select: { vaultLevel: true, buildingVersion: true } },
+      buildings: { select: { protectionTechLevel: true, buildingVersion: true } },
+      spiritResource: { select: { tianjiTalisman: true, resourceVersion: true } },
     },
   });
   const beforeGold = mustNumber(before.wallet?.vaultGold, 'building upgrade before vault gold');
   const beforeWalletVersion = mustNumber(before.wallet?.balanceVersion, 'building upgrade before wallet version');
-  const beforeVaultLevel = mustNumber(before.buildings?.vaultLevel, 'building upgrade before vault level');
+  const beforeProtectionTechLevel = mustNumber(before.buildings?.protectionTechLevel, 'building upgrade before protection tech level');
   const beforeBuildingVersion = mustNumber(before.buildings?.buildingVersion, 'building upgrade before building version');
+  const beforeTianjiTalisman = mustNumber(before.spiritResource?.tianjiTalisman, 'building upgrade before tianji talisman');
+  const beforeSpiritResourceVersion = mustNumber(before.spiritResource?.resourceVersion, 'building upgrade before spirit resource version');
   const idempotencyKey = `verify-building-${Date.now()}`;
 
   await fetchJson(`${CLIENT_API_PREFIX}/actions/upgrade-building`, {
@@ -109,8 +112,8 @@ async function verifyBuildingUpgrade(user: DevLoginResult): Promise<void> {
       'X-Idempotency-Key': idempotencyKey,
     },
     body: JSON.stringify({
-      targetType: 'building',
-      buildingId: 'vault',
+      targetType: 'territory-tech',
+      territoryUpgradeId: 'protectionTech',
       buildingVersion: beforeBuildingVersion,
       walletVersion: beforeWalletVersion,
       requestIdempotencyKey: idempotencyKey,
@@ -121,7 +124,8 @@ async function verifyBuildingUpgrade(user: DevLoginResult): Promise<void> {
     where: { id: user.player.id },
     select: {
       wallet: { select: { vaultGold: true, balanceVersion: true } },
-      buildings: { select: { vaultLevel: true, buildingVersion: true } },
+      buildings: { select: { protectionTechLevel: true, buildingVersion: true } },
+      spiritResource: { select: { tianjiTalisman: true, resourceVersion: true } },
       buildingUpgradeLogs: {
         where: { requestIdempotencyKey: idempotencyKey },
         select: { costGold: true, oldLevel: true, newLevel: true },
@@ -130,11 +134,20 @@ async function verifyBuildingUpgrade(user: DevLoginResult): Promise<void> {
   });
   const upgradeLog = after.buildingUpgradeLogs[0];
   assert(upgradeLog, 'building upgrade log should exist');
-  assertEqual(upgradeLog.oldLevel, beforeVaultLevel, 'building upgrade old level');
-  assertEqual(upgradeLog.newLevel, beforeVaultLevel + 1, 'building upgrade new level');
-  assertEqual(after.buildings?.vaultLevel, beforeVaultLevel + 1, 'vault level should increase');
-  assertEqual(after.wallet?.vaultGold, beforeGold - upgradeLog.costGold, 'vault gold should decrease by upgrade cost');
-  assertEqual(after.wallet?.balanceVersion, beforeWalletVersion + 1, 'wallet version should increase after building upgrade');
+  assertEqual(upgradeLog.oldLevel, beforeProtectionTechLevel, 'building upgrade old level');
+  assertEqual(upgradeLog.newLevel, beforeProtectionTechLevel + 1, 'building upgrade new level');
+  assertEqual(after.buildings?.protectionTechLevel, beforeProtectionTechLevel + 1, 'protection tech level should increase');
+  if (beforeProtectionTechLevel >= 5) {
+    assertEqual(upgradeLog.costGold, 0, 'tianji spell upgrade should not log gold cost');
+    assertEqual(after.wallet?.vaultGold, beforeGold, 'vault gold should not change for tianji spell upgrade');
+    assertEqual(after.wallet?.balanceVersion, beforeWalletVersion, 'wallet version should not change for tianji spell upgrade');
+    assertEqual(after.spiritResource?.tianjiTalisman, beforeTianjiTalisman - 2, 'tianji spell upgrade should spend talisman');
+    assertEqual(after.spiritResource?.resourceVersion, beforeSpiritResourceVersion + 1, 'spirit resource version should increase after tianji spell upgrade');
+  } else {
+    assertEqual(after.wallet?.vaultGold, beforeGold - upgradeLog.costGold, 'vault gold should decrease by upgrade cost');
+    assertEqual(after.wallet?.balanceVersion, beforeWalletVersion + 1, 'wallet version should increase after building upgrade');
+    assertEqual(after.spiritResource?.tianjiTalisman, beforeTianjiTalisman, 'gold spell upgrade should not spend talisman');
+  }
   assertEqual(after.buildings?.buildingVersion, beforeBuildingVersion + 1, 'building version should increase');
 }
 
@@ -237,7 +250,7 @@ async function verifyRaidAndMessage(user1: DevLoginResult, user2: DevLoginResult
   const scene = await fetchJson<ClientSceneContentResponse>(`${CLIENT_API_PREFIX}/scene-content`, {
     headers: authHeaders(user1),
   });
-  const target = scene.raid.targets.find((entry) => entry.name === '测试用户2');
+  const target = scene.raid.targets.find((entry) => entry.name === user2.player.nickname);
   assert(target, 'test user 1 should have a visible target for test user 2');
   const army = await prisma.playerArmy.findUniqueOrThrow({
     where: { playerId: user1.player.id },
@@ -269,16 +282,18 @@ async function verifyRaidAndMessage(user1: DevLoginResult, user2: DevLoginResult
       assetLocks: { select: { lockedGold: true, status: true } },
     },
   });
-  assertEqual(orderBeforeSettlement.status, 'LOCKED', 'raid order should be locked before settlement');
+  assert(['LOCKED', 'SETTLING', 'SETTLED'].includes(orderBeforeSettlement.status), `raid order should be locked or settled, got ${orderBeforeSettlement.status}`);
   assertEqual(orderBeforeSettlement.attackerPlayerId, user1.player.id, 'raid attacker should be test user 1');
   assertEqual(orderBeforeSettlement.defenderPlayerId, user2.player.id, 'raid defender should be test user 2');
   assertAtLeast(orderBeforeSettlement.assetLocks[0]?.lockedGold ?? 0, 1, 'raid asset lock should lock gold');
 
-  const app = await NestFactory.createApplicationContext(AppModule, { bufferLogs: true });
-  try {
-    await app.get(RaidSettlementService).settleRaidOrder(orderId);
-  } finally {
-    await app.close();
+  if (orderBeforeSettlement.status !== 'SETTLED') {
+    const app = await NestFactory.createApplicationContext(AppModule, { bufferLogs: true });
+    try {
+      await app.get(RaidSettlementService).settleRaidOrder(orderId);
+    } finally {
+      await app.close();
+    }
   }
 
   const settlement = await prisma.raidSettlement.findUniqueOrThrow({

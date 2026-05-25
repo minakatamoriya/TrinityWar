@@ -42,7 +42,7 @@ export class SceneContentAssembler {
           title: '农场经营',
           description: '田地状态已从数据库读取，后续将通过地契任务逐步开启更多田地。',
           actions: [
-            { label: '打开领地工坊', target: 'building', tone: 'secondary' },
+            { label: '打开法术阁', target: 'building', tone: 'secondary' },
             { label: '返回首页', target: 'home', tone: 'ghost' },
           ],
         },
@@ -192,7 +192,9 @@ export class SceneContentAssembler {
     return (Object.keys(levels) as ExtensionKey[]).map((trackId) => {
       const currentLevel = levels[trackId];
       const track = getCastleExtensionTrack(trackId);
-      const nextConfig = getCastleExtensionLevelConfig(trackId, currentLevel + 1);
+      const expectedNextLevel = currentLevel + 1;
+      const rawNextConfig = getCastleExtensionLevelConfig(trackId, expectedNextLevel);
+      const nextConfig = rawNextConfig?.level === expectedNextLevel ? rawNextConfig : null;
       const locked = !nextConfig;
       const title = track?.title ?? trackId;
       const effectUnit = getExtensionEffectUnit(trackId);
@@ -203,14 +205,14 @@ export class SceneContentAssembler {
         levelText: nextConfig ? `Lv.${currentLevel} -> Lv.${currentLevel + 1}` : `Lv.${currentLevel}`,
         description: track?.description ?? '扩展能力等待配置。',
         effectText: nextConfig
-          ? `当前 ${formatNumber(getCurrentExtensionEffect(trackId, currentLevel))}${effectUnit}，升级后 ${formatNumber(nextConfig.effectValue)}${effectUnit}。`
+          ? `当前 ${formatNumber(getCurrentExtensionEffect(trackId, currentLevel))}${effectUnit}，修习后 ${formatNumber(nextConfig.effectValue)}${effectUnit}。`
           : '已达到当前配置上限。',
         costText: nextConfig
-          ? `消耗 ${formatNumber(nextConfig.upgradeCost)} 金币`
+          ? formatSpellCostText(nextConfig)
           : '已满级',
         locked,
         action: {
-          label: locked ? '查看条件' : '升级扩展',
+          label: locked ? '查看' : '修习法术',
           target: 'building',
           tone: locked ? 'ghost' : 'secondary',
         },
@@ -299,6 +301,7 @@ export class SceneContentAssembler {
     const stipendState = readModel.factionStipendStates[0] ?? null;
     const donateGoldStep = GAME_BALANCE.faction.donateGoldStep;
     const contributionPerDonateStep = GAME_BALANCE.faction.contributionPerDonateStep;
+    const contributionBonusPercent = getCurrentExtensionEffect('factionOfferingTech', readModel.buildings?.pendingClaimTechLevel ?? 0);
     const stipendRewards = toPublicFactionStipendRewards((stipendTier?.rewards ?? []) as ClientFactionStipendReward[]);
     const stipendRewardText = stipendRewards.map((reward) => `${reward.label} x${formatNumber(reward.quantity)}`).join('、') || '暂无俸禄';
 
@@ -327,9 +330,11 @@ export class SceneContentAssembler {
       })),
       donate: {
         title: '阵营上缴',
-        description: `上缴金币可增加个人贡献，贡献会提升每日俸禄档位。当前规则：每 ${formatNumber(donateGoldStep)} 金币 = ${formatNumber(contributionPerDonateStep)} 贡献。`,
+        description: `上缴金币可增加个人贡献，贡献会提升每日俸禄档位。当前规则：每 ${formatNumber(donateGoldStep)} 金币 = ${formatNumber(contributionPerDonateStep)} 基础贡献。`,
         goldStep: donateGoldStep,
-        contributionRule: `每上缴 ${formatNumber(donateGoldStep)} 金币获得 ${formatNumber(contributionPerDonateStep)} 贡献；贡献越高，每日俸禄材料越好。`,
+        contributionRule: contributionBonusPercent > 0
+          ? `每上缴 ${formatNumber(donateGoldStep)} 金币获得 ${formatNumber(contributionPerDonateStep)} 基础贡献；同心诀当前 +${formatNumber(contributionBonusPercent)}%。`
+          : `每上缴 ${formatNumber(donateGoldStep)} 金币获得 ${formatNumber(contributionPerDonateStep)} 贡献；贡献越高，每日俸禄材料越好。`,
       },
       stipend: currentFaction
         ? {
@@ -557,6 +562,12 @@ function getExtensionEffectUnit(trackId: ExtensionKey): string {
   }
 
   return '分钟';
+}
+
+function formatSpellCostText(config: { costResource?: string; costAmount?: number; upgradeCost?: number }): string {
+  const resource = config.costResource === 'tianjiTalisman' ? '天机符' : '金币';
+  const amount = Math.max(Math.floor(config.costAmount ?? config.upgradeCost ?? 0), 0);
+  return `消耗 ${formatNumber(amount)} ${resource}`;
 }
 
 function formatNumber(value: number): string {

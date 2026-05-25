@@ -1,17 +1,17 @@
-import type { ClientBuildingUpgrade, ClientCastleExtensionUpgrade, ClientCastleExtensionUpgradeId, ClientSceneAction } from '@trinitywar/shared';
+import type { ClientBuildingUpgrade, ClientCastleExtensionUpgrade, ClientCastleExtensionUpgradeId, ClientSceneAction, ClientUpgradeTargetType } from '@trinitywar/shared';
 import { ActionButton } from '../ActionButton';
 
 interface BuildingSceneProps {
   upgrades: ClientBuildingUpgrade[];
   extensions: ClientCastleExtensionUpgrade[];
-  onUpgradeAction: (action: ClientSceneAction, upgradeId: ClientBuildingUpgrade['id'] | ClientCastleExtensionUpgradeId, context: string, targetType: 'building' | 'castle-extension') => void;
+  onUpgradeAction: (action: ClientSceneAction, upgradeId: ClientBuildingUpgrade['id'] | ClientCastleExtensionUpgradeId, context: string, targetType: ClientUpgradeTargetType, costText: string) => void;
 }
 
 const upgradeDescriptions: Record<string, string> = {
-  protectionTech: '延长被掠夺后的保护时间，减少短时间内连续被打的压力。',
-  farmYieldTech: '提高农田作物金币收益，让种菜成为更稳定的主要金币来源。',
-  ripeWindowTech: '延长丰熟可收窗口，降低错过成熟时间带来的损失。',
-  factionOfferingTech: '强化阵营供奉收益，提升每日俸禄中的材料价值，不放大金币返还。',
+  protectionTech: '结阵护住灵田与本命灵宠，延长被成功掠夺后的保护时间。',
+  farmYieldTech: '引灵雨滋养田垄，提升作物成长与丰熟阶段的金币收益。',
+  ripeWindowTech: '观天象定农时，延长作物进入丰熟后的可收窗口。',
+  factionOfferingTech: '凝聚同道心念，提升金币上缴时获得的个人阵营贡献。',
 };
 
 function getUpgradeCostText(costText: string): string {
@@ -34,7 +34,7 @@ function renderUpgradeAction(
   upgrade: ClientBuildingUpgrade | ClientCastleExtensionUpgrade,
   upgradeId: ClientBuildingUpgrade['id'] | ClientCastleExtensionUpgradeId,
   title: string,
-  targetType: 'building' | 'castle-extension',
+  targetType: ClientUpgradeTargetType,
   onUpgradeAction: BuildingSceneProps['onUpgradeAction'],
 ): JSX.Element | null {
   if (upgrade.locked || !upgrade.costText.startsWith('消耗')) {
@@ -45,7 +45,7 @@ function renderUpgradeAction(
     <div className="building-mini-card-footer">
       <strong className="building-mini-card-price">{getUpgradeCostText(upgrade.costText)}</strong>
       <ActionButton action={upgrade.action} onClick={(action) => {
-        onUpgradeAction(action, upgradeId, title, targetType);
+        onUpgradeAction(action, upgradeId, title, targetType, upgrade.costText);
       }} />
     </div>
   );
@@ -60,7 +60,7 @@ export function BuildingScene(props: BuildingSceneProps): JSX.Element {
       <div className="scene-scroll building-scene-scroll">
         <div className="card-grid compact-grid building-six-upgrade-grid">
           {upgradeItems.map((upgrade) => {
-            const targetType = 'levelText' in upgrade ? 'castle-extension' : 'building';
+            const targetType: ClientUpgradeTargetType = 'levelText' in upgrade ? 'territory-tech' : 'building';
             const upgradeId = 'levelText' in upgrade ? upgrade.id : upgrade.id;
 
             return (
@@ -68,7 +68,7 @@ export function BuildingScene(props: BuildingSceneProps): JSX.Element {
                 <div className="building-mini-card-top">
                   <h4>{upgrade.title}</h4>
                   <span className={`building-mini-card-state ${upgrade.locked ? 'locked' : 'active'}`}>
-                    {upgrade.locked ? '已满级' : '可升级'}
+                    {upgrade.locked ? '已满级' : '可修习'}
                   </span>
                 </div>
                 <div className="building-mini-card-copy">

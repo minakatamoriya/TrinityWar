@@ -18,7 +18,7 @@ export function CastleLevelsView(props: {
           </div>
           <button className="primary-button" disabled={props.busy === 'castle-levels'} onClick={props.onRefresh} type="button">刷新</button>
         </div>
-        <EmptyState text="这里用于核查地契开田、阵营每日俸禄和领地科技配置；主城税收、金库容量和每小时分红已退出首发口径。" />
+        <EmptyState text="这里用于核查地契开田、阵营每日俸禄和法术配置；主城税收、金库容量和每小时分红已退出首发口径。" />
       </section>
       <TableSection
         title="轻量规则表"

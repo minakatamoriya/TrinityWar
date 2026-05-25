@@ -92,7 +92,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-width: 74px;
+  min-width: 54px;
   justify-content: center;
 }
 
@@ -507,12 +507,13 @@ button {
 
 .global-resource-bar {
   display: flex;
-  flex-direction: column;
-  gap: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   padding: 0 12px 6px;
 }
 
-.global-gold-pill {
+.global-resource-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -520,26 +521,44 @@ button {
   min-height: 30px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(118, 92, 58, 0.42), rgba(55, 43, 31, 0.78));
-  border: 1px solid rgba(255, 214, 107, 0.2);
-  color: #ffd66b;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
 }
 
-.global-gold-icon {
+.global-gold-pill {
+  background: linear-gradient(180deg, rgba(118, 92, 58, 0.42), rgba(55, 43, 31, 0.78));
+  border: 1px solid rgba(255, 214, 107, 0.2);
+  color: #ffd66b;
+}
+
+.global-tianji-pill {
+  background: linear-gradient(180deg, rgba(61, 89, 126, 0.42), rgba(31, 45, 70, 0.78));
+  border: 1px solid rgba(164, 207, 255, 0.22);
+  color: #cfe6ff;
+}
+
+.global-gold-icon,
+.global-tianji-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: #ffd66b;
-  color: #4d3216;
   font-size: 10px;
   font-weight: 800;
 }
 
-.global-gold-pill strong {
+.global-gold-icon {
+  background: #ffd66b;
+  color: #4d3216;
+}
+
+.global-tianji-icon {
+  background: #b9dbff;
+  color: #1e314e;
+}
+
+.global-resource-pill strong {
   font-size: 18px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -2737,6 +2756,71 @@ button {
   font-size: 14px;
 }
 
+.season-signin-milestones {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.season-signin-milestone {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 7px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 248, 234, 0.08);
+  background: rgba(255, 248, 234, 0.04);
+}
+
+.season-signin-milestone.reached {
+  border-color: rgba(248, 223, 154, 0.32);
+  background: linear-gradient(180deg, rgba(138, 102, 44, 0.28), rgba(255, 248, 234, 0.05));
+}
+
+.season-signin-milestone-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(248, 223, 154, 0.14);
+  color: #f8df9a;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.season-signin-milestone strong,
+.season-signin-milestone span,
+.season-signin-milestone em {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.season-signin-milestone strong {
+  color: #fff1d2;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.season-signin-milestone span,
+.season-signin-milestone em {
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.season-signin-milestone em {
+  font-style: normal;
+  color: #f8df9a;
+}
+
+.season-signin-rule {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .season-signin-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -2784,6 +2868,10 @@ button {
 
 .season-signin-day.future {
   opacity: 0.48;
+}
+
+.season-signin-day.missed {
+  opacity: 0.32;
 }
 
 .spirit-codex-button-card span,
@@ -5141,7 +5229,7 @@ button.spirit-element-chip {
   }
 
   .global-resource-bar {
-    padding: 0;
+    padding: 0 12px 6px;
   }
 
   .resource-dock {

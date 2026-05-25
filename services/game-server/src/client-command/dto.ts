@@ -6,6 +6,7 @@ import type {
   ClientFactionDonateRequest,
   ClientBuildingUpgradeId,
   ClientCastleExtensionUpgradeId,
+  ClientTerritoryUpgradeId,
   ClientRecruitArmyRequest,
   ClientRaidActionRequest,
   ClientStartCultivationRequest,
@@ -53,6 +54,7 @@ export class UpgradeBuildingRequestDto {
   targetType!: ClientUpgradeTargetType;
   buildingId?: ClientBuildingUpgradeId;
   extensionId?: ClientCastleExtensionUpgradeId;
+  territoryUpgradeId?: ClientTerritoryUpgradeId;
   buildingVersion?: number;
   walletVersion?: number;
   requestIdempotencyKey?: string;

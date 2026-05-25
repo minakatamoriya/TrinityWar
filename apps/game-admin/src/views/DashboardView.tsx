@@ -22,7 +22,7 @@ export function DashboardView(props: {
         <div className="quick-grid">
           <button type="button" onClick={() => props.onNavigate('player')}>
             <strong>查询玩家信息</strong>
-            <span>查看身份、资产、建筑、田地、任务。</span>
+            <span>查看身份、资产、法术、田地、任务。</span>
           </button>
           <button type="button" onClick={() => props.onNavigate('order')}>
             <strong>查询订单</strong>

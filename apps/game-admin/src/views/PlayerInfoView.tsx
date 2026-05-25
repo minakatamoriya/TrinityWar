@@ -135,7 +135,7 @@ export function PlayerDetailTables(props: { overview: AdminPlayerOverviewRespons
               rows={recordRows(props.overview.wallet, ['playerId', 'vaultGold', 'walletGold', 'walletProtectedRatio', 'balanceVersion'])}
             />
             <InfoSection
-              title="建筑状态"
+              title="法术状态"
               rows={recordRows(props.overview.building, ['playerId', 'protectionTechLevel', 'farmYieldTechLevel', 'ripeWindowTechLevel', 'buildingVersion'])}
             />
           </div>

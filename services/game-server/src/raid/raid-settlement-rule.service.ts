@@ -93,8 +93,8 @@ export class RaidSettlementRuleService {
     const lockedGold = Math.max(Math.floor(input.lockedGold), 0);
     const lootGold = Math.min(lockedGold, Math.floor(lockedGold * config.goldRatio));
     const depositedGold = lootGold;
-    const attackerNextHp = input.attackerSpirit ? Math.max(Math.floor(battle.attackerHpAfter), 0) : null;
-    const defenderNextHp = input.defenderSpirit ? Math.max(Math.floor(battle.defenderHpAfter), 0) : null;
+    const attackerNextHp = input.attackerSpirit ? clampHpForPersistence(battle.attackerHpAfter, input.attackerSpirit.maxHp) : null;
+    const defenderNextHp = input.defenderSpirit ? clampHpForPersistence(battle.defenderHpAfter, input.defenderSpirit.maxHp) : null;
     const soulRewards = buildSoulRewards(input.defenderSpirit, battle.result);
     const shardDrop = buildShardDrop(input.defenderSpirit, tier, scoreDeltaRatio);
     const rewardItems = buildRewardItems(soulRewards, shardDrop);
@@ -423,6 +423,10 @@ function resolveTier(result: BattleResult, scoreDeltaRatio: number): RaidOutcome
 
 function clampPercent(value: number): number {
   return Math.max(Math.min(value, 100), 0);
+}
+
+function clampHpForPersistence(value: number, maxHp: number): number {
+  return Math.max(Math.min(Math.floor(value), Math.max(maxHp, 0)), 0);
 }
 
 function randomChance(chance: number): boolean {

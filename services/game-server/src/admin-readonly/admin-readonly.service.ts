@@ -183,11 +183,11 @@ export class AdminReadonlyService {
     }));
     const territoryTechs = Object.entries(GAME_DESIGN_CONFIG.territoryTechs as Record<string, { title?: string; levels?: Array<Record<string, unknown>> }>)
       .flatMap(([key, track]) => (track.levels ?? []).map((level) => ({
-        type: 'territory-tech',
+        type: 'spell',
         key: `${key}-lv-${level['level']}`,
         title: track.title ?? key,
         requirements: 'no castle-level requirement',
-        cost: level['upgradeCost'],
+        cost: formatRuleCost(level),
         effect: level['effectValue'],
         rewards: '-',
       })));
@@ -781,6 +781,12 @@ function formatRequirementList(requirements: unknown): string {
       return `${record['label'] ?? record['key'] ?? 'requirement'} >= ${record['target'] ?? 0}`;
     })
     .join(' + ');
+}
+
+function formatRuleCost(level: Record<string, unknown>): string {
+  const amount = Number(level['costAmount'] ?? level['upgradeCost'] ?? 0);
+  const resource = level['costResource'] === 'tianjiTalisman' ? '天机符' : '金币';
+  return `${Number.isFinite(amount) ? Math.max(Math.floor(amount), 0) : 0} ${resource}`;
 }
 
 function formatRuleRewards(rewards: unknown): string {

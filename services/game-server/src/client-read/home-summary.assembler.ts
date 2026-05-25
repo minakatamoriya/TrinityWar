@@ -55,7 +55,7 @@ export class HomeSummaryAssembler {
         actionScene: mapActionScene(taskState.actionScene),
       })),
       primaryActions: [
-        { key: 'building', title: '领地工坊', description: '升级领地科技' },
+        { key: 'building', title: '法术阁', description: '修习法术强化经营' },
         { key: 'farm', title: '农场', description: '收成熟田地' },
         { key: 'raid', title: '部队', description: '征召兵力并查看训练队列' },
         { key: 'report', title: '掠夺', description: '查看目标、战报与通缉令' },

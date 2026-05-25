@@ -7,8 +7,11 @@ import {
 
 export interface BuildingUpgradeTarget {
   key: ClientBuildingUpgradeId | ClientCastleExtensionUpgradeId;
+  title: string;
   currentLevel: number;
   nextLevel: number;
+  costResource: 'gold' | 'tianjiTalisman';
+  costAmount: number;
   costGold: number;
   requiredCastleLevel: number;
   isExtension: boolean;
@@ -37,18 +40,25 @@ export class BuildingUpgradeRuleService {
   resolveExtensionTarget(buildings: PlayerBuildingStateForUpgrade, extensionId: ClientCastleExtensionUpgradeId): BuildingUpgradeTarget {
     const currentLevel = getExtensionLevel(buildings, extensionId);
     const track = getCastleExtensionTrack(extensionId);
-    const nextLevelConfig = getCastleExtensionLevelConfig(extensionId, currentLevel + 1);
+    const nextLevel = currentLevel + 1;
+    const nextLevelConfig = getCastleExtensionLevelConfig(extensionId, nextLevel);
 
-    if (!track || !nextLevelConfig) {
+    if (!track || !nextLevelConfig || nextLevelConfig.level !== nextLevel) {
       throw new Error('BUILDING_MAX_LEVEL');
     }
 
+    const costResource = nextLevelConfig.costResource === 'tianjiTalisman' ? 'tianjiTalisman' : 'gold';
+    const costAmount = Math.max(Math.floor(nextLevelConfig.costAmount ?? nextLevelConfig.upgradeCost ?? 0), 0);
+
     return {
       key: extensionId,
+      title: track.title ?? extensionId,
       currentLevel,
-      nextLevel: currentLevel + 1,
-      costGold: nextLevelConfig.upgradeCost,
-      requiredCastleLevel: nextLevelConfig.requiredCastleLevel,
+      nextLevel,
+      costResource,
+      costAmount,
+      costGold: costResource === 'gold' ? costAmount : 0,
+      requiredCastleLevel: nextLevelConfig.requiredCastleLevel ?? 1,
       isExtension: true,
     };
   }

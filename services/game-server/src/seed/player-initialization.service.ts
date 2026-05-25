@@ -174,6 +174,7 @@ export class PlayerInitializationService {
       data: {
         castleLevelCache: castleLevel,
         lastLoginAt: now,
+        ...(resetExisting ? { protectedUntil: null } : {}),
       },
     });
   }
