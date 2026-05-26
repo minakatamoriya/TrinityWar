@@ -1,14 +1,19 @@
 {
   "actors": {
     "fox": {
-      "name": "狐狸",
+      "name": "狐灵",
       "imageUrl": "/assets/character/fox.png",
-      "imageAlt": "狐狸宠物"
+      "imageAlt": "狐灵宠物"
     },
     "tudi": {
       "name": "土地公",
       "imageUrl": "/assets/character/tudi.png",
       "imageAlt": "土地公"
+    },
+    "leader1": {
+      "name": "引导者",
+      "imageUrl": "/assets/character/leader1.png",
+      "imageAlt": "新手引导角色"
     }
   },
   "defaults": {
@@ -38,7 +43,25 @@
       "steps": [
         {
           "actorId": "fox",
-          "text": "主人，欢迎你回来。"
+          "text": "主人，欢迎回来。"
+        }
+      ]
+    },
+    "home.welcome.leader1": {
+      "mode": "sequence",
+      "chance": 1,
+      "priority": 20,
+      "interrupt": "replace",
+      "advance": "click",
+      "options": {
+        "showCloseButton": false,
+        "closeOnMaskClick": false,
+        "autoCloseMs": null
+      },
+      "steps": [
+        {
+          "actorId": "leader1",
+          "text": "从现在开始，我带你走完第一轮开荒。先收下启灵芽，再用它种出第一笔收益。"
         }
       ]
     },
@@ -65,7 +88,97 @@
       "steps": [
         {
           "actorId": "tudi",
-          "text": "小神在此守候多时了，麦子都熟了。"
+          "text": "这一块田已经熟了，收下去就能看到第一轮经营结果。"
+        }
+      ]
+    },
+    "tutorial.farm.start": {
+      "mode": "sequence",
+      "chance": 1,
+      "priority": 40,
+      "interrupt": "replace",
+      "advance": "click",
+      "options": {
+        "showCloseButton": false,
+        "closeOnMaskClick": false,
+        "autoCloseMs": null
+      },
+      "steps": [
+        {
+          "actorId": "leader1",
+          "text": "先从第一块田开始。把启灵芽种下去，十秒后你就能拿到第一笔金币和灵根。"
+        }
+      ]
+    },
+    "tutorial.farm.wait": {
+      "mode": "sequence",
+      "chance": 1,
+      "priority": 40,
+      "interrupt": "replace",
+      "advance": "auto-or-click",
+      "options": {
+        "showCloseButton": false,
+        "closeOnMaskClick": true,
+        "autoCloseMs": 4200
+      },
+      "steps": [
+        {
+          "actorId": "leader1",
+          "text": "启灵芽已经入土。等它成熟后收获，灵根会直接用来唤醒你的第一只灵宠。"
+        }
+      ]
+    },
+    "tutorial.spirit.start": {
+      "mode": "sequence",
+      "chance": 1,
+      "priority": 40,
+      "interrupt": "replace",
+      "advance": "click",
+      "options": {
+        "showCloseButton": false,
+        "closeOnMaskClick": false,
+        "autoCloseMs": null
+      },
+      "steps": [
+        {
+          "actorId": "leader1",
+          "text": "第一轮收获已经到手。现在去灵宠页，在空栏位中合成你的首宠，并选定五行属性。"
+        }
+      ]
+    },
+    "tutorial.raid.start": {
+      "mode": "sequence",
+      "chance": 1,
+      "priority": 40,
+      "interrupt": "replace",
+      "advance": "click",
+      "options": {
+        "showCloseButton": false,
+        "closeOnMaskClick": false,
+        "autoCloseMs": null
+      },
+      "steps": [
+        {
+          "actorId": "leader1",
+          "text": "首宠已经能出战。接下来只打教程目标，感受战斗结果、掠夺收益和普通兽魂入账。"
+        }
+      ]
+    },
+    "tutorial.completed": {
+      "mode": "sequence",
+      "chance": 1,
+      "priority": 40,
+      "interrupt": "replace",
+      "advance": "auto-or-click",
+      "options": {
+        "showCloseButton": false,
+        "closeOnMaskClick": true,
+        "autoCloseMs": 5200
+      },
+      "steps": [
+        {
+          "actorId": "leader1",
+          "text": "第一轮主循环已经走通。法术和阵营页现在会开放，你可以按自己的节奏继续经营。"
         }
       ]
     }

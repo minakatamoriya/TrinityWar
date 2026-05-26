@@ -2,7 +2,7 @@ import type { FieldStatus, Prisma, SpiritElement } from '@prisma/client';
 import { getDailyTaskActionScene } from '../client-read/daily-task-lifecycle.service.js';
 import { DAILY_TASK_CONFIG, LAND_DEED_CONFIG } from '../lib/game-balance.js';
 import { getLocalDateKey } from '../lib/date-key.js';
-import { DEFAULT_STARTER_SPIRIT_ID, SPIRIT_SLOT_COUNT } from './seed-data/spirits.js';
+import { DEFAULT_STARTER_SPIRIT_ID, SPIRIT_SLOT_COUNT, STARTER_SPIRIT_IDS } from './seed-data/spirits.js';
 
 export interface PlayerInitializationInput {
   playerId: string;
@@ -28,6 +28,8 @@ export interface PlayerInitializationInput {
   };
   seedInventory?: Record<string, { quantity: number; unlocked: boolean }>;
   spirit?: {
+    createStarterSpirit?: boolean;
+    readyStarterSpirits?: boolean;
     spiritSoul?: number;
     ordinarySoul?: number;
     rareSoul?: number;
@@ -58,9 +60,9 @@ export interface PlayerFieldInitializationInput {
 
 const fieldUnlockMilestones = [1, 5, 10, 15];
 const starterSeedInventory: Record<string, { quantity: number; unlocked: boolean }> = {
-  qinglingmai: { quantity: 3, unlocked: true },
-  xunyamai: { quantity: 3, unlocked: true },
+  qilingya: { quantity: 0, unlocked: true },
 };
+const STARTER_SEED_FALLBACKS = ['qilingya', 'qinglingmai'] as const;
 
 export class PlayerInitializationService {
   async initialize(client: Prisma.TransactionClient, input: PlayerInitializationInput): Promise<void> {
@@ -81,7 +83,7 @@ export class PlayerInitializationService {
       where: { playerId: input.playerId },
       create: {
         playerId: input.playerId,
-        vaultGold: input.vaultGold ?? 120,
+        vaultGold: input.vaultGold ?? 0,
         vaultCapacity: getInitialVaultCapacity(input.vaultLevel ?? 1),
         walletGold: input.walletGold ?? 0,
         walletCapacity: 500,
@@ -93,7 +95,7 @@ export class PlayerInitializationService {
       },
       update: resetExisting
         ? {
-          vaultGold: input.vaultGold ?? 120,
+          vaultGold: input.vaultGold ?? 0,
           vaultCapacity: getInitialVaultCapacity(input.vaultLevel ?? 1),
           walletGold: input.walletGold ?? 0,
           walletCapacity: 500,
@@ -165,10 +167,14 @@ export class PlayerInitializationService {
       select: { id: true, seedId: true },
     });
     const seedIdToDefinitionId = new Map(seedDefinitions.map((seed) => [seed.seedId, seed.id]));
+    const normalizedSeedInventory = normalizeSeedInventory(
+      input.seedInventory ?? starterSeedInventory,
+      seedDefinitions.map((definition) => definition.seedId),
+    );
 
     await this.initializeFields(client, input.playerId, fields, seedIdToDefinitionId, now, resetExisting);
     await this.initializeLandDeeds(client, input.playerId, fields, now, resetExisting);
-    await this.initializeSeedInventory(client, input.playerId, input.seedInventory ?? starterSeedInventory, seedDefinitions, now, resetExisting);
+    await this.initializeSeedInventory(client, input.playerId, normalizedSeedInventory, seedDefinitions, now, resetExisting);
     await this.initializeSpiritState(client, input.playerId, input.spirit, now, resetExisting);
     await this.initializeFarmBoard(client, input.playerId, resetExisting);
     await this.initializeDailyTasks(client, input.playerId, input.taskOverrides, resetExisting);
@@ -394,6 +400,8 @@ export class PlayerInitializationService {
     now: Date,
     resetExisting: boolean,
   ): Promise<void> {
+    const createStarterSpirit = spirit?.createStarterSpirit ?? true;
+    const readyStarterSpirits = spirit?.readyStarterSpirits ?? false;
     const starterSpiritId = spirit?.starterSpiritId ?? DEFAULT_STARTER_SPIRIT_ID;
     const starterElement = spirit?.starterElement ?? 'WOOD';
     const spiritSoul = spirit?.spiritSoul ?? 0;
@@ -410,9 +418,11 @@ export class PlayerInitializationService {
         growthHp: true,
       },
     });
-    const starterDefinition = spiritDefinitions.find((definition) => definition.spiritId === starterSpiritId)
-      ?? spiritDefinitions.find((definition) => definition.spiritId === DEFAULT_STARTER_SPIRIT_ID)
-      ?? spiritDefinitions[0];
+    const starterDefinition = createStarterSpirit
+      ? spiritDefinitions.find((definition) => definition.spiritId === starterSpiritId)
+        ?? spiritDefinitions.find((definition) => definition.spiritId === DEFAULT_STARTER_SPIRIT_ID)
+        ?? spiritDefinitions[0]
+      : null;
 
     await client.playerSpiritResource.upsert({
       where: { playerId },
@@ -452,7 +462,7 @@ export class PlayerInitializationService {
     });
 
     for (let slotIndex = 1; slotIndex <= SPIRIT_SLOT_COUNT; slotIndex += 1) {
-      const shouldCreateStarter = slotIndex === 1 && !!starterDefinition;
+      const shouldCreateStarter = createStarterSpirit && slotIndex === 1 && !!starterDefinition;
       const level = shouldCreateStarter ? starterLevel : 1;
       const maxHp = shouldCreateStarter ? calculateSpiritMaxHp(starterDefinition, level) : 0;
 
@@ -496,7 +506,12 @@ export class PlayerInitializationService {
     }
 
     for (const definition of spiritDefinitions) {
-      const isStarter = starterDefinition?.id === definition.id;
+      const isStarter = createStarterSpirit && starterDefinition?.id === definition.id;
+      const isReadyStarter = !createStarterSpirit
+        && readyStarterSpirits
+        && STARTER_SPIRIT_IDS.includes(definition.spiritId as typeof STARTER_SPIRIT_IDS[number]);
+      const hasSeen = isStarter || isReadyStarter;
+      const shardCount = isReadyStarter ? 100 : 0;
 
       await client.playerSpiritCodex.upsert({
         where: {
@@ -508,24 +523,24 @@ export class PlayerInitializationService {
         create: {
           playerId,
           spiritDefinitionId: definition.id,
-          hasSeen: isStarter,
-          shardCount: 0,
-          readyToCompose: false,
+          hasSeen,
+          shardCount,
+          readyToCompose: isReadyStarter,
           ownedCurrent: isStarter,
           ownedEver: isStarter,
-          firstSeenAt: isStarter ? now : null,
+          firstSeenAt: hasSeen ? now : null,
           lastOwnedAt: isStarter ? now : null,
           codexVersion: 1,
         },
         update: resetExisting
           ? {
-            hasSeen: isStarter,
-            shardCount: 0,
-            readyToCompose: false,
+            hasSeen,
+            shardCount,
+            readyToCompose: isReadyStarter,
             ownedCurrent: isStarter,
             ownedEver: isStarter,
-            firstSeenAt: isStarter ? now : null,
-            readyAt: null,
+            firstSeenAt: hasSeen ? now : null,
+            readyAt: isReadyStarter ? now : null,
             lastOwnedAt: isStarter ? now : null,
             codexVersion: { increment: 1 },
           }
@@ -584,6 +599,41 @@ function getInitialVaultCapacity(vaultLevel: number): number {
 
 function getInitialArmyCapacity(populationLevel: number): number {
   return Math.max(populationLevel, 1) * 10;
+}
+
+function normalizeSeedInventory(
+  inventory: Record<string, { quantity: number; unlocked: boolean }>,
+  availableSeedIds: string[],
+): Record<string, { quantity: number; unlocked: boolean }> {
+  const availableSeedIdSet = new Set(availableSeedIds);
+  const normalizedInventory: Record<string, { quantity: number; unlocked: boolean }> = {};
+
+  for (const [seedId, entry] of Object.entries(inventory)) {
+    if (availableSeedIdSet.has(seedId)) {
+      normalizedInventory[seedId] = entry;
+    }
+  }
+
+  if (Object.keys(normalizedInventory).length > 0) {
+    return normalizedInventory;
+  }
+
+  const sourceEntry = STARTER_SEED_FALLBACKS
+    .map((seedId) => inventory[seedId])
+    .find((entry): entry is { quantity: number; unlocked: boolean } => Boolean(entry));
+
+  if (!sourceEntry) {
+    return normalizedInventory;
+  }
+
+  for (const fallbackSeedId of STARTER_SEED_FALLBACKS) {
+    if (availableSeedIdSet.has(fallbackSeedId)) {
+      normalizedInventory[fallbackSeedId] = sourceEntry;
+      break;
+    }
+  }
+
+  return normalizedInventory;
 }
 
 function buildDailyTaskSelection(dateKey: string): string[] {

@@ -1,6 +1,8 @@
 import { Body, Controller, Headers, Inject, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type {
+  ClientClaimStarterSeedRequest,
+  ClientClaimStarterSeedResponse,
   ClientClaimDailyTaskRequest,
   ClientClaimDailyTaskResponse,
   ClientClaimPendingRequest,
@@ -21,7 +23,7 @@ import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
 import { createUnauthorizedError } from '../common/errors/index.js';
 import { ClientCommandService } from './client-command.service.js';
-import { ClaimDailyTaskRequestDto, ClaimPendingRequestDto, CollectFieldRequestDto, FactionDonateRequestDto, ClaimFactionStipendRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UpgradeBuildingRequestDto } from './dto.js';
+import { ClaimDailyTaskRequestDto, ClaimPendingRequestDto, ClaimStarterSeedRequestDto, CollectFieldRequestDto, FactionDonateRequestDto, ClaimFactionStipendRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UpgradeBuildingRequestDto } from './dto.js';
 
 @ApiTags('client')
 @Controller('client/actions')
@@ -66,6 +68,27 @@ export class ClientCommandController {
     return this.clientCommandService.claimDailyTask({
       playerId: currentPlayer.playerId,
       request: body as ClaimDailyTaskRequestDto,
+      idempotencyKey,
+    });
+  }
+
+  @Post('claim-starter-seeds')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: ClaimStarterSeedRequestDto })
+  @ApiOkResponse({ description: 'Claim tutorial starter seeds.' })
+  async claimStarterSeeds(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: ClientClaimStarterSeedRequest,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<ClientClaimStarterSeedResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.claimStarterSeeds({
+      playerId: currentPlayer.playerId,
+      request: body as ClaimStarterSeedRequestDto,
       idempotencyKey,
     });
   }
@@ -213,6 +236,7 @@ export class ClientCommandController {
 
 defineRouteParamTypes(ClientCommandController.prototype, 'claimPending', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimDailyTask', [Object, Object, Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'claimStarterSeeds', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'collectField', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'startCultivation', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'recruitArmy', [Object, Object, Object]);

@@ -23,7 +23,7 @@ import type {
   ClientUpgradeBuildingRequest,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidBattleReplay, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevLoginMode, type DevLoginSession, updateFarmBoard, upgradeClientBuilding } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidBattleReplay, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, updateFarmBoard, upgradeClientBuilding } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
@@ -43,6 +43,7 @@ import { RaidBattleScreen } from './battle/RaidBattleScreen';
 
 type RaidHubTabKey = 'targets' | 'follows' | 'reports' | 'warrants';
 type FactionTabKey = 'overview' | 'donate' | 'rank';
+type TutorialStage = 'home' | 'farm' | 'spirit' | 'raid' | 'completed';
 
 interface ToastState {
   id: number;
@@ -84,7 +85,7 @@ interface SeedCodexState {
 interface SeedRewardModalState {
   title: string;
   summary: string;
-  confirmAction?: 'claim-faction-stipend' | 'claim-spirit-ad-reward';
+  confirmAction?: 'claim-faction-stipend' | 'claim-spirit-ad-reward' | 'claim-starter-seeds';
   items: SeedRewardModalItem[];
 }
 
@@ -147,9 +148,29 @@ interface SeasonSignInMilestone {
   remainingDays: number;
 }
 
+interface FactionChoiceCard {
+  code: DevFactionChoice;
+  name: string;
+  title: string;
+  traits: string[];
+  leaderSummary: string;
+}
+
+interface LocalFarmFieldPresentation {
+  title: string;
+  badge: string;
+  tone: 'seeded' | 'growing' | 'mature' | 'withered' | 'empty' | 'locked';
+  description: string;
+  actions: ClientSceneAction[];
+  progressRemainingSeconds: number;
+  progressTotalSeconds: number;
+  fieldVersionOffset: number;
+}
+
 const seedCatalog: SeedCatalogItem[] = [
-  { id: 'qinglingmai', name: '青灵麦', rarity: 'common', sortOrder: 10, description: '普通、标准稳收基准种，初始默认可培育。', lore: '田野间最常见的灵粮，穗头泛淡青光泽，脱壳后熬粥清香回甘。凡人食之强身，修士食之略养经脉。春种秋收，从不妖异。', stageGold: { growing: 100, mature: 200, withered: 100 }, stageSeconds: { seeded: 7200, growing: 3600 }, unlockedByDefault: true },
-  { id: 'xunyamai', name: '风云稻', rarity: 'common', sortOrder: 20, description: '普通、半小时快收种，适合切碎片时间。', lore: '稻芒起势极快，晨起沾露便能成势，半个时辰内就能完成一轮收益。', stageGold: { growing: 100, mature: 200, withered: 100 }, stageSeconds: { seeded: 900, growing: 900 }, unlockedByDefault: true },
+  { id: 'qilingya', name: '启灵芽', rarity: 'common', sortOrder: 1, description: '新手教程种，20 秒完成第一轮收获。', lore: '只在开荒时授予的一枚灵芽，破土极快，用来帮新人从零点亮第一笔资金与灵根。', stageGold: { growing: 20, mature: 50, withered: 50 }, stageSeconds: { seeded: 10, growing: 10 }, unlockedByDefault: true },
+  { id: 'qinglingmai', name: '青灵麦', rarity: 'common', sortOrder: 10, description: '普通、标准稳收基准种，完成教程后进入日常经营。', lore: '田野间最常见的灵粮，穗头泛淡青光泽，脱壳后熬粥清香回甘。凡人食之强身，修士食之略养经脉。春种秋收，从不妖异。', stageGold: { growing: 100, mature: 200, withered: 100 }, stageSeconds: { seeded: 7200, growing: 3600 }, unlockedByDefault: false },
+  { id: 'xunyamai', name: '风云稻', rarity: 'common', sortOrder: 20, description: '普通、半小时快收种，适合切碎片时间。', lore: '稻芒起势极快，晨起沾露便能成势，半个时辰内就能完成一轮收益。', stageGold: { growing: 100, mature: 200, withered: 100 }, stageSeconds: { seeded: 900, growing: 900 }, unlockedByDefault: false },
   { id: 'ninglucao', name: '凝露草', rarity: 'common', sortOrder: 30, description: '普通、短线抢收种，适合高频上线卡成熟。', lore: '叶尖常凝夜露，晨时如泪珠滚落，有清心明目之效。低阶弟子多用其露水研磨朱砂画符，成功率能稍许提升。', stageGold: { growing: 100, mature: 140, withered: 40 }, stageSeconds: { seeded: 5400, growing: 1800 }, unlockedByDefault: false },
   { id: 'suixinhua', name: '碎心花', rarity: 'common', sortOrder: 40, description: '普通、高折损高回报种，丰熟收益波动很强。', lore: '花瓣薄如蝉翼，嫣红带紫纹，看似艳丽。但有微毒，采摘时指尖会传来一阵短暂的钻心刺痛，故名。可入麻醉类丹药。', stageGold: { growing: 120, mature: 300, withered: 50 }, stageSeconds: { seeded: 7200, growing: 3600 }, unlockedByDefault: false },
   { id: 'baiyulian', name: '白玉莲', rarity: 'common', sortOrder: 50, description: '普通、低频保值种，错过窗口也不容易血亏。', lore: '纯白无瑕，瓣如凝脂，生于清澈浅塘。花心微黄，清香远溢。凡人供于佛前，修士取其花瓣泡茶，可净体内杂气。', stageGold: { growing: 160, mature: 220, withered: 180 }, stageSeconds: { seeded: 10800, growing: 5400 }, unlockedByDefault: false },
@@ -174,6 +195,95 @@ const seedRarityLabels: Record<SeedRarity, string> = {
 
 function compareSeedCatalogItems(left: SeedCatalogItem, right: SeedCatalogItem): number {
   return left.sortOrder - right.sortOrder || left.id.localeCompare(right.id);
+}
+
+function buildLiveFarmFieldPresentation(
+  field: ClientViewModel['scenes']['farm']['fields'][number],
+  elapsedSeconds: number,
+  seed?: SeedCatalogItem,
+): LocalFarmFieldPresentation | null {
+  if (field.tone !== 'seeded' && field.tone !== 'growing' && field.tone !== 'mature') {
+    return null;
+  }
+
+  if (field.tone === 'mature') {
+    return {
+      title: field.title,
+      badge: field.badge,
+      tone: field.tone,
+      description: field.description,
+      actions: field.actions,
+      progressRemainingSeconds: Math.max(field.progressRemainingSeconds - elapsedSeconds, 0),
+      progressTotalSeconds: field.progressTotalSeconds,
+      fieldVersionOffset: 0,
+    };
+  }
+
+  let remainingElapsedSeconds = elapsedSeconds;
+  let stageTone: LocalFarmFieldPresentation['tone'] = field.tone;
+  let stageIndexOffset = 0;
+  let stageDurationSeconds = Math.max(field.progressTotalSeconds, 1);
+  let stageRemainingSeconds = Math.max(field.progressRemainingSeconds, 0);
+
+  while (remainingElapsedSeconds > 0 && (stageTone === 'seeded' || stageTone === 'growing')) {
+    if (remainingElapsedSeconds < stageRemainingSeconds) {
+      stageRemainingSeconds -= remainingElapsedSeconds;
+      remainingElapsedSeconds = 0;
+      break;
+    }
+
+    remainingElapsedSeconds -= stageRemainingSeconds;
+    stageIndexOffset = 1;
+
+    if (stageTone === 'seeded') {
+      stageTone = 'growing';
+      stageDurationSeconds = Math.max(seed?.stageSeconds.growing ?? field.progressTotalSeconds, 1);
+      stageRemainingSeconds = stageDurationSeconds;
+      continue;
+    }
+
+    stageTone = 'mature';
+    stageDurationSeconds = 1;
+    stageRemainingSeconds = 0;
+    break;
+  }
+
+  if (stageIndexOffset === 0) {
+    return {
+      title: field.title,
+      badge: field.badge,
+      tone: field.tone,
+      description: field.description,
+      actions: field.actions,
+      progressRemainingSeconds: stageRemainingSeconds,
+      progressTotalSeconds: field.progressTotalSeconds,
+      fieldVersionOffset: 0,
+    };
+  }
+
+  if (stageTone === 'growing') {
+    return {
+      title: '成熟期',
+      badge: '成长',
+      tone: 'growing',
+      description: '可提前收取，或继续等待进入丰熟后再结算更高收益。',
+      actions: [{ label: '提前收取', target: 'farm', tone: 'secondary' }],
+      progressRemainingSeconds: stageRemainingSeconds,
+      progressTotalSeconds: stageDurationSeconds,
+      fieldVersionOffset: 1,
+    };
+  }
+
+  return {
+    title: '丰熟期',
+    badge: '丰熟',
+    tone: 'mature',
+    description: '已进入丰熟窗口，现在可以直接成熟收取。',
+    actions: [{ label: '成熟收取', target: 'farm', tone: 'primary' }],
+    progressRemainingSeconds: 0,
+    progressTotalSeconds: 1,
+    fieldVersionOffset: 1,
+  };
 }
 
 const defaultUnlockedSeedIds = seedCatalog
@@ -205,7 +315,24 @@ const sceneNavLabels: Record<ClientSceneKey, string> = {
   faction: '阵营',
 };
 
-const sceneKeys: ClientSceneKey[] = ['home', 'building', 'farm', 'raid', 'report', 'faction'];
+const sceneKeys: ClientSceneKey[] = ['home', 'farm', 'raid', 'report', 'building', 'faction'];
+const tutorialStageStorageKeyPrefix = 'trinitywar.tutorialStage';
+const tutorialStageRank: Record<TutorialStage, number> = {
+  home: 0,
+  farm: 1,
+  spirit: 2,
+  raid: 3,
+  completed: 4,
+};
+
+const sceneTutorialUnlockStage: Record<ClientSceneKey, TutorialStage> = {
+  home: 'home',
+  farm: 'farm',
+  raid: 'spirit',
+  report: 'raid',
+  building: 'completed',
+  faction: 'completed',
+};
 
 const factionBackgroundMap: Record<string, string> = {
   人界: '/assets/backgrounds/renjie.png',
@@ -220,6 +347,30 @@ const sceneBackgroundMap: Record<Exclude<ClientSceneKey, 'home'>, string> = {
   report: '/assets/backgrounds/zhanbao.png',
   faction: '/assets/backgrounds/zhenying.png',
 };
+
+const factionChoiceCards: FactionChoiceCard[] = [
+  {
+    code: 'human',
+    name: '人界',
+    title: '稳开荒',
+    traits: ['种田链路最平滑', '适合首轮教学体验', '守成和经营反馈直接'],
+    leaderSummary: '先学会把第一块田养熟，再把第一只灵宠带上战场。',
+  },
+  {
+    code: 'immortal',
+    name: '仙界',
+    title: '快成长',
+    traits: ['偏灵宠成长', '中段节奏更快', '更适合连续在线推进'],
+    leaderSummary: '你会更早感受到灵宠成长曲线，但前期同样要先吃透种田收益。',
+  },
+  {
+    code: 'demon',
+    name: '魔界',
+    title: '强掠夺',
+    traits: ['偏掠夺压制', '丰熟收益更敢赌', '更适合主动找目标'],
+    leaderSummary: '魔界擅长掠夺，但新手第一步仍然是拿稳启灵芽和首宠。',
+  },
+];
 
 const SEASON_SIGN_IN_STORAGE_KEY_PREFIX = 'trinitywar.seasonSignIn';
 const SEASON_SIGN_IN_MILESTONES: Array<Pick<SeasonSignInMilestone, 'dayCount' | 'title'>> = [
@@ -238,6 +389,87 @@ function normalizeScene(scene: string): ClientSceneKey {
   }
 
   return 'home';
+}
+
+function getTutorialStageStorageKey(playerId: string): string {
+  return `${tutorialStageStorageKeyPrefix}:${playerId}`;
+}
+
+function isTutorialStage(value: string | null | undefined): value is TutorialStage {
+  return value === 'home' || value === 'farm' || value === 'spirit' || value === 'raid' || value === 'completed';
+}
+
+function getInitialTutorialStage(session: DevLoginSession | null): TutorialStage {
+  if (!session || session.mode !== 'new-user') {
+    return 'completed';
+  }
+
+  if (typeof window === 'undefined') {
+    return 'home';
+  }
+
+  const storedStage = window.localStorage.getItem(getTutorialStageStorageKey(session.player.id));
+  return isTutorialStage(storedStage) ? storedStage : 'home';
+}
+
+function canOpenSceneInTutorial(scene: ClientSceneKey, stage: TutorialStage): boolean {
+  return tutorialStageRank[stage] >= tutorialStageRank[sceneTutorialUnlockStage[scene]];
+}
+
+function getLockedSceneMessage(scene: ClientSceneKey): string {
+  if (scene === 'farm') {
+    return '先从首页任务进入农场。';
+  }
+
+  if (scene === 'raid') {
+    return '先完成第一轮种田，再创建灵宠。';
+  }
+
+  if (scene === 'report') {
+    return '先完成首宠创建，再进入掠夺教程。';
+  }
+
+  return '完成种田、灵宠和掠夺教程后开放。';
+}
+
+function buildTutorialTask(stage: TutorialStage): { title: string; description: string; actionLabel: string; targetScene: ClientSceneKey } | null {
+  if (stage === 'home') {
+    return {
+      title: '领取启灵芽 x3',
+      description: '先收下引导者给你的启灵芽。拿到种子后，再去第一块田播下它。',
+      actionLabel: '领取启灵芽',
+      targetScene: 'home',
+    };
+  }
+
+  if (stage === 'farm') {
+    return {
+      title: '收获启灵芽',
+      description: '启灵芽成熟后会给第一笔金币和灵根，用来开启第一只灵宠。',
+      actionLabel: '查看农场',
+      targetScene: 'farm',
+    };
+  }
+
+  if (stage === 'spirit') {
+    return {
+      title: '创建第一只灵宠',
+      description: '在空栏位中选择初始灵宠，并设定五行属性。创建后会自动设为主位。',
+      actionLabel: '创建灵宠',
+      targetScene: 'raid',
+    };
+  }
+
+  if (stage === 'raid') {
+    return {
+      title: '完成教程掠夺',
+      description: '挑战教程对象，理解战斗结果、掠夺收益、普通兽魂和图鉴推进。',
+      actionLabel: '进入掠夺',
+      targetScene: 'report',
+    };
+  }
+
+  return null;
 }
 
 function formatServerTime(serverTime: string): string {
@@ -503,12 +735,16 @@ function resolveRaidTargetByContext(targets: ClientRaidTarget[], context?: strin
 }
 
 function App(): JSX.Element {
+  const storedLoginSession = getStoredDevLoginSession();
   const [viewModel, setViewModel] = useState<ClientViewModel | null>(null);
   const [spiritState, setSpiritState] = useState<ClientSpiritState | null>(null);
-  const [loginSession, setLoginSession] = useState<DevLoginSession | null>(() => getStoredDevLoginSession());
+  const [loginSession, setLoginSession] = useState<DevLoginSession | null>(() => storedLoginSession);
+  const [pendingNewUserFaction, setPendingNewUserFaction] = useState<DevFactionChoice>('human');
+  const [authScreen, setAuthScreen] = useState<'faction-select' | 'account-select'>('faction-select');
   const [loginLoadingMode, setLoginLoadingMode] = useState<DevLoginMode | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [activeScene, setActiveScene] = useState<ClientSceneKey>('home');
+  const [tutorialStage, setTutorialStage] = useState<TutorialStage>(() => getInitialTutorialStage(storedLoginSession));
   const [raidHubTab, setRaidHubTab] = useState<RaidHubTabKey>('targets');
   const [factionTab, setFactionTab] = useState<FactionTabKey>('overview');
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -528,7 +764,7 @@ function App(): JSX.Element {
   const [farmTick, setFarmTick] = useState(0);
   const [seedInventory, setSeedInventory] = useState<Record<string, number>>(emptySeedInventory);
   const [globalItemInventory, setGlobalItemInventory] = useState<Record<string, number>>(emptyGlobalItemInventory);
-  const [unlockedSeedIds, setUnlockedSeedIds] = useState<string[]>(defaultUnlockedSeedIds);
+  const [unlockedSeedIds, setUnlockedSeedIds] = useState<string[]>([]);
   const [seedRewardModal, setSeedRewardModal] = useState<SeedRewardModalState | null>(null);
   const [pendingRaidRewardModal, setPendingRaidRewardModal] = useState<SeedRewardModalState | null>(null);
   const [raidBattleReplay, setRaidBattleReplay] = useState<ClientRaidBattleReplay | null>(null);
@@ -536,7 +772,7 @@ function App(): JSX.Element {
   const [seedSelectionState, setSeedSelectionState] = useState<SeedSelectionState | null>(null);
   const [seedCodexState, setSeedCodexState] = useState<SeedCodexState | null>(null);
   const [armyQueueRefreshReadyAt, setArmyQueueRefreshReadyAt] = useState<string | null>(null);
-  const [selectedSeedId, setSelectedSeedId] = useState<string>('qinglingmai');
+  const [selectedSeedId, setSelectedSeedId] = useState<string>('qilingya');
   const [fieldSeedAssignments, setFieldSeedAssignments] = useState<Record<string, string>>({});
   const [farmCollectPresentation, setFarmCollectPresentation] = useState<FarmCollectPresentationState | null>(null);
   const [farmBoard, setFarmBoard] = useState<ClientFarmBoardState | null>(null);
@@ -550,6 +786,19 @@ function App(): JSX.Element {
   const characterDialogPortalRef = useRef<HTMLDivElement | null>(null);
   const welcomeDialogSessionIdRef = useRef<string | null>(null);
   const farmEnterDialogRef = useRef<{ sceneId: string; at: number } | null>(null);
+
+  const advanceTutorialStage = (nextStage: TutorialStage): void => {
+    setTutorialStage(nextStage);
+    if (loginSession?.mode === 'new-user' && typeof window !== 'undefined') {
+      window.localStorage.setItem(getTutorialStageStorageKey(loginSession.player.id), nextStage);
+    }
+  };
+
+  const getPreferredSeedId = (): string => (
+    unlockedSeedIds.find((seedId) => (seedInventory[seedId] ?? 0) > 0)
+    ?? unlockedSeedIds[0]
+    ?? 'qilingya'
+  );
 
   const cacheRaidTargetDetail = (detail: ClientRaidTargetDetailResponse): void => {
     setRaidTargetDetailsById((current) => ({
@@ -652,7 +901,7 @@ function App(): JSX.Element {
   };
 
   const syncSeedBackpackState = (backpack: ClientViewModel['bootstrap']['backpack']): void => {
-    const mergedUnlockedSeedIds = Array.from(new Set([...defaultUnlockedSeedIds, ...backpack.unlockedSeedIds]));
+    const mergedUnlockedSeedIds = Array.from(new Set(backpack.unlockedSeedIds));
 
     setSeedInventory({
       ...emptySeedInventory,
@@ -664,7 +913,7 @@ function App(): JSX.Element {
     });
     setUnlockedSeedIds(mergedUnlockedSeedIds);
     if (!mergedUnlockedSeedIds.includes(selectedSeedId)) {
-      setSelectedSeedId(mergedUnlockedSeedIds[0] ?? 'qinglingmai');
+      setSelectedSeedId(mergedUnlockedSeedIds[0] ?? 'qilingya');
     }
   };
 
@@ -822,14 +1071,15 @@ function App(): JSX.Element {
     };
   };
 
-  const handleDevLogin = async (mode: DevLoginMode): Promise<void> => {
+  const handleDevLogin = async (mode: DevLoginMode, options?: { factionCode?: DevFactionChoice }): Promise<void> => {
     setLoginLoadingMode(mode);
     setLoginError(null);
 
     try {
-      const session = await devLogin(mode);
+      const session = await devLogin(mode, options);
       const data = await loadClientBundle();
       setSeasonSignInRecord(readSeasonSignInRecord(session.player.id));
+      setTutorialStage(getInitialTutorialStage(session));
       setLoginSession(session);
       applyClientBundle(data);
     } catch {
@@ -843,6 +1093,7 @@ function App(): JSX.Element {
     setSettingsOpen(false);
     clearDevLoginSession();
     setLoginSession(null);
+    setTutorialStage('completed');
     setSeasonSignInRecord(readSeasonSignInRecord());
     setViewModel(null);
     setSpiritState(null);
@@ -861,6 +1112,7 @@ function App(): JSX.Element {
     setFarmCollectPresentation(null);
     setGlobalFeatureModal(null);
     setPendingActionKey(null);
+    setAuthScreen('faction-select');
     resetNotificationState();
     setLoginError(null);
     welcomeDialogSessionIdRef.current = null;
@@ -887,6 +1139,7 @@ function App(): JSX.Element {
 
       clearDevLoginSession();
       setLoginSession(null);
+      setTutorialStage('completed');
       setSpiritState(null);
       setLoginError('登录已失效或真实接口不可用，请重新选择测试账号。');
     });
@@ -895,6 +1148,12 @@ function App(): JSX.Element {
       active = false;
     };
   }, [loginSession]);
+
+  useEffect(() => {
+    if (!canOpenSceneInTutorial(activeScene, tutorialStage)) {
+      setActiveScene('home');
+    }
+  }, [activeScene, tutorialStage]);
 
   useEffect(() => {
     if (!loginSession) {
@@ -952,7 +1211,7 @@ function App(): JSX.Element {
     }
 
     welcomeDialogSessionIdRef.current = loginSession.player.id;
-    playDialogScene('home.welcome.fox');
+    playDialogScene(loginSession.mode === 'new-user' ? 'home.welcome.leader1' : 'home.welcome.fox');
   }, [loginSession, playDialogScene, viewModel]);
 
   useEffect(() => {
@@ -1108,54 +1367,119 @@ function App(): JSX.Element {
         <main className="loading-shell auth-shell">
           <section className="loading-panel auth-panel">
             <p className="eyebrow">TRINITY WAR</p>
-            <h1>选择测试账号</h1>
-            <p className="panel-text">用于验证登录、建档和真实读接口。新用户会创建一个全新的开发账号，已注册用户会复用固定测试账号。</p>
-            <div className="auth-choice-grid">
-              <button
-                className="auth-choice-button primary-choice"
-                disabled={loginLoadingMode !== null}
-                onClick={() => {
-                  void handleDevLogin('new-user');
-                }}
-                type="button"
-              >
-                <span>我是新用户</span>
-                <strong>{loginLoadingMode === 'new-user' ? '创建中...' : '创建新档案'}</strong>
-              </button>
-              <button
-                className="auth-choice-button"
-                disabled={loginLoadingMode !== null}
-                onClick={() => {
-                  void handleDevLogin('existing-user');
-                }}
-                type="button"
-              >
-                <span>我是已注册用户</span>
-                <strong>{loginLoadingMode === 'existing-user' ? '登录中...' : '进入已有档案'}</strong>
-              </button>
-              <button
-                className="auth-choice-button"
-                disabled={loginLoadingMode !== null}
-                onClick={() => {
-                  void handleDevLogin('test-user-1');
-                }}
-                type="button"
-              >
-                <span>验证账号</span>
-                <strong>{loginLoadingMode === 'test-user-1' ? '登录中...' : '测试用户1'}</strong>
-              </button>
-              <button
-                className="auth-choice-button"
-                disabled={loginLoadingMode !== null}
-                onClick={() => {
-                  void handleDevLogin('test-user-2');
-                }}
-                type="button"
-              >
-                <span>验证账号</span>
-                <strong>{loginLoadingMode === 'test-user-2' ? '登录中...' : '测试用户2'}</strong>
-              </button>
-            </div>
+            {authScreen === 'faction-select' ? (
+              <>
+                <h1>选择阵营</h1>
+                <p className="panel-text">这是用户第一次进入时看到的页面。先确定阵营，再创建新档案进入首页。</p>
+                <div className="auth-faction-page-grid">
+                  {factionChoiceCards.map((faction) => (
+                    <article
+                      key={faction.code}
+                      className={`auth-faction-card auth-faction-page-card ${pendingNewUserFaction === faction.code ? 'is-selected' : ''}`}
+                      onClick={() => {
+                        if (loginLoadingMode !== null) {
+                          return;
+                        }
+                        setPendingNewUserFaction(faction.code);
+                      }}
+                      onKeyDown={(event) => {
+                        if (loginLoadingMode !== null || (event.key !== 'Enter' && event.key !== ' ')) {
+                          return;
+                        }
+                        event.preventDefault();
+                        setPendingNewUserFaction(faction.code);
+                      }}
+                      role="button"
+                      tabIndex={loginLoadingMode !== null ? -1 : 0}
+                    >
+                      <div className="auth-faction-card-head">
+                        <span>{faction.name}</span>
+                        <strong>{faction.title}</strong>
+                      </div>
+                      <p>{faction.leaderSummary}</p>
+                      <ul>
+                        {faction.traits.map((trait) => (
+                          <li key={trait}>{trait}</li>
+                        ))}
+                      </ul>
+                    </article>
+                  ))}
+                </div>
+                <div className="auth-faction-page-actions">
+                  <button
+                    className="secondary-button"
+                    disabled={loginLoadingMode !== null}
+                    onClick={() => {
+                      setAuthScreen('account-select');
+                    }}
+                    type="button"
+                  >
+                    其他入口
+                  </button>
+                  <button
+                    className="primary-button"
+                    disabled={loginLoadingMode !== null}
+                    onClick={() => {
+                      void handleDevLogin('new-user', { factionCode: pendingNewUserFaction });
+                    }}
+                    type="button"
+                  >
+                    {loginLoadingMode === 'new-user' ? '创建中...' : `以${factionChoiceCards.find((item) => item.code === pendingNewUserFaction)?.name ?? '该阵营'}创建新档案`}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h1>选择账号入口</h1>
+                <p className="panel-text">已有档案和验证账号从这里进入。新用户建档入口在阵营选择页。</p>
+                <div className="auth-choice-grid">
+                  <button
+                    className="auth-choice-button primary-choice"
+                    disabled={loginLoadingMode !== null}
+                    onClick={() => {
+                      setAuthScreen('faction-select');
+                    }}
+                    type="button"
+                  >
+                    <span>新用户</span>
+                    <strong>前往阵营选择</strong>
+                  </button>
+                  <button
+                    className="auth-choice-button"
+                    disabled={loginLoadingMode !== null}
+                    onClick={() => {
+                      void handleDevLogin('existing-user');
+                    }}
+                    type="button"
+                  >
+                    <span>我是已注册用户</span>
+                    <strong>{loginLoadingMode === 'existing-user' ? '登录中...' : '进入已有档案'}</strong>
+                  </button>
+                  <button
+                    className="auth-choice-button"
+                    disabled={loginLoadingMode !== null}
+                    onClick={() => {
+                      void handleDevLogin('test-user-1');
+                    }}
+                    type="button"
+                  >
+                    <span>验证账号</span>
+                    <strong>{loginLoadingMode === 'test-user-1' ? '登录中...' : '测试用户1'}</strong>
+                  </button>
+                  <button
+                    className="auth-choice-button"
+                    disabled={loginLoadingMode !== null}
+                    onClick={() => {
+                      void handleDevLogin('test-user-2');
+                    }}
+                    type="button"
+                  >
+                    <span>验证账号</span>
+                    <strong>{loginLoadingMode === 'test-user-2' ? '登录中...' : '测试用户2'}</strong>
+                  </button>
+                </div>
+              </>
+            )}
             {loginError ? <p className="auth-error">{loginError}</p> : null}
           </section>
         </main>
@@ -1179,10 +1503,12 @@ function App(): JSX.Element {
     .filter((entry) => entry.title !== '系统结算')
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
   const activeBackgroundImage = `url(${getSceneBackground(activeScene, home.factionName)})`;
+  const isTutorialUser = loginSession?.mode === 'new-user' && tutorialStage !== 'completed';
   const vaultResource = findResourceByTone('vault', home.resources);
   const devLoginModeLabel = getDevLoginModeLabel(loginSession?.mode);
   const currentAccountName = loginSession?.player.nickname ?? home.playerName;
-  const dailyTasks = home.dailyTasks ?? [];
+  const dailyTasks = isTutorialUser ? [] : (home.dailyTasks ?? []);
+  const tutorialTask = buildTutorialTask(tutorialStage);
   const vaultProgress = vaultResource ? parseCapacityResourceValue(vaultResource.value) : { current: 0, capacity: 0, ratio: 0 };
   const seasonProgress = buildSeasonProgress(bootstrap.season);
   const seasonSignInDay = getSeasonSignInDay();
@@ -1210,13 +1536,18 @@ function App(): JSX.Element {
   const farmFields = scenes.farm.fields.map((field) => {
     const assignedSeedId = fieldSeedAssignments[field.id];
     const assignedSeed = assignedSeedId ? seedCatalogMap.get(assignedSeedId) : undefined;
+    const localPresentation = buildLiveFarmFieldPresentation(field, farmTick, assignedSeed);
 
     if (!assignedSeed || (field.tone !== 'seeded' && field.tone !== 'growing' && field.tone !== 'mature' && field.tone !== 'withered')) {
-      return field;
+      return localPresentation ? {
+        ...field,
+        ...localPresentation,
+      } : field;
     }
 
     return {
       ...field,
+      ...(localPresentation ?? {}),
       cropName: assignedSeed.name,
     };
   });
@@ -1328,6 +1659,12 @@ function App(): JSX.Element {
         element,
       });
       applySpiritMutationResult(result);
+      if (tutorialStage === 'spirit') {
+        advanceTutorialStage('raid');
+        setActiveScene('report');
+        setRaidHubTab('targets');
+        playDialogScene('tutorial.raid.start', { force: true });
+      }
     } catch {
       showToast('当前无法合成灵宠，请稍后重试。', 'error');
     } finally {
@@ -1666,7 +2003,7 @@ function App(): JSX.Element {
       farmEnterDialogRef.current = null;
       setArmyQueueRefreshReadyAt(null);
       setSeedSelectionState(null);
-      setSelectedSeedId('qinglingmai');
+      setSelectedSeedId(getPreferredSeedId());
       setFieldSeedAssignments({});
       setFarmCollectPresentation(null);
       setFollowedTargetIds([]);
@@ -1792,6 +2129,11 @@ function App(): JSX.Element {
   };
 
   const navigateToScene = (scene: ClientSceneKey, nextRaidHubTab?: RaidHubTabKey): void => {
+    if (!canOpenSceneInTutorial(scene, tutorialStage)) {
+      showToast(getLockedSceneMessage(scene), 'info');
+      return;
+    }
+
     setActiveScene(scene);
 
     if (scene === 'report' && nextRaidHubTab) {
@@ -1800,6 +2142,76 @@ function App(): JSX.Element {
 
     if (scene !== 'report' && nextRaidHubTab) {
       setRaidHubTab(nextRaidHubTab);
+    }
+  };
+
+  const handleConfirmStarterSeedClaim = async (): Promise<void> => {
+    if (pendingActionKey === 'tutorial:starter-seeds') {
+      return;
+    }
+    if (!viewModel) {
+      return;
+    }
+
+    setPendingActionKey('tutorial:starter-seeds');
+    try {
+      const result = await claimStarterSeeds({
+        requestIdempotencyKey: `starter-seeds-${Date.now()}`,
+      });
+      setSeedRewardModal(null);
+      applyClientViewModel({
+        ...viewModel,
+        bootstrap: result.bootstrap,
+        home: result.home,
+        scenes: result.scenes,
+      });
+      advanceTutorialStage('farm');
+      setActiveScene('farm');
+      playDialogScene('tutorial.farm.start', { force: true });
+      showToast(result.summary, 'success');
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : '当前无法领取启灵芽，请稍后重试。';
+      showToast(message, 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleTutorialTaskAction = (): void => {
+    const task = buildTutorialTask(tutorialStage);
+    if (!task) {
+      return;
+    }
+
+    if (tutorialStage === 'home') {
+      setSeedRewardModal({
+        title: '领取启灵芽',
+        summary: '引导者交付启灵芽 x3。确认后会直接收入种子背包，并开放第一块田的播种。',
+        confirmAction: 'claim-starter-seeds',
+        items: [
+          {
+            seedId: 'qilingya',
+            label: '启灵芽',
+            quantity: 3,
+          },
+        ],
+      });
+      return;
+    }
+
+    if (tutorialStage === 'farm') {
+      setActiveScene('farm');
+      return;
+    }
+
+    if (tutorialStage === 'spirit') {
+      setActiveScene('raid');
+      return;
+    }
+
+    if (tutorialStage === 'raid') {
+      setActiveScene('report');
+      setRaidHubTab('targets');
     }
   };
 
@@ -1834,7 +2246,7 @@ function App(): JSX.Element {
     }
 
     if (action.label === '开始培育') {
-      setSelectedSeedId('qinglingmai');
+      setSelectedSeedId(getPreferredSeedId());
       setSeedSelectionState({
         fieldId,
         fieldCode: context,
@@ -1844,7 +2256,7 @@ function App(): JSX.Element {
 
     if (action.label.includes('收取')) {
       const collectMode: ClientCollectFieldRequest['collectMode'] = action.label.includes('提前') ? 'early' : 'ripe';
-      const field = farmFields.find((item) => item.id === fieldId);
+      const field = farmFields.find((item) => item.id === fieldId) as (typeof farmFields[number] & { fieldVersionOffset?: number }) | undefined;
 
       setPendingActionKey(actionKey);
 
@@ -1852,7 +2264,7 @@ function App(): JSX.Element {
         const result: ClientCollectFieldResponse = await collectFieldEarnings({
           fieldId,
           collectMode,
-          fieldVersion: field?.fieldVersion ?? 1,
+          fieldVersion: (field?.fieldVersion ?? 1) + (field?.fieldVersionOffset ?? 0),
           walletVersion: home.stateVersions.walletVersion,
         });
         applyMutationResult(result);
@@ -1873,6 +2285,27 @@ function App(): JSX.Element {
               .forEach((reward) => nextIds.add(reward.seedId as string));
             return Array.from(nextIds);
           });
+          const spiritRewardDelta = result.result.rewards.reduce((delta, reward) => {
+            if (reward.kind === 'spirit-root') {
+              delta.spiritRoot += reward.quantity;
+            }
+            if (reward.kind === 'spirit-marrow') {
+              delta.spiritMarrow += reward.quantity;
+            }
+            if (reward.kind === 'spirit-jade') {
+              delta.spiritJade += reward.quantity;
+            }
+            return delta;
+          }, { spiritRoot: 0, spiritMarrow: 0, spiritJade: 0 });
+          if (spiritRewardDelta.spiritRoot > 0 || spiritRewardDelta.spiritMarrow > 0 || spiritRewardDelta.spiritJade > 0) {
+            setSpiritState((current) => current ? {
+              ...current,
+              spiritRoot: (current.spiritRoot ?? 0) + spiritRewardDelta.spiritRoot,
+              spiritMarrow: (current.spiritMarrow ?? 0) + spiritRewardDelta.spiritMarrow,
+              spiritJade: (current.spiritJade ?? 0) + spiritRewardDelta.spiritJade,
+              resourceVersion: current.resourceVersion + 1,
+            } : current);
+          }
         }
         const rewardModalPayload: SeedRewardModalState = {
           title: '收取所得',
@@ -1895,6 +2328,11 @@ function App(): JSX.Element {
           tier: result.result.rewards.length > 0 ? 'critical' : 'harvest',
           showSeeds: result.result.rewards.length > 0,
         });
+        if (tutorialStage === 'farm') {
+          advanceTutorialStage('spirit');
+          setActiveScene('raid');
+          playDialogScene('tutorial.spirit.start', { force: true });
+        }
         window.setTimeout(() => {
           setSeedRewardModal(rewardModalPayload);
         }, FARM_COLLECT_PRESENTATION_MS);
@@ -1903,8 +2341,16 @@ function App(): JSX.Element {
           delete nextAssignments[fieldId];
           return nextAssignments;
         });
-      } catch {
-        showToast(`${context} 当前无法完成收取，请稍后重试。`, 'error');
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'STATE_VERSION_CONFLICT') {
+          const nextViewModel = await loadClientViewModel().catch(() => null);
+          if (nextViewModel) {
+            applyClientViewModel(nextViewModel);
+          }
+          showToast('田地状态刚刚发生变化，已刷新数据。请重新收取。', 'error');
+        } else {
+          showToast(`${context} 当前无法完成收取，请稍后重试。`, 'error');
+        }
       } finally {
         setPendingActionKey(null);
       }
@@ -2012,6 +2458,14 @@ function App(): JSX.Element {
             setRaidBattleReplay(response.result.battleReplay);
           } else {
             setSeedRewardModal(settledRaidRewardModal);
+          }
+          if (tutorialStage === 'raid') {
+            playDialogScene('tutorial.completed', {
+              force: true,
+              onComplete: () => {
+                advanceTutorialStage('completed');
+              },
+            });
           }
         } catch (error) {
           if (error instanceof ApiError && error.code === 'RAID_NOT_ALLOWED') {
@@ -2160,6 +2614,7 @@ function App(): JSX.Element {
     try {
       const result = await startFieldCultivation({ fieldId: seedSelectionState.fieldId, seedId: seed.id });
       applyMutationResult(result);
+      setFarmTick(0);
       setSeedInventory((current) => ({
         ...current,
         [seed.id]: Math.max((current[seed.id] ?? 0) - 1, 0),
@@ -2170,6 +2625,9 @@ function App(): JSX.Element {
       }));
       setSeedSelectionState(null);
       showToast(`${seedSelectionState.fieldCode} 已投入 ${seed.name}，开始培育。`, 'success');
+      if (tutorialStage === 'farm') {
+        playDialogScene('tutorial.farm.wait', { force: true });
+      }
     } catch {
       showToast(`${seedSelectionState.fieldCode} 当前无法开始培育，请稍后重试。`, 'error');
     } finally {
@@ -2263,28 +2721,32 @@ function App(): JSX.Element {
                   <span className="season-progress-inline-label">{seasonProgress.label}</span>
                   <span className="season-progress-inline-detail">{seasonProgress.detail}</span>
                 </div>
-                <button className="ghost-button top-action-button top-item-button" onClick={() => {
-                  setGlobalFeatureModal({
-                    title: '天机符商店',
-                    tianjiShop: true,
-                  });
-                }} type="button">
-                  商店
-                </button>
-                <button className="ghost-button top-action-button" onClick={() => {
-                  setGlobalFeatureModal({
-                    title: '赛季签到',
-                    eyebrow: '活动',
-                    description: '每个赛季 28 天，累计签到推进每日档位和阶段宝箱；漏签不清零。',
-                    seasonSignIn: true,
-                  });
-                }} type="button">
-                  签到
-                </button>
-                <button className="ghost-button top-action-button top-notification-button" onClick={handleOpenNotifications} type="button">
-                  消息
-                  {notificationUnreadCount > 0 ? <span className="top-notification-badge">{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</span> : null}
-                </button>
+                {!isTutorialUser ? (
+                  <>
+                    <button className="ghost-button top-action-button top-item-button" onClick={() => {
+                      setGlobalFeatureModal({
+                        title: '天机符商店',
+                        tianjiShop: true,
+                      });
+                    }} type="button">
+                      商店
+                    </button>
+                    <button className="ghost-button top-action-button" onClick={() => {
+                      setGlobalFeatureModal({
+                        title: '赛季签到',
+                        eyebrow: '活动',
+                        description: '每个赛季 28 天，累计签到推进每日档位和阶段宝箱；漏签不清零。',
+                        seasonSignIn: true,
+                      });
+                    }} type="button">
+                      签到
+                    </button>
+                    <button className="ghost-button top-action-button top-notification-button" onClick={handleOpenNotifications} type="button">
+                      消息
+                      {notificationUnreadCount > 0 ? <span className="top-notification-badge">{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</span> : null}
+                    </button>
+                  </>
+                ) : null}
                 <button className="ghost-button top-action-button" onClick={() => setSettingsOpen(true)} type="button">
                   设置
                 </button>
@@ -2355,10 +2817,12 @@ function App(): JSX.Element {
               <HomeScene
                 claimingTaskId={pendingActionKey?.startsWith('home:daily-task:') ? pendingActionKey.replace('home:daily-task:', '') : null}
                 dailyTasks={dailyTasks}
+                tutorialTask={tutorialTask}
                 onClaimTask={(taskId) => {
                   void handleClaimDailyTask(taskId);
                 }}
                 onNavigate={navigateToScene}
+                onTutorialAction={handleTutorialTaskAction}
               />
             ) : null}
 
@@ -2375,7 +2839,6 @@ function App(): JSX.Element {
             {activeScene === 'farm' ? (
               <FarmScene
                 collectPresentation={farmCollectPresentation}
-                farmTick={farmTick}
                 farmBoardMessage={farmBoard?.farmBoardMessage ?? ''}
                 farmBoardUpdatedAt={farmBoard?.farmBoardUpdatedAt ?? null}
                 fields={farmFields}
@@ -2386,7 +2849,7 @@ function App(): JSX.Element {
                 onOpenFarmBoard={handleOpenFarmBoardEditor}
                 onOpenSeedCodex={() => {
                   setSeedCodexState({
-                    selectedSeedId: selectedSeedId || unlockedSeedIds[0] || 'qinglingmai',
+                    selectedSeedId: selectedSeedId || unlockedSeedIds[0] || 'qilingya',
                   });
                 }}
               />
@@ -2475,18 +2938,27 @@ function App(): JSX.Element {
           </section>
 
           <footer className="bottom-dock">
-            {sceneKeys.map((scene) => (
-              <button className={`nav-item ${activeScene === scene ? 'active' : ''}`} key={scene} onClick={() => navigateToScene(scene)} type="button">
-                {sceneNavLabels[scene]}
-              </button>
-            ))}
+            {sceneKeys.map((scene) => {
+              const unlocked = canOpenSceneInTutorial(scene, tutorialStage);
+
+              return (
+                <button
+                  aria-disabled={!unlocked}
+                  className={`nav-item ${activeScene === scene ? 'active' : ''} ${unlocked ? '' : 'locked'}`}
+                  key={scene}
+                  onClick={() => navigateToScene(scene)}
+                  type="button"
+                >
+                  {sceneNavLabels[scene]}
+                </button>
+              );
+            })}
           </footer>
 
           {raidTargetModal ? (
             <RaidIntelScreen
               detail={raidTargetDetail}
               error={raidTargetDetailError}
-              farmTick={farmTick}
               followed={followedTargetIds.includes(raidTargetModal.targetId)}
               loading={raidTargetDetailLoading}
               mode={raidTargetModal.mode}
@@ -2635,7 +3107,7 @@ function App(): JSX.Element {
           ) : null}
           {seedRewardModal ? (
             <SeedRewardModal
-              confirming={pendingActionKey === 'faction:stipend' || pendingActionKey === 'spirit:ad-reward'}
+              confirming={pendingActionKey === 'faction:stipend' || pendingActionKey === 'spirit:ad-reward' || pendingActionKey === 'tutorial:starter-seeds'}
               getItemLabel={(item) => {
                 const seed = item.seedId ? seedCatalogMap.get(item.seedId) : undefined;
                 return seed?.name ?? item.label ?? item.itemId ?? item.seedId ?? '奖励';
@@ -2648,6 +3120,10 @@ function App(): JSX.Element {
                 }
                 if (seedRewardModal.confirmAction === 'claim-spirit-ad-reward') {
                   void handleConfirmSpiritAdRewardClaim();
+                  return;
+                }
+                if (seedRewardModal.confirmAction === 'claim-starter-seeds') {
+                  void handleConfirmStarterSeedClaim();
                   return;
                 }
 

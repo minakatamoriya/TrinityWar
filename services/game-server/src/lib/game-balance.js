@@ -99,6 +99,12 @@ const FIELD_SLOT_UNLOCK_CONFIG = [
 ];
 
 const SEED_LEVEL_CONFIG = {
+  qilingya: {
+    label: '启灵芽',
+    rarity: 'common',
+    stageGold: { growing: 20, mature: 50, withered: 50 },
+    stageSeconds: { seeded: 10, growing: 10 },
+  },
   qinglingmai: {
     label: '青灵麦',
     rarity: 'common',

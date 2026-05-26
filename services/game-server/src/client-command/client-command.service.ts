@@ -2,6 +2,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   APP_NAME,
+  type ClientClaimStarterSeedResponse,
   type ClientClaimDailyTaskResponse,
   type ClientClaimFactionStipendResponse,
   type ClientClaimPendingResponse,
@@ -23,6 +24,7 @@ import { DAILY_TASK_CONFIG, GAME_BALANCE, getCastleExtensionLevelConfig, getFact
 import { getVaultCapacityGain } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PlayerInitializationService } from '../seed/player-initialization.service.js';
+import { SEED_DEFINITION_SEEDS } from '../seed/seed-data/seeds.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
 import { ArmyTrainingLifecycleService } from '../client-read/army-training-lifecycle.service.js';
 import { FieldLifecycleService } from '../client-read/field-lifecycle.service.js';
@@ -32,7 +34,7 @@ import {
   type PlayerBuildingStateForUpgrade,
 } from './building-upgrade-rule.service.js';
 import { FieldCommandRuleService } from './field-command-rule.service.js';
-import type { ClaimDailyTaskRequestDto, ClaimFactionStipendRequestDto, ClaimPendingRequestDto, CollectFieldRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UpgradeBuildingRequestDto } from './dto.js';
+import type { ClaimDailyTaskRequestDto, ClaimFactionStipendRequestDto, ClaimPendingRequestDto, ClaimStarterSeedRequestDto, CollectFieldRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UpgradeBuildingRequestDto } from './dto.js';
 
 interface ClaimPendingCommandInput {
   playerId: string;
@@ -43,6 +45,12 @@ interface ClaimPendingCommandInput {
 interface ClaimDailyTaskCommandInput {
   playerId: string;
   request: ClaimDailyTaskRequestDto;
+  idempotencyKey?: string;
+}
+
+interface ClaimStarterSeedCommandInput {
+  playerId: string;
+  request: ClaimStarterSeedRequestDto;
   idempotencyKey?: string;
 }
 
@@ -84,6 +92,10 @@ interface ClaimFactionStipendCommandInput {
 type ResolvableStipendReward = ClientFactionStipendReward & {
   seedPoolIds?: string[];
 };
+
+const TUTORIAL_STARTER_SEED_ID = 'qilingya';
+const TUTORIAL_STARTER_SEED_FALLBACK_ID = 'qinglingmai';
+const TUTORIAL_STARTER_SEED_QUANTITY = 3;
 
 @Injectable()
 export class ClientCommandService {
@@ -347,6 +359,165 @@ export class ClientCommandService {
     });
   }
 
+  async claimStarterSeeds(input: ClaimStarterSeedCommandInput): Promise<ClientClaimStarterSeedResponse> {
+    validateClaimStarterSeedRequest(input.request);
+    const endpointKey = 'client.actions.claim-starter-seeds';
+    const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
+    const requestHash = hashClaimStarterSeedRequest(input.request);
+
+    return this.prisma.transaction<ClientClaimStarterSeedResponse>(async (client) => {
+      const now = new Date();
+      const idempotencyRecord = idempotencyKey
+        ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
+        : null;
+
+      if (idempotencyRecord?.status === 'completed') {
+        return idempotencyRecord.responseSnapshotJson as unknown as ClientClaimStarterSeedResponse;
+      }
+
+      const dateKey = getLocalDateKey();
+      const [spiritResource, seedDefinitions] = await Promise.all([
+        client.playerSpiritResource.findUnique({
+          where: { playerId: input.playerId },
+          select: {
+            playerId: true,
+            dailyStarterSeedClaimDateKey: true,
+            resourceVersion: true,
+          },
+        }),
+        client.seedDefinition.findMany({
+          where: { seedId: { in: [TUTORIAL_STARTER_SEED_ID, TUTORIAL_STARTER_SEED_FALLBACK_ID] } },
+          select: { id: true, seedId: true, label: true },
+        }),
+      ]);
+
+      if (!spiritResource) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Player spirit resource state not found.',
+          statusCode: 404,
+        });
+      }
+
+      if (spiritResource.dailyStarterSeedClaimDateKey === dateKey) {
+        throw new BusinessError({
+          code: ErrorCode.TaskAlreadyClaimed,
+          message: 'Starter seeds already claimed today.',
+          statusCode: 409,
+        });
+      }
+
+      const seedDefinition = seedDefinitions.find((item) => item.seedId === TUTORIAL_STARTER_SEED_ID)
+        ?? seedDefinitions.find((item) => item.seedId === TUTORIAL_STARTER_SEED_FALLBACK_ID)
+        ?? null;
+      if (!seedDefinition) {
+        const createdSeedDefinition = await ensureSeedDefinitionExists(client, TUTORIAL_STARTER_SEED_ID)
+          ?? await ensureSeedDefinitionExists(client, TUTORIAL_STARTER_SEED_FALLBACK_ID);
+        if (!createdSeedDefinition) {
+          throw new BusinessError({
+            code: ErrorCode.NotFound,
+            message: 'Tutorial starter seed definition not found.',
+            statusCode: 404,
+          });
+        }
+
+        await client.playerSpiritResource.update({
+          where: { playerId: input.playerId },
+          data: {
+            dailyStarterSeedClaimDateKey: dateKey,
+            resourceVersion: { increment: 1 },
+          },
+        });
+
+        await client.playerSeedInventory.upsert({
+          where: {
+            playerId_seedDefinitionId: {
+              playerId: input.playerId,
+              seedDefinitionId: createdSeedDefinition.id,
+            },
+          },
+          create: {
+            playerId: input.playerId,
+            seedDefinitionId: createdSeedDefinition.id,
+            quantity: TUTORIAL_STARTER_SEED_QUANTITY,
+            unlockedAt: now,
+          },
+          update: {
+            quantity: { increment: TUTORIAL_STARTER_SEED_QUANTITY },
+            unlockedAt: now,
+            inventoryVersion: { increment: 1 },
+          },
+        });
+
+        const responseSnapshot: ClientClaimStarterSeedResponse = {
+          app: APP_NAME,
+          summary: `已领取 ${createdSeedDefinition.label} x${TUTORIAL_STARTER_SEED_QUANTITY}。`,
+          bootstrap: await this.clientReadService.getBootstrap(input.playerId, client),
+          home: await this.clientReadService.getHomeSummary(input.playerId, client),
+          scenes: await this.clientReadService.getSceneContent(input.playerId, client),
+        };
+
+        if (idempotencyRecord?.id) {
+          await this.idempotencyService.markCompleted(client, {
+            id: idempotencyRecord.id,
+            responseSnapshotJson: responseSnapshot as unknown as Prisma.InputJsonValue,
+            businessEntityType: 'starter-seeds',
+            businessEntityId: input.playerId,
+          });
+        }
+
+        return responseSnapshot;
+      }
+
+      await client.playerSpiritResource.update({
+        where: { playerId: input.playerId },
+        data: {
+          dailyStarterSeedClaimDateKey: dateKey,
+          resourceVersion: { increment: 1 },
+        },
+      });
+
+      await client.playerSeedInventory.upsert({
+        where: {
+          playerId_seedDefinitionId: {
+            playerId: input.playerId,
+            seedDefinitionId: seedDefinition.id,
+          },
+        },
+        create: {
+          playerId: input.playerId,
+          seedDefinitionId: seedDefinition.id,
+          quantity: TUTORIAL_STARTER_SEED_QUANTITY,
+          unlockedAt: now,
+        },
+        update: {
+          quantity: { increment: TUTORIAL_STARTER_SEED_QUANTITY },
+          unlockedAt: now,
+          inventoryVersion: { increment: 1 },
+        },
+      });
+
+      const responseSnapshot: ClientClaimStarterSeedResponse = {
+        app: APP_NAME,
+        summary: `已领取 ${seedDefinition.label} x${TUTORIAL_STARTER_SEED_QUANTITY}。`,
+        bootstrap: await this.clientReadService.getBootstrap(input.playerId, client),
+        home: await this.clientReadService.getHomeSummary(input.playerId, client),
+        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
+      };
+
+      if (idempotencyRecord?.id) {
+        await this.idempotencyService.markCompleted(client, {
+          id: idempotencyRecord.id,
+          responseSnapshotJson: responseSnapshot as unknown as Prisma.InputJsonValue,
+          businessEntityType: 'starter-seeds',
+          businessEntityId: input.playerId,
+        });
+      }
+
+      return responseSnapshot;
+    });
+  }
+
   async collectField(input: CollectFieldCommandInput): Promise<ClientCollectFieldResponse> {
     validateCollectFieldRequest(input.request);
     const endpointKey = 'client.actions.collect-field';
@@ -461,6 +632,7 @@ export class ClientCommandService {
         });
       }
 
+      await applySeedCollectRewards(client, input.playerId, resolution.rewards);
       await applySpiritCropRewards(client, input.playerId, resolution.rewards);
 
       await this.auditService.createFieldHarvestLog(client, {
@@ -1585,6 +1757,10 @@ function validateClaimDailyTaskRequest(request: ClaimDailyTaskRequestDto): void 
   assertOptionalNumber(body.walletVersion, 'walletVersion');
 }
 
+function validateClaimStarterSeedRequest(request: ClaimStarterSeedRequestDto): void {
+  assertRequestBody(request);
+}
+
 function validateCollectFieldRequest(request: CollectFieldRequestDto): void {
   const body = assertRequestBody(request);
   assertRequiredString(body.fieldId, 'fieldId');
@@ -1679,6 +1855,14 @@ function hashClaimDailyTaskRequest(request: ClaimDailyTaskRequestDto): string {
       taskDateKey: request.taskDateKey ?? null,
       acceptOverflowLoss: Boolean(request.acceptOverflowLoss),
       walletVersion: request.walletVersion ?? null,
+    }))
+    .digest('hex');
+}
+
+function hashClaimStarterSeedRequest(request: ClaimStarterSeedRequestDto): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      requestIdempotencyKey: request.requestIdempotencyKey ?? null,
     }))
     .digest('hex');
 }
@@ -1836,6 +2020,15 @@ async function resolveStipendRewards(
       continue;
     }
 
+    const normalizedPoolKey = reward.seedPoolIds.slice().sort().join(',');
+    if (normalizedPoolKey === ['ninglucao', 'qinglingmai', 'xunyamai'].join(',') && quantity === 1) {
+      resolvedRewards.push(...normalizeStipendRewards([
+        { kind: 'seed', seedId: 'qinglingmai', label: seedLabelById.get('qinglingmai') ?? 'qinglingmai', quantity: 2 },
+        { kind: 'seed', seedId: 'xunyamai', label: seedLabelById.get('xunyamai') ?? 'xunyamai', quantity: 2 },
+      ]));
+      continue;
+    }
+
     const availablePool = reward.seedPoolIds.filter((seedId) => seedLabelById.has(seedId));
     if (availablePool.length <= 0) {
       throw new BusinessError({
@@ -1907,6 +2100,78 @@ async function applySpiritCropRewards(
       resourceVersion: { increment: 1 },
     },
   });
+}
+
+async function applySeedCollectRewards(
+  client: Prisma.TransactionClient,
+  playerId: string,
+  rewards: ClientCollectRewardItem[],
+): Promise<void> {
+  const seedRewards = rewards
+    .filter((reward): reward is ClientCollectRewardItem & { kind: 'seed'; seedId: string } => (
+      reward.kind === 'seed'
+      && typeof reward.seedId === 'string'
+      && reward.seedId.trim().length > 0
+      && reward.quantity > 0
+    ))
+    .map((reward) => ({
+      seedId: reward.seedId,
+      quantity: Math.max(Math.floor(reward.quantity), 0),
+    }));
+
+  if (seedRewards.length <= 0) {
+    return;
+  }
+
+  const groupedSeedRewards = new Map<string, number>();
+  for (const reward of seedRewards) {
+    groupedSeedRewards.set(reward.seedId, (groupedSeedRewards.get(reward.seedId) ?? 0) + reward.quantity);
+  }
+
+  const seedDefinitions = await client.seedDefinition.findMany({
+    where: { seedId: { in: Array.from(groupedSeedRewards.keys()) } },
+    select: { id: true, seedId: true },
+  });
+  const seedDefinitionBySeedId = new Map(seedDefinitions.map((seedDefinition) => [seedDefinition.seedId, seedDefinition]));
+  const now = new Date();
+
+  for (const [seedId, quantity] of groupedSeedRewards.entries()) {
+    if (quantity <= 0) {
+      continue;
+    }
+
+    let seedDefinition = seedDefinitionBySeedId.get(seedId) ?? null;
+    if (!seedDefinition) {
+      seedDefinition = await ensureSeedDefinitionExists(client, seedId);
+      if (seedDefinition) {
+        seedDefinitionBySeedId.set(seedId, seedDefinition);
+      }
+    }
+
+    if (!seedDefinition) {
+      continue;
+    }
+
+    await client.playerSeedInventory.upsert({
+      where: {
+        playerId_seedDefinitionId: {
+          playerId,
+          seedDefinitionId: seedDefinition.id,
+        },
+      },
+      create: {
+        playerId,
+        seedDefinitionId: seedDefinition.id,
+        quantity,
+        unlockedAt: now,
+      },
+      update: {
+        quantity: { increment: quantity },
+        unlockedAt: now,
+        inventoryVersion: { increment: 1 },
+      },
+    });
+  }
 }
 
 function sumCollectRewardQuantity(rewards: ClientCollectRewardItem[], kind: NonNullable<ClientCollectRewardItem['kind']>): number {

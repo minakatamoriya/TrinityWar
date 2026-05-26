@@ -27,8 +27,13 @@ export class ClientReadService {
     @Inject(SceneContentAssembler) private readonly sceneContentAssembler: SceneContentAssembler,
   ) {}
 
-  async getBootstrap(playerId: string): Promise<ClientBootstrapResponse> {
-    const player = await this.prisma.db.player.findUnique({
+  async getBootstrap(
+    playerId: string,
+    client?: Prisma.TransactionClient | PrismaClient,
+  ): Promise<ClientBootstrapResponse> {
+    const db = client ?? this.prisma.db;
+
+    const player = await db.player.findUnique({
       where: { id: playerId },
       select: { id: true },
     });
@@ -41,7 +46,7 @@ export class ClientReadService {
       });
     }
 
-    const seedDefinitions = await this.prisma.db.seedDefinition.findMany({
+    const seedDefinitions = await db.seedDefinition.findMany({
       orderBy: [{ sortOrder: 'asc' }, { seedId: 'asc' }],
       include: {
         playerInventory: {
@@ -58,7 +63,7 @@ export class ClientReadService {
 
     const seedInventory: Record<string, number> = {};
     const unlockedSeedIds: string[] = [];
-    const spiritResource = await this.prisma.db.playerSpiritResource.findUnique({
+    const spiritResource = await db.playerSpiritResource.findUnique({
       where: { playerId },
       select: {
         spiritSoul: true,
@@ -68,7 +73,7 @@ export class ClientReadService {
         dailySpiritSoulClaimDateKey: true,
       },
     });
-    const playerState = await this.prisma.db.player.findUnique({
+    const playerState = await db.player.findUnique({
       where: { id: playerId },
       select: { castleLevelCache: true },
     });

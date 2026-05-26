@@ -14,14 +14,13 @@ interface RaidIntelScreenProps {
   onRevealDeepIntel: (targetId: string) => Promise<ClientRaidDeepIntelResponse>;
   followed: boolean;
   onToggleFollow: () => void;
-  farmTick: number;
 }
 
 export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
   const [intelState, setIntelState] = useState<ClientRaidSpiritIntel | null>(null);
   const [intelLoading, setIntelLoading] = useState(false);
   const [intelError, setIntelError] = useState<string | null>(null);
-  const { mode, targetName, detail, loading, error, onClose, onAction, onRevealDeepIntel, followed, onToggleFollow, farmTick } = props;
+  const { mode, targetName, detail, loading, error, onClose, onAction, onRevealDeepIntel, followed, onToggleFollow } = props;
   const title = mode === 'revenge' ? '复仇' : '掠夺';
   const visibleActions = detail ? detail.actions.filter((action) => action.label !== '分享目标') : [];
   const spiritPreview = detail ? getRaidSpiritPreview(detail) : null;
@@ -112,7 +111,7 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
               </div>
               <div className="farm-field-grid raid-intel-field-grid">
                 {detail.fields.map((field) => (
-                  <FarmStatusCard className="raid-intel-field-card" farmTick={farmTick} key={field.id} view={buildFarmFieldStatusView(field)} />
+                  <FarmStatusCard className="raid-intel-field-card" key={field.id} view={buildFarmFieldStatusView(field)} />
                 ))}
               </div>
             </div>

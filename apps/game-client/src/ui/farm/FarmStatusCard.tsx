@@ -117,7 +117,6 @@ export function buildRaidFieldStatusView(detail: ClientRaidTargetDetailResponse)
 
 interface FarmStatusCardProps {
   view: FarmStatusViewModel;
-  farmTick: number;
   minimal?: boolean;
   collectPresentation?: FarmCollectPresentationState | null;
   compact?: boolean;
@@ -130,8 +129,8 @@ interface FarmStatusCardProps {
 }
 
 export function FarmStatusCard(props: FarmStatusCardProps): JSX.Element {
-  const { view, farmTick, minimal = false, collectPresentation = null, compact = false, footer, className, role, tabIndex, onClick, onKeyDown } = props;
-  const remainingSeconds = Math.max(view.progressRemainingSeconds - farmTick, 0);
+  const { view, minimal = false, collectPresentation = null, compact = false, footer, className, role, tabIndex, onClick, onKeyDown } = props;
+  const remainingSeconds = Math.max(view.progressRemainingSeconds, 0);
   const hasProgressTrack = minimal
     ? (view.tone === 'seeded' || view.tone === 'growing')
     : view.tone !== 'empty' && view.tone !== 'locked';

@@ -1167,7 +1167,7 @@ export class SpiritService {
         return idempotencyRecord.responseSnapshotJson as unknown as ClientSpiritMutationResponse;
       }
 
-      const [targetSlot, codexEntry] = await Promise.all([
+      const [targetSlot, codexEntry, existingMainSlot] = await Promise.all([
         client.playerSpiritSlot.findUnique({
           where: {
             playerId_slotIndex: {
@@ -1203,6 +1203,14 @@ export class SpiritService {
               },
             },
           },
+        }),
+        client.playerSpiritSlot.findFirst({
+          where: {
+            playerId,
+            isMain: true,
+            spiritDefinitionId: { not: null },
+          },
+          select: { id: true },
         }),
       ]);
 
@@ -1244,7 +1252,7 @@ export class SpiritService {
         where: { id: targetSlot.id },
         data: {
           spiritDefinitionId: codexEntry.spiritDefinitionId,
-          isMain: false,
+          isMain: !existingMainSlot,
           level: 1,
           exp: 0,
           element: toPrismaElement(request.element),

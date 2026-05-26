@@ -1,4 +1,5 @@
 import type {
+  ClientClaimStarterSeedRequest,
   ClientClaimDailyTaskRequest,
   ClientClaimPendingRequest,
   ClientClaimFactionStipendRequest,
@@ -34,6 +35,10 @@ export class ClaimDailyTaskRequestDto implements ClientClaimDailyTaskRequest {
   acceptOverflowLoss?: boolean;
   taskDateKey?: string;
   walletVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export class ClaimStarterSeedRequestDto implements ClientClaimStarterSeedRequest {
   requestIdempotencyKey?: string;
 }
 

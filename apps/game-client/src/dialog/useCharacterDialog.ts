@@ -41,6 +41,7 @@ export interface CharacterDialogController {
 
 interface CharacterDialogScenePlayOptions extends CharacterDialogOptions {
   force?: boolean;
+  onComplete?: () => void;
 }
 
 interface CharacterDialogSequence {
@@ -48,6 +49,7 @@ interface CharacterDialogSequence {
   sceneId: CharacterDialogSceneId;
   priority: number;
   options: CharacterDialogOptions;
+  onComplete?: () => void;
   steps: CharacterDialogStep[];
   stepIndex: number;
 }
@@ -78,6 +80,10 @@ export function useCharacterDialog(): CharacterDialogController {
       window.clearTimeout(leaveTimerRef.current);
       leaveTimerRef.current = null;
     }
+  }, []);
+
+  const completeSequence = useCallback((sequence: CharacterDialogSequence | null) => {
+    sequence?.onComplete?.();
   }, []);
 
   const showSequenceStep = useCallback((sequence: CharacterDialogSequence): boolean => {
@@ -160,11 +166,13 @@ export function useCharacterDialog(): CharacterDialogController {
 
   const closeDialog = useCallback(() => {
     clearStartTimer();
+    const completedSequence = activeSequenceRef.current;
     activeSequenceRef.current = null;
     finishAfterLeaving(() => {
+      completeSequence(completedSequence);
       playNextQueuedSequence();
     });
-  }, [clearStartTimer, finishAfterLeaving, playNextQueuedSequence]);
+  }, [clearStartTimer, completeSequence, finishAfterLeaving, playNextQueuedSequence]);
 
   const advanceDialog = useCallback(() => {
     const sequence = activeSequenceRef.current;
@@ -183,6 +191,7 @@ export function useCharacterDialog(): CharacterDialogController {
     if (nextSequence.stepIndex >= nextSequence.steps.length) {
       activeSequenceRef.current = null;
       finishAfterLeaving(() => {
+        completeSequence(sequence);
         playNextQueuedSequence();
       });
       return;
@@ -191,10 +200,11 @@ export function useCharacterDialog(): CharacterDialogController {
     if (!startSequence(nextSequence)) {
       activeSequenceRef.current = null;
       finishAfterLeaving(() => {
+        completeSequence(sequence);
         playNextQueuedSequence();
       });
     }
-  }, [finishAfterLeaving, playNextQueuedSequence, startSequence]);
+  }, [completeSequence, finishAfterLeaving, playNextQueuedSequence, startSequence]);
 
   const playDialogScene = useCallback((sceneId: CharacterDialogSceneId, options: CharacterDialogScenePlayOptions = {}) => {
     const scene = characterDialogScenes[sceneId];
@@ -213,6 +223,7 @@ export function useCharacterDialog(): CharacterDialogController {
       sceneId,
       priority: getDialogScenePriority(scene),
       options,
+      onComplete: options.onComplete,
       steps,
       stepIndex: 0,
     };

@@ -169,6 +169,60 @@ button {
   opacity: 0.72;
 }
 
+.auth-faction-page-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.auth-faction-page-card {
+  min-height: 0;
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(244, 209, 158, 0.22);
+  background: rgba(21, 29, 34, 0.72);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.auth-faction-page-card:hover,
+.auth-faction-page-card:focus-visible {
+  border-color: rgba(243, 181, 111, 0.5);
+  background: rgba(27, 36, 42, 0.84);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+  outline: none;
+}
+
+.auth-faction-page-card.is-selected {
+  border-color: rgba(243, 181, 111, 0.82);
+  background: rgba(46, 33, 25, 0.82);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+  transform: translateY(-1px);
+}
+
+.auth-faction-page-card p,
+.auth-faction-page-card li {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.auth-faction-page-card ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.auth-faction-page-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+}
+
 @media (min-width: 720px) {
   .auth-choice-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1007,6 +1061,31 @@ button {
 
 .home-task-card {
   gap: 14px;
+}
+
+.home-tutorial-card {
+  gap: 12px;
+  border-color: rgba(243, 181, 111, 0.22);
+  background:
+    linear-gradient(135deg, rgba(70, 95, 68, 0.18), transparent 46%),
+    rgba(72, 50, 36, 0.82);
+}
+
+.home-tutorial-body {
+  display: grid;
+  gap: 10px;
+}
+
+.home-tutorial-body strong {
+  color: #ffe2b7;
+  font-size: 16px;
+}
+
+.home-tutorial-body p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .starter-seed-card {
@@ -3326,6 +3405,98 @@ button.spirit-element-chip {
   z-index: 6;
 }
 
+.spirit-pet-action-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.spirit-pet-action-body .seed-codex-detail-card {
+  width: 100%;
+}
+
+.spirit-pet-detail-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.spirit-pet-detail-card .spirit-stage-card,
+.spirit-pet-detail-card .spirit-live-hint {
+  flex: 0 0 auto;
+}
+
+.spirit-pet-tab-row {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  padding: 2px 0 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(255, 248, 234, 0.08);
+  scrollbar-width: none;
+}
+
+.spirit-pet-tab-row::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.spirit-pet-tab {
+  flex: 1 0 54px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 248, 234, 0.08);
+  background: rgba(255, 248, 234, 0.04);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.spirit-pet-tab.is-active {
+  border-color: rgba(243, 181, 111, 0.4);
+  background: rgba(243, 181, 111, 0.16);
+  color: #ffe2b7;
+}
+
+.spirit-pet-tab-panel {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+
+.spirit-pet-tab-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.spirit-pet-tab-panel::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(243, 181, 111, 0.25);
+}
+
+.spirit-growth-panel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.spirit-pet-tab-panel .spirit-pet-action-grid {
+  margin-top: 2px;
+}
+
 .spirit-pet-action-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4795,6 +4966,14 @@ button.spirit-element-chip {
   min-height: 52px;
   font-size: 12px;
   line-height: 1.15;
+}
+
+.nav-item.locked {
+  cursor: not-allowed;
+  opacity: 0.46;
+  color: rgba(255, 248, 234, 0.5);
+  background: rgba(255, 248, 234, 0.025);
+  border-color: rgba(255, 248, 234, 0.04);
 }
 
 .result-banner {

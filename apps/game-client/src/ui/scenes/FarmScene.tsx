@@ -23,7 +23,6 @@ interface FarmSceneProps {
   collectPresentation: FarmCollectPresentationState | null;
   fields: ClientFarmField[];
   landDeeds: NonNullable<ClientSceneContentResponse['farm']['landDeeds']>;
-  farmTick: number;
   farmBoardMessage: string;
   farmBoardUpdatedAt: string | null;
   onAction: (action: ClientSceneAction, fieldId: string, fieldCode: string) => void;
@@ -36,7 +35,6 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
     collectPresentation,
     fields,
     landDeeds,
-    farmTick,
     farmBoardMessage,
     farmBoardUpdatedAt,
     onAction,
@@ -73,7 +71,6 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
               <FarmStatusCard
                 className={getFarmCardClassName(field)}
                 collectPresentation={collectPresentation?.fieldId === field.id ? collectPresentation : null}
-                farmTick={farmTick}
                 key={field.id}
                 minimal
                 onClick={() => {

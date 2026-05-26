@@ -1,6 +1,8 @@
 ﻿import {
   CLIENT_API_PREFIX,
   type ClientClaimNotificationResponse,
+  type ClientClaimStarterSeedRequest,
+  type ClientClaimStarterSeedResponse,
   type ClientDeleteNotificationResponse,
   type ClientBuySpiritSoulRequest,
   type ClientBuySpiritShopItemRequest,
@@ -59,6 +61,7 @@ const AUTH_STORAGE_KEY = 'trinitywar.devAuth';
 type DataSource = 'api' | 'mock';
 type ClientReadEndpoint = 'bootstrap' | 'home' | 'scenes';
 export type DevLoginMode = 'new-user' | 'existing-user' | 'test-user-1' | 'test-user-2';
+export type DevFactionChoice = 'human' | 'immortal' | 'demon';
 
 export interface DevLoginSession {
   accessToken: string;
@@ -67,6 +70,7 @@ export interface DevLoginSession {
     id: string;
     nickname: string;
     castleLevel: number;
+    factionCode?: DevFactionChoice;
   };
   mode: DevLoginMode;
 }
@@ -78,6 +82,9 @@ interface DevLoginResponse {
     id: string;
     nickname: string;
     castleLevel: number;
+    faction?: {
+      code: DevFactionChoice;
+    } | null;
   };
 }
 
@@ -143,7 +150,7 @@ const INITIAL_MOCK_FACTION_CONTRIBUTION = 40;
 const INITIAL_MOCK_FACTION_TREASURY_GOLD = 82400;
 const INITIAL_MOCK_FACTION_ARMY_POWER = 1260;
 const INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS: Record<string, string> = {
-  'field-1': 'qinglingmai',
+  'field-1': 'qilingya',
   'field-2': 'qinglingmai',
   'field-3': 'qinglingmai',
 };
@@ -158,6 +165,7 @@ interface MockFieldTimingState {
 }
 
 const seedLabelMap: Record<string, string> = {
+  qilingya: '启灵芽',
   qinglingmai: '青灵麦',
   xunyamai: '风云稻',
   ninglucao: '凝露草',
@@ -175,6 +183,7 @@ const seedLabelMap: Record<string, string> = {
 };
 
 const mockSeedStageGold: Record<string, { seeded: number; growing: number; mature: number; withered: number }> = {
+  qilingya: { seeded: 20, growing: 20, mature: 50, withered: 50 },
   qinglingmai: { seeded: 100, growing: 100, mature: 200, withered: 100 },
   xunyamai: { seeded: 100, growing: 100, mature: 200, withered: 100 },
   ninglucao: { seeded: 100, growing: 100, mature: 140, withered: 40 },
@@ -192,6 +201,7 @@ const mockSeedStageGold: Record<string, { seeded: number; growing: number; matur
 };
 
 const mockSeedStageSeconds: Record<string, { seeded: number; growing: number }> = {
+  qilingya: { seeded: 5, growing: 5 },
   qinglingmai: { seeded: 7200, growing: 3600 },
   xunyamai: { seeded: 900, growing: 900 },
   ninglucao: { seeded: 5400, growing: 1800 },
@@ -1393,6 +1403,17 @@ export async function collectFieldEarnings(input: ClientCollectFieldRequest): Pr
   return response;
 }
 
+export async function claimStarterSeeds(input: ClientClaimStarterSeedRequest = {}): Promise<ClientClaimStarterSeedResponse> {
+  return fetchJson<ClientClaimStarterSeedResponse>(`${CLIENT_API_PREFIX}/actions/claim-starter-seeds`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(input.requestIdempotencyKey ? { 'X-Idempotency-Key': input.requestIdempotencyKey } : {}),
+    },
+    body: JSON.stringify(input),
+  });
+}
+
 export async function startFieldCultivation(input: ClientStartCultivationRequest): Promise<ClientStateMutationResponse> {
   if (forceMockCommands) {
     return applyMockStartCultivation(input);
@@ -1863,8 +1884,8 @@ export function clearDevLoginSession(): void {
   window.localStorage.removeItem(AUTH_STORAGE_KEY);
 }
 
-export async function devLogin(mode: DevLoginMode): Promise<DevLoginSession> {
-  const loginRequest = buildDevLoginRequest(mode);
+export async function devLogin(mode: DevLoginMode, options?: { factionCode?: DevFactionChoice }): Promise<DevLoginSession> {
+  const loginRequest = buildDevLoginRequest(mode, options);
   const response = await fetchJson<DevLoginResponse>(`${CLIENT_API_PREFIX}/auth/dev-login`, {
     method: 'POST',
     headers: {
@@ -1876,7 +1897,10 @@ export async function devLogin(mode: DevLoginMode): Promise<DevLoginSession> {
   const session: DevLoginSession = {
     accessToken: response.accessToken,
     expiresAt: response.expiresAt,
-    player: response.player,
+    player: {
+      ...response.player,
+      factionCode: response.player.faction?.code ?? options?.factionCode,
+    },
     mode,
   };
 
@@ -1904,12 +1928,12 @@ export function getDevLoginModeLabel(mode: DevLoginMode | null | undefined): str
   return '未登录';
 }
 
-function buildDevLoginRequest(mode: DevLoginMode): { providerUserId: string; nickname: string; factionCode: string } {
+function buildDevLoginRequest(mode: DevLoginMode, options?: { factionCode?: DevFactionChoice }): { providerUserId: string; nickname: string; factionCode: string } {
   if (mode === 'new-user') {
     return {
       providerUserId: `dev-ui-${Date.now()}`,
       nickname: '新测试玩家',
-      factionCode: 'human',
+      factionCode: options?.factionCode ?? 'human',
     };
   }
 

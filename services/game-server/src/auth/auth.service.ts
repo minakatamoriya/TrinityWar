@@ -5,6 +5,7 @@ import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { AppConfigService } from '../config/app-config.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PlayerInitializationService, type PlayerInitializationInput } from '../seed/player-initialization.service.js';
+import { SEED_DEFINITION_SEEDS } from '../seed/seed-data/seeds.js';
 import { AuthTokenService } from './auth-token.service.js';
 
 export interface DevLoginRequestBody {
@@ -42,6 +43,18 @@ interface DevVerificationAccount {
   factionCode: 'human' | 'immortal' | 'demon';
   initialization: Omit<PlayerInitializationInput, 'playerId' | 'resetExisting'>;
 }
+
+const NEW_PLAYER_SEED_INVENTORY: PlayerInitializationInput['seedInventory'] = {
+  qilingya: { quantity: 0, unlocked: true },
+};
+const NEW_PLAYER_SPIRIT_STATE: PlayerInitializationInput['spirit'] = {
+  createStarterSpirit: false,
+  readyStarterSpirits: true,
+};
+const NEW_PLAYER_PRIMARY_SEED_ID = 'qilingya';
+const TUTORIAL_RAID_TARGET_PROVIDER_ID = 'dev-tutorial-target';
+const TUTORIAL_RAID_TARGET_NAME = '引路守田人';
+const TUTORIAL_RAID_TARGET_ORDINARY_SOUL_REWARD = 2;
 
 const DEV_VERIFICATION_ACCOUNTS: DevVerificationAccount[] = [
   {
@@ -209,10 +222,15 @@ export class AuthService {
           },
         });
 
+      await ensureSeedDefinitionExists(client, NEW_PLAYER_PRIMARY_SEED_ID);
       await this.playerInitializationService.initialize(client, {
         playerId: player.id,
         castleLevel: player.castleLevelCache,
+        vaultGold: 0,
+        seedInventory: NEW_PLAYER_SEED_INVENTORY,
+        spirit: NEW_PLAYER_SPIRIT_STATE,
       });
+      await this.ensureTutorialRaidTargetPool(client, player.id);
 
       const authIdentity = existingIdentity
         ?? await client.playerAuthIdentity.findUniqueOrThrow({
@@ -445,6 +463,192 @@ export class AuthService {
       },
     });
   }
+
+  private async ensureTutorialRaidTargetPool(
+    client: Prisma.TransactionClient,
+    ownerPlayerId: string,
+  ): Promise<void> {
+    const targetPlayerId = await this.upsertTutorialRaidTarget(client);
+
+    if (targetPlayerId === ownerPlayerId) {
+      return;
+    }
+
+    const target = await client.player.findUnique({
+      where: { id: targetPlayerId },
+      select: {
+        nickname: true,
+        castleLevelCache: true,
+        faction: { select: { name: true } },
+        wallet: { select: { vaultGold: true, walletGold: true } },
+        army: { select: { totalCount: true, availableCount: true } },
+        fieldSlots: {
+          orderBy: { slotIndex: 'asc' },
+          select: {
+            id: true,
+            slotIndex: true,
+            status: true,
+            currentClaimableGold: true,
+            seedDefinition: { select: { label: true } },
+          },
+        },
+      },
+    });
+
+    if (!target) {
+      return;
+    }
+
+    await client.raidTargetPool.deleteMany({
+      where: {
+        ownerPlayerId,
+        targetPlayerId,
+      },
+    });
+
+    const latestBatch = await client.raidTargetPool.aggregate({
+      where: { ownerPlayerId },
+      _max: { refreshBatchNo: true },
+    });
+    const refreshBatchNo = (latestBatch._max.refreshBatchNo ?? 0) + 1;
+    const fields = target.fieldSlots.map((field) => ({
+      id: field.id,
+      slotIndex: field.slotIndex,
+      status: field.status,
+      cropName: field.seedDefinition?.label ?? null,
+      currentClaimableGold: field.currentClaimableGold,
+    }));
+    const raidableGold = Math.max(...target.fieldSlots.map((field) => field.currentClaimableGold), 0);
+
+    await client.raidTargetPool.create({
+      data: {
+        ownerPlayerId,
+        targetPlayerId,
+        slotIndex: 1,
+        refreshBatchNo,
+        targetSnapshotJson: {
+          name: target.nickname,
+          faction: target.faction?.name ?? '未知阵营',
+          level: target.castleLevelCache,
+          combatPower: target.army?.totalCount ?? 0,
+          raidableGold,
+          exposedFruit: '教程成熟田，适合首次出战',
+          raidRule: '教程目标，胜利后保底获得普通兽魂。',
+          defenseStatus: `可用战力 ${target.army?.availableCount ?? 0}`,
+          protectionStatus: '教程目标可出手',
+          detail: '新手教程专用目标，守备很弱，用来验证灵宠出战、掠夺结算和战报回放。',
+          tutorialTarget: true,
+          guaranteedOrdinarySoul: TUTORIAL_RAID_TARGET_ORDINARY_SOUL_REWARD,
+        },
+        fieldSnapshotJson: fields,
+        riskSnapshotJson: {
+          risk: 'tutorial',
+          targetVaultGold: target.wallet?.vaultGold ?? 0,
+          targetWalletGold: target.wallet?.walletGold ?? 0,
+        },
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+  }
+
+  private async upsertTutorialRaidTarget(client: Prisma.TransactionClient): Promise<string> {
+    const faction = await client.faction.findUniqueOrThrow({
+      where: { code: 'human' },
+      select: { id: true },
+    });
+    const existingIdentity = await client.playerAuthIdentity.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: 'DEV_FAKE',
+          providerUserId: TUTORIAL_RAID_TARGET_PROVIDER_ID,
+        },
+      },
+      select: { playerId: true },
+    });
+    const player = existingIdentity
+      ? await client.player.update({
+        where: { id: existingIdentity.playerId },
+        data: {
+          nickname: TUTORIAL_RAID_TARGET_NAME,
+          factionId: faction.id,
+          castleLevelCache: 1,
+          protectedUntil: null,
+        },
+        select: { id: true },
+      })
+      : await client.player.create({
+        data: {
+          nickname: TUTORIAL_RAID_TARGET_NAME,
+          factionId: faction.id,
+          castleLevelCache: 1,
+          protectedUntil: null,
+          authIdentities: {
+            create: {
+              provider: 'DEV_FAKE',
+              providerUserId: TUTORIAL_RAID_TARGET_PROVIDER_ID,
+            },
+          },
+        },
+        select: { id: true },
+      });
+
+    await client.factionMember.upsert({
+      where: {
+        factionId_playerId: {
+          factionId: faction.id,
+          playerId: player.id,
+        },
+      },
+      create: {
+        factionId: faction.id,
+        playerId: player.id,
+        contributionScore: 0,
+      },
+      update: {
+        contributionScore: 0,
+      },
+    });
+
+    await this.playerInitializationService.initialize(client, {
+      playerId: player.id,
+      resetExisting: true,
+      castleLevel: 1,
+      vaultGold: 80,
+      walletGold: 0,
+      vaultLevel: 1,
+      populationLevel: 1,
+      watchtowerLevel: 1,
+      army: { totalCount: 1, availableCount: 1, frozenCount: 0, woundedCount: 0, capacity: 10 },
+      seedInventory: {
+        qinglingmai: { quantity: 1, unlocked: true },
+      },
+      fields: buildTutorialRaidTargetFields(),
+      spirit: {
+        starterSpiritId: 'linglu',
+        starterElement: 'WATER',
+        starterLevel: 1,
+      },
+    });
+
+    await client.player.update({
+      where: { id: player.id },
+      data: { protectedUntil: null },
+    });
+    await client.playerSpiritSlot.updateMany({
+      where: {
+        playerId: player.id,
+        slotIndex: 1,
+        isMain: true,
+      },
+      data: {
+        currentHp: 1,
+        status: 'RESTING',
+        slotVersion: { increment: 1 },
+      },
+    });
+
+    return player.id;
+  }
 }
 
 function buildVerificationFields(
@@ -488,6 +692,32 @@ function buildVerificationFields(
       currentClaimableGold: 220,
       stageOffsetSeconds: 75 * 60,
     },
+    { slotIndex: 4, isUnlocked: false, unlockCastleLevel: 15, status: 'LOCKED' },
+  ];
+}
+
+function buildTutorialRaidTargetFields(): Array<{
+  slotIndex: number;
+  isUnlocked: boolean;
+  unlockCastleLevel: number;
+  status: FieldStatus;
+  seedId?: string;
+  investedGold?: number;
+  currentClaimableGold?: number;
+  stageOffsetSeconds?: number;
+}> {
+  return [
+    {
+      slotIndex: 1,
+      isUnlocked: true,
+      unlockCastleLevel: 1,
+      status: 'MATURE',
+      seedId: 'qinglingmai',
+      currentClaimableGold: 80,
+      stageOffsetSeconds: 3 * 60 * 60,
+    },
+    { slotIndex: 2, isUnlocked: false, unlockCastleLevel: 5, status: 'LOCKED' },
+    { slotIndex: 3, isUnlocked: false, unlockCastleLevel: 10, status: 'LOCKED' },
     { slotIndex: 4, isUnlocked: false, unlockCastleLevel: 15, status: 'LOCKED' },
   ];
 }
@@ -543,4 +773,32 @@ async function getCurrentPlayerSummary(
       providerUserId,
     },
   };
+}
+
+async function ensureSeedDefinitionExists(
+  client: Prisma.TransactionClient,
+  seedId: string,
+): Promise<void> {
+  const seed = SEED_DEFINITION_SEEDS.find((entry) => entry.seedId === seedId);
+  if (!seed) {
+    return;
+  }
+
+  await client.seedDefinition.upsert({
+    where: { seedId: seed.seedId },
+    create: seed,
+    update: {
+      label: seed.label,
+      rarity: seed.rarity,
+      sortOrder: seed.sortOrder,
+      seedSeconds: seed.seedSeconds,
+      growSeconds: seed.growSeconds,
+      matureSeconds: seed.matureSeconds,
+      ripeWindowSeconds: seed.ripeWindowSeconds,
+      baseYieldGold: seed.baseYieldGold,
+      harvestSeedReturn: seed.harvestSeedReturn,
+      strategyNote: seed.strategyNote,
+      lore: seed.lore,
+    },
+  });
 }

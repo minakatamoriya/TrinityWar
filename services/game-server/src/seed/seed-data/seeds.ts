@@ -18,6 +18,20 @@ const defaultRipeWindowSeconds = 30 * 60;
 
 export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
   {
+    seedId: 'qilingya',
+    label: '启灵芽',
+    rarity: 'common',
+    sortOrder: 1,
+    seedSeconds: 5,
+    growSeconds: 5,
+    matureSeconds: 10,
+    ripeWindowSeconds: defaultRipeWindowSeconds,
+    baseYieldGold: 50,
+    harvestSeedReturn: 1,
+    strategyNote: '新手教程种，十秒完成第一轮收获，用来串起种田、灵宠和首次掠夺。',
+    lore: '只在开荒时授予的一枚灵芽，破土极快，适合新人理解第一轮经营。',
+  },
+  {
     seedId: 'qinglingmai',
     label: '青灵麦',
     rarity: 'common',

@@ -680,6 +680,10 @@ export interface ClientClaimDailyTaskRequest {
   requestIdempotencyKey?: string;
 }
 
+export interface ClientClaimStarterSeedRequest {
+  requestIdempotencyKey?: string;
+}
+
 export interface ClientClaimDailyTaskResponse {
   app: string;
   summary: string;
@@ -712,6 +716,10 @@ export interface ClientStateMutationResponse {
   summary: string;
   home: HomeSummaryResponse;
   scenes: ClientSceneContentResponse;
+}
+
+export interface ClientClaimStarterSeedResponse extends ClientStateMutationResponse {
+  bootstrap: ClientBootstrapResponse;
 }
 
 export interface ClientCollectFieldRequest {

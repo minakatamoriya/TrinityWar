@@ -31,6 +31,7 @@ interface ArmySceneProps {
 
 type DisplayRarity = '普通' | '稀有' | '传说';
 type DisplayElement = '金' | '木' | '水' | '火' | '土';
+type SpiritPetActionTab = 'overview' | 'growth' | 'breakthrough' | 'traits' | 'manage';
 
 const elementChoices: Array<{ value: ClientSpiritElement; label: DisplayElement }> = [
   { value: 'metal', label: '金' },
@@ -61,6 +62,14 @@ const traitChoices: Array<{ code: ClientSpiritTraitCode; label: string }> = [
   { code: 'lifesteal', label: '吸血' },
   { code: 'armor_break', label: '破甲' },
   { code: 'tenacity', label: '韧性' },
+];
+
+const petActionTabs: Array<{ key: SpiritPetActionTab; label: string }> = [
+  { key: 'overview', label: '基础' },
+  { key: 'growth', label: '成长' },
+  { key: 'breakthrough', label: '突破' },
+  { key: 'traits', label: '洗点' },
+  { key: 'manage', label: '管理' },
 ];
 
 function formatNumber(value: number): string {
@@ -434,6 +443,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const [lockedTraitSlot, setLockedTraitSlot] = useState(1);
   const [targetTraitSlot, setTargetTraitSlot] = useState(1);
   const [targetTraitCode, setTargetTraitCode] = useState<ClientSpiritTraitCode>('crit');
+  const [selectedPetTab, setSelectedPetTab] = useState<SpiritPetActionTab>('overview');
   const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
   const [expFloat, setExpFloat] = useState<{ id: number; text: string } | null>(null);
   const [levelFlashToken, setLevelFlashToken] = useState(0);
@@ -518,6 +528,10 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
 
     previousSelectedSlotRef.current = selectedSlot;
   }, [selectedSlot]);
+
+  useEffect(() => {
+    setSelectedPetTab('overview');
+  }, [selectedSlotIndex]);
 
   useEffect(() => {
     if (!expFloat) {
@@ -637,8 +651,8 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
             </div>
             <button className="ghost-button small" onClick={() => setSelectedSlotIndex(null)} type="button">关闭</button>
           </div>
-          <div className="seed-codex-body">
-            <section className="seed-codex-detail-card">
+          <div className={`seed-codex-body${selectedSlotEntry ? ' spirit-pet-action-body' : ''}`}>
+            <section className={`seed-codex-detail-card${selectedSlotEntry ? ' spirit-pet-detail-card' : ''}`}>
               {selectedSlotEntry ? (
                 <>
                   <div className="seed-codex-detail-head">
@@ -656,123 +670,151 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                     rarity={getRarityLabel(selectedSlotEntry.definition.rarity)}
                   />
                   {resumeHint ? <p className="spirit-live-hint">{resumeHint.text}</p> : null}
-                  <div className="seed-codex-stats">
-                    <div className="seed-codex-stat-row"><strong>稀有度</strong><span>{getRarityLabel(selectedSlotEntry.definition.rarity)}</span></div>
-                    <div className="seed-codex-stat-row"><strong>阵营加成</strong><span>{getFactionLabel(selectedSlotEntry.definition.factionAffinity) === playerFaction ? `已触发 ${getFactionBonusLabel(getFactionLabel(selectedSlotEntry.definition.factionAffinity))}` : `未触发，当前阵营为${playerFaction}`}</span></div>
-                    <div className="seed-codex-stat-row"><strong>升级方式</strong><span>挂机经验自动升级</span></div>
-                    <div className="seed-codex-stat-row"><strong>突破材料</strong><span>只消耗普通/稀有/传说兽魂</span></div>
-                    <div className="seed-codex-stat-row"><strong>天机符</strong><span>{formatNumber(availableTianjiTalisman)}</span></div>
-                    <div className="seed-codex-stat-row"><strong>当前血量</strong><span>{getHealthText(selectedSlot)}</span></div>
-                    <div className="seed-codex-stat-row"><strong>当前状态</strong><span>{getHealthStatus(selectedSlot)}</span></div>
-                    <div className="seed-codex-stat-row"><strong>恢复情况</strong><span>{getRecoveryStatusText(recoveryPlan, getHealthRatio(selectedSlot) >= 100)}</span></div>
+                  <div className="spirit-pet-tab-row" role="tablist" aria-label="灵宠操作分组">
+                    {petActionTabs.map((tab) => (
+                      <button
+                        aria-selected={selectedPetTab === tab.key}
+                        className={`spirit-pet-tab ${selectedPetTab === tab.key ? 'is-active' : ''}`}
+                        key={tab.key}
+                        onClick={() => setSelectedPetTab(tab.key)}
+                        role="tab"
+                        type="button"
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
                   </div>
-                  <div className="spirit-progress-block">
-                    <div className="spirit-progress-head">
-                      <span>血量</span>
-                      <strong>{getHealthText(selectedSlot)}</strong>
-                    </div>
-                    <div className="spirit-progress-track" aria-hidden="true">
-                      <div className="spirit-progress-fill spirit-progress-fill-health" style={{ width: `${getHealthRatio(selectedSlot)}%` }} />
-                    </div>
-                  </div>
-                  <section className="panel-card spirit-growth-panel">
-                    <div className="panel-head">
-                      <h4>成长</h4>
-                      <span className="soft-tag">{selectedSlot.isAtBreakthroughNode ? '待突破' : '挂机成长中'}</span>
-                    </div>
-                    <div className="spirit-progress-block spirit-progress-block-live">
-                      <div className="spirit-progress-head">
-                        <span>经验</span>
-                        <strong>
-                          {selectedSlot.isAtBreakthroughNode
-                            ? '待突破'
-                            : `${formatNumber(selectedSlot.exp)} / ${formatNumber(Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1))} · ${Math.floor((selectedSlot.exp / Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1)) * 100)}%`}
-                        </strong>
-                      </div>
-                      <div className="spirit-progress-track" aria-hidden="true">
-                        <div className="spirit-progress-fill" style={{ width: `${selectedSlot.isAtBreakthroughNode ? 100 : Math.min((selectedSlot.exp / Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1)) * 100, 100)}%` }} />
-                      </div>
-                      {expFloat ? <span className="spirit-exp-float">{expFloat.text}</span> : null}
-                    </div>
-                    <div className="seed-codex-stats">
-                      <div className="seed-codex-stat-row"><strong>灵根库存</strong><span>{formatNumber(spirit.spiritRoot ?? 0)}</span></div>
-                      <div className="seed-codex-stat-row"><strong>升级预估</strong><span>{getLevelRemainingText(selectedSlot)}</span></div>
-                      <div className="seed-codex-stat-row"><strong>当前经验速度</strong><span>{getExpGainText(selectedSlot)}</span></div>
-                      <div className="seed-codex-stat-row"><strong>自动加速</strong><span>{(selectedSlot.satiatedRemainingSeconds ?? 0) > 0 ? '自动加速中' : '未加速'}</span></div>
-                      <div className="seed-codex-stat-row"><strong>剩余加速时间</strong><span>{formatDuration(selectedSlot.satiatedRemainingSeconds ?? 0)}</span></div>
-                      <div className="seed-codex-stat-row"><strong>每次投喂</strong><span>固定消耗 10 灵根，追加 2 小时自动加速，可重复叠加</span></div>
-                    </div>
-                    {selectedSlot.isAtBreakthroughNode ? <p className="panel-text">突破后会立刻恢复挂机。投喂现在只负责续上自动加速，不再瞬间增加经验。</p> : <p className="panel-text">灵根只负责续上自动加速，经验按时间持续增长。粮食快用完时再来补就行。</p>}
-                    <div className="spirit-pet-action-grid">
-                      <button className="secondary-button" disabled={busy || (spirit.spiritRoot ?? 0) < 10} onClick={() => onFeed(selectedSlot.slotIndex, selectedSlot.slotVersion, 'feed_once')} type="button">投喂 10 灵根</button>
-                    </div>
-                  </section>
-                  <section className="panel-card spirit-growth-panel">
-                    <div className="panel-head">
-                      <h4>突破</h4>
-                      <span className="soft-tag">只消耗兽魂</span>
-                    </div>
-                    {selectedSlot.isAtBreakthroughNode && spirit.breakthroughRequirement ? (
+                  <div className="spirit-pet-tab-panel" role="tabpanel">
+                    {selectedPetTab === 'overview' ? (
                       <>
-                        <p className="panel-text">Lv.{spirit.breakthroughRequirement.level} 突破需要 {spirit.breakthroughRequirement.label} x{spirit.breakthroughRequirement.required}，当前 {spirit.breakthroughRequirement.owned}。</p>
-                        <button className="primary-button spirit-full-button" disabled={busy || !spirit.breakthroughRequirement.canBreakthrough} onClick={() => onBreakthrough(selectedSlot.slotIndex, selectedSlot.slotVersion, spirit.breakthroughRequirement?.stage)} type="button">手动突破</button>
-                      </>
-                    ) : (
-                      <p className="panel-text">未到突破节点。每 10 级需要手动突破，经验不会缓存溢出。</p>
-                    )}
-                  </section>
-                  <section className="panel-card spirit-growth-panel">
-                    <div className="panel-head">
-                      <h4>词条洗练</h4>
-                      <span className="soft-tag">重复叠加不衰减</span>
-                    </div>
-                    <div className="task-list">
-                      {Array.from({ length: 5 }, (_, index) => index + 1).map((slotIndex) => {
-                        const trait = selectedSlot.traits?.find((item) => item.slotIndex === slotIndex);
-                        const unlocked = slotIndex <= (selectedSlot.unlockedTraitSlots ?? 0);
-                        const unlockLevel = slotIndex * 10;
-                        return (
-                          <div className={`task-row spirit-trait-row${trait?.sourceType === 'natural' ? ' is-natural' : ''}`} key={slotIndex}>
-                            <span className="task-index">{slotIndex}</span>
-                            <div>
-                              <div className="task-row-head">
-                                <strong>{trait ? trait.label : unlocked ? '待洗练' : `Lv.${unlockLevel} 突破解锁`}</strong>
-                                <span className="task-state-badge">{unlocked ? '已解锁' : '未解锁'}</span>
-                              </div>
-                              <p>{trait?.description ?? (unlocked ? '洗练后生成词条' : `达到 Lv.${unlockLevel} 并完成突破后解锁`)}</p>
-                            </div>
+                        <div className="seed-codex-stats">
+                          <div className="seed-codex-stat-row"><strong>稀有度</strong><span>{getRarityLabel(selectedSlotEntry.definition.rarity)}</span></div>
+                          <div className="seed-codex-stat-row"><strong>阵营加成</strong><span>{getFactionLabel(selectedSlotEntry.definition.factionAffinity) === playerFaction ? `已触发 ${getFactionBonusLabel(getFactionLabel(selectedSlotEntry.definition.factionAffinity))}` : `未触发，当前阵营为${playerFaction}`}</span></div>
+                          <div className="seed-codex-stat-row"><strong>升级方式</strong><span>挂机经验自动升级</span></div>
+                          <div className="seed-codex-stat-row"><strong>突破材料</strong><span>只消耗普通/稀有/传说兽魂</span></div>
+                          <div className="seed-codex-stat-row"><strong>天机符</strong><span>{formatNumber(availableTianjiTalisman)}</span></div>
+                          <div className="seed-codex-stat-row"><strong>当前血量</strong><span>{getHealthText(selectedSlot)}</span></div>
+                          <div className="seed-codex-stat-row"><strong>当前状态</strong><span>{getHealthStatus(selectedSlot)}</span></div>
+                          <div className="seed-codex-stat-row"><strong>恢复情况</strong><span>{getRecoveryStatusText(recoveryPlan, getHealthRatio(selectedSlot) >= 100)}</span></div>
+                        </div>
+                        <div className="spirit-progress-block">
+                          <div className="spirit-progress-head">
+                            <span>血量</span>
+                            <strong>{getHealthText(selectedSlot)}</strong>
                           </div>
-                        );
-                      })}
-                    </div>
-                    {(selectedSlot.unlockedTraitSlots ?? 0) <= 0 ? <p className="panel-text">第一个词条会在 Lv.10 完成突破后随机生成。</p> : null}
-                    <div className="spirit-element-picker">
-                      {Array.from({ length: selectedSlot.unlockedTraitSlots ?? 0 }, (_, index) => index + 1).map((slotIndex) => (
-                        <button className={`spirit-element-chip ${lockedTraitSlot === slotIndex ? ' is-selected' : ''}`} key={`lock-${slotIndex}`} onClick={() => setLockedTraitSlot(slotIndex)} type="button">锁 {slotIndex}</button>
-                      ))}
-                    </div>
-                    <div className="spirit-element-picker">
-                      {Array.from({ length: selectedSlot.unlockedTraitSlots ?? 0 }, (_, index) => index + 1).map((slotIndex) => (
-                        <button className={`spirit-element-chip ${targetTraitSlot === slotIndex ? ' is-selected' : ''}`} key={`target-${slotIndex}`} onClick={() => setTargetTraitSlot(slotIndex)} type="button">槽 {slotIndex}</button>
-                      ))}
-                    </div>
-                    <div className="spirit-element-picker">
-                      {traitChoices.map((trait) => (
-                        <button className={`spirit-element-chip ${targetTraitCode === trait.code ? ' is-selected' : ''}`} key={trait.code} onClick={() => setTargetTraitCode(trait.code)} type="button">{trait.label}</button>
-                      ))}
-                    </div>
-                    <div className="spirit-pet-action-grid">
-                      <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 5} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'basic')} type="button">基础洗练 5 灵髓 + 金币</button>
-                      <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 50} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'batch_basic')} type="button">连续洗练 10 次</button>
-                      <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 10 || (spirit.spiritJade ?? 0) < 1} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'advanced', { lockedSlotIndex: lockedTraitSlot })} type="button">高级洗练 锁 1 条</button>
-                      <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 20 || (spirit.spiritJade ?? 0) < 5} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'ultimate', { targetSlotIndex: targetTraitSlot, targetTraitCode })} type="button">终极洗练 定向</button>
-                    </div>
-                  </section>
-                  <div className="spirit-pet-action-grid">
-                    <button className="primary-button" disabled={busy || selectedSlot.isMain} onClick={() => onSetMain(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">设为主位</button>
-                    <button className="secondary-button" disabled type="button">挂机升级中</button>
-                    <button className="secondary-button" disabled={busy || getHealthRatio(selectedSlot) >= 100 || recoveryPlan.totalRemaining <= 0 || availableTianjiTalisman < recoveryPlan.nextTalismanCost} onClick={() => onRecover(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">{getRecoveryButtonText(recoveryPlan)}</button>
-                    <button className="ghost-button" disabled={busy || selectedSlot.isMain} onClick={() => onDissolve(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">解散（返还 35% 兽魂）</button>
+                          <div className="spirit-progress-track" aria-hidden="true">
+                            <div className="spirit-progress-fill spirit-progress-fill-health" style={{ width: `${getHealthRatio(selectedSlot)}%` }} />
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
+                    {selectedPetTab === 'growth' ? (
+                      <section className="spirit-growth-panel">
+                        <div className="panel-head">
+                          <h4>成长</h4>
+                          <span className="soft-tag">{selectedSlot.isAtBreakthroughNode ? '待突破' : '挂机成长中'}</span>
+                        </div>
+                        <div className="spirit-progress-block spirit-progress-block-live">
+                          <div className="spirit-progress-head">
+                            <span>经验</span>
+                            <strong>
+                              {selectedSlot.isAtBreakthroughNode
+                                ? '待突破'
+                                : `${formatNumber(selectedSlot.exp)} / ${formatNumber(Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1))} · ${Math.floor((selectedSlot.exp / Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1)) * 100)}%`}
+                            </strong>
+                          </div>
+                          <div className="spirit-progress-track" aria-hidden="true">
+                            <div className="spirit-progress-fill" style={{ width: `${selectedSlot.isAtBreakthroughNode ? 100 : Math.min((selectedSlot.exp / Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1)) * 100, 100)}%` }} />
+                          </div>
+                          {expFloat ? <span className="spirit-exp-float">{expFloat.text}</span> : null}
+                        </div>
+                        <div className="seed-codex-stats">
+                          <div className="seed-codex-stat-row"><strong>灵根库存</strong><span>{formatNumber(spirit.spiritRoot ?? 0)}</span></div>
+                          <div className="seed-codex-stat-row"><strong>升级预估</strong><span>{getLevelRemainingText(selectedSlot)}</span></div>
+                          <div className="seed-codex-stat-row"><strong>当前经验速度</strong><span>{getExpGainText(selectedSlot)}</span></div>
+                          <div className="seed-codex-stat-row"><strong>自动加速</strong><span>{(selectedSlot.satiatedRemainingSeconds ?? 0) > 0 ? '自动加速中' : '未加速'}</span></div>
+                          <div className="seed-codex-stat-row"><strong>剩余加速时间</strong><span>{formatDuration(selectedSlot.satiatedRemainingSeconds ?? 0)}</span></div>
+                          <div className="seed-codex-stat-row"><strong>每次投喂</strong><span>固定消耗 10 灵根，追加 2 小时自动加速，可重复叠加</span></div>
+                        </div>
+                        {selectedSlot.isAtBreakthroughNode ? <p className="panel-text">突破后会立刻恢复挂机。投喂现在只负责续上自动加速，不再瞬间增加经验。</p> : <p className="panel-text">灵根只负责续上自动加速，经验按时间持续增长。粮食快用完时再来补就行。</p>}
+                        <div className="spirit-pet-action-grid">
+                          <button className="secondary-button" disabled={busy || (spirit.spiritRoot ?? 0) < 10} onClick={() => onFeed(selectedSlot.slotIndex, selectedSlot.slotVersion, 'feed_once')} type="button">投喂 10 灵根</button>
+                        </div>
+                      </section>
+                    ) : null}
+                    {selectedPetTab === 'breakthrough' ? (
+                      <section className="spirit-growth-panel">
+                        <div className="panel-head">
+                          <h4>突破</h4>
+                          <span className="soft-tag">只消耗兽魂</span>
+                        </div>
+                        {selectedSlot.isAtBreakthroughNode && spirit.breakthroughRequirement ? (
+                          <>
+                            <p className="panel-text">Lv.{spirit.breakthroughRequirement.level} 突破需要 {spirit.breakthroughRequirement.label} x{spirit.breakthroughRequirement.required}，当前 {spirit.breakthroughRequirement.owned}。</p>
+                            <button className="primary-button spirit-full-button" disabled={busy || !spirit.breakthroughRequirement.canBreakthrough} onClick={() => onBreakthrough(selectedSlot.slotIndex, selectedSlot.slotVersion, spirit.breakthroughRequirement?.stage)} type="button">手动突破</button>
+                          </>
+                        ) : (
+                          <p className="panel-text">未到突破节点。每 10 级需要手动突破，经验不会缓存溢出。</p>
+                        )}
+                      </section>
+                    ) : null}
+                    {selectedPetTab === 'traits' ? (
+                      <section className="spirit-growth-panel">
+                        <div className="panel-head">
+                          <h4>词条洗练</h4>
+                          <span className="soft-tag">重复叠加不衰减</span>
+                        </div>
+                        <div className="task-list">
+                          {Array.from({ length: 5 }, (_, index) => index + 1).map((slotIndex) => {
+                            const trait = selectedSlot.traits?.find((item) => item.slotIndex === slotIndex);
+                            const unlocked = slotIndex <= (selectedSlot.unlockedTraitSlots ?? 0);
+                            const unlockLevel = slotIndex * 10;
+                            return (
+                              <div className={`task-row spirit-trait-row${trait?.sourceType === 'natural' ? ' is-natural' : ''}`} key={slotIndex}>
+                                <span className="task-index">{slotIndex}</span>
+                                <div>
+                                  <div className="task-row-head">
+                                    <strong>{trait ? trait.label : unlocked ? '待洗练' : `Lv.${unlockLevel} 突破解锁`}</strong>
+                                    <span className="task-state-badge">{unlocked ? '已解锁' : '未解锁'}</span>
+                                  </div>
+                                  <p>{trait?.description ?? (unlocked ? '洗练后生成词条' : `达到 Lv.${unlockLevel} 并完成突破后解锁`)}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {(selectedSlot.unlockedTraitSlots ?? 0) <= 0 ? <p className="panel-text">第一个词条会在 Lv.10 完成突破后随机生成。</p> : null}
+                        <div className="spirit-element-picker">
+                          {Array.from({ length: selectedSlot.unlockedTraitSlots ?? 0 }, (_, index) => index + 1).map((slotIndex) => (
+                            <button className={`spirit-element-chip ${lockedTraitSlot === slotIndex ? ' is-selected' : ''}`} key={`lock-${slotIndex}`} onClick={() => setLockedTraitSlot(slotIndex)} type="button">锁 {slotIndex}</button>
+                          ))}
+                        </div>
+                        <div className="spirit-element-picker">
+                          {Array.from({ length: selectedSlot.unlockedTraitSlots ?? 0 }, (_, index) => index + 1).map((slotIndex) => (
+                            <button className={`spirit-element-chip ${targetTraitSlot === slotIndex ? ' is-selected' : ''}`} key={`target-${slotIndex}`} onClick={() => setTargetTraitSlot(slotIndex)} type="button">槽 {slotIndex}</button>
+                          ))}
+                        </div>
+                        <div className="spirit-element-picker">
+                          {traitChoices.map((trait) => (
+                            <button className={`spirit-element-chip ${targetTraitCode === trait.code ? ' is-selected' : ''}`} key={trait.code} onClick={() => setTargetTraitCode(trait.code)} type="button">{trait.label}</button>
+                          ))}
+                        </div>
+                        <div className="spirit-pet-action-grid">
+                          <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 5} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'basic')} type="button">基础洗练 5 灵髓 + 金币</button>
+                          <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 50} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'batch_basic')} type="button">连续洗练 10 次</button>
+                          <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 10 || (spirit.spiritJade ?? 0) < 1} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'advanced', { lockedSlotIndex: lockedTraitSlot })} type="button">高级洗练 锁 1 条</button>
+                          <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 20 || (spirit.spiritJade ?? 0) < 5} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'ultimate', { targetSlotIndex: targetTraitSlot, targetTraitCode })} type="button">终极洗练 定向</button>
+                        </div>
+                      </section>
+                    ) : null}
+                    {selectedPetTab === 'manage' ? (
+                      <div className="spirit-pet-action-grid">
+                        <button className="primary-button" disabled={busy || selectedSlot.isMain} onClick={() => onSetMain(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">设为主位</button>
+                        <button className="secondary-button" disabled type="button">挂机升级中</button>
+                        <button className="secondary-button" disabled={busy || getHealthRatio(selectedSlot) >= 100 || recoveryPlan.totalRemaining <= 0 || availableTianjiTalisman < recoveryPlan.nextTalismanCost} onClick={() => onRecover(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">{getRecoveryButtonText(recoveryPlan)}</button>
+                        <button className="ghost-button" disabled={busy || selectedSlot.isMain} onClick={() => onDissolve(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">解散（返还 35% 兽魂）</button>
+                      </div>
+                    ) : null}
                   </div>
                 </>
               ) : (

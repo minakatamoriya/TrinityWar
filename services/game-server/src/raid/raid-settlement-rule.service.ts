@@ -39,6 +39,7 @@ export interface RaidSettlementRuleInput {
   defenderFactionName: string | null;
   attackerSpirit: SpiritBattleSnapshot | null;
   defenderSpirit: SpiritBattleSnapshot | null;
+  guaranteedOrdinarySoul?: number;
 }
 
 export interface RaidSettlementRuleResult {
@@ -96,6 +97,9 @@ export class RaidSettlementRuleService {
     const attackerNextHp = input.attackerSpirit ? clampHpForPersistence(battle.attackerHpAfter, input.attackerSpirit.maxHp) : null;
     const defenderNextHp = input.defenderSpirit ? clampHpForPersistence(battle.defenderHpAfter, input.defenderSpirit.maxHp) : null;
     const soulRewards = buildSoulRewards(input.defenderSpirit, battle.result);
+    if (battle.result === 'WIN' && (input.guaranteedOrdinarySoul ?? 0) > 0) {
+      soulRewards.ordinary = Math.max(soulRewards.ordinary, Math.floor(input.guaranteedOrdinarySoul ?? 0));
+    }
     const shardDrop = buildShardDrop(input.defenderSpirit, tier, scoreDeltaRatio);
     const rewardItems = buildRewardItems(soulRewards, shardDrop);
     const rewardSummary = formatRewardSummary(soulRewards, shardDrop);

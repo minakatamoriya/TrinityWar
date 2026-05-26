@@ -73,6 +73,7 @@ export class RaidSettlementService {
         defenderFactionName: raidOrder.defender.faction?.name ?? readFactionName(raidOrder.defenderSnapshotJson) ?? null,
         attackerSpirit: readSpiritSnapshot(raidOrder.attackerSnapshotJson) ?? buildSpiritSnapshotFromSlot(raidOrder.attacker.spiritSlots[0] ?? null),
         defenderSpirit: readSpiritSnapshot(raidOrder.defenderSnapshotJson) ?? buildSpiritSnapshotFromSlot(raidOrder.defender.spiritSlots[0] ?? null),
+        guaranteedOrdinarySoul: readGuaranteedOrdinarySoul(raidOrder.defenderSnapshotJson),
       });
       const now = new Date();
       const nextVaultGold = raidOrder.attacker.wallet.vaultGold + settlementResult.depositedGold;
@@ -488,6 +489,12 @@ function readFactionName(value: Prisma.JsonValue): string | null {
 function readSpiritSnapshot(value: Prisma.JsonValue): SpiritBattleSnapshot | null {
   const snapshot = value as { mainSpirit?: unknown };
   return isSpiritBattleSnapshot(snapshot.mainSpirit) ? snapshot.mainSpirit : null;
+}
+
+function readGuaranteedOrdinarySoul(value: Prisma.JsonValue): number {
+  const snapshot = value as { targetSnapshotJson?: { guaranteedOrdinarySoul?: unknown } };
+  const rawValue = snapshot.targetSnapshotJson?.guaranteedOrdinarySoul;
+  return typeof rawValue === 'number' ? Math.max(Math.floor(rawValue), 0) : 0;
 }
 
 function buildSpiritSnapshotFromSlot(slot: {

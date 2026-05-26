@@ -44,6 +44,8 @@ export interface DevAccountSeedData {
     status?: 'IN_PROGRESS' | 'COMPLETED' | 'CLAIMED';
   }>;
   spirit?: {
+    createStarterSpirit?: boolean;
+    readyStarterSpirits?: boolean;
     spiritSoul?: number;
     ordinarySoul?: number;
     rareSoul?: number;
@@ -61,7 +63,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
     nickname: '新手测试号',
     factionCode: 'human',
     castleLevel: 1,
-    wallet: { vaultGold: 120, walletGold: 0, pendingTaxGold: 0, pendingDividendGold: 0 },
+    wallet: { vaultGold: 0, walletGold: 0, pendingTaxGold: 0, pendingDividendGold: 0 },
     building: {
       vaultLevel: 1,
       populationLevel: 1,
@@ -73,8 +75,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
     },
     army: { totalCount: 10, availableCount: 10, frozenCount: 0, woundedCount: 0, capacity: 10 },
     seedInventory: {
-      qinglingmai: { quantity: 3, unlocked: true },
-      xunyamai: { quantity: 3, unlocked: true },
+      qilingya: { quantity: 1, unlocked: true },
     },
     fields: [
       { slotIndex: 1, isUnlocked: true, unlockCastleLevel: 1, status: 'EMPTY' },
@@ -82,6 +83,10 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
       { slotIndex: 3, isUnlocked: false, unlockCastleLevel: 10, status: 'LOCKED' },
       { slotIndex: 4, isUnlocked: false, unlockCastleLevel: 15, status: 'LOCKED' },
     ],
+    spirit: {
+      createStarterSpirit: false,
+      readyStarterSpirits: true,
+    },
   },
   {
     providerUserId: 'dev-main-loop',

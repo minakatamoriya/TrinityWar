@@ -78,12 +78,31 @@ function buildFieldRewards(field: FieldStateForCollect, collectMode: ClientColle
     return [];
   }
 
-  return [{
+  const rewards: ClientCollectRewardItem[] = [{
     kind: 'seed',
     seedId: field.seedDefinition.seedId,
     label: field.seedDefinition.label,
     quantity: 1,
   }, buildSpiritCropReward(field.seedDefinition.rarity)];
+
+  if (field.seedDefinition.seedId === 'qilingya') {
+    rewards.push(
+      {
+        kind: 'seed',
+        seedId: 'qinglingmai',
+        label: '青灵麦',
+        quantity: 2,
+      },
+      {
+        kind: 'seed',
+        seedId: 'xunyamai',
+        label: '风云稻',
+        quantity: 2,
+      },
+    );
+  }
+
+  return rewards;
 }
 
 function buildSpiritCropReward(rarity: string): ClientCollectRewardItem {
