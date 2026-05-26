@@ -513,10 +513,8 @@ function buildSpiritSnapshotFromSlot(slot: {
     factionAffinity: string;
     role: string;
     baseAttack: number;
-    baseDefense: number;
     baseHp: number;
     growthAttack: number;
-    growthDefense: number;
     growthHp: number;
   } | null;
   traits?: Array<{

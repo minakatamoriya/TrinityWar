@@ -1228,7 +1228,7 @@ function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutat
     totalSeconds: nextTotalSeconds,
     remainingSeconds: nextTotalSeconds,
   };
-  updateMockDailyTask('daily-upgrade-spirit', actualRecruitCount > 0 ? 1 : 0);
+  updateMockDailyTask('daily-feed-spirit', actualRecruitCount > 0 ? 1 : 0);
 
   return buildMockMutation(
     actualRecruitCount < requestedCount
@@ -1588,7 +1588,6 @@ export async function revealRaidTargetDeepIntel(targetId: string): Promise<Clien
       intel: {
         element: 'fire',
         attackRating: 'A',
-        defenseRating: 'B',
         healthStatus: '状态良好',
         remainingFreeIntel: 2,
         remainingTalismanIntel: 3,
@@ -1959,4 +1958,3 @@ function buildDevLoginRequest(mode: DevLoginMode, options?: { factionCode?: DevF
     factionCode: 'demon',
   };
 }
-

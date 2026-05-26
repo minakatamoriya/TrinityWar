@@ -20,7 +20,6 @@ export function SpiritConfigView(props: ConfigViewProps): JSX.Element {
           { label: '阵营', key: 'factionAffinity' },
           { label: '定位', key: 'role' },
           { label: '基础攻', key: 'baseAttack' },
-          { label: '基础防', key: 'baseDefense' },
           { label: '基础生命', key: 'baseHp' },
           { label: '排序', key: 'sortOrder' },
         ]}

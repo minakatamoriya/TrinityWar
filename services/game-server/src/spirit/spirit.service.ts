@@ -10,6 +10,7 @@ import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { DAILY_TASK_CONFIG } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { STARTER_SPIRIT_IDS } from '../seed/seed-data/spirits.js';
 
 const SPIRIT_SOUL_GOLD_PRICE = 100;
 const SPIRIT_MAX_LEVEL = 50;
@@ -44,13 +45,11 @@ const SPIRIT_BREAKTHROUGH_COSTS: Record<number, { quality: 'ordinary' | 'rare' |
 const SPIRIT_TRAIT_DEFINITIONS: Array<{ code: ClientSpiritTraitCode; label: string; value: number; description: string }> = [
   { code: 'claw', label: '利爪', value: 10, description: '攻击 +10%' },
   { code: 'thick_skin', label: '厚皮', value: 10, description: '生命 +10%' },
-  { code: 'hard_armor', label: '硬甲', value: 10, description: '防御 +10%' },
   { code: 'crit', label: '暴击', value: 6, description: '暴击率 +6%' },
   { code: 'crit_damage', label: '爆伤', value: 20, description: '暴击伤害 +20%' },
   { code: 'dodge', label: '闪避', value: 5, description: '闪避率 +5%' },
   { code: 'counter', label: '反击', value: 10, description: '受击 +10% 概率反击，造成 50% 伤害' },
   { code: 'lifesteal', label: '吸血', value: 10, description: '造成伤害的 10% 回复自身' },
-  { code: 'armor_break', label: '破甲', value: 10, description: '攻击无视目标 10% 防御' },
   { code: 'tenacity', label: '韧性', value: 10, description: '受暴击时伤害降低 10%' },
 ];
 
@@ -205,6 +204,24 @@ export class SpiritService {
         note: `Buy ${soulGain} spirit soul.`,
       });
 
+      if (STARTER_SPIRIT_IDS.includes(codexEntry.spiritDefinition.spiritId as typeof STARTER_SPIRIT_IDS[number])) {
+        await client.playerSpiritCodex.updateMany({
+          where: {
+            playerId,
+            spiritDefinition: {
+              spiritId: { in: [...STARTER_SPIRIT_IDS] },
+            },
+            id: { not: codexEntry.id },
+          },
+          data: {
+            shardCount: 0,
+            readyToCompose: false,
+            readyAt: null,
+            codexVersion: { increment: 1 },
+          },
+        });
+      }
+
       const response = await this.buildSpiritMutationResponse(client, playerId, `已消耗 ${goldAmount} 金币，购入 ${soulGain} 点兽魂。`);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-resource', playerId);
       return response;
@@ -320,7 +337,6 @@ export class SpiritService {
           slotVersion: { increment: 1 },
         },
       });
-      await this.recordDailyTaskProgress(client, playerId, 'upgrade-spirit');
 
       const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition.label} 已升至 Lv.${nextLevel}。`);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
@@ -423,6 +439,7 @@ export class SpiritService {
           requestIdempotencyKey: idempotencyKey ?? null,
         },
       });
+      await this.recordDailyTaskProgress(client, playerId, 'feed-spirit');
 
       const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 已安排 2 小时自动加速。`);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
@@ -1247,6 +1264,7 @@ export class SpiritService {
       }
 
       const maxHp = calculateSpiritMaxHp(codexEntry.spiritDefinition.baseHp, codexEntry.spiritDefinition.growthHp, 1);
+      const now = new Date();
 
       await client.playerSpiritSlot.update({
         where: { id: targetSlot.id },
@@ -1259,7 +1277,8 @@ export class SpiritService {
           currentHp: maxHp,
           maxHp,
           status: 'ACTIVE',
-          acquiredAt: new Date(),
+          acquiredAt: now,
+          lastExpSettledAt: now,
           dissolvedAt: null,
           slotVersion: { increment: 1 },
         },
@@ -1273,7 +1292,7 @@ export class SpiritService {
           ownedEver: true,
           hasSeen: true,
           readyAt: null,
-          lastOwnedAt: new Date(),
+          lastOwnedAt: now,
           codexVersion: { increment: 1 },
         },
       });

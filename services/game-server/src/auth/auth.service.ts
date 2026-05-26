@@ -50,6 +50,7 @@ const NEW_PLAYER_SEED_INVENTORY: PlayerInitializationInput['seedInventory'] = {
 const NEW_PLAYER_SPIRIT_STATE: PlayerInitializationInput['spirit'] = {
   createStarterSpirit: false,
   readyStarterSpirits: true,
+  starterSpiritId: 'linglu',
 };
 const NEW_PLAYER_PRIMARY_SEED_ID = 'qilingya';
 const TUTORIAL_RAID_TARGET_PROVIDER_ID = 'dev-tutorial-target';

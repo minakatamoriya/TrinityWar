@@ -90,12 +90,24 @@ export class LandDeedService {
   }
 
   private async loadMetrics(client: PrismaClientLike, playerId: string, now: Date): Promise<Record<string, number>> {
+    const tutorialSeedId = 'qilingya';
     const [player, harvestCount, factionMember, successfulRaidCount, factionDonateCount, buildingUpgradeCount] = await Promise.all([
       client.player.findUnique({
         where: { id: playerId },
         select: { createdAt: true },
       }),
-      client.fieldHarvestLog.count({ where: { playerId } }),
+      client.fieldHarvestLog.count({
+        where: {
+          playerId,
+          fieldSlot: {
+            seedDefinition: {
+              seedId: {
+                not: tutorialSeedId,
+              },
+            },
+          },
+        },
+      }),
       client.factionMember.findFirst({
         where: { playerId },
         select: { contributionScore: true },

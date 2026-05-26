@@ -26,8 +26,8 @@ const mockDailyTasks: ClientDailyTaskSummary[] = [
     actionScene: 'farm',
   },
   {
-    id: 'daily-upgrade-spirit',
-    title: '升级 1 次灵宠',
+    id: 'daily-feed-spirit',
+    title: '投喂 1 次灵宠',
     description: '经营任务，完成后可领取 20 金币。',
     progressCurrent: 0,
     progressTarget: 1,

@@ -54,13 +54,11 @@ const SPIRIT_MAX_LEVEL = 50;
 const traitChoices: Array<{ code: ClientSpiritTraitCode; label: string }> = [
   { code: 'claw', label: '利爪' },
   { code: 'thick_skin', label: '厚皮' },
-  { code: 'hard_armor', label: '硬甲' },
   { code: 'crit', label: '暴击' },
   { code: 'crit_damage', label: '爆伤' },
   { code: 'dodge', label: '闪避' },
   { code: 'counter', label: '反击' },
   { code: 'lifesteal', label: '吸血' },
-  { code: 'armor_break', label: '破甲' },
   { code: 'tenacity', label: '韧性' },
 ];
 
@@ -205,6 +203,14 @@ function getExpGainText(slot: ClientSpiritSlot): string {
   return `每 10 秒约 +${formatNumber(expPerTenSeconds)} 经验`;
 }
 
+function getExpProgressPercent(slot: ClientSpiritSlot): number {
+  if (slot.isAtBreakthroughNode) {
+    return 100;
+  }
+
+  return Math.min((slot.exp / Math.max(slot.currentLevelExpRequired ?? 1, 1)) * 100, 100);
+}
+
 const spiritResourceItems = [
   { key: 'spiritRoot', icon: '根', label: '灵根' },
   { key: 'spiritMarrow', icon: '髓', label: '灵髓' },
@@ -286,9 +292,6 @@ function getRoleLabel(role: ClientSpiritRole): string {
   if (role === 'attack') {
     return '攻击型';
   }
-  if (role === 'defense') {
-    return '防御型';
-  }
   if (role === 'health') {
     return '血量型';
   }
@@ -331,12 +334,12 @@ function getHealthStatus(slot: ClientSpiritSlot): string {
     return '不可出战';
   }
   if (ratio >= 70) {
-    return '正常：攻防 100%';
+    return '正常：攻击 100%';
   }
   if (ratio >= 30) {
-    return '低迷：攻防 70%';
+    return '低迷：攻击 70%';
   }
-  return '重伤：攻防 30%';
+  return '重伤：攻击 30%';
 }
 
 function getRecoveryPlan(dailyRecoveryUsed: number): {
@@ -376,7 +379,7 @@ function getRecoveryButtonText(plan: ReturnType<typeof getRecoveryPlan>): string
 
 function getFactionBonusLabel(faction: string): string {
   if (faction === '仙界') {
-    return '防御 +8%';
+    return '生命 +8%';
   }
   if (faction === '魔界') {
     return '攻击 +8%';
@@ -449,8 +452,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const [levelFlashToken, setLevelFlashToken] = useState(0);
   const [resumeHint, setResumeHint] = useState<{ id: number; text: string } | null>(null);
   const previousSelectedSlotRef = useRef<ClientSpiritSlot | null>(null);
-  const pendingExpGainRef = useRef(0);
-  const lastExpFloatAtRef = useRef(0);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -470,9 +471,9 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
     [liveNowMs, spirit.slots],
   );
   const codexById = useMemo(() => new Map(spirit.codex.map((entry) => [entry.spiritId, entry])), [spirit.codex]);
-  const mainSlot = spirit.mainSlot;
+  const mainSlot = slots.find((slot) => slot.isMain && slot.spiritId !== null) ?? spirit.mainSlot;
   const mainEntry = mainSlot?.spiritId ? codexById.get(mainSlot.spiritId) ?? null : null;
-  const stableSlots = slots.filter((slot) => !slot.isMain);
+  const stableSlots = slots.filter((slot) => !slot.isMain && slot.slotIndex > 1);
   const selectedSlot = selectedSlotIndex === null ? null : slots.find((slot) => slot.slotIndex === selectedSlotIndex) ?? null;
   const selectedSlotEntry = selectedSlot?.spiritId ? codexById.get(selectedSlot.spiritId) ?? null : null;
   const selectedCodexEntry = selectedCodexSpiritId ? codexById.get(selectedCodexSpiritId) ?? null : null;
@@ -490,14 +491,12 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   useEffect(() => {
     if (!selectedSlot?.spiritId) {
       previousSelectedSlotRef.current = selectedSlot ?? null;
-      pendingExpGainRef.current = 0;
       return;
     }
 
     const previousSlot = previousSelectedSlotRef.current;
     if (!previousSlot || previousSlot.slotIndex !== selectedSlot.slotIndex) {
       previousSelectedSlotRef.current = selectedSlot;
-      pendingExpGainRef.current = 0;
       return;
     }
 
@@ -508,18 +507,12 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
       : selectedSlot.exp - previousSlot.exp;
 
     if (expGain > 0) {
-      pendingExpGainRef.current += expGain;
-      const now = Date.now();
-      if (pendingExpGainRef.current >= 80 || now - lastExpFloatAtRef.current >= 1800) {
-        setExpFloat({ id: now, text: `+${formatNumber(pendingExpGainRef.current)} 经验` });
-        lastExpFloatAtRef.current = now;
-        pendingExpGainRef.current = 0;
-      }
+      setExpFloat({ id: Date.now(), text: `+${formatNumber(expGain)} \u7ecf\u9a8c` });
     }
 
     if (levelGain > 0) {
       setLevelFlashToken(Date.now());
-      setResumeHint({ id: Date.now(), text: `升级成功，当前 Lv.${selectedSlot.level}` });
+      setResumeHint({ id: Date.now(), text: `\u5347\u7ea7\u6210\u529f\uff0c\u5f53\u524d Lv.${selectedSlot.level}` });
     }
 
     if (previousSlot.isAtBreakthroughNode && !selectedSlot.isAtBreakthroughNode) {
@@ -540,7 +533,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
 
     const timer = window.setTimeout(() => {
       setExpFloat((current) => current?.id === expFloat.id ? null : current);
-    }, 1100);
+    }, 900);
 
     return () => {
       window.clearTimeout(timer);
@@ -647,7 +640,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
           <div className="seed-codex-topbar">
             <div className="seed-codex-title-block">
               <p className="eyebrow">{selectedSlot.isMain ? '主位' : `副位 ${selectedSlot.slotIndex - 1}`}</p>
-              <p className="seed-codex-tip">{selectedSlotEntry ? `${selectedSlotEntry.definition.label} Lv.${selectedSlot.level}` : '空栏位'}</p>
             </div>
             <button className="ghost-button small" onClick={() => setSelectedSlotIndex(null)} type="button">关闭</button>
           </div>
@@ -655,12 +647,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
             <section className={`seed-codex-detail-card${selectedSlotEntry ? ' spirit-pet-detail-card' : ''}`}>
               {selectedSlotEntry ? (
                 <>
-                  <div className="seed-codex-detail-head">
-                    <div>
-                      <p className="eyebrow">{getElementLabel(selectedSlot.element)} · {getPhaseForLevel(selectedSlot.level)}</p>
-                      <h3>{selectedSlotEntry.definition.label}</h3>
-                    </div>
-                  </div>
                   <SpiritStageCard
                     element={getElementLabel(selectedSlot.element) || undefined}
                     flash={isLevelFlashActive}
@@ -670,6 +656,29 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                     rarity={getRarityLabel(selectedSlotEntry.definition.rarity)}
                   />
                   {resumeHint ? <p className="spirit-live-hint">{resumeHint.text}</p> : null}
+                  <div className="spirit-progress-block">
+                    <div className="spirit-progress-head">
+                      <span>{'\u8840\u91cf'}</span>
+                      <strong>{getHealthText(selectedSlot)}</strong>
+                    </div>
+                    <div className="spirit-progress-track" aria-hidden="true">
+                      <div className="spirit-progress-fill spirit-progress-fill-health" style={{ width: `${getHealthRatio(selectedSlot)}%` }} />
+                    </div>
+                  </div>
+                  <div className="spirit-progress-block spirit-progress-block-live">
+                    <div className="spirit-progress-head">
+                      <span>{'\u7ecf\u9a8c'}</span>
+                      <strong>
+                        {selectedSlot.isAtBreakthroughNode
+                          ? '\u5f85\u7a81\u7834'
+                          : `${formatNumber(selectedSlot.exp)} / ${formatNumber(Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1))} \u00b7 ${Math.floor(getExpProgressPercent(selectedSlot))}%`}
+                      </strong>
+                    </div>
+                    <div className="spirit-progress-track" aria-hidden="true">
+                      <div className="spirit-progress-fill" style={{ width: `${getExpProgressPercent(selectedSlot)}%` }} />
+                    </div>
+                    {expFloat ? <span className="spirit-exp-float">{expFloat.text}</span> : null}
+                  </div>
                   <div className="spirit-pet-tab-row" role="tablist" aria-label="灵宠操作分组">
                     {petActionTabs.map((tab) => (
                       <button
@@ -697,15 +706,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                           <div className="seed-codex-stat-row"><strong>当前状态</strong><span>{getHealthStatus(selectedSlot)}</span></div>
                           <div className="seed-codex-stat-row"><strong>恢复情况</strong><span>{getRecoveryStatusText(recoveryPlan, getHealthRatio(selectedSlot) >= 100)}</span></div>
                         </div>
-                        <div className="spirit-progress-block">
-                          <div className="spirit-progress-head">
-                            <span>血量</span>
-                            <strong>{getHealthText(selectedSlot)}</strong>
-                          </div>
-                          <div className="spirit-progress-track" aria-hidden="true">
-                            <div className="spirit-progress-fill spirit-progress-fill-health" style={{ width: `${getHealthRatio(selectedSlot)}%` }} />
-                          </div>
-                        </div>
                       </>
                     ) : null}
                     {selectedPetTab === 'growth' ? (
@@ -713,20 +713,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                         <div className="panel-head">
                           <h4>成长</h4>
                           <span className="soft-tag">{selectedSlot.isAtBreakthroughNode ? '待突破' : '挂机成长中'}</span>
-                        </div>
-                        <div className="spirit-progress-block spirit-progress-block-live">
-                          <div className="spirit-progress-head">
-                            <span>经验</span>
-                            <strong>
-                              {selectedSlot.isAtBreakthroughNode
-                                ? '待突破'
-                                : `${formatNumber(selectedSlot.exp)} / ${formatNumber(Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1))} · ${Math.floor((selectedSlot.exp / Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1)) * 100)}%`}
-                            </strong>
-                          </div>
-                          <div className="spirit-progress-track" aria-hidden="true">
-                            <div className="spirit-progress-fill" style={{ width: `${selectedSlot.isAtBreakthroughNode ? 100 : Math.min((selectedSlot.exp / Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1)) * 100, 100)}%` }} />
-                          </div>
-                          {expFloat ? <span className="spirit-exp-float">{expFloat.text}</span> : null}
                         </div>
                         <div className="seed-codex-stats">
                           <div className="seed-codex-stat-row"><strong>灵根库存</strong><span>{formatNumber(spirit.spiritRoot ?? 0)}</span></div>

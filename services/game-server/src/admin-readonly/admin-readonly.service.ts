@@ -619,14 +619,12 @@ function parseSpiritDefinitionPayload(body: unknown, requireAll: boolean): Recor
   copyStringField(payload, record, 'label', requireAll);
   copyEnumField(payload, record, 'rarity', ['COMMON', 'RARE', 'LEGENDARY'], requireAll, true);
   copyEnumField(payload, record, 'factionAffinity', ['human', 'immortal', 'demon'], requireAll);
-  copyEnumField(payload, record, 'role', ['ATTACK', 'DEFENSE', 'BALANCED', 'HEALTH'], requireAll, true);
+  copyEnumField(payload, record, 'role', ['ATTACK', 'BALANCED', 'HEALTH'], requireAll, true);
   copyStringField(payload, record, 'shardName', requireAll);
   copyIntegerField(payload, record, 'shardUnlockRequired', requireAll, 1);
   copyIntegerField(payload, record, 'baseAttack', requireAll, 0);
-  copyIntegerField(payload, record, 'baseDefense', requireAll, 0);
   copyIntegerField(payload, record, 'baseHp', requireAll, 1);
   copyIntegerField(payload, record, 'growthAttack', requireAll, 0);
-  copyIntegerField(payload, record, 'growthDefense', requireAll, 0);
   copyIntegerField(payload, record, 'growthHp', requireAll, 0);
   copyIntegerField(payload, record, 'sortOrder', requireAll, 0);
   copyNullableStringField(payload, record, 'lore', requireAll);
@@ -850,10 +848,8 @@ function normalizeSpiritSlot(slot: {
     shardName: string;
     shardUnlockRequired: number;
     baseAttack: number;
-    baseDefense: number;
     baseHp: number;
     growthAttack: number;
-    growthDefense: number;
     growthHp: number;
     lore: string | null;
   } | null;
@@ -875,10 +871,8 @@ function normalizeSpiritSlot(slot: {
     maxHp: slot.maxHp,
     status: slot.status,
     baseAttack: slot.spiritDefinition?.baseAttack ?? null,
-    baseDefense: slot.spiritDefinition?.baseDefense ?? null,
     baseHp: slot.spiritDefinition?.baseHp ?? null,
     growthAttack: slot.spiritDefinition?.growthAttack ?? null,
-    growthDefense: slot.spiritDefinition?.growthDefense ?? null,
     growthHp: slot.spiritDefinition?.growthHp ?? null,
     shardName: slot.spiritDefinition?.shardName ?? null,
     shardUnlockRequired: slot.spiritDefinition?.shardUnlockRequired ?? null,

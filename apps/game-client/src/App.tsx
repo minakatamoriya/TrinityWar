@@ -43,7 +43,7 @@ import { RaidBattleScreen } from './battle/RaidBattleScreen';
 
 type RaidHubTabKey = 'targets' | 'follows' | 'reports' | 'warrants';
 type FactionTabKey = 'overview' | 'donate' | 'rank';
-type TutorialStage = 'home' | 'farm' | 'spirit' | 'raid' | 'completed';
+type TutorialStage = 'home' | 'farm' | 'spirit' | 'raid' | 'faction' | 'building' | 'completed';
 
 interface ToastState {
   id: number;
@@ -168,7 +168,7 @@ interface LocalFarmFieldPresentation {
 }
 
 const seedCatalog: SeedCatalogItem[] = [
-  { id: 'qilingya', name: '启灵芽', rarity: 'common', sortOrder: 1, description: '新手教程种，20 秒完成第一轮收获。', lore: '只在开荒时授予的一枚灵芽，破土极快，用来帮新人从零点亮第一笔资金与灵根。', stageGold: { growing: 20, mature: 50, withered: 50 }, stageSeconds: { seeded: 10, growing: 10 }, unlockedByDefault: true },
+  { id: 'qilingya', name: '启灵芽', rarity: 'common', sortOrder: 1, description: '新手教程种，20 秒完成第一轮收获。', lore: '只在开荒时授予的一枚灵芽，破土极快，用来帮新人从零点亮第一笔资金。', stageGold: { growing: 20, mature: 50, withered: 50 }, stageSeconds: { seeded: 10, growing: 10 }, unlockedByDefault: true },
   { id: 'qinglingmai', name: '青灵麦', rarity: 'common', sortOrder: 10, description: '普通、标准稳收基准种，完成教程后进入日常经营。', lore: '田野间最常见的灵粮，穗头泛淡青光泽，脱壳后熬粥清香回甘。凡人食之强身，修士食之略养经脉。春种秋收，从不妖异。', stageGold: { growing: 100, mature: 200, withered: 100 }, stageSeconds: { seeded: 7200, growing: 3600 }, unlockedByDefault: false },
   { id: 'xunyamai', name: '风云稻', rarity: 'common', sortOrder: 20, description: '普通、半小时快收种，适合切碎片时间。', lore: '稻芒起势极快，晨起沾露便能成势，半个时辰内就能完成一轮收益。', stageGold: { growing: 100, mature: 200, withered: 100 }, stageSeconds: { seeded: 900, growing: 900 }, unlockedByDefault: false },
   { id: 'ninglucao', name: '凝露草', rarity: 'common', sortOrder: 30, description: '普通、短线抢收种，适合高频上线卡成熟。', lore: '叶尖常凝夜露，晨时如泪珠滚落，有清心明目之效。低阶弟子多用其露水研磨朱砂画符，成功率能稍许提升。', stageGold: { growing: 100, mature: 140, withered: 40 }, stageSeconds: { seeded: 5400, growing: 1800 }, unlockedByDefault: false },
@@ -317,12 +317,15 @@ const sceneNavLabels: Record<ClientSceneKey, string> = {
 
 const sceneKeys: ClientSceneKey[] = ['home', 'farm', 'raid', 'report', 'building', 'faction'];
 const tutorialStageStorageKeyPrefix = 'trinitywar.tutorialStage';
+const TUTORIAL_STARTER_SEED_ID = 'qilingya';
 const tutorialStageRank: Record<TutorialStage, number> = {
   home: 0,
   farm: 1,
   spirit: 2,
   raid: 3,
-  completed: 4,
+  faction: 4,
+  building: 5,
+  completed: 6,
 };
 
 const sceneTutorialUnlockStage: Record<ClientSceneKey, TutorialStage> = {
@@ -330,8 +333,8 @@ const sceneTutorialUnlockStage: Record<ClientSceneKey, TutorialStage> = {
   farm: 'farm',
   raid: 'spirit',
   report: 'raid',
-  building: 'completed',
-  faction: 'completed',
+  building: 'building',
+  faction: 'faction',
 };
 
 const factionBackgroundMap: Record<string, string> = {
@@ -396,7 +399,7 @@ function getTutorialStageStorageKey(playerId: string): string {
 }
 
 function isTutorialStage(value: string | null | undefined): value is TutorialStage {
-  return value === 'home' || value === 'farm' || value === 'spirit' || value === 'raid' || value === 'completed';
+  return value === 'home' || value === 'farm' || value === 'spirit' || value === 'raid' || value === 'faction' || value === 'building' || value === 'completed';
 }
 
 function getInitialTutorialStage(session: DevLoginSession | null): TutorialStage {
@@ -429,13 +432,21 @@ function getLockedSceneMessage(scene: ClientSceneKey): string {
     return '先完成首宠创建，再进入掠夺教程。';
   }
 
-  return '完成种田、灵宠和掠夺教程后开放。';
+  if (scene === 'faction') {
+    return '先完成教程掠夺，再领取阵营俸禄。';
+  }
+
+  if (scene === 'building') {
+    return '先领取阵营俸禄，再修习第一项法术。';
+  }
+
+  return '完成新手引导后开放。';
 }
 
 function buildTutorialTask(stage: TutorialStage): { title: string; description: string; actionLabel: string; targetScene: ClientSceneKey } | null {
   if (stage === 'home') {
     return {
-      title: '领取启灵芽 x3',
+      title: '领取启灵芽 x1',
       description: '先收下引导者给你的启灵芽。拿到种子后，再去第一块田播下它。',
       actionLabel: '领取启灵芽',
       targetScene: 'home',
@@ -445,7 +456,7 @@ function buildTutorialTask(stage: TutorialStage): { title: string; description: 
   if (stage === 'farm') {
     return {
       title: '收获启灵芽',
-      description: '启灵芽成熟后会给第一笔金币和灵根，用来开启第一只灵宠。',
+      description: '启灵芽成熟后会给第一笔金币。收获后去创建第一只灵宠。',
       actionLabel: '查看农场',
       targetScene: 'farm',
     };
@@ -463,9 +474,27 @@ function buildTutorialTask(stage: TutorialStage): { title: string; description: 
   if (stage === 'raid') {
     return {
       title: '完成教程掠夺',
-      description: '挑战教程对象，理解战斗结果、掠夺收益、普通兽魂和图鉴推进。',
+      description: '挑战教程对象，理解战斗结果、掠夺收益和战报回放。',
       actionLabel: '进入掠夺',
       targetScene: 'report',
+    };
+  }
+
+  if (stage === 'faction') {
+    return {
+      title: '领取阵营俸禄',
+      description: '完成首战后回到阵营领取补给。第一次领取会固定获得青灵麦和风云稻各 1 个。',
+      actionLabel: '前往阵营',
+      targetScene: 'faction',
+    };
+  }
+
+  if (stage === 'building') {
+    return {
+      title: '修习第一项法术',
+      description: '去法术阁修习护灵阵，完成后会开放全部功能。',
+      actionLabel: '前往法术',
+      targetScene: 'building',
     };
   }
 
@@ -740,7 +769,7 @@ function App(): JSX.Element {
   const [spiritState, setSpiritState] = useState<ClientSpiritState | null>(null);
   const [loginSession, setLoginSession] = useState<DevLoginSession | null>(() => storedLoginSession);
   const [pendingNewUserFaction, setPendingNewUserFaction] = useState<DevFactionChoice>('human');
-  const [authScreen, setAuthScreen] = useState<'faction-select' | 'account-select'>('faction-select');
+  const [authScreen, setAuthScreen] = useState<'faction-select' | 'account-select'>('account-select');
   const [loginLoadingMode, setLoginLoadingMode] = useState<DevLoginMode | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [activeScene, setActiveScene] = useState<ClientSceneKey>('home');
@@ -1112,7 +1141,7 @@ function App(): JSX.Element {
     setFarmCollectPresentation(null);
     setGlobalFeatureModal(null);
     setPendingActionKey(null);
-    setAuthScreen('faction-select');
+    setAuthScreen('account-select');
     resetNotificationState();
     setLoginError(null);
     welcomeDialogSessionIdRef.current = null;
@@ -1141,6 +1170,7 @@ function App(): JSX.Element {
       setLoginSession(null);
       setTutorialStage('completed');
       setSpiritState(null);
+      setAuthScreen('account-select');
       setLoginError('登录已失效或真实接口不可用，请重新选择测试账号。');
     });
 
@@ -1210,9 +1240,14 @@ function App(): JSX.Element {
       return;
     }
 
+    if (loginSession.mode === 'new-user' && tutorialStage !== 'home') {
+      welcomeDialogSessionIdRef.current = loginSession.player.id;
+      return;
+    }
+
     welcomeDialogSessionIdRef.current = loginSession.player.id;
     playDialogScene(loginSession.mode === 'new-user' ? 'home.welcome.leader1' : 'home.welcome.fox');
-  }, [loginSession, playDialogScene, viewModel]);
+  }, [loginSession, playDialogScene, tutorialStage, viewModel]);
 
   useEffect(() => {
     if (activeScene !== 'farm' || !viewModel) {
@@ -1520,11 +1555,12 @@ function App(): JSX.Element {
   const seasonSignInTodayReward = getSeasonSignInReward(seasonSignInTodayClaimOrder);
   const seasonSignInMilestones = buildSeasonSignInMilestones(seasonSignInRecord.claimedDays.length);
   const tianjiTalismanCount = spiritState?.tianjiTalisman ?? globalItemInventory.tianjiTalisman ?? 0;
+  const visibleSeedCatalog = seedCatalog.filter((seed) => isTutorialUser || seed.id !== TUTORIAL_STARTER_SEED_ID);
   const seedCatalogMap = new Map(seedCatalog.map((seed) => [seed.id, seed]));
   const seedGroups = (['common', 'rare', 'legendary'] as const).map((rarity) => ({
     rarity,
     label: seedRarityLabels[rarity],
-    seeds: seedCatalog.filter((seed) => seed.rarity === rarity).sort(compareSeedCatalogItems).map((seed) => ({
+    seeds: visibleSeedCatalog.filter((seed) => seed.rarity === rarity).sort(compareSeedCatalogItems).map((seed) => ({
       ...seed,
       unlocked: unlockedSeedIds.includes(seed.id),
       quantity: seedInventory[seed.id] ?? 0,
@@ -1940,6 +1976,11 @@ function App(): JSX.Element {
       });
       setSeedRewardModal(null);
       showToast(result.summary, 'success');
+      if (tutorialStage === 'faction') {
+        advanceTutorialStage('building');
+        setActiveScene('building');
+        playDialogScene('tutorial.building.start', { force: true });
+      }
     } catch {
       showToast('当前无法领取阵营俸禄，请稍后重试。', 'error');
     } finally {
@@ -2186,13 +2227,13 @@ function App(): JSX.Element {
     if (tutorialStage === 'home') {
       setSeedRewardModal({
         title: '领取启灵芽',
-        summary: '引导者交付启灵芽 x3。确认后会直接收入种子背包，并开放第一块田的播种。',
+        summary: '引导者交付启灵芽 x1。确认后会直接收入种子背包，并开放第一块田的播种。',
         confirmAction: 'claim-starter-seeds',
         items: [
           {
             seedId: 'qilingya',
             label: '启灵芽',
-            quantity: 3,
+            quantity: 1,
           },
         ],
       });
@@ -2212,6 +2253,17 @@ function App(): JSX.Element {
     if (tutorialStage === 'raid') {
       setActiveScene('report');
       setRaidHubTab('targets');
+      return;
+    }
+
+    if (tutorialStage === 'faction') {
+      setActiveScene('faction');
+      setFactionTab('overview');
+      return;
+    }
+
+    if (tutorialStage === 'building') {
+      setActiveScene('building');
     }
   };
 
@@ -2228,6 +2280,12 @@ function App(): JSX.Element {
         const result = await upgradeClientBuilding(buildUpgradeRequest(targetType, upgradeId, home.stateVersions.buildingVersion, home.stateVersions.walletVersion));
         applyMutationResult(result);
         applyLocalTianjiSpend(costText);
+        if (tutorialStage === 'building' && upgradeId === 'protectionTech') {
+          advanceTutorialStage('completed');
+          playDialogScene('tutorial.completed', {
+            force: true,
+          });
+        }
       } catch {
         showToast(`${context} 当前修习失败，请稍后重试。`, 'error');
       } finally {
@@ -2247,6 +2305,11 @@ function App(): JSX.Element {
 
     if (action.label === '开始培育') {
       setSelectedSeedId(getPreferredSeedId());
+      if (tutorialStage === 'farm' && selectedSeedId === TUTORIAL_STARTER_SEED_ID) {
+        void handleStartCultivation(fieldId, context, TUTORIAL_STARTER_SEED_ID);
+        return;
+      }
+
       setSeedSelectionState({
         fieldId,
         fieldCode: context,
@@ -2460,12 +2523,10 @@ function App(): JSX.Element {
             setSeedRewardModal(settledRaidRewardModal);
           }
           if (tutorialStage === 'raid') {
-            playDialogScene('tutorial.completed', {
-              force: true,
-              onComplete: () => {
-                advanceTutorialStage('completed');
-              },
-            });
+            advanceTutorialStage('faction');
+            setActiveScene('faction');
+            setFactionTab('overview');
+            playDialogScene('tutorial.faction.start', { force: true });
           }
         } catch (error) {
           if (error instanceof ApiError && error.code === 'RAID_NOT_ALLOWED') {
@@ -2587,12 +2648,8 @@ function App(): JSX.Element {
     }
   };
 
-  const handleConfirmSeedCultivation = async (): Promise<void> => {
-    if (!seedSelectionState) {
-      return;
-    }
-
-    const seed = seedCatalogMap.get(selectedSeedId);
+  const handleStartCultivation = async (fieldId: string, fieldCode: string, seedId: string): Promise<void> => {
+    const seed = seedCatalogMap.get(seedId);
     if (!seed || !unlockedSeedIds.includes(seed.id)) {
       showToast('当前只可选择已解锁的种子。', 'error');
       return;
@@ -2604,7 +2661,7 @@ function App(): JSX.Element {
       return;
     }
 
-    const actionKey = `farm:${seedSelectionState.fieldId}:开始培育`;
+    const actionKey = `farm:${fieldId}:开始培育`;
     if (pendingActionKey === actionKey) {
       return;
     }
@@ -2612,7 +2669,7 @@ function App(): JSX.Element {
     setPendingActionKey(actionKey);
 
     try {
-      const result = await startFieldCultivation({ fieldId: seedSelectionState.fieldId, seedId: seed.id });
+      const result = await startFieldCultivation({ fieldId, seedId: seed.id });
       applyMutationResult(result);
       setFarmTick(0);
       setSeedInventory((current) => ({
@@ -2621,18 +2678,25 @@ function App(): JSX.Element {
       }));
       setFieldSeedAssignments((current) => ({
         ...current,
-        [seedSelectionState.fieldId]: seed.id,
+        [fieldId]: seed.id,
       }));
       setSeedSelectionState(null);
-      showToast(`${seedSelectionState.fieldCode} 已投入 ${seed.name}，开始培育。`, 'success');
+      showToast(`${fieldCode} 已投入 ${seed.name}，开始培育。`, 'success');
       if (tutorialStage === 'farm') {
         playDialogScene('tutorial.farm.wait', { force: true });
       }
     } catch {
-      showToast(`${seedSelectionState.fieldCode} 当前无法开始培育，请稍后重试。`, 'error');
+      showToast(`${fieldCode} 当前无法开始培育，请稍后重试。`, 'error');
     } finally {
       setPendingActionKey(null);
     }
+  };
+
+  const handleConfirmSeedCultivation = async (): Promise<void> => {
+    if (!seedSelectionState) {
+      return;
+    }
+    await handleStartCultivation(seedSelectionState.fieldId, seedSelectionState.fieldCode, selectedSeedId);
   };
 
   return (

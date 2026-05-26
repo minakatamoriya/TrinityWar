@@ -7,19 +7,17 @@ export const ARMY_RECRUIT_GOLD_COST_PER_UNIT = 100;
 export const ARMY_RECRUIT_SECONDS_PER_UNIT = 60;
 
 export type ClientSpiritRarity = 'common' | 'rare' | 'legendary';
-export type ClientSpiritRole = 'attack' | 'defense' | 'balanced' | 'health';
+export type ClientSpiritRole = 'attack' | 'balanced' | 'health';
 export type ClientSpiritElement = 'metal' | 'wood' | 'water' | 'fire' | 'earth';
 export type ClientSpiritStatus = 'active' | 'wounded' | 'resting' | 'dissolved';
 export type ClientSpiritTraitCode =
   | 'claw'
   | 'thick_skin'
-  | 'hard_armor'
   | 'crit'
   | 'crit_damage'
   | 'dodge'
   | 'counter'
   | 'lifesteal'
-  | 'armor_break'
   | 'tenacity';
 export type ClientSpiritRollMode = 'basic' | 'advanced' | 'ultimate' | 'batch_basic';
 export type ClientSpiritFeedActionType = 'feed_once' | 'fill_full';
@@ -222,7 +220,6 @@ export interface ClientRaidSpiritPreview {
 export interface ClientRaidSpiritIntel {
   element: ClientSpiritElement | null;
   attackRating: string;
-  defenseRating: string;
   healthStatus: string;
   remainingFreeIntel: number;
   remainingTalismanIntel: number;
@@ -800,10 +797,9 @@ export interface ClientRaidBattleUnitSnapshot {
   hpAfter: number;
   maxHp: number;
   attack: number;
-  defense: number;
   healthStatus?: 'normal' | 'low' | 'injured' | 'down';
   healthStatusLabel?: string;
-  attackDefenseCoefficient?: number;
+  attackCoefficient?: number;
   traits?: Array<{
     code: string;
     label: string;

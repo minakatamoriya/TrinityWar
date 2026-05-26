@@ -138,10 +138,9 @@ function buildBattleUnit(
     hpAfter,
     maxHp,
     attack: stats.attack,
-    defense: stats.defense,
     healthStatus: healthStatus.code,
     healthStatusLabel: healthStatus.label,
-    attackDefenseCoefficient: healthStatus.attackDefenseCoefficient,
+    attackCoefficient: healthStatus.attackCoefficient,
     traits: buildBattleTraits(spirit),
   };
 }
@@ -163,49 +162,46 @@ function getTraitLabel(code: string): string {
   const labels: Record<string, string> = {
     claw: '利爪',
     thick_skin: '厚皮',
-    hard_armor: '硬甲',
     crit: '暴击',
     crit_damage: '暴伤',
     dodge: '闪避',
     counter: '反击',
     lifesteal: '吸血',
-    armor_break: '破甲',
     tenacity: '韧性',
   };
 
   return labels[code] ?? code;
 }
 
-function buildBattleStats(spirit: SpiritBattleSnapshot | null): { attack: number; defense: number } {
+function buildBattleStats(spirit: SpiritBattleSnapshot | null): { attack: number } {
   if (!spirit?.spiritDefinition) {
-    return { attack: 50, defense: 50 };
+    return { attack: 50 };
   }
 
   const levelDelta = Math.max(spirit.level - 1, 0);
   const rarityMultiplier = getRarityGrowthMultiplier(spirit.spiritDefinition.rarity, spirit.level);
   const healthStatus = resolveBattleHealthStatus(spirit.currentHp, spirit.maxHp);
   return {
-    attack: Math.round((spirit.spiritDefinition.baseAttack + levelDelta * spirit.spiritDefinition.growthAttack * rarityMultiplier) * healthStatus.attackDefenseCoefficient),
-    defense: Math.round((spirit.spiritDefinition.baseDefense + levelDelta * spirit.spiritDefinition.growthDefense * rarityMultiplier) * healthStatus.attackDefenseCoefficient),
+    attack: Math.round((spirit.spiritDefinition.baseAttack + levelDelta * spirit.spiritDefinition.growthAttack * rarityMultiplier) * healthStatus.attackCoefficient),
   };
 }
 
 function resolveBattleHealthStatus(currentHp: number, maxHp: number): {
   code: NonNullable<ClientRaidBattleReplay['attacker']['healthStatus']>;
   label: string;
-  attackDefenseCoefficient: number;
+  attackCoefficient: number;
 } {
   const ratio = maxHp > 0 ? currentHp / maxHp : 0;
   if (currentHp <= 0 || ratio <= 0) {
-    return { code: 'down', label: '不可出战', attackDefenseCoefficient: 0 };
+    return { code: 'down', label: '不可出战', attackCoefficient: 0 };
   }
   if (ratio < 0.3) {
-    return { code: 'injured', label: '重伤：攻防 30%', attackDefenseCoefficient: 0.3 };
+    return { code: 'injured', label: '重伤：攻击 30%', attackCoefficient: 0.3 };
   }
   if (ratio < 0.7) {
-    return { code: 'low', label: '低迷：攻防 70%', attackDefenseCoefficient: 0.7 };
+    return { code: 'low', label: '低迷：攻击 70%', attackCoefficient: 0.7 };
   }
-  return { code: 'normal', label: '正常：攻防 100%', attackDefenseCoefficient: 1 };
+  return { code: 'normal', label: '正常：攻击 100%', attackCoefficient: 1 };
 }
 
 function getRarityGrowthMultiplier(rarity: string, level: number): number {

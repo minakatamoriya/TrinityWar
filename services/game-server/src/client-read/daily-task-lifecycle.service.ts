@@ -72,7 +72,7 @@ const DAILY_TASK_SCENE_MAP: Record<string, string> = {
   'start-cultivation': 'farm',
   'faction-interaction': 'faction',
   'faction-donate': 'faction',
-  'upgrade-spirit': 'raid',
+  'feed-spirit': 'raid',
   'upgrade-territory-tech': 'building',
   'upgrade-building': 'building',
   'upgrade-core-line': 'building',

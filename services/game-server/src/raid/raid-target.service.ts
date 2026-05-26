@@ -340,10 +340,8 @@ export class RaidTargetService {
               factionAffinity: true,
               role: true,
               baseAttack: true,
-              baseDefense: true,
               baseHp: true,
               growthAttack: true,
-              growthDefense: true,
               growthHp: true,
             },
           },
@@ -723,7 +721,6 @@ function buildRaidDeepIntelResponse(
     intel: {
       element: mapSpiritElement(mainSlot?.element ?? null),
       attackRating: buildAttackRating(mainSlot),
-      defenseRating: buildDefenseRating(mainSlot),
       healthStatus: buildHealthStatus(mainSlot),
       remainingFreeIntel: remaining.remainingFreeIntel,
       remainingTalismanIntel: remaining.remainingTalismanIntel,
@@ -936,43 +933,41 @@ function buildBattleUnit(
     hpAfter,
     maxHp,
     attack: stats.attack,
-    defense: stats.defense,
     healthStatus: healthStatus.code,
     healthStatusLabel: healthStatus.label,
-    attackDefenseCoefficient: healthStatus.attackDefenseCoefficient,
+    attackCoefficient: healthStatus.attackCoefficient,
   };
 }
 
-function buildBattleStats(spirit: ReturnType<typeof buildSpiritBattleSnapshot>): { attack: number; defense: number } {
+function buildBattleStats(spirit: ReturnType<typeof buildSpiritBattleSnapshot>): { attack: number } {
   if (!spirit?.spiritDefinition) {
-    return { attack: 50, defense: 50 };
+    return { attack: 50 };
   }
 
   const levelDelta = Math.max(spirit.level - 1, 0);
   const rarityMultiplier = getRarityGrowthMultiplier(spirit.spiritDefinition.rarity, spirit.level);
   const healthStatus = resolveBattleHealthStatus(spirit.currentHp, spirit.maxHp);
   return {
-    attack: Math.round((spirit.spiritDefinition.baseAttack + levelDelta * spirit.spiritDefinition.growthAttack * rarityMultiplier) * healthStatus.attackDefenseCoefficient),
-    defense: Math.round((spirit.spiritDefinition.baseDefense + levelDelta * spirit.spiritDefinition.growthDefense * rarityMultiplier) * healthStatus.attackDefenseCoefficient),
+    attack: Math.round((spirit.spiritDefinition.baseAttack + levelDelta * spirit.spiritDefinition.growthAttack * rarityMultiplier) * healthStatus.attackCoefficient),
   };
 }
 
 function resolveBattleHealthStatus(currentHp: number, maxHp: number): {
   code: NonNullable<ClientRaidBattleReplay['attacker']['healthStatus']>;
   label: string;
-  attackDefenseCoefficient: number;
+  attackCoefficient: number;
 } {
   const ratio = maxHp > 0 ? currentHp / maxHp : 0;
   if (currentHp <= 0 || ratio <= 0) {
-    return { code: 'down', label: '不可出战', attackDefenseCoefficient: 0 };
+    return { code: 'down', label: '不可出战', attackCoefficient: 0 };
   }
   if (ratio < 0.3) {
-    return { code: 'injured', label: '重伤：攻防 30%', attackDefenseCoefficient: 0.3 };
+    return { code: 'injured', label: '重伤：攻击 30%', attackCoefficient: 0.3 };
   }
   if (ratio < 0.7) {
-    return { code: 'low', label: '低迷：攻防 70%', attackDefenseCoefficient: 0.7 };
+    return { code: 'low', label: '低迷：攻击 70%', attackCoefficient: 0.7 };
   }
-  return { code: 'normal', label: '正常：攻防 100%', attackDefenseCoefficient: 1 };
+  return { code: 'normal', label: '正常：攻击 100%', attackCoefficient: 1 };
 }
 
 function getRarityGrowthMultiplier(rarity: string, level: number): number {
@@ -1128,10 +1123,8 @@ function buildSpiritBattleSnapshot(
       factionAffinity: string;
       role: string;
       baseAttack: number;
-      baseDefense: number;
       baseHp: number;
       growthAttack: number;
-      growthDefense: number;
       growthHp: number;
     } | null;
     traits?: Array<{
@@ -1213,22 +1206,6 @@ function buildAttackRating(
 ): string {
   const score = slot?.spiritDefinition
     ? slot.spiritDefinition.baseAttack + Math.max(slot.level - 1, 0) * slot.spiritDefinition.growthAttack
-    : 0;
-
-  return mapScoreRating(score);
-}
-
-function buildDefenseRating(
-  slot: {
-    level: number;
-    spiritDefinition: {
-      baseDefense: number;
-      growthDefense: number;
-    } | null;
-  } | null,
-): string {
-  const score = slot?.spiritDefinition
-    ? slot.spiritDefinition.baseDefense + Math.max(slot.level - 1, 0) * slot.spiritDefinition.growthDefense
     : 0;
 
   return mapScoreRating(score);

@@ -85,7 +85,6 @@ enum SpiritRarity {
 
 enum SpiritRole {
   ATTACK
-  DEFENSE
   BALANCED
   HEALTH
 }
@@ -380,10 +379,8 @@ model SpiritDefinition {
   shardName           String       @map("shard_name")
   shardUnlockRequired Int          @default(100) @map("shard_unlock_required")
   baseAttack          Int          @map("base_attack")
-  baseDefense         Int          @map("base_defense")
   baseHp              Int          @map("base_hp")
   growthAttack        Int          @map("growth_attack")
-  growthDefense       Int          @map("growth_defense")
   growthHp            Int          @map("growth_hp")
   sortOrder           Int          @default(0) @map("sort_order")
   lore                String?

@@ -317,7 +317,7 @@ export const TERRITORY_TECH_TRACKS = {
     description: '结阵护住灵田与本命灵宠，延长被成功掠夺后的保护时间。',
     effectKey: 'protectionMinutes',
     levels: [
-      { level: 1, costResource: 'gold', costAmount: 320, upgradeCost: 320, effectValue: 10 },
+      { level: 1, costResource: 'gold', costAmount: 50, upgradeCost: 50, effectValue: 10 },
       { level: 2, costResource: 'gold', costAmount: 480, upgradeCost: 480, effectValue: 20 },
       { level: 3, costResource: 'gold', costAmount: 680, upgradeCost: 680, effectValue: 30 },
       { level: 4, costResource: 'gold', costAmount: 920, upgradeCost: 920, effectValue: 40 },
@@ -438,10 +438,10 @@ export const DAILY_TASK_CONFIG = {
       rewards: [{ type: 'gold', amount: 22 }],
     },
     {
-      id: 'daily-upgrade-spirit',
-      title: '升级 1 次灵宠',
-      category: '经营',
-      objective: { type: 'upgrade-spirit', count: 1 },
+      id: 'daily-feed-spirit',
+      title: '投喂 1 次灵宠',
+      category: '灵宠',
+      objective: { type: 'feed-spirit', count: 1 },
       rewards: [{ type: 'gold', amount: 20 }],
     },
     {

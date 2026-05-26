@@ -310,7 +310,12 @@ export class SceneContentAssembler {
     const contributionPerDonateStep = GAME_BALANCE.faction.contributionPerDonateStep;
     const contributionBonusPercent = getCurrentExtensionEffect('factionOfferingTech', readModel.buildings?.pendingClaimTechLevel ?? 0);
     const stipendRewards = toPublicFactionStipendRewards((stipendTier?.rewards ?? []) as ClientFactionStipendReward[]);
-    const stipendRewardText = stipendRewards.map((reward) => `${reward.label} x${formatNumber(reward.quantity)}`).join('、') || '暂无俸禄';
+    const visibleStipendRewards = stipendState?.claimedAt
+      ? normalizeFactionStipendRewards(stipendState.rewardJson) ?? stipendRewards
+      : readModel.factionStipendClaimCount <= 0
+        ? buildFirstFactionStipendPreview(stipendRewards)
+        : stipendRewards;
+    const stipendRewardText = visibleStipendRewards.map((reward) => `${reward.label} x${formatNumber(reward.quantity)}`).join('、') || '暂无俸禄';
 
     return {
       hero: {
@@ -352,7 +357,7 @@ export class SceneContentAssembler {
           contribution: stipendState?.contributionSnapshot ?? contribution,
           tierKey: stipendState?.tierKey ?? stipendTier?.tierKey ?? 'contribution-0',
           tierLabel: stipendTier?.label ?? '基础俸禄',
-          rewards: normalizeFactionStipendRewards(stipendState?.rewardJson) ?? stipendRewards,
+          rewards: visibleStipendRewards,
           claimedAt: stipendState?.claimedAt?.toISOString() ?? null,
           action: stipendState?.claimedAt ? null : { label: '领取俸禄', target: 'faction', tone: 'primary' },
         }
@@ -391,6 +396,14 @@ function toPublicFactionStipendRewards(rewards: ClientFactionStipendReward[]): C
       seedId: item.seedId,
     }))
     .filter((item) => item.label.trim().length > 0 && item.quantity > 0);
+}
+
+function buildFirstFactionStipendPreview(rewards: ClientFactionStipendReward[]): ClientFactionStipendReward[] {
+  return [
+    ...rewards.filter((reward) => reward.kind !== 'seed'),
+    { kind: 'seed', seedId: 'qinglingmai', label: '青灵麦', quantity: 1 },
+    { kind: 'seed', seedId: 'xunyamai', label: '风云稻', quantity: 1 },
+  ];
 }
 
 function getLocalDateKeyForAssembler(): string {

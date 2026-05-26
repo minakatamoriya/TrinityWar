@@ -90,7 +90,6 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
                   <div className="raid-spirit-revealed">
                     <div><span>五行</span><strong>{formatSpiritElement(intelState.element)}</strong></div>
                     <div><span>攻击</span><strong>{intelState.attackRating}</strong></div>
-                    <div><span>防御</span><strong>{intelState.defenseRating}</strong></div>
                     <div><span>状态</span><strong>{intelState.healthStatus}</strong></div>
                   </div>
                 ) : (
@@ -130,7 +129,7 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
             </div>
 
             <div className="raid-detail-status-list raid-intel-status-list">
-              <p><strong>主宠情报：</strong>默认只显示卡面外观与等级，不直接展示五行、状态和攻防评级。</p>
+              <p><strong>主宠情报：</strong>默认只显示卡面外观与等级，不直接展示五行、状态和攻击评级。</p>
               <p><strong>保护状态：</strong>{detail.protectionStatus}</p>
             </div>
 

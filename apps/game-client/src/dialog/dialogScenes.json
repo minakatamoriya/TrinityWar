@@ -106,7 +106,7 @@
       "steps": [
         {
           "actorId": "leader1",
-          "text": "先从第一块田开始。把启灵芽种下去，十秒后你就能拿到第一笔金币和灵根。"
+          "text": "先从第一块田开始。把启灵芽种下去，十秒后你就能拿到第一笔金币。"
         }
       ]
     },
@@ -124,7 +124,7 @@
       "steps": [
         {
           "actorId": "leader1",
-          "text": "启灵芽已经入土。等它成熟后收获，灵根会直接用来唤醒你的第一只灵宠。"
+          "text": "启灵芽已经入土。等它成熟后收获，这笔金币会帮你走完第一轮开荒。"
         }
       ]
     },
@@ -142,7 +142,7 @@
       "steps": [
         {
           "actorId": "leader1",
-          "text": "第一轮收获已经到手。现在去灵宠页，在空栏位中合成你的首宠，并选定五行属性。"
+          "text": "第一笔收获已经到手。现在去灵宠页，在空栏位中合成你的首宠，并选定五行属性。经验会自动挂机成长，投喂灵粮可以加速；每 10 级需要手动点击兽魂突破。"
         }
       ]
     },
@@ -164,6 +164,42 @@
         }
       ]
     },
+    "tutorial.faction.start": {
+      "mode": "sequence",
+      "chance": 1,
+      "priority": 40,
+      "interrupt": "replace",
+      "advance": "click",
+      "options": {
+        "showCloseButton": false,
+        "closeOnMaskClick": false,
+        "autoCloseMs": null
+      },
+      "steps": [
+        {
+          "actorId": "leader1",
+          "text": "首战已经完成。现在回到阵营领取第一份俸禄，阵营会给你下一轮种田所需的补给。"
+        }
+      ]
+    },
+    "tutorial.building.start": {
+      "mode": "sequence",
+      "chance": 1,
+      "priority": 40,
+      "interrupt": "replace",
+      "advance": "click",
+      "options": {
+        "showCloseButton": false,
+        "closeOnMaskClick": false,
+        "autoCloseMs": null
+      },
+      "steps": [
+        {
+          "actorId": "leader1",
+          "text": "补给已经到手。最后去法术阁修习一次护灵阵，之后各处功能就会全部开放。"
+        }
+      ]
+    },
     "tutorial.completed": {
       "mode": "sequence",
       "chance": 1,
@@ -178,7 +214,7 @@
       "steps": [
         {
           "actorId": "leader1",
-          "text": "第一轮主循环已经走通。法术和阵营页现在会开放，你可以按自己的节奏继续经营。"
+          "text": "第一轮修行已经走通：耕种、灵宠、掠夺、阵营和法术都已接上。接下来全部功能开放，你可以按自己的节奏继续经营。"
         }
       ]
     }

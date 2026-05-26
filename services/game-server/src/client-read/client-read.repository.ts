@@ -133,6 +133,7 @@ export interface SceneContentReadModel {
     rewardJson: Prisma.JsonValue;
     claimedAt: Date | null;
   }>;
+  factionStipendClaimCount: number;
   factions: Array<{
     id: string;
     name: string;
@@ -447,15 +448,23 @@ export class ClientReadRepository {
       return null;
     }
 
-    const factions = await client.faction.findMany({
-      orderBy: [{ contributionScore: 'desc' }, { treasuryGold: 'desc' }, { name: 'asc' }],
-      select: {
-        id: true,
-        name: true,
-        treasuryGold: true,
-        contributionScore: true,
-      },
-    });
+    const [factions, factionStipendClaimCount] = await Promise.all([
+      client.faction.findMany({
+        orderBy: [{ contributionScore: 'desc' }, { treasuryGold: 'desc' }, { name: 'asc' }],
+        select: {
+          id: true,
+          name: true,
+          treasuryGold: true,
+          contributionScore: true,
+        },
+      }),
+      client.playerFactionStipendState.count({
+        where: {
+          playerId,
+          claimedAt: { not: null },
+        },
+      }),
+    ]);
 
     const raidTargetPools = await client.raidTargetPool.findMany({
       where: {
@@ -568,6 +577,7 @@ export class ClientReadRepository {
       fieldSlots: player.fieldSlots,
       landDeedProgress: player.landDeedProgress,
       factionStipendStates: player.factionStipendStates,
+      factionStipendClaimCount,
       factions,
       raidTargetPools,
       raidMessageTemplates,

@@ -20,10 +20,8 @@ export interface SpiritBattleSnapshot {
     factionAffinity: string;
     role: string;
     baseAttack: number;
-    baseDefense: number;
     baseHp: number;
     growthAttack: number;
-    growthDefense: number;
     growthHp: number;
   };
   traits?: Array<{
@@ -135,20 +133,17 @@ export class RaidSettlementRuleService {
 interface TraitTotals {
   claw: number;
   thickSkin: number;
-  hardArmor: number;
   crit: number;
   critDamage: number;
   dodge: number;
   counter: number;
   lifesteal: number;
-  armorBreak: number;
   tenacity: number;
 }
 
 interface SpiritPanel {
   label: string;
   attack: number;
-  defense: number;
   maxHp: number;
   currentHp: number;
   healthStatus: BattleHealthStatus;
@@ -159,7 +154,7 @@ interface SpiritPanel {
 type BattleHealthStatus = {
   code: 'normal' | 'low' | 'injured' | 'down';
   label: string;
-  attackDefenseCoefficient: number;
+  attackCoefficient: number;
 };
 
 function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string | null): SpiritPanel {
@@ -167,7 +162,6 @@ function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string |
     return {
       label: '守备灵宠',
       attack: 50,
-      defense: 50,
       maxHp: 120,
       currentHp: 120,
       healthStatus: resolveBattleHealthStatus(120, 120),
@@ -179,13 +173,12 @@ function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string |
   const rarityMultiplier = getRarityGrowthMultiplier(snapshot.spiritDefinition.rarity, snapshot.level);
   const levelDelta = Math.max(snapshot.level - 1, 0);
   let attack = snapshot.spiritDefinition.baseAttack + levelDelta * snapshot.spiritDefinition.growthAttack * rarityMultiplier;
-  let defense = snapshot.spiritDefinition.baseDefense + levelDelta * snapshot.spiritDefinition.growthDefense * rarityMultiplier;
   let maxHp = snapshot.spiritDefinition.baseHp + levelDelta * snapshot.spiritDefinition.growthHp * rarityMultiplier;
   const faction = normalizeFaction(snapshot.spiritDefinition.factionAffinity);
 
   if (faction && faction === normalizeFaction(factionName)) {
     if (faction === 'immortal') {
-      defense *= 1.08;
+      maxHp *= 1.08;
     } else if (faction === 'demon') {
       attack *= 1.08;
     } else if (faction === 'human') {
@@ -195,17 +188,14 @@ function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string |
 
   const traits = buildTraitTotals(snapshot.traits ?? []);
   attack *= 1 + traits.claw / 100;
-  defense *= 1 + traits.hardArmor / 100;
   maxHp *= 1 + traits.thickSkin / 100;
   const currentHp = Math.min(Math.max(snapshot.currentHp, 0), Math.max(snapshot.maxHp, 1));
   const healthStatus = resolveBattleHealthStatus(currentHp, snapshot.maxHp);
-  attack *= healthStatus.attackDefenseCoefficient;
-  defense *= healthStatus.attackDefenseCoefficient;
+  attack *= healthStatus.attackCoefficient;
 
   return {
     label: snapshot.spiritDefinition.label,
     attack,
-    defense,
     maxHp,
     currentHp,
     healthStatus,
@@ -232,7 +222,7 @@ function resolveSingleClash(attacker: SpiritPanel, defender: SpiritPanel): {
       events.push({
         type: 'status',
         label: `${sideLabel}${panel.healthStatus.label}`,
-        description: `${sideLabel}开战血量状态为${panel.healthStatus.label}，攻击和防御按 ${Math.round(panel.healthStatus.attackDefenseCoefficient * 100)}% 结算，词条效果不受影响。`,
+        description: `${sideLabel}开战血量状态为${panel.healthStatus.label}，攻击按 ${Math.round(panel.healthStatus.attackCoefficient * 100)}% 结算，词条效果不受影响。`,
       });
     }
   }
@@ -241,7 +231,7 @@ function resolveSingleClash(attacker: SpiritPanel, defender: SpiritPanel): {
     events.push({
       type: 'element',
       label: relation === 'attacker' ? '五行克制' : '被五行克制',
-      description: relation === 'attacker' ? '进攻方本场攻防血和普通战斗词条效果翻倍。' : '防守方本场攻防血和普通战斗词条效果翻倍。',
+      description: relation === 'attacker' ? '进攻方本场攻击血和普通战斗词条效果翻倍。' : '防守方本场攻击血和普通战斗词条效果翻倍。',
     });
   }
 
@@ -286,15 +276,15 @@ function resolveSingleClash(attacker: SpiritPanel, defender: SpiritPanel): {
 function resolveBattleHealthStatus(currentHp: number, maxHp: number): BattleHealthStatus {
   const ratio = maxHp > 0 ? currentHp / maxHp : 0;
   if (currentHp <= 0 || ratio <= 0) {
-    return { code: 'down', label: '不可出战', attackDefenseCoefficient: 0 };
+    return { code: 'down', label: '不可出战', attackCoefficient: 0 };
   }
   if (ratio < 0.3) {
-    return { code: 'injured', label: '重伤：攻防 30%', attackDefenseCoefficient: 0.3 };
+    return { code: 'injured', label: '重伤：攻击 30%', attackCoefficient: 0.3 };
   }
   if (ratio < 0.7) {
-    return { code: 'low', label: '低迷：攻防 70%', attackDefenseCoefficient: 0.7 };
+    return { code: 'low', label: '低迷：攻击 70%', attackCoefficient: 0.7 };
   }
-  return { code: 'normal', label: '正常：攻防 100%', attackDefenseCoefficient: 1 };
+  return { code: 'normal', label: '正常：攻击 100%', attackCoefficient: 1 };
 }
 
 function resolveAttack(
@@ -317,9 +307,8 @@ function resolveAttack(
     return { damage: defender.currentHp * defenderMultiplier, lifesteal: 0, counterDamage: 0, execute: true };
   }
 
-  const pierceDefense = Math.max(defender.defense * defenderMultiplier * (1 - clampPercent(attacker.traits.armorBreak * attackerMultiplier) / 100), 0);
   const randomFactor = 0.9 + Math.random() * 0.2;
-  let damage = attacker.attack * attackerMultiplier * (1 - pierceDefense / (pierceDefense + 200)) * randomFactor;
+  let damage = attacker.attack * attackerMultiplier * randomFactor;
   const critChance = clampPercent(attacker.traits.crit * attackerMultiplier);
   const didCrit = Math.random() * 100 < critChance;
 
@@ -423,20 +412,18 @@ function buildTraitTotals(traits: SpiritBattleSnapshot['traits']): TraitTotals {
   for (const trait of traits ?? []) {
     if (trait.traitCode === 'claw') totals.claw += trait.traitValue;
     else if (trait.traitCode === 'thick_skin') totals.thickSkin += trait.traitValue;
-    else if (trait.traitCode === 'hard_armor') totals.hardArmor += trait.traitValue;
     else if (trait.traitCode === 'crit') totals.crit += trait.traitValue;
     else if (trait.traitCode === 'crit_damage') totals.critDamage += trait.traitValue;
     else if (trait.traitCode === 'dodge') totals.dodge += trait.traitValue;
     else if (trait.traitCode === 'counter') totals.counter += trait.traitValue;
     else if (trait.traitCode === 'lifesteal') totals.lifesteal += trait.traitValue;
-    else if (trait.traitCode === 'armor_break') totals.armorBreak += trait.traitValue;
     else if (trait.traitCode === 'tenacity') totals.tenacity += trait.traitValue;
   }
   return totals;
 }
 
 function emptyTraits(): TraitTotals {
-  return { claw: 0, thickSkin: 0, hardArmor: 0, crit: 0, critDamage: 0, dodge: 0, counter: 0, lifesteal: 0, armorBreak: 0, tenacity: 0 };
+  return { claw: 0, thickSkin: 0, crit: 0, critDamage: 0, dodge: 0, counter: 0, lifesteal: 0, tenacity: 0 };
 }
 
 function resolveElementAdvantage(attacker: Element | null, defender: Element | null): 'attacker' | 'defender' | 'none' {

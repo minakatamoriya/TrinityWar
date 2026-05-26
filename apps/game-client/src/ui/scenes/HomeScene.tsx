@@ -33,8 +33,8 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
         {tutorialTask ? (
           <article className="panel-card home-tutorial-card">
             <div className="panel-head">
-              <h4>新手主线</h4>
-              <span className="soft-tag">当前目标</span>
+              <h4>{'\u65b0\u624b\u4efb\u52a1'}</h4>
+              <span className="soft-tag">{'\u5f53\u524d\u76ee\u6807'}</span>
             </div>
             <div className="home-tutorial-body">
               <strong>{tutorialTask.title}</strong>
@@ -48,7 +48,7 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
         {dailyTasks.length > 0 ? (
           <article className="panel-card home-task-card">
             <div className="panel-head">
-              <h4>任务列表</h4>
+              <h4>{'\u6bcf\u65e5\u4efb\u52a1'}</h4>
             </div>
             <div className="task-list">
               {dailyTasks.map((item, index) => (
@@ -59,19 +59,19 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
                       <strong>{item.title}</strong>
                       {item.status === 'completed' ? (
                         <>
-                          <span className="task-state-badge task-state-badge-completed">已完成</span>
+                          <span className="task-state-badge task-state-badge-completed">{'\u5df2\u5b8c\u6210'}</span>
                           <button className="text-link task-link task-link-claim" disabled={claimingTaskId === item.id} onClick={() => onClaimTask(item.id)} type="button">
-                            {claimingTaskId === item.id ? '领取中' : '领取'}
+                            {claimingTaskId === item.id ? '\u9886\u53d6\u4e2d' : '\u9886\u53d6'}
                           </button>
                         </>
                       ) : (
                         <button className="text-link task-link" disabled={item.status === 'claimed'} onClick={() => onNavigate(item.actionScene)} type="button">
-                          {item.status === 'claimed' ? '已领取' : '前往'}
+                          {item.status === 'claimed' ? '\u5df2\u9886\u53d6' : '\u524d\u5f80'}
                         </button>
                       )}
                     </div>
                     <p>{item.description}</p>
-                    <p className="task-progress-line">进度 {item.progressText} / 奖励 {formatNumber(item.rewardGold)} 金币</p>
+                    <p className="task-progress-line">{'\u8fdb\u5ea6'} {item.progressText} / {'\u5956\u52b1'} {formatNumber(item.rewardGold)} {'\u91d1\u5e01'}</p>
                   </div>
                 </div>
               ))}

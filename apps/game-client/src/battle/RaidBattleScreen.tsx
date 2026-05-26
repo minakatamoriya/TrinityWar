@@ -136,7 +136,6 @@ function BattleUnitPanel(props: {
       </div>
       <div className="battle-unit-line compact">
         <span>攻 {unit.attack}</span>
-        <span>防 {unit.defense}</span>
         <span>血 {hp}/{unit.maxHp}</span>
         <span className="battle-buff-text">{traitText}</span>
       </div>

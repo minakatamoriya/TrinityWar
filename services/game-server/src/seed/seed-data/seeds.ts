@@ -27,7 +27,7 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 10,
     ripeWindowSeconds: defaultRipeWindowSeconds,
     baseYieldGold: 50,
-    harvestSeedReturn: 1,
+    harvestSeedReturn: 0,
     strategyNote: '新手教程种，十秒完成第一轮收获，用来串起种田、灵宠和首次掠夺。',
     lore: '只在开荒时授予的一枚灵芽，破土极快，适合新人理解第一轮经营。',
   },

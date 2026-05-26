@@ -95,7 +95,7 @@ type ResolvableStipendReward = ClientFactionStipendReward & {
 
 const TUTORIAL_STARTER_SEED_ID = 'qilingya';
 const TUTORIAL_STARTER_SEED_FALLBACK_ID = 'qinglingmai';
-const TUTORIAL_STARTER_SEED_QUANTITY = 3;
+const TUTORIAL_STARTER_SEED_QUANTITY = 1;
 
 @Injectable()
 export class ClientCommandService {
@@ -644,7 +644,11 @@ export class ClientCommandService {
         rewardItemsJson: resolution.rewards as unknown as Prisma.InputJsonValue,
       });
 
-      if (input.request.collectMode === 'ripe' && (field.status === 'MATURE' || field.status === 'WITHERED')) {
+      if (
+        field.seedDefinition?.seedId !== TUTORIAL_STARTER_SEED_ID
+        && input.request.collectMode === 'ripe'
+        && (field.status === 'MATURE' || field.status === 'WITHERED')
+      ) {
         await this.recordDailyTaskProgress(client, input.playerId, 'collect-field');
       }
 
@@ -802,8 +806,10 @@ export class ClientCommandService {
         },
       });
 
-      await this.recordDailyTaskProgress(client, input.playerId, 'start-cultivation');
-      await this.recordDailyTaskProgress(client, input.playerId, 'farm-cycle');
+      if (seedDefinition.seedId !== TUTORIAL_STARTER_SEED_ID) {
+        await this.recordDailyTaskProgress(client, input.playerId, 'start-cultivation');
+        await this.recordDailyTaskProgress(client, input.playerId, 'farm-cycle');
+      }
 
       const responseSnapshot: ClientStateMutationResponse = {
         app: APP_NAME,
@@ -1339,14 +1345,22 @@ export class ClientCommandService {
 
       assertVersion('walletVersion', input.request.walletVersion, playerState.wallet.balanceVersion);
 
-      const existingClaim = await client.playerFactionStipendState.findUnique({
-        where: {
-          playerId_dateKey: {
-            playerId: input.playerId,
-            dateKey,
+      const [existingClaim, priorClaimCount] = await Promise.all([
+        client.playerFactionStipendState.findUnique({
+          where: {
+            playerId_dateKey: {
+              playerId: input.playerId,
+              dateKey,
+            },
           },
-        },
-      });
+        }),
+        client.playerFactionStipendState.count({
+          where: {
+            playerId: input.playerId,
+            claimedAt: { not: null },
+          },
+        }),
+      ]);
 
       if (existingClaim?.claimedAt) {
         throw new BusinessError({
@@ -1358,7 +1372,9 @@ export class ClientCommandService {
 
       const contribution = playerState.factionMembers[0]?.contributionScore ?? 0;
       const tier = getFactionStipendTier(contribution);
-      const rewards = await resolveStipendRewards(client, (tier?.rewards ?? []) as ResolvableStipendReward[]);
+      const rewards = priorClaimCount <= 0
+        ? await resolveFirstFactionStipendRewards(client, (tier?.rewards ?? []) as ResolvableStipendReward[])
+        : await resolveStipendRewards(client, (tier?.rewards ?? []) as ResolvableStipendReward[]);
       const now = new Date();
       const goldReward = sumRewardQuantity(rewards, 'gold');
       const ordinarySoulReward = sumRewardQuantity(rewards, 'ordinary-soul');
@@ -2020,15 +2036,6 @@ async function resolveStipendRewards(
       continue;
     }
 
-    const normalizedPoolKey = reward.seedPoolIds.slice().sort().join(',');
-    if (normalizedPoolKey === ['ninglucao', 'qinglingmai', 'xunyamai'].join(',') && quantity === 1) {
-      resolvedRewards.push(...normalizeStipendRewards([
-        { kind: 'seed', seedId: 'qinglingmai', label: seedLabelById.get('qinglingmai') ?? 'qinglingmai', quantity: 2 },
-        { kind: 'seed', seedId: 'xunyamai', label: seedLabelById.get('xunyamai') ?? 'xunyamai', quantity: 2 },
-      ]));
-      continue;
-    }
-
     const availablePool = reward.seedPoolIds.filter((seedId) => seedLabelById.has(seedId));
     if (availablePool.length <= 0) {
       throw new BusinessError({
@@ -2059,6 +2066,32 @@ async function resolveStipendRewards(
   }
 
   return normalizeStipendRewards(resolvedRewards);
+}
+
+async function resolveFirstFactionStipendRewards(
+  client: Prisma.TransactionClient,
+  rewards: ResolvableStipendReward[],
+): Promise<ClientFactionStipendReward[]> {
+  const nonSeedRewards = rewards.filter((reward) => reward.kind !== 'seed');
+  const seedDefinitions = await client.seedDefinition.findMany({
+    where: { seedId: { in: ['qinglingmai', 'xunyamai'] } },
+    select: { seedId: true, label: true },
+  });
+  const seedLabelById = new Map(seedDefinitions.map((seed) => [seed.seedId, seed.label]));
+
+  if (!seedLabelById.has('qinglingmai') || !seedLabelById.has('xunyamai')) {
+    throw new BusinessError({
+      code: ErrorCode.NotFound,
+      message: 'First faction stipend seed definitions not found. Please seed seed definitions first.',
+      statusCode: 404,
+    });
+  }
+
+  return normalizeStipendRewards([
+    ...nonSeedRewards,
+    { kind: 'seed', seedId: 'qinglingmai', label: seedLabelById.get('qinglingmai') ?? 'qinglingmai', quantity: 1 },
+    { kind: 'seed', seedId: 'xunyamai', label: seedLabelById.get('xunyamai') ?? 'xunyamai', quantity: 1 },
+  ]);
 }
 
 function sumRewardQuantity(rewards: ClientFactionStipendReward[], kind: ClientFactionStipendReward['kind']): number {
@@ -2185,7 +2218,7 @@ function getDailyTaskTitle(taskId: string): string {
     'daily-harvest-once': '收一次田地',
     'daily-start-cultivation': '开始一次培育',
     'daily-upgrade-building': '修习一次法术',
-    'daily-upgrade-spirit': '升级一次灵宠',
+    'daily-feed-spirit': '投喂一次灵宠',
     'daily-donate-faction': '上缴一次阵营资源',
   };
 
