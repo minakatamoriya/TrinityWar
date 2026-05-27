@@ -44,8 +44,50 @@ interface TianjiShopPanelProps {
 
 interface GlobalFeatureModalContentProps {
   contributionTiers?: FactionContributionTierView[];
+  seasonResetRules?: {
+    title: string;
+    reset: string[];
+    retained: string[];
+    onOpenSignIn?: () => void;
+  };
   seasonSignIn?: SeasonSignInPanelProps;
   tianjiShop?: TianjiShopPanelProps;
+}
+
+function SeasonResetRulesPanel(props: { title: string; reset: string[]; retained: string[]; onOpenSignIn?: () => void }): JSX.Element {
+  return (
+    <div className="contribution-tier-list">
+      <article className="contribution-tier-card">
+        <div>
+          <span>赛季规则</span>
+          <strong>{props.title}</strong>
+        </div>
+        <ul>
+          {props.retained.map((item) => (
+            <li key={`retain-${item}`}>保留：{item}</li>
+          ))}
+        </ul>
+      </article>
+      <article className="contribution-tier-card">
+        <div>
+          <span>赛季重置</span>
+          <strong>以下内容会清零</strong>
+        </div>
+        <ul>
+          {props.reset.map((item) => (
+            <li key={`reset-${item}`}>{item}</li>
+          ))}
+        </ul>
+        {props.onOpenSignIn ? (
+          <div className="button-row end">
+            <button className="secondary-button small" onClick={props.onOpenSignIn} type="button">
+              查看签到
+            </button>
+          </div>
+        ) : null}
+      </article>
+    </div>
+  );
 }
 
 function ContributionTierList(props: { tiers: FactionContributionTierView[] }): JSX.Element {
@@ -92,11 +134,11 @@ function SeasonSignInPanel(props: SeasonSignInPanelProps): JSX.Element {
               <strong>{milestone.title}</strong>
               <span>累计 {milestone.dayCount} 天</span>
             </div>
-            <em>{milestone.reached ? '已达成' : `差 ${milestone.remainingDays} 天`}</em>
+            <em>{milestone.reached ? '已达成' : `还差 ${milestone.remainingDays} 天`}</em>
           </div>
         ))}
       </div>
-      <p className="season-signin-rule">1-6 天 x1，7-13 天 x2，14-20 天 x3，21 天后 x4；宝箱奖励待定。</p>
+      <p className="season-signin-rule">1-6 天 x1，7-13 天 x2，14-20 天 x3，21 天后 x4。</p>
       <div className="season-signin-grid" aria-label="赛季签到日历">
         {days.map((day) => (
           <div
@@ -170,6 +212,7 @@ export function GlobalFeatureModalContent(props: GlobalFeatureModalContentProps)
   return (
     <>
       {props.contributionTiers ? <ContributionTierList tiers={props.contributionTiers} /> : null}
+      {props.seasonResetRules ? <SeasonResetRulesPanel {...props.seasonResetRules} /> : null}
       {props.seasonSignIn ? <SeasonSignInPanel {...props.seasonSignIn} /> : null}
       {props.tianjiShop ? <TianjiShopPanel {...props.tianjiShop} /> : null}
     </>

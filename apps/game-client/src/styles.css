@@ -565,6 +565,7 @@ button {
   align-items: center;
   gap: 8px;
   padding: 0 12px 6px;
+  flex-wrap: wrap;
 }
 
 .global-resource-pill {
@@ -616,6 +617,20 @@ button {
   font-size: 18px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+.global-resource-entry {
+  border: 1px solid rgba(255, 248, 234, 0.12);
+  background: rgba(255, 248, 234, 0.06);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.global-resource-entry:hover {
+  border-color: rgba(242, 198, 120, 0.5);
+  background: rgba(242, 198, 120, 0.12);
 }
 
 .resource-dock {
@@ -957,6 +972,27 @@ button {
 .pending-claim-button strong {
   font-size: 24px;
   line-height: 1;
+}
+
+.faction-advantage-panel {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(67, 49, 35, 0.86), rgba(37, 28, 22, 0.92));
+}
+
+.faction-advantage-panel .panel-head,
+.faction-advantage-panel .mini-list {
+  display: none;
+}
+
+.faction-advantage-panel .panel-text {
+  margin: 0;
+  color: #fff1d2;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .pending-claim-button em {
@@ -1691,13 +1727,18 @@ button {
 
 .farm-top-card-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
 .farm-top-action-card {
   display: grid;
-  gap: 8px;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  max-height: 96px;
+  padding: 12px;
   text-align: left;
   border: 1px solid rgba(255, 248, 234, 0.1);
   background: rgba(255, 248, 234, 0.05);
@@ -1706,13 +1747,31 @@ button {
 
 .farm-top-action-card strong {
   font-size: 15px;
-  line-height: 1.2;
+  line-height: 1.35;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.farm-top-action-card span:last-child {
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.4;
+.farm-board-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: rgba(242, 198, 120, 0.14);
+  border: 1px solid rgba(242, 198, 120, 0.22);
+  color: #f2c678;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.farm-board-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .home-farm-board-card {
@@ -1800,6 +1859,20 @@ button {
   gap: 12px;
   padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(243, 181, 111, 0.32) transparent;
+  scrollbar-gutter: stable;
+}
+
+.seed-codex-body::-webkit-scrollbar,
+.resource-backpack-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.seed-codex-body::-webkit-scrollbar-thumb,
+.resource-backpack-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(243, 181, 111, 0.25);
 }
 
 .seed-codex-rarity-row {
@@ -1819,7 +1892,7 @@ button {
 
 .seed-codex-icon {
   aspect-ratio: 1 / 1;
-  min-height: 42px;
+  min-height: 44px;
   border-radius: 12px;
   border: 1px solid rgba(255, 248, 234, 0.14);
   background: rgba(255, 248, 234, 0.04);
@@ -1918,6 +1991,92 @@ button {
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.55;
+}
+
+.resource-backpack-body {
+  display: grid;
+  gap: 12px;
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(243, 181, 111, 0.32) transparent;
+  scrollbar-gutter: stable;
+}
+
+.backpack-group-card {
+  display: grid;
+  gap: 10px;
+}
+
+.backpack-item-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.backpack-item-card {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 58px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 248, 234, 0.08);
+  background: rgba(255, 248, 234, 0.04);
+}
+
+.backpack-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 248, 234, 0.08);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.backpack-item-card strong,
+.backpack-item-card span,
+.backpack-item-card em {
+  display: block;
+}
+
+.backpack-item-card strong {
+  font-size: 13px;
+}
+
+.backpack-item-card span {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.backpack-item-card em {
+  color: #f2c678;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.backpack-rarity-rare {
+  border-color: rgba(164, 207, 255, 0.18);
+  background: rgba(91, 137, 185, 0.08);
+}
+
+.backpack-rarity-legendary {
+  border-color: rgba(242, 198, 120, 0.22);
+  background: rgba(183, 122, 48, 0.1);
+}
+
+.resource-backpack-empty {
+  min-height: 180px;
+  place-items: center;
 }
 
 .collect-overflow-backdrop {
@@ -2697,9 +2856,13 @@ button {
 }
 
 .spirit-top-actions {
-  display: grid;
+  display: none;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+}
+
+.spirit-growth-card {
+  display: none;
 }
 
 .spirit-codex-button-card,
@@ -3985,19 +4148,7 @@ button.spirit-element-chip {
 .seed-selection-body {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
-  padding: 14px 16px 12px;
-}
-
-.seed-selection-body::-webkit-scrollbar {
-  width: 0;
-}
-
-.seed-selection-body {
-  scrollbar-width: none;
+  padding-bottom: 12px;
 }
 
 .seed-rarity-panel {
@@ -4065,6 +4216,10 @@ button.spirit-element-chip {
   color: #ffe0b2;
   font-size: 12px;
   font-weight: 700;
+}
+
+.seed-selection-detail-card {
+  margin-top: 2px;
 }
 
 .seed-selection-actionbar {
@@ -5613,9 +5768,8 @@ button.spirit-element-chip {
     gap: 6px;
   }
 
-  .seed-codex-icon {
-    min-height: 36px;
-    font-size: 10px;
+  .backpack-item-grid {
+    grid-template-columns: 1fr;
   }
 
   .seed-codex-stat-row {

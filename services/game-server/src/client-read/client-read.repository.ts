@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ArmyTrainingStatus, FieldStatus, Prisma, PrismaClient, TaskStatus } from '@prisma/client';
+import type { ArmyTrainingStatus, DailyFactionTaskType, FieldStatus, Prisma, PrismaClient, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 export interface HomeSummaryReadModel {
@@ -9,6 +9,7 @@ export interface HomeSummaryReadModel {
     castleLevelCache: number;
     protectedUntil: Date | null;
     faction: {
+      id: string;
       name: string;
     } | null;
     factionMembers: Array<{
@@ -46,6 +47,27 @@ export interface HomeSummaryReadModel {
     rewardGold: number;
     actionScene: string;
   }>;
+  dailyFactionTasks: Array<{
+    id: string;
+    taskType: DailyFactionTaskType;
+    requiredEssenceType: string | null;
+    requiredAmount: number;
+    progressAmount: number;
+    rewardContribution: number;
+    status: TaskStatus;
+    completedAt: Date | null;
+  }>;
+  seedInventory: Array<{
+    quantity: number;
+    unlockedAt: Date | null;
+    seedDefinition: {
+      seedId: string;
+      label: string;
+    };
+  }>;
+  contributionLogs: Array<{
+    contributionDelta: number;
+  }>;
   trainingQueues: Array<{
     status: ArmyTrainingStatus;
     finishAt: Date;
@@ -57,6 +79,7 @@ export interface SceneContentReadModel {
     id: string;
     nickname: string;
     castleLevelCache: number;
+    factionCode: string | null;
     faction: {
       id: string;
       name: string;
@@ -104,6 +127,10 @@ export interface SceneContentReadModel {
     isUnlocked: boolean;
     unlockCastleLevel: number;
     status: FieldStatus;
+    expectedEssenceYield: number;
+    stolenEssenceYield: number;
+    harvestedEssenceYield: number;
+    lastStolenAt: Date | null;
     investedGold: number;
     currentClaimableGold: number;
     seedAt: Date | null;
@@ -118,7 +145,32 @@ export interface SceneContentReadModel {
       matureSeconds: number;
       ripeWindowSeconds: number;
       baseYieldGold: number;
+      rarity: string;
     } | null;
+  }>;
+  seedInventory: Array<{
+    quantity: number;
+    unlockedAt: Date | null;
+    seedDefinition: {
+      seedId: string;
+      label: string;
+      rarity: string;
+      sortOrder: number;
+      seedSeconds: number;
+      growSeconds: number;
+      matureSeconds: number;
+      baseYieldGold: number;
+      plantResearch: Array<{
+        discoveredAt: Date;
+      }>;
+    };
+  }>;
+  dailyFactionTasks: HomeSummaryReadModel['dailyFactionTasks'];
+  contributionLogs: Array<{
+    id: string;
+    sourceType: string;
+    contributionDelta: number;
+    createdAt: Date;
   }>;
   landDeedProgress: Array<{
     deedKey: string;
@@ -219,6 +271,7 @@ export class ClientReadRepository {
         protectedUntil: true,
         faction: {
           select: {
+            id: true,
             name: true,
           },
         },
@@ -227,6 +280,31 @@ export class ClientReadRepository {
           select: {
             contributionScore: true,
           },
+        },
+        dailyFactionTasks: {
+          where: { taskDate: dateKey },
+          orderBy: { generatedAt: 'asc' },
+          select: {
+            id: true,
+            taskType: true,
+            requiredEssenceType: true,
+            requiredAmount: true,
+            progressAmount: true,
+            rewardContribution: true,
+            status: true,
+            completedAt: true,
+          },
+        },
+        seedInventory: {
+          select: {
+            quantity: true,
+            unlockedAt: true,
+            seedDefinition: { select: { seedId: true, label: true } },
+          },
+        },
+        factionContributionLogs: {
+          where: { createdAt: { gte: startOfDateKey(dateKey) } },
+          select: { contributionDelta: true },
         },
         wallet: {
           select: {
@@ -323,6 +401,9 @@ export class ClientReadRepository {
       army: player.army,
       fieldSlots: player.fieldSlots,
       taskStates: player.taskStates,
+      dailyFactionTasks: player.dailyFactionTasks,
+      seedInventory: player.seedInventory,
+      contributionLogs: player.factionContributionLogs,
       trainingQueues: player.trainingQueues,
     };
   }
@@ -340,6 +421,7 @@ export class ClientReadRepository {
         faction: {
           select: {
             id: true,
+            code: true,
             name: true,
             treasuryGold: true,
             contributionScore: true,
@@ -404,6 +486,10 @@ export class ClientReadRepository {
             status: true,
             investedGold: true,
             currentClaimableGold: true,
+            expectedEssenceYield: true,
+            stolenEssenceYield: true,
+            harvestedEssenceYield: true,
+            lastStolenAt: true,
             seedAt: true,
             matureAt: true,
             fullMatureAt: true,
@@ -417,8 +503,59 @@ export class ClientReadRepository {
                 matureSeconds: true,
                 ripeWindowSeconds: true,
                 baseYieldGold: true,
+                rarity: true,
               },
             },
+          },
+        },
+        seedInventory: {
+          orderBy: [
+            { seedDefinition: { sortOrder: 'asc' } },
+            { seedDefinition: { seedId: 'asc' } },
+          ],
+          select: {
+            quantity: true,
+            unlockedAt: true,
+            seedDefinition: {
+              select: {
+                seedId: true,
+                label: true,
+                rarity: true,
+                sortOrder: true,
+                seedSeconds: true,
+                growSeconds: true,
+                matureSeconds: true,
+                baseYieldGold: true,
+                plantResearch: {
+                  where: { playerId },
+                  select: { discoveredAt: true },
+                },
+              },
+            },
+          },
+        },
+        dailyFactionTasks: {
+          where: { taskDate: getLocalDateKeyForRepository() },
+          orderBy: { generatedAt: 'asc' },
+          select: {
+            id: true,
+            taskType: true,
+            requiredEssenceType: true,
+            requiredAmount: true,
+            progressAmount: true,
+            rewardContribution: true,
+            status: true,
+            completedAt: true,
+          },
+        },
+        factionContributionLogs: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: {
+            id: true,
+            sourceType: true,
+            contributionDelta: true,
+            createdAt: true,
           },
         },
         landDeedProgress: {
@@ -567,6 +704,7 @@ export class ClientReadRepository {
         id: player.id,
         nickname: player.nickname,
         castleLevelCache: player.castleLevelCache,
+        factionCode: player.faction?.code ?? null,
         faction: player.faction,
         factionMembers: player.factionMembers,
       },
@@ -575,6 +713,9 @@ export class ClientReadRepository {
       army: player.army,
       trainingQueues: player.trainingQueues,
       fieldSlots: player.fieldSlots,
+      seedInventory: player.seedInventory,
+      dailyFactionTasks: player.dailyFactionTasks,
+      contributionLogs: player.factionContributionLogs,
       landDeedProgress: player.landDeedProgress,
       factionStipendStates: player.factionStipendStates,
       factionStipendClaimCount,
@@ -595,4 +736,8 @@ function getLocalDateKeyForRepository(): string {
   });
 
   return formatter.format(new Date());
+}
+
+function startOfDateKey(dateKey: string): Date {
+  return new Date(`${dateKey}T00:00:00+08:00`);
 }

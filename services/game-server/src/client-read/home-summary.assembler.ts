@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { APP_NAME, type ClientDailyTaskStatus, type ClientSceneKey, type HomeSummaryResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientDailyTaskStatus, type ClientHomeFactionTaskSummary, type ClientSceneKey, type HomeSummaryResponse } from '@trinitywar/shared';
 import { getActiveDailyTaskIds, getDailyTaskDefinition } from '../lib/game-balance.js';
 import type { HomeSummaryReadModel } from './client-read.repository.js';
 import { getDailyTaskActionScene } from './daily-task-lifecycle.service.js';
@@ -55,6 +55,8 @@ export class HomeSummaryAssembler {
         status: mapTaskStatus(taskState.status),
         actionScene: mapActionScene(getDailyTaskActionScene(getDailyTaskDefinition(taskState.taskId)?.objective.type, taskState.actionScene)),
       })),
+      factionTasks: buildHomeFactionTasks(readModel),
+      todayContribution: readModel.contributionLogs.reduce((sum, log) => sum + Math.max(log.contributionDelta, 0), 0),
       primaryActions: [
         { key: 'building', title: '法术阁', description: '修习法术强化经营' },
         { key: 'farm', title: '农场', description: '收成熟田地' },
@@ -141,4 +143,92 @@ function mapActionScene(actionScene: string): ClientSceneKey {
   }
 
   return 'home';
+}
+
+function buildHomeFactionTasks(readModel: HomeSummaryReadModel): ClientHomeFactionTaskSummary[] {
+  const essenceInventory = new Map(
+    readModel.seedInventory.map((item) => [item.seedDefinition.seedId, {
+      quantity: item.quantity,
+      label: `${item.seedDefinition.label}精华`,
+      unlocked: Boolean(item.unlockedAt),
+    }]),
+  );
+
+  return readModel.dailyFactionTasks.map((task) => {
+    const taskType = mapFactionTaskType(task.taskType);
+    const requiredEssence = task.requiredEssenceType ? essenceInventory.get(task.requiredEssenceType) : null;
+    const progressCurrent = Math.min(task.progressAmount, task.requiredAmount);
+    const status = mapTaskStatus(task.status);
+    const actionScene = taskType === 'conflict-raid'
+      ? 'raid'
+      : requiredEssence && requiredEssence.quantity >= Math.max(task.requiredAmount - progressCurrent, 1)
+        ? 'faction'
+        : 'farm';
+
+    return {
+      id: task.id,
+      type: taskType,
+      title: buildFactionTaskTitle(taskType, requiredEssence?.label ?? task.requiredEssenceType),
+      description: buildFactionTaskDescription(taskType, task.rewardContribution),
+      progressCurrent,
+      progressTarget: task.requiredAmount,
+      progressText: buildDailyTaskProgressText(task.progressAmount, task.requiredAmount, task.status),
+      rewardContribution: task.rewardContribution,
+      requiredEssenceType: task.requiredEssenceType,
+      requiredEssenceLabel: requiredEssence?.label ?? (task.requiredEssenceType ? `${task.requiredEssenceType}精华` : null),
+      currentEssenceQuantity: requiredEssence?.quantity ?? 0,
+      status,
+      action: {
+        label: buildFactionTaskActionLabel(taskType, status, requiredEssence?.quantity ?? 0, task.requiredAmount - progressCurrent),
+        target: actionScene,
+        tone: status === 'completed' || (taskType !== 'conflict-raid' && (requiredEssence?.quantity ?? 0) >= task.requiredAmount - progressCurrent) ? 'primary' : 'secondary',
+        context: task.id,
+      },
+    };
+  });
+}
+
+function mapFactionTaskType(taskType: HomeSummaryReadModel['dailyFactionTasks'][number]['taskType']): ClientHomeFactionTaskSummary['type'] {
+  if (taskType === 'ESSENCE_SUBMIT_FOCUS') {
+    return 'essence-submit-focus';
+  }
+
+  if (taskType === 'CONFLICT_RAID') {
+    return 'conflict-raid';
+  }
+
+  return 'essence-submit-basic';
+}
+
+function buildFactionTaskTitle(type: ClientHomeFactionTaskSummary['type'], essenceLabel?: string | null): string {
+  if (type === 'conflict-raid') {
+    return '完成 1 次成功掠夺';
+  }
+
+  return `上缴${essenceLabel ?? '精华'}`;
+}
+
+function buildFactionTaskDescription(type: ClientHomeFactionTaskSummary['type'], rewardContribution: number): string {
+  if (type === 'conflict-raid') {
+    return `冲突对抗任务，完成后获得 ${formatNumber(rewardContribution)} 贡献。`;
+  }
+
+  return `上缴指定精华，完成后获得 ${formatNumber(rewardContribution)} 贡献。`;
+}
+
+function buildFactionTaskActionLabel(
+  type: ClientHomeFactionTaskSummary['type'],
+  status: ClientDailyTaskStatus,
+  ownedQuantity: number,
+  remainingAmount: number,
+): string {
+  if (status === 'claimed') {
+    return '已完成';
+  }
+
+  if (type === 'conflict-raid') {
+    return '去掠夺';
+  }
+
+  return ownedQuantity >= Math.max(remainingAmount, 1) ? '上缴' : '去种植';
 }

@@ -8,11 +8,13 @@ import type {
   ClientRaidDeepIntelResponse,
   ClientRaidBattleReplay,
   ClientFactionDonateRequest,
+  ClientHomeFactionTaskSummary,
   ClientBuildingUpgradeId,
   ClientRaidTarget,
   ClientRaidTargetDetailResponse,
   ClientSceneAction,
   ClientSceneKey,
+  ClientPlantResearchState,
   ClientFarmBoardState,
   ClientSpiritElement,
   ClientSpiritRollMode,
@@ -23,7 +25,7 @@ import type {
   ClientUpgradeBuildingRequest,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidBattleReplay, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, updateFarmBoard, upgradeClientBuilding } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidBattleReplay, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, submitFactionTask, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
@@ -36,6 +38,9 @@ import { SeedSelectionScreen } from './ui/scenes/SeedSelectionScreen';
 import { GlobalFeatureModal } from './ui/common/GlobalFeatureModal';
 import { FarmBoardEditorModal } from './ui/common/FarmBoardEditorModal';
 import { GlobalFeatureModalContent } from './ui/common/GlobalFeatureModalContent';
+import { PlantCodexModal } from './ui/common/PlantCodexModal';
+import { ResourceBackpackModal, type BackpackResourceItem } from './ui/common/ResourceBackpackModal';
+import { SpiritCodexModal } from './ui/common/SpiritCodexModal';
 import { SeedRewardModal, type SeedRewardModalItem } from './ui/common/SeedRewardModal';
 import { CharacterDialogProvider } from './dialog/CharacterDialogProvider';
 import { useCharacterDialog } from './dialog/useCharacterDialog';
@@ -82,6 +87,8 @@ interface SeedCodexState {
   selectedSeedId: string;
 }
 
+type TopResourcePanel = 'spirit-codex' | 'resources';
+
 interface SeedRewardModalState {
   title: string;
   summary: string;
@@ -117,6 +124,7 @@ interface GlobalFeatureModalState {
   eyebrow?: string;
   description?: string;
   contributionTiers?: FactionContributionTier[];
+  seasonResetRules?: boolean;
   tianjiShop?: boolean;
   seasonSignIn?: boolean;
 }
@@ -195,6 +203,20 @@ const seedRarityLabels: Record<SeedRarity, string> = {
 
 function compareSeedCatalogItems(left: SeedCatalogItem, right: SeedCatalogItem): number {
   return left.sortOrder - right.sortOrder || left.id.localeCompare(right.id);
+}
+
+function buildLocalPlantResearchState(plantType: string, unlocked: boolean, essenceOwned: number): ClientPlantResearchState {
+  return {
+    plantType,
+    discovered: unlocked || essenceOwned > 0,
+    unlocked,
+    status: unlocked ? 'unlocked' : essenceOwned > 0 ? 'discovered' : 'undiscovered',
+    essenceRequired: 0,
+    essenceOwned,
+    contributionRequired: 0,
+    contributionOwned: 0,
+    canUnlock: false,
+  };
 }
 
 function buildLiveFarmFieldPresentation(
@@ -566,54 +588,44 @@ function getMillisecondsUntilNextChinaMidnight(): number {
   return Math.max(nextMidnightUtc - now, 1000);
 }
 
-function getSeasonSignInDay(): number {
+function getSeasonSignInDay(currentWeek: number, totalWeeks: number): number {
+  const safeTotalWeeks = Math.max(Math.floor(totalWeeks), 1);
+  const safeCurrentWeek = Math.min(Math.max(Math.floor(currentWeek), 1), safeTotalWeeks);
   const chinaNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  const seasonStartUtc = Date.UTC(chinaNow.getUTCFullYear(), 0, 1);
-  const chinaTodayUtc = Date.UTC(chinaNow.getUTCFullYear(), chinaNow.getUTCMonth(), chinaNow.getUTCDate());
-  const dayOfYear = Math.floor((chinaTodayUtc - seasonStartUtc) / 86_400_000) + 1;
+  const weekday = chinaNow.getUTCDay();
+  const mondayBasedDay = weekday === 0 ? 7 : weekday;
 
-  return ((dayOfYear - 1) % 28) + 1;
+  return Math.min((safeCurrentWeek - 1) * 7 + mondayBasedDay, safeTotalWeeks * 7);
 }
 
-function getSeasonSignInReward(cumulativeClaimCount: number): number {
-  if (cumulativeClaimCount >= 21) {
+function getSeasonSignInReward(day: number): number {
+  if (day >= 22) {
     return 4;
   }
 
-  if (cumulativeClaimCount >= 14) {
+  if (day >= 15) {
     return 3;
   }
 
-  if (cumulativeClaimCount >= 7) {
+  if (day >= 8) {
     return 2;
   }
 
   return 1;
 }
 
-function getSeasonSignInClaimOrder(claimedDays: number[], day: number): number {
-  return claimedDays.filter((claimedDay) => claimedDay <= day).length;
-}
-
 function buildSeasonSignInDays(record: SeasonSignInRecord, currentDay: number): SeasonSignInDay[] {
   const claimed = new Set(record.claimedDays);
-  let projectedClaimCount = record.claimedDays.length;
 
   return Array.from({ length: 28 }, (_, index) => {
     const day = index + 1;
     const isClaimed = claimed.has(day);
     const future = day > currentDay;
     const missed = day < currentDay && !isClaimed;
-    let claimOrder = isClaimed ? getSeasonSignInClaimOrder(record.claimedDays, day) : getSeasonSignInClaimOrder(record.claimedDays, day - 1) + 1;
-
-    if (!isClaimed && day >= currentDay) {
-      projectedClaimCount += 1;
-      claimOrder = projectedClaimCount;
-    }
 
     return {
       day,
-      reward: getSeasonSignInReward(claimOrder),
+      reward: getSeasonSignInReward(day),
       claimed: isClaimed,
       current: day === currentDay,
       future,
@@ -794,12 +806,15 @@ function App(): JSX.Element {
   const [seedInventory, setSeedInventory] = useState<Record<string, number>>(emptySeedInventory);
   const [globalItemInventory, setGlobalItemInventory] = useState<Record<string, number>>(emptyGlobalItemInventory);
   const [unlockedSeedIds, setUnlockedSeedIds] = useState<string[]>([]);
+  const [plantResearchState, setPlantResearchState] = useState<Record<string, ClientPlantResearchState>>({});
   const [seedRewardModal, setSeedRewardModal] = useState<SeedRewardModalState | null>(null);
   const [pendingRaidRewardModal, setPendingRaidRewardModal] = useState<SeedRewardModalState | null>(null);
   const [raidBattleReplay, setRaidBattleReplay] = useState<ClientRaidBattleReplay | null>(null);
   const [raidBattleAutoStart, setRaidBattleAutoStart] = useState(true);
   const [seedSelectionState, setSeedSelectionState] = useState<SeedSelectionState | null>(null);
   const [seedCodexState, setSeedCodexState] = useState<SeedCodexState | null>(null);
+  const [topResourcePanel, setTopResourcePanel] = useState<TopResourcePanel | null>(null);
+  const [topSpiritCodexSpiritId, setTopSpiritCodexSpiritId] = useState<string | null>(null);
   const [armyQueueRefreshReadyAt, setArmyQueueRefreshReadyAt] = useState<string | null>(null);
   const [selectedSeedId, setSelectedSeedId] = useState<string>('qilingya');
   const [fieldSeedAssignments, setFieldSeedAssignments] = useState<Record<string, string>>({});
@@ -941,6 +956,7 @@ function App(): JSX.Element {
       ...backpack.globalItemInventory,
     });
     setUnlockedSeedIds(mergedUnlockedSeedIds);
+    setPlantResearchState(backpack.plantResearch ?? {});
     if (!mergedUnlockedSeedIds.includes(selectedSeedId)) {
       setSelectedSeedId(mergedUnlockedSeedIds[0] ?? 'qilingya');
     }
@@ -1546,13 +1562,10 @@ function App(): JSX.Element {
   const tutorialTask = buildTutorialTask(tutorialStage);
   const vaultProgress = vaultResource ? parseCapacityResourceValue(vaultResource.value) : { current: 0, capacity: 0, ratio: 0 };
   const seasonProgress = buildSeasonProgress(bootstrap.season);
-  const seasonSignInDay = getSeasonSignInDay();
+  const seasonSignInDay = getSeasonSignInDay(bootstrap.season.currentWeek, bootstrap.season.totalWeeks);
   const seasonSignInDays = buildSeasonSignInDays(seasonSignInRecord, seasonSignInDay);
   const seasonSignInClaimedToday = seasonSignInRecord.claimedDays.includes(seasonSignInDay);
-  const seasonSignInTodayClaimOrder = seasonSignInClaimedToday
-    ? getSeasonSignInClaimOrder(seasonSignInRecord.claimedDays, seasonSignInDay)
-    : seasonSignInRecord.claimedDays.length + 1;
-  const seasonSignInTodayReward = getSeasonSignInReward(seasonSignInTodayClaimOrder);
+  const seasonSignInTodayReward = getSeasonSignInReward(seasonSignInDay);
   const seasonSignInMilestones = buildSeasonSignInMilestones(seasonSignInRecord.claimedDays.length);
   const tianjiTalismanCount = spiritState?.tianjiTalisman ?? globalItemInventory.tianjiTalisman ?? 0;
   const visibleSeedCatalog = seedCatalog.filter((seed) => isTutorialUser || seed.id !== TUTORIAL_STARTER_SEED_ID);
@@ -1564,11 +1577,35 @@ function App(): JSX.Element {
       ...seed,
       unlocked: unlockedSeedIds.includes(seed.id),
       quantity: seedInventory[seed.id] ?? 0,
+      research: plantResearchState[seed.id] ?? buildLocalPlantResearchState(seed.id, unlockedSeedIds.includes(seed.id), seedInventory[seed.id] ?? 0),
     })),
   }));
   const selectedSeedCodexItem = seedCodexState
     ? seedGroups.flatMap((group) => group.seeds).find((seed) => seed.id === seedCodexState.selectedSeedId) ?? null
     : null;
+  const firstVisibleUnlockedSeedId = seedGroups.flatMap((group) => group.seeds).find((seed) => seed.unlocked)?.id
+    ?? visibleSeedCatalog[0]?.id
+    ?? 'qilingya';
+  const topSpiritCodexSelectedId = topSpiritCodexSpiritId
+    ?? spiritState?.codex.find((entry) => entry.hasSeen || entry.ownedEver || entry.shardCount > 0 || entry.ownedCurrent)?.spiritId
+    ?? spiritState?.codex[0]?.spiritId
+    ?? null;
+  const spiritStableFull = spiritState ? spiritState.slots.filter((slot) => slot.spiritId).length >= spiritState.slots.length : false;
+  const backpackResourceItems: BackpackResourceItem[] = [
+    { id: 'spirit-root', label: '灵根', quantity: spiritState?.spiritRoot ?? 0, group: 'spirit', rarity: 'common' },
+    { id: 'spirit-marrow', label: '灵髓', quantity: spiritState?.spiritMarrow ?? 0, group: 'spirit', rarity: 'rare' },
+    { id: 'spirit-jade', label: '灵玉', quantity: spiritState?.spiritJade ?? 0, group: 'spirit', rarity: 'legendary' },
+    { id: 'ordinary-soul', label: '普通兽魂', quantity: spiritState?.ordinarySoul ?? 0, group: 'spirit', rarity: 'common' },
+    { id: 'rare-soul', label: '稀有兽魂', quantity: spiritState?.rareSoul ?? 0, group: 'spirit', rarity: 'rare' },
+    { id: 'legendary-soul', label: '传说兽魂', quantity: spiritState?.legendarySoul ?? 0, group: 'spirit', rarity: 'legendary' },
+    ...visibleSeedCatalog.map((seed) => ({
+      id: `essence-${seed.id}`,
+      label: `${seed.name}精华`,
+      quantity: seedInventory[seed.id] ?? 0,
+      group: 'farm' as const,
+      rarity: seed.rarity,
+    })),
+  ];
   const farmFields = scenes.farm.fields.map((field) => {
     const assignedSeedId = fieldSeedAssignments[field.id];
     const assignedSeed = assignedSeedId ? seedCatalogMap.get(assignedSeedId) : undefined;
@@ -1724,6 +1761,52 @@ function App(): JSX.Element {
       applyMutationResult(result);
     } catch {
       showToast('当前无法完成阵营上缴，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleSubmitFactionTask = async (task: ClientHomeFactionTaskSummary): Promise<void> => {
+    const actionKey = `faction:task:${task.id}`;
+    if (pendingActionKey === actionKey || task.status === 'claimed') {
+      return;
+    }
+
+    setPendingActionKey(actionKey);
+    try {
+      const result = await submitFactionTask({
+        taskId: task.id,
+      });
+      applyMutationResult(result);
+      if (task.requiredEssenceType) {
+        setSeedInventory((current) => ({
+          ...current,
+          [task.requiredEssenceType as string]: Math.max((current[task.requiredEssenceType as string] ?? 0) - Math.max(task.progressTarget - task.progressCurrent, 0), 0),
+        }));
+      }
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : '当前无法上缴精华，请稍后重试。';
+      showToast(message, 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleUnlockPlant = async (plantId: string): Promise<void> => {
+    const actionKey = `plant-unlock:${plantId}`;
+    if (pendingActionKey === actionKey) {
+      return;
+    }
+
+    setPendingActionKey(actionKey);
+    try {
+      const result = await unlockPlant({ plantType: plantId });
+      applyMutationResult(result);
+      syncSeedBackpackState(result.bootstrap.backpack);
+      showToast(result.summary, 'success');
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : '当前无法解锁灵植，请稍后重试。';
+      showToast(message, 'error');
     } finally {
       setPendingActionKey(null);
     }
@@ -1949,22 +2032,6 @@ function App(): JSX.Element {
         walletVersion: home.stateVersions.walletVersion,
       });
       applyMutationResult(result);
-      setSeedInventory((current) => {
-        const nextInventory = { ...current };
-        result.rewards
-          .filter((reward) => reward.kind === 'seed' && reward.seedId)
-          .forEach((reward) => {
-            nextInventory[reward.seedId as string] = (nextInventory[reward.seedId as string] ?? 0) + reward.quantity;
-          });
-        return nextInventory;
-      });
-      setUnlockedSeedIds((current) => {
-        const nextIds = new Set(current);
-        result.rewards
-          .filter((reward) => reward.kind === 'seed' && reward.seedId)
-          .forEach((reward) => nextIds.add(reward.seedId as string));
-        return Array.from(nextIds);
-      });
       setGlobalItemInventory((current) => {
         const nextItems = { ...current };
         result.rewards
@@ -2335,7 +2402,7 @@ function App(): JSX.Element {
           setSeedInventory((current) => {
             const nextInventory = { ...current };
             result.result.rewards
-              .filter((reward) => (reward.kind ?? 'seed') === 'seed' && reward.seedId)
+              .filter((reward) => ((reward.kind ?? 'seed') === 'seed' || reward.kind === 'essence') && reward.seedId)
               .forEach((reward) => {
                 nextInventory[reward.seedId as string] = (nextInventory[reward.seedId as string] ?? 0) + reward.quantity;
               });
@@ -2344,7 +2411,7 @@ function App(): JSX.Element {
           setUnlockedSeedIds((current) => {
             const nextIds = new Set(current);
             result.result.rewards
-              .filter((reward) => (reward.kind ?? 'seed') === 'seed' && reward.seedId)
+              .filter((reward) => ((reward.kind ?? 'seed') === 'seed' || reward.kind === 'essence') && reward.seedId)
               .forEach((reward) => nextIds.add(reward.seedId as string));
             return Array.from(nextIds);
           });
@@ -2651,13 +2718,7 @@ function App(): JSX.Element {
   const handleStartCultivation = async (fieldId: string, fieldCode: string, seedId: string): Promise<void> => {
     const seed = seedCatalogMap.get(seedId);
     if (!seed || !unlockedSeedIds.includes(seed.id)) {
-      showToast('当前只可选择已解锁的种子。', 'error');
-      return;
-    }
-
-    const currentCount = seedInventory[seed.id] ?? 0;
-    if (currentCount <= 0) {
-      showToast(`${seed.name} 库存不足，请先领取或获取种子。`, 'error');
+      showToast('当前只可选择已解锁的灵植。', 'error');
       return;
     }
 
@@ -2669,13 +2730,9 @@ function App(): JSX.Element {
     setPendingActionKey(actionKey);
 
     try {
-      const result = await startFieldCultivation({ fieldId, seedId: seed.id });
+      const result = await startFieldCultivation({ fieldId, seedId: seed.id, plantType: seed.id });
       applyMutationResult(result);
       setFarmTick(0);
-      setSeedInventory((current) => ({
-        ...current,
-        [seed.id]: Math.max((current[seed.id] ?? 0) - 1, 0),
-      }));
       setFieldSeedAssignments((current) => ({
         ...current,
         [fieldId]: seed.id,
@@ -2781,10 +2838,22 @@ function App(): JSX.Element {
           <section className="top-dock">
             <header className="top-bar">
               <div className="top-action-group">
-                <div className="season-progress-inline" aria-label="赛季进度">
+                <button
+                  aria-label="赛季进度"
+                  className="season-progress-inline"
+                  onClick={() => {
+                    setGlobalFeatureModal({
+                      title: '赛季规则',
+                      eyebrow: '赛季',
+                      description: '查看赛季结算与重置规则，再决定本赛季的经营重点。',
+                      seasonResetRules: true,
+                    });
+                  }}
+                  type="button"
+                >
                   <span className="season-progress-inline-label">{seasonProgress.label}</span>
                   <span className="season-progress-inline-detail">{seasonProgress.detail}</span>
-                </div>
+                </button>
                 {!isTutorialUser ? (
                   <>
                     <button className="ghost-button top-action-button top-item-button" onClick={() => {
@@ -2798,8 +2867,8 @@ function App(): JSX.Element {
                     <button className="ghost-button top-action-button" onClick={() => {
                       setGlobalFeatureModal({
                         title: '赛季签到',
-                        eyebrow: '活动',
-                        description: '每个赛季 28 天，累计签到推进每日档位和阶段宝箱；漏签不清零。',
+                        eyebrow: '赛季',
+                        description: '按天签到领取天机符，本赛季累计签到也会逐步解锁阶段奖励。',
                         seasonSignIn: true,
                       });
                     }} type="button">
@@ -2873,6 +2942,20 @@ function App(): JSX.Element {
                 <span className="global-tianji-icon" aria-hidden="true">符</span>
                 <strong>{formatNumber(tianjiTalismanCount)}</strong>
               </div>
+              <button className="global-resource-pill global-resource-entry" onClick={() => {
+                setSeedCodexState({ selectedSeedId: firstVisibleUnlockedSeedId });
+              }} type="button">
+                灵植图鉴
+              </button>
+              <button className="global-resource-pill global-resource-entry" onClick={() => {
+                setTopSpiritCodexSpiritId(topSpiritCodexSelectedId);
+                setTopResourcePanel('spirit-codex');
+              }} type="button">
+                宠物图鉴
+              </button>
+              <button className="global-resource-pill global-resource-entry" onClick={() => setTopResourcePanel('resources')} type="button">
+                我的资源
+              </button>
             </section>
           </section>
 
@@ -2881,9 +2964,14 @@ function App(): JSX.Element {
               <HomeScene
                 claimingTaskId={pendingActionKey?.startsWith('home:daily-task:') ? pendingActionKey.replace('home:daily-task:', '') : null}
                 dailyTasks={dailyTasks}
+                factionTasks={home.factionTasks ?? []}
+                todayContribution={home.todayContribution ?? 0}
                 tutorialTask={tutorialTask}
                 onClaimTask={(taskId) => {
                   void handleClaimDailyTask(taskId);
+                }}
+                onSubmitFactionTask={(task) => {
+                  void handleSubmitFactionTask(task);
                 }}
                 onNavigate={navigateToScene}
                 onTutorialAction={handleTutorialTaskAction}
@@ -2902,6 +2990,7 @@ function App(): JSX.Element {
 
             {activeScene === 'farm' ? (
               <FarmScene
+                advantage={scenes.farm.advantage}
                 collectPresentation={farmCollectPresentation}
                 farmBoardMessage={farmBoard?.farmBoardMessage ?? ''}
                 farmBoardUpdatedAt={farmBoard?.farmBoardUpdatedAt ?? null}
@@ -2911,16 +3000,12 @@ function App(): JSX.Element {
                   void handleFarmAction(action, fieldId, fieldCode);
                 }}
                 onOpenFarmBoard={handleOpenFarmBoardEditor}
-                onOpenSeedCodex={() => {
-                  setSeedCodexState({
-                    selectedSeedId: selectedSeedId || unlockedSeedIds[0] || 'qilingya',
-                  });
-                }}
               />
             ) : null}
 
             {activeScene === 'raid' ? (
                 <ArmyScene
+                advantage={scenes.army.advantage}
                 busy={pendingActionKey?.startsWith('spirit:') ?? false}
                 onCompose={(spiritId, slotIndex, element) => {
                   void handleComposeSpiritAction(spiritId, slotIndex, element);
@@ -2951,6 +3036,7 @@ function App(): JSX.Element {
             {activeScene === 'report' ? (
               <ReportScene
                 activeTab={raidHubTab}
+                advantage={scenes.raid.advantage}
                 followedTargets={followedTargets}
                 heroTitle={scenes.raid.hero.title}
                 onAction={handleSceneAction}
@@ -2994,8 +3080,13 @@ function App(): JSX.Element {
                 onDonate={(goldAmount) => {
                   void handleFactionDonate(goldAmount);
                 }}
+                onSubmitFactionTask={(task) => {
+                  void handleSubmitFactionTask(task);
+                }}
                 onTransferFaction={handleTransferFaction}
                 comparison={scenes.faction.comparison}
+                tasks={scenes.faction.tasks ?? []}
+                contributionLogs={scenes.faction.contributionLogs ?? []}
                 rankings={scenes.faction.rankings}
               />
             ) : null}
@@ -3065,6 +3156,31 @@ function App(): JSX.Element {
             >
               <GlobalFeatureModalContent
                 contributionTiers={globalFeatureModal.contributionTiers}
+                seasonResetRules={globalFeatureModal.seasonResetRules ? {
+                  title: '赛季结束时，重置战力与经营进度，保留长期图鉴与认知资产。',
+                  retained: [
+                    '已解锁的种子图鉴仍然可见',
+                    '已解锁的灵宠图鉴仍然可见',
+                    '灵宠碎片不清零',
+                    '已见过的种子与灵宠信息继续保留',
+                  ],
+                  reset: [
+                    '种子库存清零',
+                    '灵宠等级清零，需要重新培养',
+                    '金币清零',
+                    '法术等级清零',
+                    '阵营贡献清零',
+                    '灵宠当前血量与战斗养成进度按赛季重开',
+                  ],
+                  onOpenSignIn: () => {
+                    setGlobalFeatureModal({
+                      title: '赛季签到',
+                      eyebrow: '赛季',
+                      description: '按天签到领取天机符，本赛季累计签到也会逐步解锁阶段奖励。',
+                      seasonSignIn: true,
+                    });
+                  },
+                } : undefined}
                 seasonSignIn={globalFeatureModal.seasonSignIn ? {
                   record: seasonSignInRecord,
                   todayReward: seasonSignInTodayReward,
@@ -3095,85 +3211,43 @@ function App(): JSX.Element {
             />
           ) : null}
           {seedCodexState && selectedSeedCodexItem ? (
-            <section className="seed-codex-screen" role="dialog" aria-modal="true" aria-label="灵植图鉴">
-              <div className="seed-codex-topbar">
-                <div className="seed-codex-title-block">
-                  <p className="eyebrow">灵植图鉴</p>
-                  <p className="seed-codex-tip">点击植物图标切换详情</p>
-                </div>
-                <button className="ghost-button small" onClick={() => setSeedCodexState(null)} type="button">关闭</button>
-              </div>
-
-              <div className="seed-codex-body">
-                {seedGroups.map((group) => (
-                  <section className="panel-card seed-codex-rarity-row" key={group.rarity}>
-                    <div className="seed-codex-rarity-head">
-                      <strong>{group.label}</strong>
-                    </div>
-                    <div className="seed-codex-icon-grid">
-                      {group.seeds.map((seed) => (
-                        <button
-                          aria-label={seed.unlocked ? seed.name : '尚未发现'}
-                          className={`seed-codex-icon ${seed.unlocked ? 'is-unlocked' : 'is-locked'} ${seed.id === selectedSeedCodexItem.id && seed.unlocked ? 'is-selected' : ''}`}
-                          disabled={!seed.unlocked}
-                          key={seed.id}
-                          onClick={() => {
-                            if (!seed.unlocked) {
-                              return;
-                            }
-
-                            setSeedCodexState({ selectedSeedId: seed.id });
-                          }}
-                          type="button"
-                        >
-                          <span>{seed.unlocked ? seed.name.slice(0, 2) : '？？'}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                ))}
-
-                <section className={`seed-codex-detail-card ${selectedSeedCodexItem?.unlocked ? '' : 'is-undiscovered'}`}>
-                  {selectedSeedCodexItem?.unlocked ? (
-                    <>
-                      <div className="seed-codex-detail-head">
-                        <div>
-                          <p className="eyebrow">{seedRarityLabels[selectedSeedCodexItem.rarity]}</p>
-                          <h3>{selectedSeedCodexItem.name}</h3>
-                        </div>
-                      </div>
-                      <p className="seed-codex-lore">{selectedSeedCodexItem.lore}</p>
-                      <div className="seed-codex-stats">
-                        <div className="seed-codex-stat-row">
-                          <strong>成熟时间</strong>
-                          <span>{formatProtectionCountdown(selectedSeedCodexItem.stageSeconds.seeded + selectedSeedCodexItem.stageSeconds.growing)}</span>
-                        </div>
-                        <div className="seed-codex-stat-row">
-                          <strong>丰熟窗口</strong>
-                          <span>基础 30 分钟，可被观星术延长</span>
-                        </div>
-                        <div className="seed-codex-stat-row">
-                          <strong>收益</strong>
-                          <span>成长 {formatNumber(selectedSeedCodexItem.stageGold.growing)} / 丰熟 {formatNumber(selectedSeedCodexItem.stageGold.mature)} / 枯萎 {formatNumber(selectedSeedCodexItem.stageGold.withered)}</span>
-                        </div>
-                      </div>
-                      <div className="seed-codex-strategy">
-                        <strong>策略建议</strong>
-                        <p>{selectedSeedCodexItem.description}</p>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="seed-codex-undiscovered-text">尚未发现</p>
-                  )}
-                </section>
-              </div>
-            </section>
+            <PlantCodexModal
+              formatDuration={formatProtectionCountdown}
+              formatNumber={formatNumber}
+              groups={seedGroups.map((group) => ({ ...group, plants: group.seeds }))}
+              busyPlantId={pendingActionKey?.startsWith('plant-unlock:') ? pendingActionKey.replace('plant-unlock:', '') : null}
+              onClose={() => setSeedCodexState(null)}
+              onSelectPlant={(plantId) => setSeedCodexState({ selectedSeedId: plantId })}
+              onUnlockPlant={(plantId) => {
+                void handleUnlockPlant(plantId);
+              }}
+              selectedPlant={selectedSeedCodexItem}
+            />
+          ) : null}
+          {topResourcePanel === 'spirit-codex' && spiritState ? (
+            <SpiritCodexModal
+              entries={spiritState.codex}
+              onClose={() => setTopResourcePanel(null)}
+              onSelectSpirit={setTopSpiritCodexSpiritId}
+              selectedSpiritId={topSpiritCodexSelectedId}
+              stableFull={spiritStableFull}
+            />
+          ) : null}
+          {topResourcePanel === 'resources' ? (
+            <ResourceBackpackModal
+              formatNumber={formatNumber}
+              items={backpackResourceItems}
+              onClose={() => setTopResourcePanel(null)}
+            />
           ) : null}
           {seedRewardModal ? (
             <SeedRewardModal
               confirming={pendingActionKey === 'faction:stipend' || pendingActionKey === 'spirit:ad-reward' || pendingActionKey === 'tutorial:starter-seeds'}
               getItemLabel={(item) => {
                 const seed = item.seedId ? seedCatalogMap.get(item.seedId) : undefined;
+                if (seedRewardModal.confirmAction === 'claim-faction-stipend' && seed) {
+                  return `${seed.name}精华`;
+                }
                 return seed?.name ?? item.label ?? item.itemId ?? item.seedId ?? '奖励';
               }}
               items={seedRewardModal.items}

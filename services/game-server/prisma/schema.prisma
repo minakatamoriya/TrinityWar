@@ -34,6 +34,12 @@ enum TaskStatus {
   CLAIMED
 }
 
+enum DailyFactionTaskType {
+  ESSENCE_SUBMIT_BASIC
+  ESSENCE_SUBMIT_FOCUS
+  CONFLICT_RAID
+}
+
 enum RaidOrderMode {
   SINGLE
   BOUNTY
@@ -147,6 +153,9 @@ model Player {
   fieldHarvestLogs        FieldHarvestLog[]
   fieldSlots              PlayerFieldSlot[]
   seedInventory           PlayerSeedInventory[]
+  plantResearch           PlayerPlantResearch[]
+  dailyFactionTasks       DailyFactionTask[]
+  essenceTransactionLogs  EssenceTransactionLog[]
   spiritCodex             PlayerSpiritCodex[]
   spiritFeedLogs          SpiritFeedLog[]
   spiritBreakthroughLogs  SpiritBreakthroughLog[]
@@ -209,6 +218,7 @@ model Faction {
   players                 Player[]                 @relation("PlayerFaction")
   members                 FactionMember[]
   factionContributionLogs FactionContributionLog[]
+  dailyFactionTasks       DailyFactionTask[]
 
   @@unique([code])
   @@unique([name])
@@ -363,6 +373,7 @@ model SeedDefinition {
 
   fieldSlots      PlayerFieldSlot[]
   playerInventory PlayerSeedInventory[]
+  plantResearch   PlayerPlantResearch[]
 
   @@unique([seedId])
   @@index([rarity, sortOrder])
@@ -713,6 +724,23 @@ model PlayerSeedInventory {
   @@map("player_seed_inventory")
 }
 
+model PlayerPlantResearch {
+  id               String   @id @default(cuid())
+  playerId         String   @map("player_id")
+  seedDefinitionId String   @map("seed_definition_id")
+  discoveredAt     DateTime @default(now()) @map("discovered_at")
+  researchVersion  Int      @default(1) @map("research_version")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  player         Player         @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  seedDefinition SeedDefinition @relation(fields: [seedDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, seedDefinitionId])
+  @@index([playerId])
+  @@map("player_plant_research")
+}
+
 model PlayerFieldSlot {
   id                   String      @id @default(cuid())
   playerId             String      @map("player_id")
@@ -721,6 +749,10 @@ model PlayerFieldSlot {
   unlockCastleLevel    Int         @map("unlock_castle_level")
   status               FieldStatus @default(LOCKED)
   seedDefinitionId     String?     @map("seed_definition_id")
+  expectedEssenceYield Int         @default(0) @map("expected_essence_yield")
+  stolenEssenceYield   Int         @default(0) @map("stolen_essence_yield")
+  harvestedEssenceYield Int        @default(0) @map("harvested_essence_yield")
+  lastStolenAt         DateTime?   @map("last_stolen_at")
   investedGold         Int         @default(0) @map("invested_gold")
   currentClaimableGold Int         @default(0) @map("current_claimable_gold")
   harvestedGoldTotal   Int         @default(0) @map("harvested_gold_total")
@@ -832,8 +864,11 @@ model FactionContributionLog {
   id                String   @id @default(cuid())
   factionId         String   @map("faction_id")
   playerId          String   @map("player_id")
-  donatedGold       Int      @map("donated_gold")
+  donatedGold       Int      @default(0) @map("donated_gold")
   contributionDelta Int      @map("contribution_delta")
+  sourceType        String   @default("gold-donation") @map("source_type")
+  sourceId          String?  @map("source_id")
+  metadataJson      Json?    @map("metadata_json")
   createdAt         DateTime @default(now()) @map("created_at")
 
   faction Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)
@@ -842,6 +877,47 @@ model FactionContributionLog {
   @@index([factionId, createdAt])
   @@index([playerId, createdAt])
   @@map("faction_contribution_log")
+}
+
+model DailyFactionTask {
+  id                    String               @id @default(cuid())
+  playerId              String               @map("player_id")
+  factionId             String               @map("faction_id")
+  taskDate              String               @map("task_date")
+  taskType              DailyFactionTaskType @map("task_type")
+  requiredEssenceType   String?              @map("required_essence_type")
+  requiredAmount        Int                  @map("required_amount")
+  progressAmount        Int                  @default(0) @map("progress_amount")
+  rewardContribution    Int                  @map("reward_contribution")
+  status                TaskStatus           @default(IN_PROGRESS)
+  generatedAt           DateTime             @default(now()) @map("generated_at")
+  completedAt           DateTime?            @map("completed_at")
+  refreshedFromTaskId   String?              @map("refreshed_from_task_id")
+
+  player  Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  faction Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, taskDate, taskType])
+  @@index([playerId, taskDate, status])
+  @@index([factionId, taskDate])
+  @@map("daily_faction_task")
+}
+
+model EssenceTransactionLog {
+  id              String   @id @default(cuid())
+  playerId        String   @map("player_id")
+  essenceType     String   @map("essence_type")
+  delta           Int
+  reason          String
+  sourceId        String?  @map("source_id")
+  balanceAfter    Int      @map("balance_after")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([essenceType, createdAt])
+  @@map("essence_transaction_log")
 }
 
 model TaskRewardLog {

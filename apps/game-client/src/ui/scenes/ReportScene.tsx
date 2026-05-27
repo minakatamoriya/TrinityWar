@@ -1,4 +1,4 @@
-import type { ClientRaidTarget, ClientReportEntry, ClientSceneAction } from '@trinitywar/shared';
+import type { ClientFactionAdvantagePanel, ClientRaidTarget, ClientReportEntry, ClientSceneAction } from '@trinitywar/shared';
 import { ReportCard } from '../ReportCard';
 import { RaidTargetCard } from '../raid/RaidTargetCard';
 
@@ -12,6 +12,7 @@ interface FollowedRaidTargetRow {
 
 interface ReportSceneProps {
   activeTab: RaidHubTabKey;
+  advantage?: ClientFactionAdvantagePanel;
   heroTitle: string;
   refreshLabel: string;
   refreshPending: boolean;
@@ -30,6 +31,7 @@ interface ReportSceneProps {
 export function ReportScene(props: ReportSceneProps): JSX.Element {
   const {
     activeTab,
+    advantage,
     heroTitle,
     refreshLabel,
     refreshPending,
@@ -56,6 +58,22 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
 
       {activeTab === 'targets' ? (
         <div className="scene-scroll raid-scene-scroll">
+          {advantage ? (
+            <article className="panel-card faction-advantage-panel">
+              <div className="panel-head">
+                <h4>{advantage.factionName}优势</h4>
+                <span className="soft-tag">{advantage.title}</span>
+              </div>
+              <p className="panel-text">{advantage.summary}</p>
+              {advantage.details.length > 0 ? (
+                <ul className="mini-list">
+                  {advantage.details.map((detail) => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </article>
+          ) : null}
           <div className="raid-toolbar panel-card compact-raid-toolbar">
             <p className="raid-toolbar-text">{heroTitle}</p>
             <button className="secondary-button" disabled={refreshPending} onClick={onRefresh} type="button">

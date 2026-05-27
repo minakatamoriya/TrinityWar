@@ -61,6 +61,8 @@ export interface PlayerFieldInitializationInput {
 const fieldUnlockMilestones = [1, 5, 10, 15];
 const starterSeedInventory: Record<string, { quantity: number; unlocked: boolean }> = {
   qilingya: { quantity: 0, unlocked: true },
+  qinglingmai: { quantity: 0, unlocked: true },
+  xunyamai: { quantity: 0, unlocked: true },
 };
 const STARTER_SEED_FALLBACKS = ['qilingya', 'qinglingmai'] as const;
 

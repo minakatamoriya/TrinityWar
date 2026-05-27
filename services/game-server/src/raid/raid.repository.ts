@@ -188,7 +188,7 @@ export class RaidRepository {
           select: {
             id: true,
             nickname: true,
-            faction: { select: { name: true } },
+            faction: { select: { id: true, name: true, code: true } },
             wallet: {
               select: {
                 vaultGold: true,
@@ -240,7 +240,21 @@ export class RaidRepository {
           select: {
             id: true,
             nickname: true,
-            faction: { select: { name: true } },
+            faction: { select: { name: true, code: true } },
+            seedInventory: {
+              select: {
+                id: true,
+                quantity: true,
+                seedDefinition: {
+                  select: {
+                    id: true,
+                    seedId: true,
+                    label: true,
+                    rarity: true,
+                  },
+                },
+              },
+            },
             spiritSlots: {
               where: { isMain: true },
               take: 1,

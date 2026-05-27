@@ -46,6 +46,8 @@ interface DevVerificationAccount {
 
 const NEW_PLAYER_SEED_INVENTORY: PlayerInitializationInput['seedInventory'] = {
   qilingya: { quantity: 0, unlocked: true },
+  qinglingmai: { quantity: 0, unlocked: true },
+  xunyamai: { quantity: 0, unlocked: true },
 };
 const NEW_PLAYER_SPIRIT_STATE: PlayerInitializationInput['spirit'] = {
   createStarterSpirit: false,

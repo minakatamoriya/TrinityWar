@@ -11,6 +11,10 @@ import type {
   ClientClaimFactionStipendResponse,
   ClientCollectFieldRequest,
   ClientFactionDonateRequest,
+  ClientFactionTaskSubmitRequest,
+  ClientFactionTaskSubmitResponse,
+  ClientUnlockPlantRequest,
+  ClientUnlockPlantResponse,
   ClientCollectFieldResponse,
   ClientRecruitArmyRequest,
   ClientResetDemoStateResponse,
@@ -23,7 +27,7 @@ import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
 import { createUnauthorizedError } from '../common/errors/index.js';
 import { ClientCommandService } from './client-command.service.js';
-import { ClaimDailyTaskRequestDto, ClaimPendingRequestDto, ClaimStarterSeedRequestDto, CollectFieldRequestDto, FactionDonateRequestDto, ClaimFactionStipendRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UpgradeBuildingRequestDto } from './dto.js';
+import { ClaimDailyTaskRequestDto, ClaimPendingRequestDto, ClaimStarterSeedRequestDto, CollectFieldRequestDto, FactionDonateRequestDto, FactionTaskSubmitRequestDto, ClaimFactionStipendRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UnlockPlantRequestDto, UpgradeBuildingRequestDto } from './dto.js';
 
 @ApiTags('client')
 @Controller('client/actions')
@@ -196,6 +200,48 @@ export class ClientCommandController {
     });
   }
 
+  @Post('submit-faction-task')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: FactionTaskSubmitRequestDto })
+  @ApiOkResponse({ description: 'Submit essence to a daily faction task.' })
+  async submitFactionTask(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: ClientFactionTaskSubmitRequest,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<ClientFactionTaskSubmitResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.submitFactionTask({
+      playerId: currentPlayer.playerId,
+      request: body as FactionTaskSubmitRequestDto,
+      idempotencyKey,
+    });
+  }
+
+  @Post('unlock-plant')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: UnlockPlantRequestDto })
+  @ApiOkResponse({ description: 'Unlock a discovered plant with essence and contribution requirements.' })
+  async unlockPlant(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: ClientUnlockPlantRequest,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<ClientUnlockPlantResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.unlockPlant({
+      playerId: currentPlayer.playerId,
+      request: body as UnlockPlantRequestDto,
+      idempotencyKey,
+    });
+  }
+
   @Post('claim-faction-stipend')
   @UseGuards(AuthPlaceholderGuard)
   @ApiBearerAuth()
@@ -242,6 +288,8 @@ defineRouteParamTypes(ClientCommandController.prototype, 'startCultivation', [Ob
 defineRouteParamTypes(ClientCommandController.prototype, 'recruitArmy', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'upgradeBuilding', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'donateFaction', [Object, Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'submitFactionTask', [Object, Object, Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'unlockPlant', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimFactionStipend', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'resetDemoState', [Object]);
 

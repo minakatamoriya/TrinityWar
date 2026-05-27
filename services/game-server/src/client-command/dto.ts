@@ -5,6 +5,8 @@ import type {
   ClientClaimFactionStipendRequest,
   ClientCollectFieldRequest,
   ClientFactionDonateRequest,
+  ClientFactionTaskSubmitRequest,
+  ClientUnlockPlantRequest,
   ClientBuildingUpgradeId,
   ClientCastleExtensionUpgradeId,
   ClientTerritoryUpgradeId,
@@ -23,6 +25,17 @@ export class ClaimPendingRequestDto implements ClientClaimPendingRequest {
 
 export class FactionDonateRequestDto implements ClientFactionDonateRequest {
   goldAmount!: number;
+}
+
+export class FactionTaskSubmitRequestDto implements ClientFactionTaskSubmitRequest {
+  taskId!: string;
+  amount?: number;
+  requestIdempotencyKey?: string;
+}
+
+export class UnlockPlantRequestDto implements ClientUnlockPlantRequest {
+  plantType!: string;
+  requestIdempotencyKey?: string;
 }
 
 export class ClaimFactionStipendRequestDto implements ClientClaimFactionStipendRequest {
@@ -52,7 +65,8 @@ export class CollectFieldRequestDto implements ClientCollectFieldRequest {
 
 export class StartCultivationRequestDto implements ClientStartCultivationRequest {
   fieldId!: string;
-  seedId!: string;
+  seedId?: string;
+  plantType?: string;
 }
 
 export class UpgradeBuildingRequestDto {

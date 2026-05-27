@@ -8,7 +8,8 @@ import { ClientReadService } from '../client-read/client-read.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
-import { DAILY_TASK_CONFIG } from '../lib/game-balance.js';
+import { DAILY_TASK_CONFIG, getFactionAdvantageConfig } from '../lib/game-balance.js';
+import { applyFactionSpiritPassiveExpBonus, getFactionSpiritFeedDurationSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { STARTER_SPIRIT_IDS } from '../seed/seed-data/spirits.js';
 
@@ -55,6 +56,7 @@ const SPIRIT_TRAIT_DEFINITIONS: Array<{ code: ClientSpiritTraitCode; label: stri
 
 type SpiritReadResource = {
   playerId: string;
+  factionCode?: string | null;
   spiritSoul: number;
   spiritRoot: number;
   spiritMarrow: number;
@@ -371,6 +373,15 @@ export class SpiritService {
           select: {
             spiritRoot: true,
             resourceVersion: true,
+            player: {
+              select: {
+                faction: {
+                  select: {
+                    code: true,
+                  },
+                },
+              },
+            },
           },
         }),
         client.playerSpiritSlot.findUnique({
@@ -397,9 +408,10 @@ export class SpiritService {
       assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
 
       const now = new Date();
-      const settled = settleSpiritProgress(slot, now);
+      const factionCode = (resource.player?.faction?.code ?? null) as FactionAdvantageCode;
+      const settled = settleSpiritProgress(slot, now, factionCode);
       const satiatedRemainingSeconds = Math.max(Math.floor(((settled.satiatedUntil?.getTime() ?? now.getTime()) - now.getTime()) / 1000), 0);
-      const satiatedSecondsAdded = SPIRIT_FEED_ONCE_SECONDS;
+      const satiatedSecondsAdded = getFactionSpiritFeedDurationSeconds(SPIRIT_FEED_ONCE_SECONDS, factionCode);
       const feedCount = Math.ceil(SPIRIT_FEED_ONCE_SECONDS / 3600 * SPIRIT_ROOT_PER_SATIATED_HOUR);
 
       if (resource.spiritRoot < feedCount) {
@@ -476,6 +488,15 @@ export class SpiritService {
             rareSoul: true,
             legendarySoul: true,
             resourceVersion: true,
+            player: {
+              select: {
+                faction: {
+                  select: {
+                    code: true,
+                  },
+                },
+              },
+            },
           },
         }),
         client.playerSpiritSlot.findUnique({
@@ -502,7 +523,7 @@ export class SpiritService {
       assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
 
       const now = new Date();
-      const settled = settleSpiritProgress(slot, now);
+      const settled = settleSpiritProgress(slot, now, (resource.player?.faction?.code ?? null) as FactionAdvantageCode);
       const targetStage = request.targetStage ?? Math.floor(settled.level / 10);
       if (!isBreakthroughLevel(settled.level) || targetStage !== Math.floor(settled.level / 10) || settled.breakthroughStage >= targetStage) {
         throw new BusinessError({ code: ErrorCode.BadRequest, message: 'Spirit is not at a pending breakthrough node.', statusCode: 400 });
@@ -1327,6 +1348,15 @@ export class SpiritService {
       client.playerSpiritResource.findUnique({
         where: { playerId },
         select: {
+          player: {
+            select: {
+              faction: {
+                select: {
+                  code: true,
+                },
+              },
+            },
+          },
           playerId: true,
           spiritSoul: true,
           spiritRoot: true,
@@ -1429,7 +1459,16 @@ export class SpiritService {
       });
     }
 
-    return { resource, slots, codex, shopPurchases, adRewardUsedToday };
+    return {
+      resource: {
+        ...resource,
+        factionCode: resource.player?.faction?.code ?? null,
+      },
+      slots,
+      codex,
+      shopPurchases,
+      adRewardUsedToday,
+    };
   }
 
   private async ensureNaturalTraitSlots(client: Prisma.TransactionClient, spiritSlotId: string, breakthroughStage: number): Promise<void> {
@@ -1618,7 +1657,7 @@ function buildSpiritState(
 ): ClientSpiritState {
   const now = new Date();
   const mappedSlots: ClientSpiritSlot[] = slots.map((slot) => {
-    const settled = slot.spiritDefinition ? settleSpiritProgress(slot, now) : {
+    const settled = slot.spiritDefinition ? settleSpiritProgress(slot, now, resource.factionCode ?? null) : {
       level: slot.level,
       exp: slot.exp,
       breakthroughStage: slot.breakthroughStage,
@@ -1679,6 +1718,7 @@ function buildSpiritState(
     slots: mappedSlots,
     codex: mappedCodex,
     readyToCompose: mappedCodex.filter((entry) => entry.readyToCompose),
+    factionAdvantage: getFactionAdvantageConfig(resource.factionCode ?? null) ?? undefined,
     breakthroughRequirement: buildBreakthroughRequirement(mainSlot, resource),
     shop: {
       items: buildShopItemsForState(shopPurchases),
@@ -1809,20 +1849,20 @@ function isAtPendingBreakthrough(level: number, breakthroughStage: number): bool
   return isBreakthroughLevel(level) && breakthroughStage < Math.floor(level / 10);
 }
 
-function getPassiveExpPerMinute(level: number): number {
+function getPassiveExpPerMinute(level: number, factionCode: FactionAdvantageCode = null): number {
+  let baseExpPerMinute = 150;
+
   if (level <= 2) {
-    return 5000;
+    baseExpPerMinute = 5000;
+  } else if (level <= 10) {
+    baseExpPerMinute = 1000;
+  } else if (level <= 20) {
+    baseExpPerMinute = 500;
+  } else if (level <= 30) {
+    baseExpPerMinute = 250;
   }
-  if (level <= 10) {
-    return 1000;
-  }
-  if (level <= 20) {
-    return 500;
-  }
-  if (level <= 30) {
-    return 250;
-  }
-  return 150;
+
+  return applyFactionSpiritPassiveExpBonus(baseExpPerMinute, factionCode);
 }
 
 function settleSpiritProgress(slot: {
@@ -1831,7 +1871,7 @@ function settleSpiritProgress(slot: {
   breakthroughStage: number;
   satiatedUntil: Date | null;
   lastExpSettledAt: Date | null;
-}, now: Date): {
+}, now: Date, factionCode: FactionAdvantageCode = null): {
   level: number;
   exp: number;
   breakthroughStage: number;
@@ -1855,7 +1895,7 @@ function settleSpiritProgress(slot: {
     ? Math.max(Math.floor((Math.min(satiatedUntilMs, nowMs) - lastSettledAtMs) / 1000), 0)
     : 0;
   const normalSeconds = Math.max(elapsedSeconds - satiatedSeconds, 0);
-  const passiveExpPerMinute = getPassiveExpPerMinute(slot.level);
+  const passiveExpPerMinute = getPassiveExpPerMinute(slot.level, factionCode);
   const normalExpGain = Math.floor(passiveExpPerMinute * normalSeconds / 60);
   const satiatedExpGain = Math.floor(passiveExpPerMinute * satiatedSeconds * (10_000 + SPIRIT_SATIATED_EXP_BONUS_BPS) / 10_000 / 60);
   const expGain = normalExpGain + satiatedExpGain;

@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import type { ClientFactionStipendSummary, ClientSceneContentResponse } from '@trinitywar/shared';
+import type { ClientFactionStipendSummary, ClientHomeFactionTaskSummary, ClientSceneContentResponse } from '@trinitywar/shared';
 
 interface FactionSceneProps {
   hero: ClientSceneContentResponse['faction']['hero'];
@@ -11,11 +10,14 @@ interface FactionSceneProps {
   factionTab: 'overview' | 'donate' | 'rank';
   comparison: ClientSceneContentResponse['faction']['comparison'];
   donate: ClientSceneContentResponse['faction']['donate'];
+  tasks?: ClientHomeFactionTaskSummary[];
+  contributionLogs?: NonNullable<ClientSceneContentResponse['faction']['contributionLogs']>;
   rankings: ClientSceneContentResponse['faction']['rankings'];
   onClaimStipend: () => void;
   onChangeTab: (tab: 'overview' | 'donate' | 'rank') => void;
   onContributionGuide: () => void;
   onDonate: (goldAmount: number) => void;
+  onSubmitFactionTask?: (task: ClientHomeFactionTaskSummary) => void;
   onTransferFaction: (factionName: string) => void;
 }
 
@@ -25,27 +27,20 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
     contribution,
     stipend,
     claimingStipend,
-    donating,
-    currentGold,
     factionTab,
     comparison,
     donate,
+    tasks = [],
+    contributionLogs = [],
     rankings,
     onClaimStipend,
     onChangeTab,
     onContributionGuide,
-    onDonate,
+    onSubmitFactionTask,
     onTransferFaction,
   } = props;
-  const [donateGoldAmount, setDonateGoldAmount] = useState(0);
-  const maxDonateGoldAmount = Math.floor(currentGold / donate.goldStep) * donate.goldStep;
-  const contributionGain = donateGoldAmount / donate.goldStep;
   const canClaimStipend = stipend?.status === 'available';
   const stipendButtonLabel = stipend?.status === 'claimed' ? '已领取' : '领取俸禄';
-
-  useEffect(() => {
-    setDonateGoldAmount((current) => Math.min(current, maxDonateGoldAmount));
-  }, [maxDonateGoldAmount]);
 
   return (
     <div className="scene-shell">
@@ -78,7 +73,7 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
           阵营对比
         </button>
         <button className={`tab-button ${factionTab === 'donate' ? 'active' : ''}`} onClick={() => onChangeTab('donate')} type="button">
-          增加贡献
+          今日任务
         </button>
         <button className={`tab-button ${factionTab === 'rank' ? 'active' : ''}`} onClick={() => onChangeTab('rank')} type="button">
           贡献排行
@@ -115,38 +110,53 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
         ) : null}
 
         {factionTab === 'donate' ? (
-          <article className="panel-card faction-donate-card">
-            <div className="faction-donate-copy">
-              <p className="eyebrow">{donate.title}</p>
-              <p className="muted">{donate.description}</p>
-              <p className="muted">{donate.contributionRule}</p>
-            </div>
-
-            <div className="faction-donate-slider-group">
-              <div className="faction-donate-slider-head">
-                <strong>金币 {donateGoldAmount}</strong>
-                <span>最大 {maxDonateGoldAmount}</span>
+          <>
+            <article className="panel-card faction-donate-card">
+              <div className="faction-donate-copy">
+                <p className="eyebrow">{donate.title}</p>
+                <p className="muted">{donate.description}</p>
+                <p className="muted">{donate.contributionRule}</p>
               </div>
-              <input
-                className="army-recruit-slider"
-                max={maxDonateGoldAmount}
-                min={0}
-                onChange={(event) => setDonateGoldAmount(Number(event.target.value))}
-                step={donate.goldStep}
-                type="range"
-                value={donateGoldAmount}
-              />
-            </div>
+            </article>
 
-            <div className="faction-donate-footer">
-              <div className="faction-donate-summary">
-                <strong>本次贡献值 +{contributionGain}</strong>
+            <article className="panel-card">
+              <div className="panel-head">
+                <h4>今日阵营任务</h4>
               </div>
-              <button className="secondary-button" disabled={donating || contributionGain <= 0} onClick={() => onDonate(donateGoldAmount)} type="button">
-                {donating ? '上缴中...' : '确认上缴'}
-              </button>
-            </div>
-          </article>
+              <div className="task-list">
+                {tasks.map((task, index) => (
+                  <div className={`task-row task-row-${task.status}`} key={task.id}>
+                    <span className="task-index">0{index + 1}</span>
+                    <div>
+                      <div className="task-row-head">
+                        <strong>{task.title}</strong>
+                        <span className="task-state-badge">{task.progressText}</span>
+                        <button className="text-link task-link" disabled={task.status === 'claimed' || task.action.label !== '上缴'} onClick={() => onSubmitFactionTask?.(task)} type="button">
+                          {task.action.label}
+                        </button>
+                      </div>
+                      <p>{task.description}</p>
+                      <p className="task-progress-line">库存 {task.requiredEssenceLabel ?? '精华'} x{task.currentEssenceQuantity} / 奖励 {task.rewardContribution} 贡献</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            {contributionLogs.length > 0 ? (
+              <article className="panel-card">
+                <div className="panel-head">
+                  <h4>贡献记录</h4>
+                </div>
+                {contributionLogs.map((log) => (
+                  <div className="stat-row" key={log.id}>
+                    <span>{log.sourceLabel}</span>
+                    <strong>+{log.contributionDelta}</strong>
+                  </div>
+                ))}
+              </article>
+            ) : null}
+          </>
         ) : null}
 
         {factionTab === 'rank' ? (

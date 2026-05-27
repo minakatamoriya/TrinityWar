@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type {
   ClientSpiritCodexEntry,
   ClientSpiritElement,
+  ClientFactionAdvantagePanel,
   ClientSpiritRarity,
   ClientSpiritRole,
   ClientSpiritRollMode,
@@ -12,6 +13,7 @@ import type {
 } from '@trinitywar/shared';
 
 interface ArmySceneProps {
+  advantage?: ClientFactionAdvantagePanel;
   playerFaction: string;
   spirit: ClientSpiritState;
   busy: boolean;
@@ -437,7 +439,7 @@ function SpiritStageCard(props: {
 }
 
 export function ArmyScene(props: ArmySceneProps): JSX.Element {
-  const { playerFaction, spirit, busy, onSetMain, onRecover, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits } = props;
+  const { advantage, playerFaction, spirit, busy, onSetMain, onRecover, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits } = props;
   const [codexOpen, setCodexOpen] = useState(false);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [selectedCodexSpiritId, setSelectedCodexSpiritId] = useState<string | null>(() => spirit.codex.find((entry) => isDiscovered(entry))?.spiritId ?? spirit.codex[0]?.spiritId ?? null);
@@ -557,6 +559,22 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   return (
     <div className="scene-shell">
       <div className="scene-scroll spirit-scene-scroll">
+        {advantage ? (
+          <article className="panel-card faction-advantage-panel">
+            <div className="panel-head">
+              <h4>{advantage.factionName}优势</h4>
+              <span className="soft-tag">{advantage.title}</span>
+            </div>
+            <p className="panel-text">{advantage.summary}</p>
+            {advantage.details.length > 0 ? (
+              <ul className="mini-list">
+                {advantage.details.map((detail) => (
+                  <li key={detail}>{detail}</li>
+                ))}
+              </ul>
+            ) : null}
+          </article>
+        ) : null}
         <section className="spirit-top-actions">
           <button className="spirit-codex-button-card" onClick={() => setCodexOpen(true)} type="button">
             <span>灵宠图鉴</span>

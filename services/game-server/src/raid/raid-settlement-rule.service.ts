@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { getFactionAdvantageConfig } from '../lib/game-balance.js';
+import { getFactionBattleAttackMultiplier } from '../lib/faction-advantage-formulas.js';
 
 type RaidOutcomeTier = 'perfect_win' | 'major_win' | 'minor_win' | 'draw' | 'minor_loss' | 'major_loss' | 'perfect_loss';
 type Element = 'METAL' | 'WOOD' | 'WATER' | 'FIRE' | 'EARTH';
@@ -175,14 +177,19 @@ function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string |
   let attack = snapshot.spiritDefinition.baseAttack + levelDelta * snapshot.spiritDefinition.growthAttack * rarityMultiplier;
   let maxHp = snapshot.spiritDefinition.baseHp + levelDelta * snapshot.spiritDefinition.growthHp * rarityMultiplier;
   const faction = normalizeFaction(snapshot.spiritDefinition.factionAffinity);
+  const playerFaction = normalizeFaction(factionName);
 
-  if (faction && faction === normalizeFaction(factionName)) {
+  if (faction && faction === playerFaction) {
+    const config = getFactionAdvantageConfig(faction);
+
     if (faction === 'immortal') {
       maxHp *= 1.08;
-    } else if (faction === 'demon') {
-      attack *= 1.08;
     } else if (faction === 'human') {
       maxHp *= 1.08;
+    }
+
+    if ((config?.modifiers.battleAttackBonusPercent ?? 0) > 0) {
+      attack *= getFactionBattleAttackMultiplier(faction);
     }
   }
 

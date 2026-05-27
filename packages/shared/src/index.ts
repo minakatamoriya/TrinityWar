@@ -33,6 +33,24 @@ export interface ClientSpiritDefinition {
   lore: string | null;
 }
 
+export interface ClientFactionAdvantageModifiers {
+  farmMatureYieldBonusPercent: number;
+  farmRipeWindowBonusPercent: number;
+  spiritPassiveExpBonusPercent: number;
+  spiritFeedDurationBonusPercent: number;
+  battleAttackBonusPercent: number;
+  battlePostRecoveryLostHpPercent: number;
+}
+
+export interface ClientFactionAdvantagePanel {
+  factionCode: 'human' | 'immortal' | 'demon';
+  factionName: string;
+  title: string;
+  summary: string;
+  details: string[];
+  modifiers: ClientFactionAdvantageModifiers;
+}
+
 export interface ClientSpiritSlot {
   slotIndex: number;
   spiritId: string | null;
@@ -115,6 +133,7 @@ export interface ClientSpiritState {
   slots: ClientSpiritSlot[];
   codex: ClientSpiritCodexEntry[];
   readyToCompose: ClientSpiritCodexEntry[];
+  factionAdvantage?: ClientFactionAdvantagePanel;
   breakthroughRequirement?: ClientSpiritBreakthroughRequirement | null;
   shop?: {
     items: ClientSpiritShopItem[];
@@ -259,9 +278,18 @@ export interface ClientBootstrapResponse {
 }
 
 export interface ClientSeedBackpack {
+  /**
+   * @deprecated Seed inventory now represents essence inventory in client-facing copy.
+   */
   seedInventory: Record<string, number>;
+  essenceInventory?: Record<string, number>;
   globalItemInventory: Record<string, number>;
+  /**
+   * @deprecated Use unlockedPlantIds for new UI.
+   */
   unlockedSeedIds: string[];
+  unlockedPlantIds?: string[];
+  plantResearch?: Record<string, ClientPlantResearchState>;
   starterSeedClaimed: boolean;
   tianjiTalismanClaimed: boolean;
   spiritSoulClaimed: boolean;
@@ -557,10 +585,25 @@ export type ClientFactionStipendStatus = 'available' | 'claimed' | 'unavailable'
 export type ClientFactionStipendRewardKind = 'gold' | 'seed' | 'ordinary-soul' | 'rare-soul' | 'legendary-soul';
 
 export interface ClientFactionStipendReward {
-  kind: ClientFactionStipendRewardKind;
+  kind: ClientFactionStipendRewardKind | 'essence';
   label: string;
   quantity: number;
   seedId?: string;
+  essenceType?: string;
+}
+
+export type ClientPlantResearchStatus = 'undiscovered' | 'discovered' | 'ready' | 'unlocked';
+
+export interface ClientPlantResearchState {
+  plantType: string;
+  discovered: boolean;
+  unlocked: boolean;
+  status: ClientPlantResearchStatus;
+  essenceRequired: number;
+  essenceOwned: number;
+  contributionRequired: number;
+  contributionOwned: number;
+  canUnlock: boolean;
 }
 
 export interface ClientFactionStipendSummary {
@@ -596,6 +639,24 @@ export interface ClientDailyTaskSummary {
   actionScene: ClientSceneKey;
 }
 
+export type ClientFactionTaskType = 'essence-submit-basic' | 'essence-submit-focus' | 'conflict-raid';
+
+export interface ClientHomeFactionTaskSummary {
+  id: string;
+  type: ClientFactionTaskType;
+  title: string;
+  description: string;
+  progressCurrent: number;
+  progressTarget: number;
+  progressText: string;
+  rewardContribution: number;
+  requiredEssenceType: string | null;
+  requiredEssenceLabel: string | null;
+  currentEssenceQuantity: number;
+  status: ClientDailyTaskStatus;
+  action: ClientSceneAction;
+}
+
 export interface HomeSummaryResponse {
   app: string;
   playerName: string;
@@ -619,6 +680,8 @@ export interface HomeSummaryResponse {
    */
   temporaryClaim: ClientTemporaryClaimSummary | null;
   dailyTasks: ClientDailyTaskSummary[];
+  factionTasks: ClientHomeFactionTaskSummary[];
+  todayContribution: number;
   primaryActions: HomeActionItem[];
 }
 
@@ -727,11 +790,12 @@ export interface ClientCollectFieldRequest {
   requestIdempotencyKey?: string;
 }
 
-export type ClientCollectRewardKind = 'seed' | 'spirit-root' | 'spirit-marrow' | 'spirit-jade';
+export type ClientCollectRewardKind = 'seed' | 'essence' | 'spirit-root' | 'spirit-marrow' | 'spirit-jade';
 
 export interface ClientCollectRewardItem {
   kind?: ClientCollectRewardKind;
   seedId?: string;
+  essenceType?: string;
   label: string;
   quantity: number;
 }
@@ -753,7 +817,11 @@ export interface ClientCollectFieldResponse {
 
 export interface ClientStartCultivationRequest {
   fieldId: string;
-  seedId: string;
+  /**
+   * @deprecated Use plantType for new UI.
+   */
+  seedId?: string;
+  plantType?: string;
 }
 
 export interface ClientRecruitArmyRequest {
@@ -774,6 +842,8 @@ export interface ClientRaidRewardItem {
   seedId: string;
   label: string;
   quantity: number;
+  kind?: 'seed' | 'essence';
+  essenceType?: string;
 }
 
 export interface ClientRaidBattleEvent {
@@ -856,6 +926,7 @@ export interface ClientRaidActionResponse {
     temporaryClaimExpiresAt: string | null;
     casualties: number;
     rewards: ClientRaidRewardItem[];
+    contributionGain?: number;
     battleEvents?: ClientRaidBattleEvent[];
     battleReplay?: ClientRaidBattleReplay;
     attackerHpAfter?: number | null;
@@ -971,8 +1042,30 @@ export interface ClientFarmField {
   progressRemainingSeconds: number;
   progressTotalSeconds: number;
   yieldGold: number;
+  expectedEssenceYield?: number;
+  stolenEssenceYield?: number;
+  harvestableEssenceYield?: number;
+  essenceLabel?: string | null;
   description: string;
   actions: ClientSceneAction[];
+}
+
+export interface ClientPlantInventoryItem {
+  plantType: string;
+  essenceType: string;
+  plantName: string;
+  essenceLabel: string;
+  rarity: ClientSpiritRarity;
+  unlocked: boolean;
+  discovered?: boolean;
+  researchStatus?: ClientPlantResearchStatus;
+  unlockEssenceRequired?: number;
+  unlockContributionRequired?: number;
+  canUnlock?: boolean;
+  essenceQuantity: number;
+  growSeconds: number;
+  matureSeconds: number;
+  expectedEssenceYield: number;
 }
 
 export interface ClientRaidTarget {
@@ -1031,6 +1124,8 @@ export interface ClientReportEntry {
     ownDamage: string;
     opponentDamage: string;
   };
+  rewards?: ClientRaidRewardItem[];
+  contributionGain?: number;
   unread?: boolean;
   revengeable?: boolean;
   raidMessage?: ClientRaidMessageSnapshot | null;
@@ -1080,7 +1175,30 @@ export interface ClientFactionLeaderboardEntry {
 }
 
 export interface ClientFactionDonateRequest {
+  /**
+   * @deprecated Gold donation no longer grants contribution. Use ClientFactionTaskSubmitRequest.
+   */
   goldAmount: number;
+}
+
+export interface ClientFactionTaskSubmitRequest {
+  taskId: string;
+  amount?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientFactionTaskSubmitResponse extends ClientStateMutationResponse {
+  task: ClientHomeFactionTaskSummary;
+}
+
+export interface ClientUnlockPlantRequest {
+  plantType: string;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientUnlockPlantResponse extends ClientStateMutationResponse {
+  plant: ClientPlantInventoryItem;
+  bootstrap: ClientBootstrapResponse;
 }
 
 export interface ClientArmyTrainingQueue {
@@ -1096,6 +1214,7 @@ export interface ClientArmySceneContent {
   unitCostGold: number;
   unitTrainingSeconds: number;
   queue: ClientArmyTrainingQueue | null;
+  advantage?: ClientFactionAdvantagePanel;
 }
 
 export interface ClientSceneContentResponse {
@@ -1107,12 +1226,15 @@ export interface ClientSceneContentResponse {
   army: ClientArmySceneContent;
   farm: {
     hero: ClientFarmHero;
+    advantage?: ClientFactionAdvantagePanel;
     fields: ClientFarmField[];
+    plants?: ClientPlantInventoryItem[];
     landDeeds?: ClientLandDeedProgress[];
     guide: ClientGuideSection;
   };
   raid: {
     hero: ClientFarmHero;
+    advantage?: ClientFactionAdvantagePanel;
     targets: ClientRaidTarget[];
     detail: ClientRaidDetail;
     messageTemplates: ClientRaidMessageTemplate[];
@@ -1127,6 +1249,14 @@ export interface ClientSceneContentResponse {
     contribution: ClientFactionContributionSummary;
     comparison: ClientFactionComparisonEntry[];
     donate: ClientFactionDonatePanel;
+    tasks: ClientHomeFactionTaskSummary[];
+    contributionLogs?: Array<{
+      id: string;
+      sourceType: string;
+      sourceLabel: string;
+      contributionDelta: number;
+      createdAt: string;
+    }>;
     stipend?: ClientFactionStipendSummary;
     rankings: ClientFactionLeaderboardEntry[];
   };

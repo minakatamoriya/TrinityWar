@@ -1,14 +1,17 @@
-import type { ClientDailyTaskSummary, ClientSceneKey } from '@trinitywar/shared';
+import type { ClientDailyTaskSummary, ClientHomeFactionTaskSummary, ClientSceneKey } from '@trinitywar/shared';
 
 interface HomeSceneProps {
   claimingTaskId: string | null;
   dailyTasks: ClientDailyTaskSummary[];
+  factionTasks: ClientHomeFactionTaskSummary[];
+  todayContribution: number;
   tutorialTask?: {
     title: string;
     description: string;
     actionLabel: string;
   } | null;
   onClaimTask: (taskId: string) => void;
+  onSubmitFactionTask: (task: ClientHomeFactionTaskSummary) => void;
   onNavigate: (scene: ClientSceneKey) => void;
   onTutorialAction?: () => void;
 }
@@ -21,8 +24,11 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
   const {
     claimingTaskId,
     dailyTasks,
+    factionTasks,
+    todayContribution,
     tutorialTask,
     onClaimTask,
+    onSubmitFactionTask,
     onNavigate,
     onTutorialAction,
   } = props;
@@ -72,6 +78,48 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
                     </div>
                     <p>{item.description}</p>
                     <p className="task-progress-line">{'\u8fdb\u5ea6'} {item.progressText} / {'\u5956\u52b1'} {formatNumber(item.rewardGold)} {'\u91d1\u5e01'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
+        ) : null}
+        {factionTasks.length > 0 ? (
+          <article className="panel-card home-task-card">
+            <div className="panel-head">
+              <h4>今日阵营任务</h4>
+              <span className="soft-tag">今日贡献 {formatNumber(todayContribution)}</span>
+            </div>
+            <div className="task-list">
+              {factionTasks.map((item, index) => (
+                <div className={`task-row task-row-${item.status}`} key={item.id}>
+                  <span className="task-index">0{index + 1}</span>
+                  <div>
+                    <div className="task-row-head">
+                      <strong>{item.title}</strong>
+                      <span className={`task-state-badge${item.status === 'completed' || item.status === 'claimed' ? ' task-state-badge-completed' : ''}`}>
+                        {item.status === 'claimed' ? '已完成' : item.progressText}
+                      </span>
+                      <button
+                        className="text-link task-link"
+                        disabled={item.status === 'claimed'}
+                        onClick={() => {
+                          if (item.action.label === '上缴') {
+                            onSubmitFactionTask(item);
+                            return;
+                          }
+                          onNavigate(item.action.target);
+                        }}
+                        type="button"
+                      >
+                        {item.action.label}
+                      </button>
+                    </div>
+                    <p>{item.description}</p>
+                    <p className="task-progress-line">
+                      进度 {item.progressText} / 奖励 {formatNumber(item.rewardContribution)} 贡献
+                      {item.requiredEssenceLabel ? ` / 库存 ${item.requiredEssenceLabel} x${formatNumber(item.currentEssenceQuantity)}` : ''}
+                    </p>
                   </div>
                 </div>
               ))}

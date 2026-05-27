@@ -310,6 +310,66 @@ export const FACTION_STIPEND_CONFIG = {
   ],
 };
 
+export const FACTION_ADVANTAGE_CONFIG = {
+  human: {
+    factionCode: 'human',
+    factionName: '人界',
+    title: '种田更强',
+    summary: '成熟收益更高，丰熟窗口更长，适合稳定经营。',
+    details: [
+      '丰熟窗口 +20%',
+      '成熟收益 +5%',
+      '已解锁种子和灵宠图鉴赛季内保留可见',
+    ],
+    modifiers: {
+      farmMatureYieldBonusPercent: 5,
+      farmRipeWindowBonusPercent: 20,
+      spiritPassiveExpBonusPercent: 0,
+      spiritFeedDurationBonusPercent: 0,
+      battleAttackBonusPercent: 0,
+      battlePostRecoveryLostHpPercent: 0,
+    },
+  },
+  immortal: {
+    factionCode: 'immortal',
+    factionName: '仙界',
+    title: '灵宠更强',
+    summary: '挂机经验更高，投喂续航更久，适合围绕主宠持续培养。',
+    details: [
+      '挂机经验 +10%',
+      '投喂加速时长 +25%',
+      '灵宠等级赛季重置后可更快重新养成',
+    ],
+    modifiers: {
+      farmMatureYieldBonusPercent: 0,
+      farmRipeWindowBonusPercent: 0,
+      spiritPassiveExpBonusPercent: 10,
+      spiritFeedDurationBonusPercent: 25,
+      battleAttackBonusPercent: 0,
+      battlePostRecoveryLostHpPercent: 0,
+    },
+  },
+  demon: {
+    factionCode: 'demon',
+    factionName: '魔界',
+    title: '战斗更强',
+    summary: '战斗伤害更高，战后恢复更强，适合主动出击。',
+    details: [
+      '战斗伤害 +5%',
+      '战后恢复已损生命 20%',
+      '更适合连续掠夺和压制节奏',
+    ],
+    modifiers: {
+      farmMatureYieldBonusPercent: 0,
+      farmRipeWindowBonusPercent: 0,
+      spiritPassiveExpBonusPercent: 0,
+      spiritFeedDurationBonusPercent: 0,
+      battleAttackBonusPercent: 5,
+      battlePostRecoveryLostHpPercent: 20,
+    },
+  },
+};
+
 export const TERRITORY_TECH_TRACKS = {
   protectionTech: {
     id: 'protectionTech',
@@ -495,6 +555,7 @@ export const GAME_DESIGN_CONFIG = {
   territoryTechs: TERRITORY_TECH_TRACKS,
   landDeeds: LAND_DEED_CONFIG,
   factionStipends: FACTION_STIPEND_CONFIG,
+  factionAdvantages: FACTION_ADVANTAGE_CONFIG,
   dailyTasks: DAILY_TASK_CONFIG,
 };
 
@@ -554,6 +615,7 @@ export const GAME_BALANCE = {
     donateGoldStep: 100,
     contributionPerDonateStep: 1,
     stipendTiers: FACTION_STIPEND_CONFIG.tiers,
+    advantages: FACTION_ADVANTAGE_CONFIG,
   },
   raid: {
     temporaryClaimMinutes: 0,
@@ -698,6 +760,14 @@ export function getFactionStipendTier(factionContribution) {
   return [...FACTION_STIPEND_CONFIG.tiers]
     .sort((left, right) => right.minContribution - left.minContribution)
     .find((tier) => contribution >= tier.minContribution) ?? FACTION_STIPEND_CONFIG.tiers[0] ?? null;
+}
+
+export function getFactionAdvantageConfig(factionCode) {
+  if (!factionCode) {
+    return null;
+  }
+
+  return FACTION_ADVANTAGE_CONFIG[factionCode] ?? null;
 }
 
 export function getDailyTaskRewardBudget(week) {

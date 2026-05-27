@@ -3,10 +3,17 @@ import type { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { LandDeedService } from '../land-deed/land-deed.service.js';
+import { getLocalDateKey } from '../lib/date-key.js';
+import { getFactionAdvantageConfig } from '../lib/game-balance.js';
+import { applyFactionBattlePostRecovery } from '../lib/faction-advantage-formulas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { buildRaidBattleReplay } from './raid-battle-replay.js';
 import { RaidRepository } from './raid.repository.js';
 import { RaidSettlementRuleService, type SpiritBattleSnapshot } from './raid-settlement-rule.service.js';
+
+const ESSENCE_LOOT_RATIO = 0.08;
+const ESSENCE_LOOT_MAX_PER_TYPE = 8;
+const ESSENCE_LOOT_PROTECTED_QUANTITY = 10;
 
 @Injectable()
 export class RaidSettlementService {
@@ -87,6 +94,25 @@ export class RaidSettlementService {
         ...settlementResult.rewardItems,
         ...settlementResult.battleEvents.map((event) => ({ ...event, type: 'battleEvent' })),
       ];
+      const essenceLoot = settlementResult.result === 'WIN'
+        ? await this.applyEssenceLoot(client, raidOrder)
+        : [];
+      const contributionGain = settlementResult.result === 'WIN' ? 15 : 0;
+      if (contributionGain > 0 && raidOrder.attacker.faction) {
+        await grantFactionContribution(client, {
+          playerId: raidOrder.attackerPlayerId,
+          factionId: raidOrder.attacker.faction.id,
+          contribution: contributionGain,
+          sourceType: 'raid-success',
+          sourceId: raidOrder.id,
+          metadata: { lootGold: settlementResult.lootGold },
+        });
+        await this.completeConflictFactionTasks(client, raidOrder.attackerPlayerId, raidOrder.attacker.faction.id);
+      }
+      rewardItemsJson.push(
+        ...essenceLoot,
+        ...(contributionGain > 0 ? [{ kind: 'contribution', label: '阵营贡献', quantity: contributionGain }] : []),
+      );
       const battleReplay = buildRaidBattleReplay(raidOrder.id, {
         result: settlementResult.result,
         lootGold: settlementResult.lootGold,
@@ -211,6 +237,139 @@ export class RaidSettlementService {
     });
   }
 
+  private async applyEssenceLoot(
+    client: Prisma.TransactionClient,
+    raidOrder: NonNullable<Awaited<ReturnType<RaidRepository['findRaidOrderForSettlement']>>>,
+  ): Promise<Array<{ kind: 'essence'; seedId: string; essenceType: string; label: string; quantity: number }>> {
+    const defenderInventory = raidOrder.defender.seedInventory
+      .filter((inventory) => inventory.quantity > ESSENCE_LOOT_PROTECTED_QUANTITY)
+      .sort((left, right) => {
+        const rarityDelta = getRarityWeight(right.seedDefinition.rarity) - getRarityWeight(left.seedDefinition.rarity);
+        if (rarityDelta !== 0) {
+          return rarityDelta;
+        }
+
+        return right.quantity - left.quantity;
+      })
+      .slice(0, 2);
+
+    const rewards: Array<{ kind: 'essence'; seedId: string; essenceType: string; label: string; quantity: number }> = [];
+
+    for (const inventory of defenderInventory) {
+      const available = Math.max(inventory.quantity - ESSENCE_LOOT_PROTECTED_QUANTITY, 0);
+      const quantity = Math.min(Math.max(Math.floor(available * ESSENCE_LOOT_RATIO), 1), ESSENCE_LOOT_MAX_PER_TYPE, available);
+
+      if (quantity <= 0) {
+        continue;
+      }
+
+      const defenderNextQuantity = inventory.quantity - quantity;
+      await client.playerSeedInventory.update({
+        where: { id: inventory.id },
+        data: {
+          quantity: { decrement: quantity },
+          inventoryVersion: { increment: 1 },
+        },
+      });
+      await createEssenceTransaction(client, {
+        playerId: raidOrder.defenderPlayerId,
+        essenceType: inventory.seedDefinition.seedId,
+        delta: -quantity,
+        reason: 'raid-looted',
+        sourceId: raidOrder.id,
+        balanceAfter: defenderNextQuantity,
+      });
+
+      const attackerInventory = await client.playerSeedInventory.upsert({
+        where: {
+          playerId_seedDefinitionId: {
+            playerId: raidOrder.attackerPlayerId,
+            seedDefinitionId: inventory.seedDefinition.id,
+          },
+        },
+        create: {
+          playerId: raidOrder.attackerPlayerId,
+          seedDefinitionId: inventory.seedDefinition.id,
+          quantity,
+        },
+        update: {
+          quantity: { increment: quantity },
+          inventoryVersion: { increment: 1 },
+        },
+        select: { quantity: true },
+      });
+      await discoverPlant(client, {
+        playerId: raidOrder.attackerPlayerId,
+        seedDefinitionId: inventory.seedDefinition.id,
+      });
+      await createEssenceTransaction(client, {
+        playerId: raidOrder.attackerPlayerId,
+        essenceType: inventory.seedDefinition.seedId,
+        delta: quantity,
+        reason: 'raid-loot',
+        sourceId: raidOrder.id,
+        balanceAfter: attackerInventory.quantity,
+      });
+
+      rewards.push({
+        kind: 'essence',
+        seedId: inventory.seedDefinition.seedId,
+        essenceType: inventory.seedDefinition.seedId,
+        label: `${inventory.seedDefinition.label}精华`,
+        quantity,
+      });
+    }
+
+    return rewards;
+  }
+
+  private async completeConflictFactionTasks(
+    client: Prisma.TransactionClient,
+    playerId: string,
+    factionId: string,
+  ): Promise<void> {
+    const dateKey = getLocalDateKey();
+    const tasks = await client.dailyFactionTask.findMany({
+      where: {
+        playerId,
+        factionId,
+        taskDate: dateKey,
+        taskType: 'CONFLICT_RAID',
+        status: 'IN_PROGRESS',
+      },
+      select: {
+        id: true,
+        requiredAmount: true,
+        progressAmount: true,
+        rewardContribution: true,
+      },
+    });
+
+    for (const task of tasks) {
+      const nextProgress = Math.min(task.progressAmount + 1, task.requiredAmount);
+      const completed = nextProgress >= task.requiredAmount;
+      await client.dailyFactionTask.update({
+        where: { id: task.id },
+        data: {
+          progressAmount: nextProgress,
+          status: completed ? 'CLAIMED' : 'IN_PROGRESS',
+          completedAt: completed ? new Date() : null,
+        },
+      });
+
+      if (completed) {
+        await grantFactionContribution(client, {
+          playerId,
+          factionId,
+          contribution: task.rewardContribution,
+          sourceType: 'faction-task-conflict',
+          sourceId: task.id,
+          metadata: { raidOrderId: task.id },
+        });
+      }
+    }
+  }
+
   async settleDueRaidOrders(input: { take?: number } = {}): Promise<{ settled: number; failed: number }> {
     const failedOrders = await this.raidRepository.findDueRaidOrders({
       statuses: ['SETTLEMENT_FAILED'],
@@ -309,12 +468,18 @@ export class RaidSettlementService {
     raidOrder: NonNullable<Awaited<ReturnType<RaidRepository['findRaidOrderForSettlement']>>>,
     settlementResult: ReturnType<RaidSettlementRuleService['calculate']>,
   ): Promise<void> {
+    const attackerFactionCode = normalizeFactionCode(raidOrder.attacker.faction?.code ?? readFactionName(raidOrder.attackerSnapshotJson));
+
     if (settlementResult.attackerSpiritSlotId && settlementResult.attackerNextHp !== null) {
+      const attackerMaxHp = settlementResult.attackerSpiritSlotId
+        ? (readSpiritSnapshot(raidOrder.attackerSnapshotJson)?.maxHp ?? buildSpiritSnapshotFromSlot(raidOrder.attacker.spiritSlots[0] ?? null)?.maxHp ?? settlementResult.attackerNextHp)
+        : settlementResult.attackerNextHp;
+      const recoveredAttackerHp = applyFactionBattlePostRecovery(settlementResult.attackerNextHp, attackerMaxHp, attackerFactionCode);
       await client.playerSpiritSlot.update({
         where: { id: settlementResult.attackerSpiritSlotId },
         data: {
-          currentHp: settlementResult.attackerNextHp,
-          status: settlementResult.attackerNextHp <= 0 ? 'WOUNDED' : settlementResult.attackerNextHp < 30 ? 'RESTING' : 'ACTIVE',
+          currentHp: recoveredAttackerHp,
+          status: recoveredAttackerHp <= 0 ? 'WOUNDED' : recoveredAttackerHp < 30 ? 'RESTING' : 'ACTIVE',
           slotVersion: { increment: 1 },
         },
       });
@@ -421,6 +586,24 @@ export class RaidSettlementService {
       }
     });
   }
+}
+
+function normalizeFactionCode(value: string | null | undefined): 'human' | 'immortal' | 'demon' | null {
+  if (!value) {
+    return null;
+  }
+
+  if (value === 'human' || value === '人界') {
+    return 'human';
+  }
+  if (value === 'immortal' || value === '仙界') {
+    return 'immortal';
+  }
+  if (value === 'demon' || value === '魔界') {
+    return 'demon';
+  }
+
+  return null;
 }
 
 interface DefenderFieldDeductionPlanEntry {
@@ -618,5 +801,107 @@ function invertSettlementTitle(title: string): string {
     return '完胜';
   }
   return '相持';
+}
+
+function getRarityWeight(rarity: string): number {
+  if (rarity === 'legendary') {
+    return 3;
+  }
+
+  if (rarity === 'rare') {
+    return 2;
+  }
+
+  return 1;
+}
+
+async function createEssenceTransaction(
+  client: Prisma.TransactionClient,
+  data: {
+    playerId: string;
+    essenceType: string;
+    delta: number;
+    reason: string;
+    sourceId?: string | null;
+    balanceAfter: number;
+  },
+): Promise<void> {
+  await client.essenceTransactionLog.create({
+    data: {
+      playerId: data.playerId,
+      essenceType: data.essenceType,
+      delta: data.delta,
+      reason: data.reason,
+      sourceId: data.sourceId,
+      balanceAfter: data.balanceAfter,
+    },
+  });
+}
+
+async function discoverPlant(
+  client: Prisma.TransactionClient,
+  input: {
+    playerId: string;
+    seedDefinitionId: string;
+  },
+): Promise<void> {
+  await client.playerPlantResearch.upsert({
+    where: {
+      playerId_seedDefinitionId: {
+        playerId: input.playerId,
+        seedDefinitionId: input.seedDefinitionId,
+      },
+    },
+    create: {
+      playerId: input.playerId,
+      seedDefinitionId: input.seedDefinitionId,
+      discoveredAt: new Date(),
+    },
+    update: {
+      researchVersion: { increment: 1 },
+    },
+  });
+}
+
+async function grantFactionContribution(
+  client: Prisma.TransactionClient,
+  input: {
+    playerId: string;
+    factionId: string;
+    contribution: number;
+    sourceType: string;
+    sourceId?: string | null;
+    metadata?: Prisma.InputJsonValue;
+  },
+): Promise<void> {
+  const contribution = Math.max(Math.floor(input.contribution), 0);
+  if (contribution <= 0) {
+    return;
+  }
+
+  await client.faction.update({
+    where: { id: input.factionId },
+    data: { contributionScore: { increment: contribution } },
+  });
+
+  await client.factionMember.updateMany({
+    where: {
+      playerId: input.playerId,
+      factionId: input.factionId,
+    },
+    data: { contributionScore: { increment: contribution } },
+  });
+
+  await client.factionContributionLog.create({
+    data: {
+      factionId: input.factionId,
+      playerId: input.playerId,
+      donatedGold: 0,
+      contributionDelta: contribution,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      metadataJson: input.metadata,
+    },
+  });
 }
 

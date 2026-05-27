@@ -1,9 +1,10 @@
 ﻿import { Injectable } from '@nestjs/common';
-import { APP_NAME, type ClientFactionStipendReward, type ClientFarmField, type ClientRaidSpiritPreview, type ClientSceneAction, type ClientSceneContentResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientFactionStipendReward, type ClientFarmField, type ClientHomeFactionTaskSummary, type ClientPlantInventoryItem, type ClientRaidRewardItem, type ClientRaidSpiritPreview, type ClientSceneAction, type ClientSceneContentResponse } from '@trinitywar/shared';
 import type { FieldStatus } from '@prisma/client';
 import {
   GAME_BALANCE,
   getCastleExtensionLevelConfig,
+  getFactionAdvantageConfig,
   getCastleExtensionTrack,
   getFactionStipendTier,
   getLandDeedConfig,
@@ -36,7 +37,9 @@ export class SceneContentAssembler {
       army: this.buildArmy(readModel, now),
       farm: {
         hero: this.buildFarmHero(readModel),
+        advantage: this.buildFactionAdvantage(readModel, 'farm'),
         fields: readModel.fieldSlots.map((field) => this.buildFarmField(field, now)),
+        plants: this.buildPlants(readModel),
         landDeeds: this.buildLandDeeds(readModel),
         guide: {
           title: '农场经营',
@@ -49,6 +52,7 @@ export class SceneContentAssembler {
       },
       raid: {
         hero: this.buildRaidHero(readModel),
+        advantage: this.buildFactionAdvantage(readModel, 'raid'),
         targets: visibleRaidTargets,
         detail: {
           advice: visibleRaidTargets.length > 0
@@ -169,6 +173,8 @@ export class SceneContentAssembler {
               opponentDamage: `${formatNumber(opponentDamage ?? 0)}%`,
             }
             : undefined,
+          rewards: normalizeRaidRewardItems(settlement?.rewardItemsJson),
+          contributionGain: getContributionGainFromRewardItems(settlement?.rewardItemsJson),
           revengeable: report.revengeAvailable,
           raidMessage: report.raidOrder.raidMessage && !report.raidOrder.raidMessage.isHidden
             ? {
@@ -235,6 +241,7 @@ export class SceneContentAssembler {
     return {
       unitCostGold: GAME_BALANCE.army.recruitGoldCostPerUnit,
       unitTrainingSeconds: GAME_BALANCE.army.recruitSecondsPerUnit,
+      advantage: this.buildFactionAdvantage(readModel, 'spirit'),
       queue: activeQueue
         ? {
           queuedUnits: activeQueue.queuedCount,
@@ -265,6 +272,9 @@ export class SceneContentAssembler {
   private buildFarmField(field: SceneContentReadModel['fieldSlots'][number], now: Date): ClientFarmField {
     const copy = FIELD_STATUS_COPY[field.status];
     const timing = getFieldTiming(field, now);
+    const expectedEssenceYield = field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition);
+    const stolenEssenceYield = Math.min(field.stolenEssenceYield, expectedEssenceYield);
+    const harvestableEssenceYield = Math.max(expectedEssenceYield - stolenEssenceYield, 0);
 
     return {
       id: field.id,
@@ -277,9 +287,51 @@ export class SceneContentAssembler {
       progressRemainingSeconds: timing.remainingSeconds,
       progressTotalSeconds: timing.totalSeconds,
       yieldGold: field.currentClaimableGold || field.seedDefinition?.baseYieldGold || 0,
+      expectedEssenceYield,
+      stolenEssenceYield,
+      harvestableEssenceYield,
+      essenceLabel: field.seedDefinition ? `${field.seedDefinition.label}精华` : null,
       description: buildFieldDescription(field),
       actions: buildFieldActions(field.status),
     };
+  }
+
+  private buildPlants(readModel: SceneContentReadModel): ClientPlantInventoryItem[] {
+    const contribution = readModel.player.factionMembers[0]?.contributionScore ?? 0;
+
+    return readModel.seedInventory.map((inventory) => {
+      const unlocked = Boolean(inventory.unlockedAt);
+      const discovered = unlocked || inventory.quantity > 0 || inventory.seedDefinition.plantResearch.length > 0;
+      const requirement = getPlantUnlockRequirement(
+        inventory.seedDefinition.seedId,
+        inventory.seedDefinition.rarity,
+        inventory.seedDefinition.sortOrder,
+      );
+      const essenceQuantity = Math.max(inventory.quantity, 0);
+      const canUnlock = discovered
+        && !unlocked
+        && requirement.essenceRequired > 0
+        && essenceQuantity >= requirement.essenceRequired
+        && contribution >= requirement.contributionRequired;
+
+      return {
+        plantType: inventory.seedDefinition.seedId,
+        essenceType: inventory.seedDefinition.seedId,
+        plantName: inventory.seedDefinition.label,
+        essenceLabel: `${inventory.seedDefinition.label}精华`,
+        rarity: mapSeedRarity(inventory.seedDefinition.rarity),
+        unlocked,
+        discovered,
+        researchStatus: unlocked ? 'unlocked' : canUnlock ? 'ready' : discovered ? 'discovered' : 'undiscovered',
+        unlockEssenceRequired: requirement.essenceRequired,
+        unlockContributionRequired: requirement.contributionRequired,
+        canUnlock,
+        essenceQuantity,
+        growSeconds: inventory.seedDefinition.growSeconds,
+        matureSeconds: inventory.seedDefinition.matureSeconds,
+        expectedEssenceYield: getExpectedEssenceYield(inventory.seedDefinition),
+      };
+    });
   }
 
   private buildLandDeeds(readModel: SceneContentReadModel): NonNullable<ClientSceneContentResponse['farm']['landDeeds']> {
@@ -307,7 +359,6 @@ export class SceneContentAssembler {
     const stipendTier = getFactionStipendTier(contribution);
     const stipendState = readModel.factionStipendStates[0] ?? null;
     const donateGoldStep = GAME_BALANCE.faction.donateGoldStep;
-    const contributionPerDonateStep = GAME_BALANCE.faction.contributionPerDonateStep;
     const contributionBonusPercent = getCurrentExtensionEffect('factionOfferingTech', readModel.buildings?.pendingClaimTechLevel ?? 0);
     const stipendRewards = toPublicFactionStipendRewards((stipendTier?.rewards ?? []) as ClientFactionStipendReward[]);
     const visibleStipendRewards = stipendState?.claimedAt
@@ -341,13 +392,21 @@ export class SceneContentAssembler {
         isCurrent: faction.id === currentFaction?.id,
       })),
       donate: {
-        title: '阵营上缴',
-        description: `上缴金币可增加个人贡献，贡献会提升每日俸禄档位。当前规则：每 ${formatNumber(donateGoldStep)} 金币 = ${formatNumber(contributionPerDonateStep)} 基础贡献。`,
+        title: '精华上缴',
+        description: '贡献主要来自今日阵营任务和上缴指定精华，金币不再直接兑换贡献。',
         goldStep: donateGoldStep,
         contributionRule: contributionBonusPercent > 0
-          ? `每上缴 ${formatNumber(donateGoldStep)} 金币获得 ${formatNumber(contributionPerDonateStep)} 基础贡献；同心诀当前 +${formatNumber(contributionBonusPercent)}%。`
-          : `每上缴 ${formatNumber(donateGoldStep)} 金币获得 ${formatNumber(contributionPerDonateStep)} 贡献；贡献越高，每日俸禄材料越好。`,
+          ? `同心诀当前 +${formatNumber(contributionBonusPercent)}%，后续可用于精华任务加成。`
+          : '首页每日 3 个阵营任务是首发贡献主入口。',
       },
+      tasks: buildFactionTasks(readModel),
+      contributionLogs: readModel.contributionLogs.map((log) => ({
+        id: log.id,
+        sourceType: log.sourceType,
+        sourceLabel: getContributionSourceLabel(log.sourceType),
+        contributionDelta: log.contributionDelta,
+        createdAt: log.createdAt.toISOString(),
+      })),
       stipend: currentFaction
         ? {
           title: '每日阵营俸禄',
@@ -368,6 +427,41 @@ export class SceneContentAssembler {
         note: `${formatNumber(faction.treasuryGold)} 金库`,
       })),
     };
+  }
+
+  private buildFactionAdvantage(
+    readModel: SceneContentReadModel,
+    scene: 'farm' | 'spirit' | 'raid',
+  ): ClientSceneContentResponse['farm']['advantage'] {
+    const factionCode = readModel.player.factionCode;
+    const config = getFactionAdvantageConfig(factionCode);
+
+    if (!config) {
+      return undefined;
+    }
+
+    if (factionCode === 'human' && scene === 'farm') {
+      return {
+        ...config,
+        summary: `人界优势：丰熟收益 +${formatNumber(config.modifiers.farmMatureYieldBonusPercent)}%，丰熟窗口 +${formatNumber(config.modifiers.farmRipeWindowBonusPercent)}%`,
+      };
+    }
+
+    if (factionCode === 'immortal' && scene === 'spirit') {
+      return {
+        ...config,
+        summary: `仙界优势：挂机经验 +${formatNumber(config.modifiers.spiritPassiveExpBonusPercent)}%，投喂时长 +${formatNumber(config.modifiers.spiritFeedDurationBonusPercent)}%`,
+      };
+    }
+
+    if (factionCode === 'demon' && scene === 'raid') {
+      return {
+        ...config,
+        summary: `魔界优势：战斗攻击 +${formatNumber(config.modifiers.battleAttackBonusPercent)}%，战后回血 ${formatNumber(config.modifiers.battlePostRecoveryLostHpPercent)}%`,
+      };
+    }
+
+    return undefined;
   }
 }
 
@@ -404,6 +498,90 @@ function buildFirstFactionStipendPreview(rewards: ClientFactionStipendReward[]):
     { kind: 'seed', seedId: 'qinglingmai', label: '青灵麦', quantity: 1 },
     { kind: 'seed', seedId: 'xunyamai', label: '风云稻', quantity: 1 },
   ];
+}
+
+function buildFactionTasks(readModel: SceneContentReadModel): ClientHomeFactionTaskSummary[] {
+  const essenceInventory = new Map(
+    readModel.seedInventory.map((item) => [item.seedDefinition.seedId, {
+      quantity: item.quantity,
+      label: `${item.seedDefinition.label}精华`,
+    }]),
+  );
+
+  return readModel.dailyFactionTasks.map((task) => {
+    const type = mapFactionTaskType(task.taskType);
+    const requiredEssence = task.requiredEssenceType ? essenceInventory.get(task.requiredEssenceType) : null;
+    const progressCurrent = Math.min(task.progressAmount, task.requiredAmount);
+    const remaining = Math.max(task.requiredAmount - progressCurrent, 0);
+    const status = mapTaskStatusForFaction(task.status);
+
+    return {
+      id: task.id,
+      type,
+      title: type === 'conflict-raid' ? '完成 1 次成功掠夺' : `上缴${requiredEssence?.label ?? task.requiredEssenceType ?? '精华'}`,
+      description: type === 'conflict-raid'
+        ? `完成冲突对抗，奖励 ${formatNumber(task.rewardContribution)} 贡献。`
+        : `上缴指定精华，奖励 ${formatNumber(task.rewardContribution)} 贡献。`,
+      progressCurrent,
+      progressTarget: task.requiredAmount,
+      progressText: status === 'claimed' ? '已完成' : `${progressCurrent}/${task.requiredAmount}`,
+      rewardContribution: task.rewardContribution,
+      requiredEssenceType: task.requiredEssenceType,
+      requiredEssenceLabel: requiredEssence?.label ?? (task.requiredEssenceType ? `${task.requiredEssenceType}精华` : null),
+      currentEssenceQuantity: requiredEssence?.quantity ?? 0,
+      status,
+      action: {
+        label: status === 'claimed'
+          ? '已完成'
+          : type === 'conflict-raid'
+            ? '去掠夺'
+            : (requiredEssence?.quantity ?? 0) >= Math.max(remaining, 1) ? '上缴' : '去种植',
+        target: type === 'conflict-raid' ? 'raid' : (requiredEssence?.quantity ?? 0) >= Math.max(remaining, 1) ? 'faction' : 'farm',
+        tone: status === 'claimed' ? 'ghost' : 'primary',
+        context: task.id,
+      },
+    };
+  });
+}
+
+function mapFactionTaskType(taskType: SceneContentReadModel['dailyFactionTasks'][number]['taskType']): ClientHomeFactionTaskSummary['type'] {
+  if (taskType === 'ESSENCE_SUBMIT_FOCUS') {
+    return 'essence-submit-focus';
+  }
+
+  if (taskType === 'CONFLICT_RAID') {
+    return 'conflict-raid';
+  }
+
+  return 'essence-submit-basic';
+}
+
+function mapTaskStatusForFaction(status: SceneContentReadModel['dailyFactionTasks'][number]['status']): ClientHomeFactionTaskSummary['status'] {
+  if (status === 'CLAIMED') {
+    return 'claimed';
+  }
+
+  if (status === 'COMPLETED') {
+    return 'completed';
+  }
+
+  return 'in-progress';
+}
+
+function getContributionSourceLabel(sourceType: string): string {
+  if (sourceType === 'faction-task-submit') {
+    return '精华上缴';
+  }
+
+  if (sourceType === 'raid-success') {
+    return '成功掠夺';
+  }
+
+  if (sourceType === 'field-steal') {
+    return '偷取精华';
+  }
+
+  return '贡献记录';
 }
 
 function getLocalDateKeyForAssembler(): string {
@@ -479,14 +657,14 @@ function buildFieldDescription(field: SceneContentReadModel['fieldSlots'][number
   }
 
   if (field.status === 'MATURE') {
-    return `当前可收取 ${formatNumber(field.currentClaimableGold)} 金币。`;
+    return `理论产出 ${formatNumber(field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition))} 个精华，已被偷 ${formatNumber(field.stolenEssenceYield)} 个。`;
   }
 
   if (field.status === 'WITHERED') {
-    return `已枯萎，当前保底可收取 ${formatNumber(field.currentClaimableGold)} 金币。`;
+    return `已枯萎，仍可收取 ${formatNumber(Math.max((field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition)) - field.stolenEssenceYield, 0))} 个精华。`;
   }
 
-  return `${field.seedDefinition?.label ?? '作物'} 培育中，预计收益 ${formatNumber(field.currentClaimableGold || field.seedDefinition?.baseYieldGold || 0)} 金币。`;
+  return `${field.seedDefinition?.label ?? '灵植'} 培育中，预计产出 ${formatNumber(field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition))} 个精华。`;
 }
 
 function buildFieldActions(status: FieldStatus): ClientFarmField['actions'] {
@@ -645,6 +823,83 @@ function mapSpiritRarity(rarity: string): ClientRaidSpiritPreview['rarity'] {
   }
 
   return null;
+}
+
+function mapSeedRarity(rarity: string): ClientPlantInventoryItem['rarity'] {
+  if (rarity === 'rare') {
+    return 'rare';
+  }
+
+  if (rarity === 'legendary') {
+    return 'legendary';
+  }
+
+  return 'common';
+}
+
+function getExpectedEssenceYield(seedDefinition: { rarity?: string; baseYieldGold?: number } | null): number {
+  if (!seedDefinition) {
+    return 0;
+  }
+
+  if (seedDefinition.rarity === 'legendary') {
+    return 8;
+  }
+
+  if (seedDefinition.rarity === 'rare') {
+    return 6;
+  }
+
+  return 10;
+}
+
+function getPlantUnlockRequirement(seedId: string, rarity: string, sortOrder: number): { essenceRequired: number; contributionRequired: number } {
+  if (seedId === 'qilingya' || seedId === 'qinglingmai' || seedId === 'xunyamai') {
+    return { essenceRequired: 0, contributionRequired: 0 };
+  }
+
+  if (rarity === 'legendary') {
+    return { essenceRequired: 30, contributionRequired: 800 };
+  }
+
+  if (rarity === 'rare') {
+    return { essenceRequired: 12, contributionRequired: 300 };
+  }
+
+  if (sortOrder >= 50) {
+    return { essenceRequired: 6, contributionRequired: 120 };
+  }
+
+  return { essenceRequired: 3, contributionRequired: 50 };
+}
+
+function normalizeRaidRewardItems(value: unknown): ClientRaidRewardItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => item && typeof item === 'object' && !Array.isArray(item) ? item as Record<string, unknown> : null)
+    .filter((item): item is Record<string, unknown> => Boolean(item && item.kind === 'essence' && typeof item.quantity === 'number'))
+    .map((item) => ({
+      kind: 'essence',
+      seedId: typeof item.seedId === 'string' ? item.seedId : typeof item.essenceType === 'string' ? item.essenceType : '',
+      essenceType: typeof item.essenceType === 'string' ? item.essenceType : typeof item.seedId === 'string' ? item.seedId : undefined,
+      label: typeof item.label === 'string' ? item.label : '精华',
+      quantity: Math.max(Math.floor(item.quantity as number), 0),
+    }))
+    .filter((item) => item.seedId.length > 0 && item.quantity > 0);
+}
+
+function getContributionGainFromRewardItems(value: unknown): number {
+  if (!Array.isArray(value)) {
+    return 0;
+  }
+
+  return value
+    .map((item) => item && typeof item === 'object' && !Array.isArray(item) ? item as Record<string, unknown> : null)
+    .filter((item): item is Record<string, unknown> => Boolean(item && item.kind === 'contribution' && typeof item.quantity === 'number'))
+    .reduce((sum, item) => sum + Math.max(Math.floor(item.quantity as number), 0), 0);
 }
 
 function getSpiritGlyph(label: string): string {

@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { APP_NAME, type ClientBootstrapResponse, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientBootstrapResponse, type ClientPlantResearchState, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { LandDeedService } from '../land-deed/land-deed.service.js';
@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ArmyTrainingLifecycleService } from './army-training-lifecycle.service.js';
 import { ClientReadRepository } from './client-read.repository.js';
 import { DailyTaskLifecycleService } from './daily-task-lifecycle.service.js';
+import { DailyFactionTaskLifecycleService } from './daily-faction-task-lifecycle.service.js';
 import { FieldLifecycleService } from './field-lifecycle.service.js';
 import { HomeSummaryAssembler } from './home-summary.assembler.js';
 import { PassiveIncomeLifecycleService } from './passive-income-lifecycle.service.js';
@@ -21,6 +22,7 @@ export class ClientReadService {
     @Inject(ArmyTrainingLifecycleService) private readonly armyTrainingLifecycleService: ArmyTrainingLifecycleService,
     @Inject(FieldLifecycleService) private readonly fieldLifecycleService: FieldLifecycleService,
     @Inject(DailyTaskLifecycleService) private readonly dailyTaskLifecycleService: DailyTaskLifecycleService,
+    @Inject(DailyFactionTaskLifecycleService) private readonly dailyFactionTaskLifecycleService: DailyFactionTaskLifecycleService,
     @Inject(PassiveIncomeLifecycleService) private readonly passiveIncomeLifecycleService: PassiveIncomeLifecycleService,
     @Inject(LandDeedService) private readonly landDeedService: LandDeedService,
     @Inject(HomeSummaryAssembler) private readonly homeSummaryAssembler: HomeSummaryAssembler,
@@ -58,11 +60,20 @@ export class ClientReadService {
             unlockedAt: true,
           },
         },
+        plantResearch: {
+          where: {
+            playerId,
+          },
+          select: {
+            discoveredAt: true,
+          },
+        },
       },
     });
 
     const seedInventory: Record<string, number> = {};
     const unlockedSeedIds: string[] = [];
+    const plantResearch: Record<string, ClientPlantResearchState> = {};
     const spiritResource = await db.playerSpiritResource.findUnique({
       where: { playerId },
       select: {
@@ -75,18 +86,44 @@ export class ClientReadService {
     });
     const playerState = await db.player.findUnique({
       where: { id: playerId },
-      select: { castleLevelCache: true },
+      select: {
+        castleLevelCache: true,
+        factionMembers: {
+          take: 1,
+          select: { contributionScore: true },
+        },
+      },
     });
     const dateKey = getLocalDateKey();
     const dailySpiritSoulAmount = Math.max(Math.floor(playerState?.castleLevelCache ?? 1), 1);
+    const contribution = playerState?.factionMembers[0]?.contributionScore ?? 0;
 
     for (const seedDefinition of seedDefinitions) {
       const inventoryEntry = seedDefinition.playerInventory[0];
       const quantity = inventoryEntry?.quantity ?? 0;
+      const unlocked = (inventoryEntry?.unlockedAt ?? null) !== null;
+      const discovered = unlocked || quantity > 0 || Boolean(seedDefinition.plantResearch[0]?.discoveredAt);
+      const unlockRequirement = getPlantUnlockRequirement(seedDefinition.seedId, seedDefinition.rarity, seedDefinition.sortOrder);
+      const canUnlock = discovered
+        && !unlocked
+        && unlockRequirement.essenceRequired > 0
+        && quantity >= unlockRequirement.essenceRequired
+        && contribution >= unlockRequirement.contributionRequired;
 
       seedInventory[seedDefinition.seedId] = quantity;
+      plantResearch[seedDefinition.seedId] = {
+        plantType: seedDefinition.seedId,
+        discovered,
+        unlocked,
+        status: unlocked ? 'unlocked' : canUnlock ? 'ready' : discovered ? 'discovered' : 'undiscovered',
+        essenceRequired: unlockRequirement.essenceRequired,
+        essenceOwned: quantity,
+        contributionRequired: unlockRequirement.contributionRequired,
+        contributionOwned: contribution,
+        canUnlock,
+      };
 
-      if ((inventoryEntry?.unlockedAt ?? null) !== null || quantity > 0) {
+      if (unlocked) {
         unlockedSeedIds.push(seedDefinition.seedId);
       }
     }
@@ -103,11 +140,14 @@ export class ClientReadService {
       },
       backpack: {
         seedInventory,
+        essenceInventory: seedInventory,
         globalItemInventory: {
           spiritSoul: spiritResource?.spiritSoul ?? 0,
           tianjiTalisman: spiritResource?.tianjiTalisman ?? 0,
         },
         unlockedSeedIds,
+        unlockedPlantIds: unlockedSeedIds,
+        plantResearch,
         starterSeedClaimed: spiritResource?.dailyStarterSeedClaimDateKey === dateKey,
         tianjiTalismanClaimed: spiritResource?.dailyTianjiClaimDateKey === dateKey,
         spiritSoulClaimed: spiritResource?.dailySpiritSoulClaimDateKey === dateKey,
@@ -129,6 +169,7 @@ export class ClientReadService {
     await this.fieldLifecycleService.settlePlayerFields(client, playerId);
     const dateKey = getLocalDateKey();
     await this.dailyTaskLifecycleService.ensurePlayerDailyTasks(client, playerId, dateKey);
+    await this.dailyFactionTaskLifecycleService.ensurePlayerDailyFactionTasks(client, playerId, dateKey);
     const readModel = await this.clientReadRepository.findHomeSummary(playerId, dateKey, client);
 
     if (!readModel) {
@@ -153,6 +194,7 @@ export class ClientReadService {
     await this.armyTrainingLifecycleService.settlePlayerTrainingQueues(client, playerId);
     await this.passiveIncomeLifecycleService.settlePlayerPassiveIncome(client, playerId);
     await this.fieldLifecycleService.settlePlayerFields(client, playerId);
+    await this.dailyFactionTaskLifecycleService.ensurePlayerDailyFactionTasks(client, playerId, getLocalDateKey());
     await this.landDeedService.reconcilePlayerLandDeeds(client, playerId);
     await this.ensureRaidTargetPool(client, playerId);
     const [readModel, codex] = await Promise.all([
@@ -287,4 +329,24 @@ export class ClientReadService {
       });
     }
   }
+}
+
+function getPlantUnlockRequirement(seedId: string, rarity: string, sortOrder: number): { essenceRequired: number; contributionRequired: number } {
+  if (seedId === 'qilingya' || seedId === 'qinglingmai' || seedId === 'xunyamai') {
+    return { essenceRequired: 0, contributionRequired: 0 };
+  }
+
+  if (rarity === 'legendary') {
+    return { essenceRequired: 30, contributionRequired: 800 };
+  }
+
+  if (rarity === 'rare') {
+    return { essenceRequired: 12, contributionRequired: 300 };
+  }
+
+  if (sortOrder >= 50) {
+    return { essenceRequired: 6, contributionRequired: 120 };
+  }
+
+  return { essenceRequired: 3, contributionRequired: 50 };
 }

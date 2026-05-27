@@ -1,0 +1,14 @@
+
+> @trinitywar/game-client@0.1.0 dev
+> vite --host 0.0.0.0 --port 5173 "--host" "0.0.0.0" "--port" "5173"
+
+Port 5173 is in use, trying another one...
+Port 5174 is in use, trying another one...
+Port 5175 is in use, trying another one...
+Port 5176 is in use, trying another one...
+
+  [32m[1mVITE[22m v4.5.14[39m  [2mready in [0m[1m327[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5177[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.32.28:[1m5177[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://10.10.50.6:[1m5177[22m/[39m

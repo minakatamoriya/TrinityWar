@@ -1,4 +1,4 @@
-import type { ClientFarmField, ClientSceneAction, ClientSceneContentResponse } from '@trinitywar/shared';
+import type { ClientFactionAdvantagePanel, ClientFarmField, ClientSceneAction, ClientSceneContentResponse } from '@trinitywar/shared';
 import { buildFarmFieldStatusView, FarmStatusCard } from '../farm/FarmStatusCard';
 
 interface FarmCollectPresentationState {
@@ -7,19 +7,8 @@ interface FarmCollectPresentationState {
   showSeeds: boolean;
 }
 
-function getFarmCardAction(field: ClientFarmField): ClientSceneAction | undefined {
-  return field.actions[0];
-}
-
-function getFarmCardClassName(field: ClientFarmField): string {
-  return `field-card farm-plot ${field.tone}`;
-}
-
-function isHarvestAction(action: ClientSceneAction | undefined): boolean {
-  return Boolean(action?.label.includes('收取') || action?.label.includes('鏀跺彇'));
-}
-
 interface FarmSceneProps {
+  advantage?: ClientFactionAdvantagePanel;
   collectPresentation: FarmCollectPresentationState | null;
   fields: ClientFarmField[];
   landDeeds: NonNullable<ClientSceneContentResponse['farm']['landDeeds']>;
@@ -27,49 +16,57 @@ interface FarmSceneProps {
   farmBoardUpdatedAt: string | null;
   onAction: (action: ClientSceneAction, fieldId: string, fieldCode: string) => void;
   onOpenFarmBoard: () => void;
-  onOpenSeedCodex: () => void;
 }
 
 export function FarmScene(props: FarmSceneProps): JSX.Element {
   const {
     collectPresentation,
+    advantage,
     fields,
     landDeeds,
     farmBoardMessage,
-    farmBoardUpdatedAt,
     onAction,
     onOpenFarmBoard,
-    onOpenSeedCodex,
   } = props;
   const boardPreview = farmBoardMessage.trim() || '还没有留言，点击写下农场留言。';
-  const boardUpdatedText = farmBoardUpdatedAt
-    ? `最后修改 ${new Date(farmBoardUpdatedAt).toLocaleString('zh-CN', { hour12: false })}`
-    : '点击留言或修改';
 
   return (
     <div className="scene-shell">
       <div className="scene-scroll farm-scene-scroll">
+        {advantage ? (
+          <article className="panel-card faction-advantage-panel">
+            <div className="panel-head">
+              <h4>{advantage.factionName}优势</h4>
+              <span className="soft-tag">{advantage.title}</span>
+            </div>
+            <p className="panel-text">{advantage.summary}</p>
+            {advantage.details.length > 0 ? (
+              <ul className="mini-list">
+                {advantage.details.map((detail) => (
+                  <li key={detail}>{detail}</li>
+                ))}
+              </ul>
+            ) : null}
+          </article>
+        ) : null}
+
         <div className="farm-top-card-grid">
-          <button className="panel-card farm-top-action-card farm-codex-panel-card" onClick={onOpenSeedCodex} type="button">
-            <span className="eyebrow">灵植图鉴</span>
-            <strong>查看已发现灵植</strong>
-            <span>按稀有度浏览种子、收益和培育策略。</span>
-          </button>
           <button className="panel-card farm-top-action-card farm-board-panel-card" onClick={onOpenFarmBoard} type="button">
-            <span className="eyebrow">农场留言板</span>
-            <strong>{boardPreview}</strong>
-            <span>{boardUpdatedText}</span>
+            <span className="farm-board-icon" aria-hidden="true">田</span>
+            <span className="farm-board-copy">
+              <strong>{boardPreview}</strong>
+            </span>
           </button>
         </div>
 
         <div className="card-grid farm-field-grid">
           {fields.map((field) => {
-            const primaryAction = getFarmCardAction(field);
-            const canClick = field.tone === 'empty' || isHarvestAction(primaryAction);
+            const primaryAction = field.actions[0];
+            const canClick = field.tone === 'empty' || Boolean(primaryAction?.label.includes('收取') || primaryAction?.label.includes('收获'));
 
             return (
               <FarmStatusCard
-                className={getFarmCardClassName(field)}
+                className={`field-card farm-plot ${field.tone}`}
                 collectPresentation={collectPresentation?.fieldId === field.id ? collectPresentation : null}
                 key={field.id}
                 minimal

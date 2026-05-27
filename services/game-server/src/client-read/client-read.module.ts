@@ -6,6 +6,7 @@ import { ArmyTrainingLifecycleService } from './army-training-lifecycle.service.
 import { ClientReadRepository } from './client-read.repository.js';
 import { ClientReadService } from './client-read.service.js';
 import { DailyTaskLifecycleService } from './daily-task-lifecycle.service.js';
+import { DailyFactionTaskLifecycleService } from './daily-faction-task-lifecycle.service.js';
 import { FieldLifecycleService } from './field-lifecycle.service.js';
 import { HomeSummaryAssembler } from './home-summary.assembler.js';
 import { PassiveIncomeLifecycleService } from './passive-income-lifecycle.service.js';
@@ -14,7 +15,7 @@ import { SceneContentAssembler } from './scene-content.assembler.js';
 @Module({
   imports: [AuthModule, LandDeedModule],
   controllers: [ClientReadController],
-  providers: [ClientReadService, ClientReadRepository, HomeSummaryAssembler, SceneContentAssembler, FieldLifecycleService, ArmyTrainingLifecycleService, PassiveIncomeLifecycleService, DailyTaskLifecycleService],
-  exports: [ClientReadService, FieldLifecycleService, ArmyTrainingLifecycleService, PassiveIncomeLifecycleService, DailyTaskLifecycleService],
+  providers: [ClientReadService, ClientReadRepository, HomeSummaryAssembler, SceneContentAssembler, FieldLifecycleService, ArmyTrainingLifecycleService, PassiveIncomeLifecycleService, DailyTaskLifecycleService, DailyFactionTaskLifecycleService],
+  exports: [ClientReadService, FieldLifecycleService, ArmyTrainingLifecycleService, PassiveIncomeLifecycleService, DailyTaskLifecycleService, DailyFactionTaskLifecycleService],
 })
 export class ClientReadModule {}

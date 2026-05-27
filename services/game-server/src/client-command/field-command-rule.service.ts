@@ -9,6 +9,8 @@ export interface FieldStateForCollect {
   status: 'LOCKED' | 'EMPTY' | 'SEEDED' | 'GROWING' | 'MATURE' | 'WITHERED';
   statusVersion: number;
   currentClaimableGold: number;
+  expectedEssenceYield: number;
+  stolenEssenceYield: number;
   seedDefinition: {
     seedId: string;
     label: string;
@@ -58,9 +60,9 @@ export class FieldCommandRuleService {
       });
     }
 
-    const collectedGold = Math.max(field.currentClaimableGold, 0);
-    const overflowGold = 0;
-    const rewards = buildFieldRewards(field, request.collectMode);
+  const collectedGold = Math.max(field.currentClaimableGold, 0);
+  const overflowGold = 0;
+  const rewards = buildFieldRewards(field, request.collectMode);
     const fieldCode = `田地 ${String(field.slotIndex).padStart(2, '0')}`;
     const rewardSummary = rewards.length > 0 ? `，并获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : '';
 
@@ -78,18 +80,29 @@ function buildFieldRewards(field: FieldStateForCollect, collectMode: ClientColle
     return [];
   }
 
-  if (field.seedDefinition.seedId === 'qilingya') {
-    return [];
-  }
+  const essenceYield = Math.max((field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition.rarity)) - field.stolenEssenceYield, 0);
 
   const rewards: ClientCollectRewardItem[] = [{
-    kind: 'seed',
+    kind: 'essence',
     seedId: field.seedDefinition.seedId,
-    label: field.seedDefinition.label,
-    quantity: 1,
+    essenceType: field.seedDefinition.seedId,
+    label: `${field.seedDefinition.label}精华`,
+    quantity: essenceYield,
   }, buildSpiritCropReward(field.seedDefinition.rarity)];
 
   return rewards;
+}
+
+function getExpectedEssenceYield(rarity: string): number {
+  if (rarity === 'legendary') {
+    return 8;
+  }
+
+  if (rarity === 'rare') {
+    return 6;
+  }
+
+  return 10;
 }
 
 function buildSpiritCropReward(rarity: string): ClientCollectRewardItem {

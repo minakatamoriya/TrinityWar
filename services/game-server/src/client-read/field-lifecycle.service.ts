@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { FieldStatus, Prisma } from '@prisma/client';
 import { getCastleExtensionLevelConfig, getSeedStageGold, getSeedStageSeconds } from '../lib/game-balance.js';
+import { getFactionFarmMatureYieldMultiplier, getFactionFarmRipeWindowSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 
 interface FieldLifecycleSlot {
   id: string;
@@ -28,6 +29,11 @@ export class FieldLifecycleService {
           select: {
             farmYieldTechLevel: true,
             ripeWindowTechLevel: true,
+          },
+        },
+        faction: {
+          select: {
+            code: true,
           },
         },
         fieldSlots: {
@@ -58,9 +64,18 @@ export class FieldLifecycleService {
 
     const farmYieldMultiplier = getFarmYieldMultiplier(player.buildings?.farmYieldTechLevel ?? 0);
     const ripeWindowBonusSeconds = getRipeWindowBonusSeconds(player.buildings?.ripeWindowTechLevel ?? 0);
+    const factionCode = (player.faction?.code ?? null) as FactionAdvantageCode;
+    const farmMatureYieldMultiplier = getFactionFarmMatureYieldMultiplier(factionCode);
 
     for (const field of player.fieldSlots) {
-      const update = buildFieldLifecycleUpdate(field, farmYieldMultiplier, ripeWindowBonusSeconds, now);
+      const update = buildFieldLifecycleUpdate(
+        field,
+        farmYieldMultiplier,
+        ripeWindowBonusSeconds,
+        factionCode,
+        farmMatureYieldMultiplier,
+        now,
+      );
 
       if (!update) {
         continue;
@@ -78,13 +93,22 @@ function buildFieldLifecycleUpdate(
   field: FieldLifecycleSlot,
   farmYieldMultiplier: number,
   ripeWindowBonusSeconds: number,
+  factionCode: FactionAdvantageCode,
+  farmMatureYieldMultiplier: number,
   now: Date,
 ): Prisma.PlayerFieldSlotUpdateInput | null {
   if (!field.isUnlocked || !field.seedDefinition || field.status === 'LOCKED' || field.status === 'EMPTY') {
     return null;
   }
 
-  const next = settleField(field, farmYieldMultiplier, ripeWindowBonusSeconds, now);
+  const next = settleField(
+    field,
+    farmYieldMultiplier,
+    ripeWindowBonusSeconds,
+    factionCode,
+    farmMatureYieldMultiplier,
+    now,
+  );
   const changed = next.status !== field.status
     || next.currentClaimableGold !== field.currentClaimableGold
     || !sameDate(next.seedAt, field.seedAt)
@@ -112,6 +136,8 @@ function settleField(
   field: FieldLifecycleSlot,
   farmYieldMultiplier: number,
   ripeWindowBonusSeconds: number,
+  factionCode: FactionAdvantageCode,
+  farmMatureYieldMultiplier: number,
   now: Date,
 ) {
   const seedId = field.seedDefinition?.seedId;
@@ -163,7 +189,11 @@ function settleField(
     }
 
     if (status === 'MATURE') {
-      const ripeWindowSeconds = Math.max((field.seedDefinition?.ripeWindowSeconds ?? 0) + ripeWindowBonusSeconds, 1);
+      const ripeWindowSeconds = getFactionFarmRipeWindowSeconds(
+        field.seedDefinition?.ripeWindowSeconds ?? 0,
+        ripeWindowBonusSeconds,
+        factionCode,
+      );
 
       if (nowMs < stageStartedAt.getTime() + ripeWindowSeconds * 1000) {
         break;
@@ -180,7 +210,11 @@ function settleField(
 
   return {
     status,
-    currentClaimableGold: Math.round(getSeedStageGold(seedId, toBalanceStatus(status)) * farmYieldMultiplier),
+    currentClaimableGold: Math.round(
+      getSeedStageGold(seedId, toBalanceStatus(status))
+      * farmYieldMultiplier
+      * (status === 'MATURE' ? farmMatureYieldMultiplier : 1),
+    ),
     seedAt,
     matureAt,
     fullMatureAt,

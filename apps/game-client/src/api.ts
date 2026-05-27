@@ -22,6 +22,8 @@
   type ClientRaidDeepIntelResponse,
   type ClientDissolveSpiritRequest,
   type ClientFactionDonateRequest,
+  type ClientFactionTaskSubmitRequest,
+  type ClientFactionTaskSubmitResponse,
   type ClientClaimPendingRequest,
   type ClientClaimPendingResponse,
   type ClientCollectFieldRequest,
@@ -40,6 +42,8 @@
   type ClientSceneContentResponse,
   type ClientStartCultivationRequest,
   type ClientStateMutationResponse,
+  type ClientUnlockPlantRequest,
+  type ClientUnlockPlantResponse,
   type ClientUnreadNotificationCountResponse,
   type ClientSetMainSpiritRequest,
   type ClientSpiritMutationResponse,
@@ -128,8 +132,10 @@ function normalizeBootstrap(bootstrap: ClientBootstrapResponse): ClientBootstrap
     season: { ...bootstrap.season },
     backpack: {
       seedInventory: { ...bootstrap.backpack.seedInventory },
+      essenceInventory: { ...(bootstrap.backpack.essenceInventory ?? bootstrap.backpack.seedInventory) },
       globalItemInventory: { ...bootstrap.backpack.globalItemInventory },
       unlockedSeedIds: [...bootstrap.backpack.unlockedSeedIds],
+      unlockedPlantIds: [...(bootstrap.backpack.unlockedPlantIds ?? bootstrap.backpack.unlockedSeedIds)],
       starterSeedClaimed: bootstrap.backpack.starterSeedClaimed,
       tianjiTalismanClaimed: bootstrap.backpack.tianjiTalismanClaimed,
       spiritSoulClaimed: bootstrap.backpack.spiritSoulClaimed,
@@ -265,6 +271,8 @@ function normalizeHomeSummary(home: HomeSummaryResponse): HomeSummaryResponse {
     pendingClaims: (home.pendingClaims ?? []).map((claim) => ({ ...claim })),
     temporaryClaim: home.temporaryClaim ? { ...home.temporaryClaim } : null,
     dailyTasks: (home.dailyTasks ?? []).map((task) => ({ ...task })),
+    factionTasks: (home.factionTasks ?? []).map((task) => ({ ...task, action: { ...task.action } })),
+    todayContribution: home.todayContribution ?? 0,
     primaryActions: (home.primaryActions ?? []).map((action) => ({ ...action })),
   };
 }
@@ -302,6 +310,11 @@ function cloneSceneContent(scenes: ClientSceneContentResponse): ClientSceneConte
 function cloneSpiritState(spirit: ClientSpiritState): ClientSpiritState {
   return {
     ...spirit,
+    factionAdvantage: spirit.factionAdvantage ? {
+      ...spirit.factionAdvantage,
+      details: [...spirit.factionAdvantage.details],
+      modifiers: { ...spirit.factionAdvantage.modifiers },
+    } : undefined,
     mainSlot: spirit.mainSlot ? { ...spirit.mainSlot } : null,
     slots: spirit.slots.map((slot) => ({ ...slot })),
     codex: spirit.codex.map((entry) => ({
@@ -1154,6 +1167,7 @@ function applyMockStartCultivation(input: ClientStartCultivationRequest): Client
   syncMockFieldLifecycle();
   const field = mockSceneSnapshot.farm.fields.find((item) => item.id === input.fieldId);
   const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
+  const plantType = (input.plantType ?? input.seedId ?? '').trim();
 
   if (!field || !vaultResource || field.tone === 'locked') {
     return buildMockMutation('当前地块尚未解锁，无法开始培育。');
@@ -1163,21 +1177,16 @@ function applyMockStartCultivation(input: ClientStartCultivationRequest): Client
     return buildMockMutation('当前地块已经在培育中或可直接收取。');
   }
 
-  if (!mockBootstrapSnapshot.backpack.unlockedSeedIds.includes(input.seedId)) {
+  if (!plantType || !mockBootstrapSnapshot.backpack.unlockedSeedIds.includes(plantType)) {
     return buildMockMutation('当前种子尚未解锁，无法开始本轮培育。');
   }
 
-  if ((mockBootstrapSnapshot.backpack.seedInventory[input.seedId] ?? 0) <= 0) {
-    return buildMockMutation('当前种子库存不足，无法开始本轮培育。');
-  }
-
-  mockBootstrapSnapshot.backpack.seedInventory[input.seedId] = Math.max((mockBootstrapSnapshot.backpack.seedInventory[input.seedId] ?? 0) - 1, 0);
   setMockFieldTiming(input.fieldId, Date.now());
-  setMockFieldPresentation(field, 'seeded', input.seedId, getMockSeedStageSeconds(input.seedId, 'seeded'));
-  mockFieldSeedAssignments[input.fieldId] = input.seedId;
+  setMockFieldPresentation(field, 'seeded', plantType, getMockSeedStageSeconds(plantType, 'seeded'));
+  mockFieldSeedAssignments[input.fieldId] = plantType;
   updateMockDailyTask('daily-start-cultivation');
 
-  return buildMockMutation(`${field.code} 已播下 ${seedLabelMap[input.seedId] ?? input.seedId}，开始新一轮培育。`);
+  return buildMockMutation(`${field.code} 已播下 ${seedLabelMap[plantType] ?? plantType}，开始新一轮培育。`);
 }
 
 function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutationResponse {
@@ -1481,6 +1490,44 @@ export async function donateFactionResources(input: ClientFactionDonateRequest):
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(input),
+  });
+
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return response;
+}
+
+export async function submitFactionTask(input: ClientFactionTaskSubmitRequest): Promise<ClientFactionTaskSubmitResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('submit-faction-task');
+  const response = await fetchJson<ClientFactionTaskSubmitResponse>(`${CLIENT_API_PREFIX}/actions/submit-faction-task`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
+
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return response;
+}
+
+export async function unlockPlant(input: ClientUnlockPlantRequest): Promise<ClientUnlockPlantResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('unlock-plant');
+  const response = await fetchJson<ClientUnlockPlantResponse>(`${CLIENT_API_PREFIX}/actions/unlock-plant`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
   });
 
   mockHomeSnapshot = cloneHomeSummary(response.home);

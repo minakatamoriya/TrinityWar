@@ -40,7 +40,7 @@ export function SeedRewardModal(props: SeedRewardModalProps): JSX.Element {
         </div>
         <div className="transfer-foot-row seed-reward-actions">
           <button className="secondary-button" disabled={confirming} onClick={onConfirm} type="button">
-            {confirming ? '收取中...' : '确认'}
+            {confirming ? '领取中...' : '确认'}
           </button>
         </div>
       </div>

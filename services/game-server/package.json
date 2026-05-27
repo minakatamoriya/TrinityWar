@@ -7,6 +7,7 @@
     "dev": "tsx watch src/main.ts",
     "worker:raid-settlement": "tsx src/raid-settlement.worker.ts",
     "worker:raid-settlement:sweep": "tsx src/raid-settlement-sweep.ts",
+    "test:faction-advantages": "tsx src/verification/verify-faction-advantage-formulas.ts",
     "verify:test-flow": "tsx src/verification/verify-test-flow.ts",
     "build": "node ./scripts/build.mjs",
     "start": "node dist/index.js",
