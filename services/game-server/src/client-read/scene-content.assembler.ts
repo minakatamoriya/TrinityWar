@@ -508,20 +508,21 @@ function buildFactionTasks(readModel: SceneContentReadModel): ClientHomeFactionT
     }]),
   );
 
-  return readModel.dailyFactionTasks.map((task) => {
+  return readModel.dailyFactionTasks.filter((task) => findFactionTaskConfig(readModel, task)?.isEnabled ?? true).map((task) => {
     const type = mapFactionTaskType(task.taskType);
     const requiredEssence = task.requiredEssenceType ? essenceInventory.get(task.requiredEssenceType) : null;
     const progressCurrent = Math.min(task.progressAmount, task.requiredAmount);
     const remaining = Math.max(task.requiredAmount - progressCurrent, 0);
     const status = mapTaskStatusForFaction(task.status);
+    const taskConfig = findFactionTaskConfig(readModel, task);
 
     return {
       id: task.id,
       type,
-      title: type === 'conflict-raid' ? '完成 1 次成功掠夺' : `上缴${requiredEssence?.label ?? task.requiredEssenceType ?? '精华'}`,
-      description: type === 'conflict-raid'
+      title: buildConfiguredFactionTaskTitle(type, requiredEssence?.label ?? task.requiredEssenceType, taskConfig?.title),
+      description: taskConfig?.description ?? (type === 'conflict-raid'
         ? `完成冲突对抗，奖励 ${formatNumber(task.rewardContribution)} 贡献。`
-        : `上缴指定精华，奖励 ${formatNumber(task.rewardContribution)} 贡献。`,
+        : `上缴指定精华，奖励 ${formatNumber(task.rewardContribution)} 贡献。`),
       progressCurrent,
       progressTarget: task.requiredAmount,
       progressText: status === 'claimed' ? '已完成' : `${progressCurrent}/${task.requiredAmount}`,
@@ -566,6 +567,33 @@ function mapTaskStatusForFaction(status: SceneContentReadModel['dailyFactionTask
   }
 
   return 'in-progress';
+}
+
+function buildConfiguredFactionTaskTitle(
+  type: ClientHomeFactionTaskSummary['type'],
+  essenceLabel?: string | null,
+  configuredTitle?: string | null,
+): string {
+  if (configuredTitle) {
+    return type === 'conflict-raid' ? configuredTitle : `${configuredTitle}：${essenceLabel ?? '精华'}`;
+  }
+
+  return type === 'conflict-raid' ? '完成 1 次成功掠夺' : `上缴${essenceLabel ?? '精华'}`;
+}
+
+function findFactionTaskConfig(
+  readModel: SceneContentReadModel,
+  task: SceneContentReadModel['dailyFactionTasks'][number],
+): SceneContentReadModel['taskConfigs'][number] | null {
+  const taskId = task.taskType === 'CONFLICT_RAID'
+    ? 'conflict-raid'
+    : task.taskType === 'ESSENCE_SUBMIT_BASIC'
+      ? 'essence-submit-basic'
+      : task.rewardContribution >= 35 || task.requiredAmount <= 10
+        ? 'essence-submit-focus-rare'
+        : 'essence-submit-focus-common';
+
+  return readModel.taskConfigs.find((config) => config.taskGroup === 'daily-faction' && config.taskId === taskId) ?? null;
 }
 
 function getContributionSourceLabel(sourceType: string): string {

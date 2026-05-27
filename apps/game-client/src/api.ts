@@ -1045,9 +1045,6 @@ function applyMockClaimPending(input: ClientClaimPendingRequest): ClientClaimPen
     pendingClaim.value = formatNumber(remainingPendingGold);
   }
   syncMockFactionScene();
-  if (input.source === 'faction' && claimableGold > 0) {
-    updateMockDailyTask('daily-faction-touch');
-  }
 
   const summary = input.acceptOverflowLoss && overflowGold > 0
     ? `${sourceLabel}本次入库 ${formatNumber(claimableGold)} 金币，另有 ${formatNumber(overflowGold)} 已确认放弃。`
@@ -1237,7 +1234,7 @@ function applyMockRecruitArmy(input: ClientRecruitArmyRequest): ClientStateMutat
     totalSeconds: nextTotalSeconds,
     remainingSeconds: nextTotalSeconds,
   };
-  updateMockDailyTask('daily-feed-spirit', actualRecruitCount > 0 ? 1 : 0);
+  updateMockDailyTask('daily-recruit-army', actualRecruitCount > 0 ? 1 : 0);
 
   return buildMockMutation(
     actualRecruitCount < requestedCount
@@ -1388,7 +1385,6 @@ function applyMockFactionDonate(input: ClientFactionDonateRequest): ClientStateM
   applyVaultGoldDelta(-actualGoldAmount);
   mockFactionContribution += contributionGain;
   mockFactionTreasuryGold += actualGoldAmount;
-  updateMockDailyTask('daily-faction-touch');
 
   return buildMockMutation(`已向阵营捐出 ${formatNumber(actualGoldAmount)} 金币，贡献值 +${formatNumber(contributionGain)}。`);
 }

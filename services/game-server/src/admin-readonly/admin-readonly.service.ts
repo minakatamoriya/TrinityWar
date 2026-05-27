@@ -13,6 +13,7 @@ import { APP_NAME, DOCS_ROUTE } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { GAME_DESIGN_CONFIG } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { TaskConfigService, type TaskConfigGroup } from '../task-config/task-config.service.js';
 
 interface PagingQuery {
   page?: string;
@@ -23,7 +24,10 @@ interface PagingQuery {
 
 @Injectable()
 export class AdminReadonlyService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(TaskConfigService) private readonly taskConfigService: TaskConfigService,
+  ) {}
 
   async getOverview(): Promise<AdminOverviewResponse> {
     return {
@@ -40,9 +44,29 @@ export class AdminReadonlyService {
         'raid-order-detail',
         'seed-config',
         'spirit-config',
+        'task-config',
         'castle-level-config',
       ],
     };
+  }
+
+  async listTaskConfigs(query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
+    const group = normalizeTaskGroup(query.group);
+    const items = await this.taskConfigService.listAdminTaskConfigs(group);
+    return {
+      items: items.map((item) => ({ ...item })),
+      pagination: { page: 1, pageSize: items.length, total: items.length },
+    };
+  }
+
+  async updateTaskConfig(taskGroup: string, taskId: string, body: unknown): Promise<Record<string, unknown>> {
+    const group = normalizeTaskGroup(taskGroup);
+    if (!group) {
+      throwBadRequest('taskGroup must be starter, daily, or daily-faction.');
+    }
+
+    const payload = parseTaskConfigPayload(body);
+    return { ...(await this.taskConfigService.upsertAdminTaskConfig(group, taskId, payload)) };
   }
 
   async getSystemStatus(): Promise<AdminSystemStatusResponse> {
@@ -632,11 +656,85 @@ function parseSpiritDefinitionPayload(body: unknown, requireAll: boolean): Recor
   return payload;
 }
 
+function parseTaskConfigPayload(body: unknown): {
+  title?: string | null;
+  description?: string | null;
+  targetCount?: number | null;
+  rewardGold?: number | null;
+  rewardContribution?: number | null;
+  isEnabled?: boolean;
+} {
+  const record = requireRecord(body);
+  const payload: {
+    title?: string | null;
+    description?: string | null;
+    targetCount?: number | null;
+    rewardGold?: number | null;
+    rewardContribution?: number | null;
+    isEnabled?: boolean;
+  } = {};
+
+  copyOptionalNullableString(payload, record, 'title');
+  copyOptionalNullableString(payload, record, 'description');
+  copyOptionalNullableInteger(payload, record, 'targetCount', 0);
+  copyOptionalNullableInteger(payload, record, 'rewardGold', 0);
+  copyOptionalNullableInteger(payload, record, 'rewardContribution', 0);
+
+  if (record.isEnabled !== undefined) {
+    if (typeof record.isEnabled !== 'boolean') {
+      throwBadRequest('isEnabled must be a boolean.');
+    }
+    payload.isEnabled = record.isEnabled;
+  }
+
+  return payload;
+}
+
 function requireRecord(body: unknown): Record<string, unknown> {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throwBadRequest('Request body must be a JSON object.');
   }
   return body as Record<string, unknown>;
+}
+
+function copyOptionalNullableString<T extends Record<string, unknown>>(
+  payload: T,
+  record: Record<string, unknown>,
+  field: string,
+): void {
+  const value = record[field];
+  if (value === undefined) {
+    return;
+  }
+  if (value === null) {
+    payload[field as keyof T] = null as T[keyof T];
+    return;
+  }
+  if (typeof value !== 'string') {
+    throwBadRequest(`${field} must be a string or null.`);
+  }
+  payload[field as keyof T] = (value.trim() || null) as T[keyof T];
+}
+
+function copyOptionalNullableInteger<T extends Record<string, unknown>>(
+  payload: T,
+  record: Record<string, unknown>,
+  field: string,
+  minValue: number,
+): void {
+  const value = record[field];
+  if (value === undefined) {
+    return;
+  }
+  if (value === null || value === '') {
+    payload[field as keyof T] = null as T[keyof T];
+    return;
+  }
+  const normalized = typeof value === 'string' ? Number(value) : value;
+  if (!Number.isInteger(normalized) || Number(normalized) < minValue) {
+    throwBadRequest(`${field} must be an integer >= ${minValue} or null.`);
+  }
+  payload[field as keyof T] = Number(normalized) as T[keyof T];
 }
 
 function copyStringField(
@@ -767,6 +865,18 @@ function throwBadRequest(message: string): never {
   });
 }
 
+function normalizeTaskGroup(value: string | undefined): TaskConfigGroup | null {
+  if (!value) {
+    return null;
+  }
+
+  if (value === 'starter' || value === 'daily' || value === 'daily-faction') {
+    return value;
+  }
+
+  throwBadRequest('taskGroup must be starter, daily, or daily-faction.');
+}
+
 function buildDateRange(query: PagingQuery): { createdAt?: { gte?: Date; lte?: Date } } {
   const createdAt: { gte?: Date; lte?: Date } = {};
   if (query.from) {
@@ -892,4 +1002,3 @@ function toIso(value: Date | null): string | null {
 function parseBoolean(value: string | undefined): boolean {
   return value === '1' || value?.toLowerCase() === 'true';
 }
-

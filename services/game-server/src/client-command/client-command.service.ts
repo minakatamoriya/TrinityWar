@@ -1004,6 +1004,8 @@ export class ClientCommandService {
         note: `Recruit ${actualRecruitCount} army units.`,
       });
 
+      await this.recordDailyTaskProgress(client, input.playerId, 'recruit-army');
+
       const responseSnapshot: ClientStateMutationResponse = {
         app: APP_NAME,
         summary: actualRecruitCount < requestedCount
@@ -1336,8 +1338,6 @@ export class ClientCommandService {
             submittedAmount: nextProgress,
           },
         });
-        await this.recordDailyTaskProgress(client, input.playerId, 'faction-interaction');
-        await this.recordDailyTaskProgress(client, input.playerId, 'faction-donate');
         await this.landDeedService.reconcilePlayerLandDeeds(client, input.playerId);
       }
 
@@ -1553,8 +1553,6 @@ export class ClientCommandService {
           claimedAt: now,
         },
       });
-
-      await this.recordDailyTaskProgress(client, input.playerId, 'faction-interaction');
 
       const responseSnapshot: ClientClaimFactionStipendResponse = {
         app: APP_NAME,
@@ -2725,7 +2723,7 @@ function getDailyTaskTitle(taskId: string): string {
     'daily-start-cultivation': '开始一次培育',
     'daily-upgrade-building': '修习一次法术',
     'daily-feed-spirit': '投喂一次灵宠',
-    'daily-donate-faction': '上缴一次阵营资源',
+    'daily-recruit-army': '征召一次士兵',
   };
 
   return titleMap[taskId] ?? taskId;

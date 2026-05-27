@@ -17,7 +17,7 @@ import { API_BASE, DEBUG_KEY, adminFetch, jsonRequest } from './api/admin';
 import { NotificationComposer, createEmptyNotificationForm, type AdminNotificationAttachmentDraft, type AdminNotificationFormState } from './components/NotificationComposer';
 import { EmptyState } from './components/EmptyState';
 import { Modal } from './components/Modal';
-import { buildConfigPayload, createConfigFormFromRecord, createEmptyConfigForm, seedConfigFields, spiritConfigFields } from './domain/config';
+import { buildConfigPayload, createConfigFormFromRecord, createEmptyConfigForm, seedConfigFields, spiritConfigFields, taskConfigFields } from './domain/config';
 import { formatValue } from './domain/labels';
 import { navItems } from './domain/navigation';
 import { CastleLevelsView } from './views/CastleLevelsView';
@@ -28,6 +28,7 @@ import { PlayerDetailTables, PlayerInfoView, PlayerRaidContent } from './views/P
 import { SeedConfigView } from './views/SeedConfigView';
 import { SpiritConfigView } from './views/SpiritConfigView';
 import { SystemView } from './views/SystemView';
+import { TaskConfigView, type TaskConfigGroup } from './views/TaskConfigView';
 import { TableSection } from './components/TableSection';
 import type { AdminRecord, ModuleKey, PlayerModal } from './types';
 import './styles.css';
@@ -64,6 +65,12 @@ function App(): JSX.Element {
   const [spiritForm, setSpiritForm] = useState<Record<string, string>>(() => createEmptyConfigForm(spiritConfigFields));
   const [editingSpiritId, setEditingSpiritId] = useState('');
   const [isSpiritEditorOpen, setIsSpiritEditorOpen] = useState(false);
+  const [taskDefinitions, setTaskDefinitions] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [taskGroup, setTaskGroup] = useState<TaskConfigGroup>('daily');
+  const [taskForm, setTaskForm] = useState<Record<string, string>>(() => createEmptyConfigForm(taskConfigFields));
+  const [editingTaskId, setEditingTaskId] = useState('');
+  const [editingTaskGroup, setEditingTaskGroup] = useState<TaskConfigGroup>('daily');
+  const [isTaskEditorOpen, setIsTaskEditorOpen] = useState(false);
   const [castleLevels, setCastleLevels] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +98,9 @@ function App(): JSX.Element {
     }
     if (activeModule === 'spiritConfig' && !spiritDefinitions) {
       void loadSpiritDefinitions();
+    }
+    if (activeModule === 'taskConfig' && !taskDefinitions) {
+      void loadTaskDefinitions();
     }
     if (activeModule === 'castleLevels' && !castleLevels) {
       void loadCastleLevels();
@@ -454,6 +464,50 @@ function App(): JSX.Element {
     }
   };
 
+  const loadTaskDefinitions = async (group = taskGroup): Promise<void> => {
+    const result = await run('task-list', () => adminFetch<AdminListResponse<AdminRecord>>(`/config/tasks?group=${encodeURIComponent(group)}`));
+    if (result) {
+      setTaskDefinitions(result);
+    }
+  };
+
+  const changeTaskGroup = (group: TaskConfigGroup): void => {
+    setTaskGroup(group);
+    setIsTaskEditorOpen(false);
+    void loadTaskDefinitions(group);
+  };
+
+  const editTaskDefinition = (row: AdminRecord): void => {
+    const group = row.taskGroup === 'starter' || row.taskGroup === 'daily-faction' ? row.taskGroup : 'daily';
+    setEditingTaskGroup(group);
+    setEditingTaskId(String(row.taskId));
+    setTaskForm(createConfigFormFromRecord(taskConfigFields, row));
+    setIsTaskEditorOpen(true);
+  };
+
+  const saveTaskDefinition = async (): Promise<void> => {
+    if (!editingTaskId) {
+      setError('请选择任务配置。');
+      return;
+    }
+
+    const payload: Record<string, unknown> = buildConfigPayload(taskConfigFields, taskForm);
+    payload.isEnabled = taskForm.isEnabled === 'true';
+    const result = await run('task-save', () => adminFetch<AdminRecord>(
+      `/config/tasks/${encodeURIComponent(editingTaskGroup)}/${encodeURIComponent(editingTaskId)}`,
+      jsonRequest('PATCH', payload),
+    ));
+    if (!result) {
+      return;
+    }
+
+    setEditingTaskId('');
+    setEditingTaskGroup(taskGroup);
+    setTaskForm(createEmptyConfigForm(taskConfigFields));
+    setIsTaskEditorOpen(false);
+    await loadTaskDefinitions(taskGroup);
+  };
+
   const loadCastleLevels = async (): Promise<void> => {
     const result = await run('castle-levels', () => adminFetch<AdminListResponse<AdminRecord>>('/config/castle-levels'));
     if (result) {
@@ -625,6 +679,28 @@ function App(): JSX.Element {
               onFieldChange={(field, value) => setSeedForm((current) => ({ ...current, [field]: value }))}
               onRefresh={() => void loadSeedDefinitions()}
               onSave={() => void saveSeedDefinition()}
+            />
+          ) : null}
+
+          {activeModule === 'taskConfig' ? (
+            <TaskConfigView
+              busy={busy}
+              definitions={taskDefinitions}
+              editingId={editingTaskId}
+              form={taskForm}
+              group={taskGroup}
+              isEditorOpen={isTaskEditorOpen}
+              onCancelEdit={() => {
+                setEditingTaskId('');
+                setEditingTaskGroup(taskGroup);
+                setTaskForm(createEmptyConfigForm(taskConfigFields));
+                setIsTaskEditorOpen(false);
+              }}
+              onEdit={editTaskDefinition}
+              onFieldChange={(field, value) => setTaskForm((current) => ({ ...current, [field]: value }))}
+              onGroupChange={changeTaskGroup}
+              onRefresh={() => void loadTaskDefinitions()}
+              onSave={() => void saveTaskDefinition()}
             />
           ) : null}
 

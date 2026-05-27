@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { ArmyTrainingStatus, DailyFactionTaskType, FieldStatus, Prisma, PrismaClient, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { AdminTaskConfigRecord } from '../task-config/task-config.service.js';
 
 export interface HomeSummaryReadModel {
   player: {
@@ -68,6 +69,7 @@ export interface HomeSummaryReadModel {
   contributionLogs: Array<{
     contributionDelta: number;
   }>;
+  taskConfigs: AdminTaskConfigRecord[];
   trainingQueues: Array<{
     status: ArmyTrainingStatus;
     finishAt: Date;
@@ -166,6 +168,7 @@ export interface SceneContentReadModel {
     };
   }>;
   dailyFactionTasks: HomeSummaryReadModel['dailyFactionTasks'];
+  taskConfigs: AdminTaskConfigRecord[];
   contributionLogs: Array<{
     id: string;
     sourceType: string;
@@ -404,6 +407,7 @@ export class ClientReadRepository {
       dailyFactionTasks: player.dailyFactionTasks,
       seedInventory: player.seedInventory,
       contributionLogs: player.factionContributionLogs,
+      taskConfigs: [],
       trainingQueues: player.trainingQueues,
     };
   }
@@ -715,6 +719,7 @@ export class ClientReadRepository {
       fieldSlots: player.fieldSlots,
       seedInventory: player.seedInventory,
       dailyFactionTasks: player.dailyFactionTasks,
+      taskConfigs: [],
       contributionLogs: player.factionContributionLogs,
       landDeedProgress: player.landDeedProgress,
       factionStipendStates: player.factionStipendStates,

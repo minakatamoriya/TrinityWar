@@ -1,6 +1,6 @@
 import type { AdminListResponse } from '@trinitywar/shared';
 
-export type ModuleKey = 'dashboard' | 'player' | 'order' | 'notifications' | 'spiritConfig' | 'seedConfig' | 'castleLevels' | 'system';
+export type ModuleKey = 'dashboard' | 'player' | 'order' | 'notifications' | 'spiritConfig' | 'seedConfig' | 'taskConfig' | 'castleLevels' | 'system';
 export type AdminRecord = Record<string, unknown>;
 export type PlayerModal = { type: 'info' | 'raid'; playerId: string } | null;
 

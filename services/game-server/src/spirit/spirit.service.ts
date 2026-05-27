@@ -524,12 +524,13 @@ export class SpiritService {
 
       const now = new Date();
       const settled = settleSpiritProgress(slot, now, (resource.player?.faction?.code ?? null) as FactionAdvantageCode);
-      const targetStage = request.targetStage ?? Math.floor(settled.level / 10);
-      if (!isBreakthroughLevel(settled.level) || targetStage !== Math.floor(settled.level / 10) || settled.breakthroughStage >= targetStage) {
+      const targetStage = request.targetStage ?? getBreakthroughStageForLevel(settled.level);
+      const expectedStage = getBreakthroughStageForLevel(settled.level);
+      if (expectedStage === null || targetStage !== expectedStage || settled.breakthroughStage >= expectedStage) {
         throw new BusinessError({ code: ErrorCode.BadRequest, message: 'Spirit is not at a pending breakthrough node.', statusCode: 400 });
       }
 
-      const cost = SPIRIT_BREAKTHROUGH_COSTS[targetStage];
+      const cost = SPIRIT_BREAKTHROUGH_COSTS[expectedStage];
       if (!cost) {
         throw new BusinessError({ code: ErrorCode.BadRequest, message: 'Unsupported breakthrough stage.', statusCode: 400 });
       }
@@ -549,9 +550,9 @@ export class SpiritService {
       await client.playerSpiritSlot.update({
         where: { id: slot.id },
         data: {
-          level: settled.level,
-          exp: settled.exp,
-          breakthroughStage: targetStage,
+          level: Math.min(settled.level + 1, SPIRIT_MAX_LEVEL),
+          exp: 0,
+          breakthroughStage: expectedStage,
           satiatedUntil: settled.satiatedUntil,
           lastExpSettledAt: now,
           slotVersion: { increment: 1 },
@@ -562,14 +563,14 @@ export class SpiritService {
           playerId,
           spiritSlotId: slot.id,
           fromStage: slot.breakthroughStage,
-          toStage: targetStage,
+          toStage: expectedStage,
           consumedSoulQuality: cost.quality,
           consumedSoulCount: cost.count,
           requestIdempotencyKey: idempotencyKey ?? null,
         },
       });
 
-      await this.ensureNaturalTraitSlots(client, slot.id, targetStage);
+      await this.ensureNaturalTraitSlots(client, slot.id, expectedStage);
       const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 已突破。`);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
@@ -1028,7 +1029,7 @@ export class SpiritService {
         });
       }
 
-      assertVersion('resourceVersion', request.resourceVersion, resource.resourceVersion);
+      assertVersion('resourceVersion', request.resourceVersion, resource.resourceVersion, { allowStale: true });
       assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
 
       if (slot.currentHp >= slot.maxHp) {
@@ -1762,7 +1763,10 @@ function buildBreakthroughRequirement(
     return null;
   }
 
-  const stage = Math.floor(slot.level / 10);
+  const stage = getBreakthroughStageForLevel(slot.level);
+  if (stage === null) {
+    return null;
+  }
   const cost = SPIRIT_BREAKTHROUGH_COSTS[stage];
   if (!cost) {
     return null;
@@ -1841,12 +1845,26 @@ function getUnlockedTraitSlots(breakthroughStage: number): number {
   return Math.min(Math.max(Math.floor(breakthroughStage), 0), 5);
 }
 
-function isBreakthroughLevel(level: number): boolean {
-  return level > 0 && level % 10 === 0 && level <= SPIRIT_MAX_LEVEL;
+function getBreakthroughStageForLevel(level: number): number | null {
+  if (level < 9 || level >= SPIRIT_MAX_LEVEL) {
+    return null;
+  }
+
+  const stage = Math.floor((level + 1) / 10);
+  return stage >= 1 && stage <= 5 && level === stage * 10 - 1 ? stage : null;
+}
+
+function getCompletedBreakthroughStageForLevel(level: number): number {
+  if (level >= SPIRIT_MAX_LEVEL) {
+    return 5;
+  }
+
+  return Math.min(Math.max(Math.floor(level / 10), 0), 4);
 }
 
 function isAtPendingBreakthrough(level: number, breakthroughStage: number): boolean {
-  return isBreakthroughLevel(level) && breakthroughStage < Math.floor(level / 10);
+  const stage = getBreakthroughStageForLevel(level);
+  return stage !== null && breakthroughStage < stage;
 }
 
 function getPassiveExpPerMinute(level: number, factionCode: FactionAdvantageCode = null): number {
@@ -1878,17 +1896,22 @@ function settleSpiritProgress(slot: {
   satiatedUntil: Date | null;
   lastExpSettledAt: Date | null;
 } {
-  if (isAtPendingBreakthrough(slot.level, slot.breakthroughStage)) {
-    return { ...slot, exp: Math.min(slot.exp, SPIRIT_LEVEL_EXP_REQUIRED), lastExpSettledAt: now };
+  const normalizedSlot = {
+    ...slot,
+    breakthroughStage: Math.max(slot.breakthroughStage, getCompletedBreakthroughStageForLevel(slot.level)),
+  };
+
+  if (isAtPendingBreakthrough(normalizedSlot.level, normalizedSlot.breakthroughStage)) {
+    return { ...normalizedSlot, exp: Math.min(normalizedSlot.exp, SPIRIT_LEVEL_EXP_REQUIRED), lastExpSettledAt: now };
   }
 
-  const lastSettledAt = slot.lastExpSettledAt ?? now;
+  const lastSettledAt = normalizedSlot.lastExpSettledAt ?? now;
   const elapsedSeconds = Math.max(Math.floor((now.getTime() - lastSettledAt.getTime()) / 1000), 0);
   if (elapsedSeconds <= 0) {
-    return slot;
+    return normalizedSlot;
   }
 
-  const satiatedUntilMs = slot.satiatedUntil?.getTime() ?? 0;
+  const satiatedUntilMs = normalizedSlot.satiatedUntil?.getTime() ?? 0;
   const lastSettledAtMs = lastSettledAt.getTime();
   const nowMs = now.getTime();
   const satiatedSeconds = satiatedUntilMs > lastSettledAtMs
@@ -1899,7 +1922,7 @@ function settleSpiritProgress(slot: {
   const normalExpGain = Math.floor(passiveExpPerMinute * normalSeconds / 60);
   const satiatedExpGain = Math.floor(passiveExpPerMinute * satiatedSeconds * (10_000 + SPIRIT_SATIATED_EXP_BONUS_BPS) / 10_000 / 60);
   const expGain = normalExpGain + satiatedExpGain;
-  return applyExpGain({ ...slot, lastExpSettledAt: now }, expGain);
+  return applyExpGain({ ...normalizedSlot, lastExpSettledAt: now }, expGain);
 }
 
 function applyExpGain(state: {
@@ -1911,11 +1934,12 @@ function applyExpGain(state: {
 }, expGain: number) {
   let level = state.level;
   let exp = Math.max(state.exp + Math.max(expGain, 0), 0);
+  const breakthroughStage = Math.max(state.breakthroughStage, getCompletedBreakthroughStageForLevel(level));
 
   while (level < SPIRIT_MAX_LEVEL && exp >= SPIRIT_LEVEL_EXP_REQUIRED) {
     exp -= SPIRIT_LEVEL_EXP_REQUIRED;
     level += 1;
-    if (isAtPendingBreakthrough(level, state.breakthroughStage)) {
+    if (isAtPendingBreakthrough(level, breakthroughStage)) {
       exp = 0;
       break;
     }
@@ -1923,12 +1947,13 @@ function applyExpGain(state: {
 
   if (level >= SPIRIT_MAX_LEVEL) {
     level = SPIRIT_MAX_LEVEL;
-    exp = Math.min(exp, SPIRIT_LEVEL_EXP_REQUIRED);
+    exp = 0;
   }
 
   return {
     ...state,
     level,
+    breakthroughStage,
     exp,
   };
 }
@@ -2259,12 +2284,12 @@ function getSpiritRecoveryTalismanCost(nextRecoveryUsed: number): number {
   return nextRecoveryUsed - SPIRIT_DAILY_FREE_RECOVERY_LIMIT;
 }
 
-function assertVersion(label: string, expected: number | undefined, actual: number): void {
+function assertVersion(label: string, expected: number | undefined, actual: number, options?: { allowStale?: boolean }): void {
   if (typeof expected !== 'number') {
     return;
   }
 
-  if (expected !== actual) {
+  if (options?.allowStale ? expected > actual : expected !== actual) {
     throw new BusinessError({
       code: ErrorCode.StateVersionConflict,
       message: `${label} conflict.`,

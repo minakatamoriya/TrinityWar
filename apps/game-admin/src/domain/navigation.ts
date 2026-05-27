@@ -7,6 +7,7 @@ export const navItems: NavItem[] = [
   { key: 'notifications', label: '系统通知', description: '全服通知和单玩家站内信' },
   { key: 'spiritConfig', label: '灵宠管理', description: '新增、编辑、删除灵宠定义' },
   { key: 'seedConfig', label: '灵植管理', description: '新增、编辑、删除灵植定义' },
+  { key: 'taskConfig', label: '任务模块', description: '新手、每日和阵营任务配置' },
   { key: 'castleLevels', label: '轻量规则', description: '查看地契、俸禄和法术配置' },
   { key: 'system', label: '系统状态', description: '环境、依赖与开关' },
 ];

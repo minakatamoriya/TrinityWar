@@ -1598,7 +1598,7 @@ function App(): JSX.Element {
     { id: 'ordinary-soul', label: '普通兽魂', quantity: spiritState?.ordinarySoul ?? 0, group: 'spirit', rarity: 'common' },
     { id: 'rare-soul', label: '稀有兽魂', quantity: spiritState?.rareSoul ?? 0, group: 'spirit', rarity: 'rare' },
     { id: 'legendary-soul', label: '传说兽魂', quantity: spiritState?.legendarySoul ?? 0, group: 'spirit', rarity: 'legendary' },
-    ...visibleSeedCatalog.map((seed) => ({
+    ...visibleSeedCatalog.filter((seed) => unlockedSeedIds.includes(seed.id)).map((seed) => ({
       id: `essence-${seed.id}`,
       label: `${seed.name}精华`,
       quantity: seedInventory[seed.id] ?? 0,

@@ -1,19 +1,23 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { DAILY_TASK_CONFIG, getDailyTaskDefinition } from '../lib/game-balance.js';
 import { getLocalDateKey } from '../lib/date-key.js';
+import { TaskConfigService } from '../task-config/task-config.service.js';
 
 type PrismaClientLike = Prisma.TransactionClient | PrismaClient;
 
 @Injectable()
 export class DailyTaskLifecycleService {
+  constructor(@Inject(TaskConfigService) private readonly taskConfigService: TaskConfigService) {}
+
   async ensurePlayerDailyTasks(client: PrismaClientLike, playerId: string, dateKey = getLocalDateKey()): Promise<void> {
     const taskIds = buildDailyTaskSelection(dateKey);
 
     for (const taskId of taskIds) {
       const taskDefinition = getDailyTaskDefinition(taskId);
+      const taskConfig = await this.taskConfigService.getDailyTaskConfig(taskId, client);
 
-      if (!taskDefinition) {
+      if (!taskDefinition || !taskConfig?.isEnabled) {
         continue;
       }
 
@@ -30,9 +34,9 @@ export class DailyTaskLifecycleService {
           dateKey,
           taskId,
           progress: 0,
-          target: taskDefinition.objective.count,
+          target: taskConfig.targetCount,
           status: 'IN_PROGRESS',
-          rewardGold: getDailyTaskGoldReward(taskId),
+          rewardGold: taskConfig.rewardGold,
           actionScene: getDailyTaskActionScene(taskDefinition.objective.type),
           claimedAt: null,
         },
@@ -61,18 +65,11 @@ function buildDailyTaskSelection(dateKey: string): string[] {
   return [...fixedTaskIds, ...randomTaskIds];
 }
 
-function getDailyTaskGoldReward(taskId: string): number {
-  const task = getDailyTaskDefinition(taskId);
-  const goldReward = task?.rewards?.find((reward) => reward.type === 'gold');
-  return typeof goldReward?.amount === 'number' ? goldReward.amount : 0;
-}
-
 const DAILY_TASK_SCENE_MAP: Record<string, string> = {
   'collect-field': 'farm',
   'start-cultivation': 'farm',
-  'faction-interaction': 'faction',
-  'faction-donate': 'faction',
   'feed-spirit': 'raid',
+  'recruit-army': 'raid',
   'upgrade-territory-tech': 'building',
   'upgrade-building': 'building',
   'upgrade-core-line': 'building',

@@ -13,6 +13,7 @@ import { FieldLifecycleService } from './field-lifecycle.service.js';
 import { HomeSummaryAssembler } from './home-summary.assembler.js';
 import { PassiveIncomeLifecycleService } from './passive-income-lifecycle.service.js';
 import { SceneContentAssembler } from './scene-content.assembler.js';
+import { TaskConfigService } from '../task-config/task-config.service.js';
 
 @Injectable()
 export class ClientReadService {
@@ -27,6 +28,7 @@ export class ClientReadService {
     @Inject(LandDeedService) private readonly landDeedService: LandDeedService,
     @Inject(HomeSummaryAssembler) private readonly homeSummaryAssembler: HomeSummaryAssembler,
     @Inject(SceneContentAssembler) private readonly sceneContentAssembler: SceneContentAssembler,
+    @Inject(TaskConfigService) private readonly taskConfigService: TaskConfigService,
   ) {}
 
   async getBootstrap(
@@ -180,6 +182,7 @@ export class ClientReadService {
       });
     }
 
+    readModel.taskConfigs = await this.listTaskConfigsForClientRead(client);
     return this.homeSummaryAssembler.assemble(readModel);
   }
 
@@ -213,7 +216,16 @@ export class ClientReadService {
       });
     }
 
+    readModel.taskConfigs = await this.listTaskConfigsForClientRead(client);
     return this.sceneContentAssembler.assemble(readModel, codex);
+  }
+
+  private async listTaskConfigsForClientRead(client: Prisma.TransactionClient | PrismaClient): Promise<Awaited<ReturnType<TaskConfigService['listAdminTaskConfigs']>>> {
+    try {
+      return await this.taskConfigService.listAdminTaskConfigs(null, client);
+    } catch {
+      return [];
+    }
   }
 
   private async ensureRaidTargetPool(client: Prisma.TransactionClient | PrismaClient, playerId: string): Promise<void> {

@@ -84,6 +84,22 @@ export class AdminReadonlyController {
     return this.adminReadonlyService.listCastleLevels();
   }
 
+  @Get('config/tasks')
+  @ApiOkResponse({ description: 'List task configs.' })
+  listTaskConfigs(@Query() query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
+    return this.adminReadonlyService.listTaskConfigs(query);
+  }
+
+  @Patch('config/tasks/:taskGroup/:taskId')
+  @ApiOkResponse({ description: 'Update task config override.' })
+  updateTaskConfig(
+    @Param('taskGroup') taskGroup: string,
+    @Param('taskId') taskId: string,
+    @Body() body: unknown,
+  ): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.updateTaskConfig(taskGroup, taskId, body);
+  }
+
   @Get('players/search')
   @ApiOkResponse({ description: 'Search players by id, nickname, or dev identity.' })
   searchPlayers(@Query() query: Record<string, string | undefined>): Promise<AdminPlayerSearchResponse> {
@@ -155,6 +171,8 @@ defineRouteParamTypes(AdminReadonlyController.prototype, 'createSpiritDefinition
 defineRouteParamTypes(AdminReadonlyController.prototype, 'updateSpiritDefinition', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'deleteSpiritDefinition', [String]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listCastleLevels', []);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'listTaskConfigs', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'updateTaskConfig', [String, String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getPlayerOverview', [String]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'deletePlayer', [String]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getWalletLogs', [String, Object]);

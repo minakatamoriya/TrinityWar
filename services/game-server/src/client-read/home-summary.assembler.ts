@@ -44,17 +44,20 @@ export class HomeSummaryAssembler {
       ],
       pendingClaims: [],
       temporaryClaim: null,
-      dailyTasks: readModel.taskStates.filter((taskState) => activeDailyTaskIds.has(taskState.taskId)).map((taskState) => ({
-        id: taskState.taskId,
-        title: getDailyTaskDefinition(taskState.taskId)?.title ?? taskState.taskId,
-        description: `每日任务，完成后可领取 ${formatNumber(taskState.rewardGold)} 金币。`,
-        progressCurrent: Math.min(taskState.progress, taskState.target),
-        progressTarget: taskState.target,
-        progressText: buildDailyTaskProgressText(taskState.progress, taskState.target, taskState.status),
-        rewardGold: taskState.rewardGold,
-        status: mapTaskStatus(taskState.status),
-        actionScene: mapActionScene(getDailyTaskActionScene(getDailyTaskDefinition(taskState.taskId)?.objective.type, taskState.actionScene)),
-      })),
+      dailyTasks: readModel.taskStates.filter((taskState) => activeDailyTaskIds.has(taskState.taskId) && (findTaskConfig(readModel, taskState.taskId)?.isEnabled ?? true)).map((taskState) => {
+        const taskConfig = findTaskConfig(readModel, taskState.taskId);
+        return {
+          id: taskState.taskId,
+          title: taskConfig?.title ?? getDailyTaskDefinition(taskState.taskId)?.title ?? taskState.taskId,
+          description: taskConfig?.description ?? `每日任务，完成后可领取 ${formatNumber(taskState.rewardGold)} 金币。`,
+          progressCurrent: Math.min(taskState.progress, taskState.target),
+          progressTarget: taskState.target,
+          progressText: buildDailyTaskProgressText(taskState.progress, taskState.target, taskState.status),
+          rewardGold: taskState.rewardGold,
+          status: mapTaskStatus(taskState.status),
+          actionScene: mapActionScene(getDailyTaskActionScene(getDailyTaskDefinition(taskState.taskId)?.objective.type, taskState.actionScene)),
+        };
+      }),
       factionTasks: buildHomeFactionTasks(readModel),
       todayContribution: readModel.contributionLogs.reduce((sum, log) => sum + Math.max(log.contributionDelta, 0), 0),
       primaryActions: [
@@ -62,7 +65,7 @@ export class HomeSummaryAssembler {
         { key: 'farm', title: '农场', description: '收成熟田地' },
         { key: 'raid', title: '部队', description: '征召兵力并查看训练队列' },
         { key: 'report', title: '掠夺', description: '查看目标、战报与通缉令' },
-        { key: 'faction', title: '阵营', description: '上缴并领取每日俸禄' },
+        { key: 'faction', title: '阵营', description: '上缴精华并领取每日俸禄' },
       ],
     };
   }
@@ -154,7 +157,7 @@ function buildHomeFactionTasks(readModel: HomeSummaryReadModel): ClientHomeFacti
     }]),
   );
 
-  return readModel.dailyFactionTasks.map((task) => {
+  return readModel.dailyFactionTasks.filter((task) => findFactionTaskConfig(readModel, task)?.isEnabled ?? true).map((task) => {
     const taskType = mapFactionTaskType(task.taskType);
     const requiredEssence = task.requiredEssenceType ? essenceInventory.get(task.requiredEssenceType) : null;
     const progressCurrent = Math.min(task.progressAmount, task.requiredAmount);
@@ -164,12 +167,13 @@ function buildHomeFactionTasks(readModel: HomeSummaryReadModel): ClientHomeFacti
       : requiredEssence && requiredEssence.quantity >= Math.max(task.requiredAmount - progressCurrent, 1)
         ? 'faction'
         : 'farm';
+    const taskConfig = findFactionTaskConfig(readModel, task);
 
     return {
       id: task.id,
       type: taskType,
-      title: buildFactionTaskTitle(taskType, requiredEssence?.label ?? task.requiredEssenceType),
-      description: buildFactionTaskDescription(taskType, task.rewardContribution),
+      title: buildFactionTaskTitle(taskType, requiredEssence?.label ?? task.requiredEssenceType, taskConfig?.title),
+      description: taskConfig?.description ?? buildFactionTaskDescription(taskType, task.rewardContribution),
       progressCurrent,
       progressTarget: task.requiredAmount,
       progressText: buildDailyTaskProgressText(task.progressAmount, task.requiredAmount, task.status),
@@ -200,7 +204,11 @@ function mapFactionTaskType(taskType: HomeSummaryReadModel['dailyFactionTasks'][
   return 'essence-submit-basic';
 }
 
-function buildFactionTaskTitle(type: ClientHomeFactionTaskSummary['type'], essenceLabel?: string | null): string {
+function buildFactionTaskTitle(type: ClientHomeFactionTaskSummary['type'], essenceLabel?: string | null, configuredTitle?: string | null): string {
+  if (configuredTitle) {
+    return type === 'conflict-raid' ? configuredTitle : `${configuredTitle}：${essenceLabel ?? '精华'}`;
+  }
+
   if (type === 'conflict-raid') {
     return '完成 1 次成功掠夺';
   }
@@ -231,4 +239,23 @@ function buildFactionTaskActionLabel(
   }
 
   return ownedQuantity >= Math.max(remainingAmount, 1) ? '上缴' : '去种植';
+}
+
+function findTaskConfig(readModel: HomeSummaryReadModel, taskId: string): HomeSummaryReadModel['taskConfigs'][number] | null {
+  return readModel.taskConfigs.find((task) => task.taskId === taskId && (task.taskGroup === 'daily' || task.taskGroup === 'starter')) ?? null;
+}
+
+function findFactionTaskConfig(
+  readModel: HomeSummaryReadModel,
+  task: HomeSummaryReadModel['dailyFactionTasks'][number],
+): HomeSummaryReadModel['taskConfigs'][number] | null {
+  const taskId = task.taskType === 'CONFLICT_RAID'
+    ? 'conflict-raid'
+    : task.taskType === 'ESSENCE_SUBMIT_BASIC'
+      ? 'essence-submit-basic'
+      : task.rewardContribution >= 35 || task.requiredAmount <= 10
+        ? 'essence-submit-focus-rare'
+        : 'essence-submit-focus-common';
+
+  return readModel.taskConfigs.find((config) => config.taskGroup === 'daily-faction' && config.taskId === taskId) ?? null;
 }

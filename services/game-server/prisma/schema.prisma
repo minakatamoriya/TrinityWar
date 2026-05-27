@@ -803,6 +803,24 @@ model PlayerDailyTaskState {
   @@map("player_daily_task_state")
 }
 
+model TaskConfigOverride {
+  id                 String   @id @default(cuid())
+  taskGroup          String   @map("task_group")
+  taskId             String   @map("task_id")
+  title              String?
+  description        String?
+  targetCount        Int?     @map("target_count")
+  rewardGold         Int?     @map("reward_gold")
+  rewardContribution Int?     @map("reward_contribution")
+  isEnabled          Boolean  @default(true) @map("is_enabled")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@unique([taskGroup, taskId])
+  @@index([taskGroup, isEnabled])
+  @@map("task_config_override")
+}
+
 model WalletChangeLog {
   id                    String   @id @default(cuid())
   playerId              String   @map("player_id")

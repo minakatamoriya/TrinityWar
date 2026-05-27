@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
 import { LandDeedModule } from '../land-deed/land-deed.module.js';
+import { TaskConfigModule } from '../task-config/task-config.module.js';
 import { ClientReadController } from './client-read.controller.js';
 import { ArmyTrainingLifecycleService } from './army-training-lifecycle.service.js';
 import { ClientReadRepository } from './client-read.repository.js';
@@ -13,7 +14,7 @@ import { PassiveIncomeLifecycleService } from './passive-income-lifecycle.servic
 import { SceneContentAssembler } from './scene-content.assembler.js';
 
 @Module({
-  imports: [AuthModule, LandDeedModule],
+  imports: [AuthModule, LandDeedModule, TaskConfigModule],
   controllers: [ClientReadController],
   providers: [ClientReadService, ClientReadRepository, HomeSummaryAssembler, SceneContentAssembler, FieldLifecycleService, ArmyTrainingLifecycleService, PassiveIncomeLifecycleService, DailyTaskLifecycleService, DailyFactionTaskLifecycleService],
   exports: [ClientReadService, FieldLifecycleService, ArmyTrainingLifecycleService, PassiveIncomeLifecycleService, DailyTaskLifecycleService, DailyFactionTaskLifecycleService],

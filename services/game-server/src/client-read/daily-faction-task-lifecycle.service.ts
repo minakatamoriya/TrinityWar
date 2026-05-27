@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { DailyFactionTaskType, Prisma, PrismaClient } from '@prisma/client';
+import { TaskConfigService } from '../task-config/task-config.service.js';
 
 type PrismaClientLike = Prisma.TransactionClient | PrismaClient;
 
@@ -17,6 +18,8 @@ interface DailyFactionTaskSeed {
 
 @Injectable()
 export class DailyFactionTaskLifecycleService {
+  constructor(@Inject(TaskConfigService) private readonly taskConfigService: TaskConfigService) {}
+
   async ensurePlayerDailyFactionTasks(client: PrismaClientLike, playerId: string, dateKey: string): Promise<void> {
     const player = await client.player.findUnique({
       where: { id: playerId },
@@ -60,30 +63,38 @@ export class DailyFactionTaskLifecycleService {
     if (unlockedPlants.length > 0) {
       const basicPlant = unlockedPlants.find((plant) => plant.rarity === 'common') ?? unlockedPlants[0];
       const focusPlant = pickFocusPlant(unlockedPlants, dateKey);
-      tasks.push(
-        {
+      const basicConfig = await this.taskConfigService.getDailyFactionTaskConfig('essence-submit-basic', client);
+      const focusConfig = await this.taskConfigService.getDailyFactionTaskConfig(
+        focusPlant.rarity === 'common' ? 'essence-submit-focus-common' : 'essence-submit-focus-rare',
+        client,
+      );
+      if (basicConfig?.isEnabled) {
+        tasks.push({
           taskType: BASIC_TASK,
           requiredEssenceType: basicPlant.seedId,
-          requiredAmount: 20,
-          rewardContribution: 20,
-        },
-        {
+          requiredAmount: basicConfig.targetCount,
+          rewardContribution: basicConfig.rewardContribution,
+        });
+      }
+      if (focusConfig?.isEnabled) {
+        tasks.push({
           taskType: FOCUS_TASK,
           requiredEssenceType: focusPlant.seedId,
-          requiredAmount: focusPlant.rarity === 'common' ? 15 : 10,
-          rewardContribution: focusPlant.rarity === 'common' ? 30 : 35,
-        },
-      );
+          requiredAmount: focusConfig.targetCount,
+          rewardContribution: focusConfig.rewardContribution,
+        });
+      }
     }
 
-    tasks.push(
-      {
+    const conflictConfig = await this.taskConfigService.getDailyFactionTaskConfig('conflict-raid', client);
+    if (conflictConfig?.isEnabled) {
+      tasks.push({
         taskType: CONFLICT_TASK,
         requiredEssenceType: null,
-        requiredAmount: 1,
-        rewardContribution: 25,
-      },
-    );
+        requiredAmount: conflictConfig.targetCount,
+        rewardContribution: conflictConfig.rewardContribution,
+      });
+    }
 
     for (const task of tasks) {
       await client.dailyFactionTask.upsert({

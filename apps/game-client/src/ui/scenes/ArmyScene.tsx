@@ -101,22 +101,37 @@ function getPassiveExpPerMinute(level: number): number {
   return 150;
 }
 
-function isBreakthroughLevel(level: number): boolean {
-  return level > 0 && level % 10 === 0 && level <= SPIRIT_MAX_LEVEL;
+function getBreakthroughStageForLevel(level: number): number | null {
+  if (level < 9 || level >= SPIRIT_MAX_LEVEL) {
+    return null;
+  }
+
+  const stage = Math.floor((level + 1) / 10);
+  return stage >= 1 && stage <= 5 && level === stage * 10 - 1 ? stage : null;
+}
+
+function getCompletedBreakthroughStageForLevel(level: number): number {
+  if (level >= SPIRIT_MAX_LEVEL) {
+    return 5;
+  }
+
+  return Math.min(Math.max(Math.floor(level / 10), 0), 4);
 }
 
 function isAtPendingBreakthrough(level: number, breakthroughStage: number): boolean {
-  return isBreakthroughLevel(level) && breakthroughStage < Math.floor(level / 10);
+  const stage = getBreakthroughStageForLevel(level);
+  return stage !== null && breakthroughStage < stage;
 }
 
 function applyExpGain(level: number, exp: number, breakthroughStage: number, expGain: number, currentLevelExpRequired: number): Pick<ClientSpiritSlot, 'level' | 'exp' | 'breakthroughStage' | 'isAtBreakthroughNode'> {
   let nextLevel = level;
   let nextExp = Math.max(exp + Math.max(expGain, 0), 0);
+  const nextBreakthroughStage = Math.max(breakthroughStage, getCompletedBreakthroughStageForLevel(nextLevel));
 
   while (nextLevel < SPIRIT_MAX_LEVEL && nextExp >= currentLevelExpRequired) {
     nextExp -= currentLevelExpRequired;
     nextLevel += 1;
-    if (isAtPendingBreakthrough(nextLevel, breakthroughStage)) {
+    if (isAtPendingBreakthrough(nextLevel, nextBreakthroughStage)) {
       nextExp = 0;
       break;
     }
@@ -124,14 +139,14 @@ function applyExpGain(level: number, exp: number, breakthroughStage: number, exp
 
   if (nextLevel >= SPIRIT_MAX_LEVEL) {
     nextLevel = SPIRIT_MAX_LEVEL;
-    nextExp = Math.min(nextExp, currentLevelExpRequired);
+    nextExp = 0;
   }
 
   return {
     level: nextLevel,
     exp: nextExp,
-    breakthroughStage,
-    isAtBreakthroughNode: isAtPendingBreakthrough(nextLevel, breakthroughStage),
+    breakthroughStage: nextBreakthroughStage,
+    isAtBreakthroughNode: isAtPendingBreakthrough(nextLevel, nextBreakthroughStage),
   };
 }
 
@@ -143,10 +158,10 @@ function getLiveSpiritSlot(slot: ClientSpiritSlot, nowMs: number): ClientSpiritS
     ? Math.max(Math.floor((satiatedUntilMs - nowMs) / 1000), 0)
     : 0;
 
-  if (!lastExpSettledAtMs || slot.isAtBreakthroughNode) {
+  if (slot.level >= SPIRIT_MAX_LEVEL || !lastExpSettledAtMs || slot.isAtBreakthroughNode) {
     return {
       ...slot,
-      exp: Math.min(slot.exp, currentLevelExpRequired),
+      exp: slot.level >= SPIRIT_MAX_LEVEL ? 0 : Math.min(slot.exp, currentLevelExpRequired),
       satiatedRemainingSeconds,
       satiatedExpBonusPercent: satiatedRemainingSeconds > 0 ? 50 : 0,
     };
@@ -179,6 +194,10 @@ function getLiveSpiritSlot(slot: ClientSpiritSlot, nowMs: number): ClientSpiritS
 }
 
 function getLevelRemainingText(slot: ClientSpiritSlot): string {
+  if (slot.level >= SPIRIT_MAX_LEVEL) {
+    return '已达等级上限';
+  }
+
   if (slot.isAtBreakthroughNode) {
     return '等待突破';
   }
@@ -195,6 +214,10 @@ function getLevelRemainingText(slot: ClientSpiritSlot): string {
 }
 
 function getExpGainText(slot: ClientSpiritSlot): string {
+  if (slot.level >= SPIRIT_MAX_LEVEL) {
+    return '当前已达等级上限';
+  }
+
   if (slot.isAtBreakthroughNode) {
     return '当前待突破，突破后恢复增长';
   }
@@ -206,6 +229,10 @@ function getExpGainText(slot: ClientSpiritSlot): string {
 }
 
 function getExpProgressPercent(slot: ClientSpiritSlot): number {
+  if (slot.level >= SPIRIT_MAX_LEVEL) {
+    return 100;
+  }
+
   if (slot.isAtBreakthroughNode) {
     return 100;
   }
@@ -508,11 +535,11 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
       ? levelGain * currentLevelExpRequired + selectedSlot.exp - previousSlot.exp
       : selectedSlot.exp - previousSlot.exp;
 
-    if (expGain > 0) {
+    if (selectedSlot.level < SPIRIT_MAX_LEVEL && expGain > 0) {
       setExpFloat({ id: Date.now(), text: `+${formatNumber(expGain)} \u7ecf\u9a8c` });
     }
 
-    if (levelGain > 0) {
+    if (selectedSlot.level < SPIRIT_MAX_LEVEL && levelGain > 0) {
       setLevelFlashToken(Date.now());
       setResumeHint({ id: Date.now(), text: `\u5347\u7ea7\u6210\u529f\uff0c\u5f53\u524d Lv.${selectedSlot.level}` });
     }
@@ -687,7 +714,9 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                     <div className="spirit-progress-head">
                       <span>{'\u7ecf\u9a8c'}</span>
                       <strong>
-                        {selectedSlot.isAtBreakthroughNode
+                        {selectedSlot.level >= SPIRIT_MAX_LEVEL
+                          ? '已封顶'
+                          : selectedSlot.isAtBreakthroughNode
                           ? '\u5f85\u7a81\u7834'
                           : `${formatNumber(selectedSlot.exp)} / ${formatNumber(Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1))} \u00b7 ${Math.floor(getExpProgressPercent(selectedSlot))}%`}
                       </strong>
@@ -754,11 +783,11 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                         </div>
                         {selectedSlot.isAtBreakthroughNode && spirit.breakthroughRequirement ? (
                           <>
-                            <p className="panel-text">Lv.{spirit.breakthroughRequirement.level} 突破需要 {spirit.breakthroughRequirement.label} x{spirit.breakthroughRequirement.required}，当前 {spirit.breakthroughRequirement.owned}。</p>
+                            <p className="panel-text">Lv.{spirit.breakthroughRequirement.level} 满经验突破后升至 Lv.{spirit.breakthroughRequirement.level + 1}，需要 {spirit.breakthroughRequirement.label} x{spirit.breakthroughRequirement.required}，当前 {spirit.breakthroughRequirement.owned}。</p>
                             <button className="primary-button spirit-full-button" disabled={busy || !spirit.breakthroughRequirement.canBreakthrough} onClick={() => onBreakthrough(selectedSlot.slotIndex, selectedSlot.slotVersion, spirit.breakthroughRequirement?.stage)} type="button">手动突破</button>
                           </>
                         ) : (
-                          <p className="panel-text">未到突破节点。每 10 级需要手动突破，经验不会缓存溢出。</p>
+                          <p className="panel-text">未到突破节点。Lv.9/19/29/39/49 满经验时需要手动突破，经验不会缓存溢出。</p>
                         )}
                       </section>
                     ) : null}
@@ -773,21 +802,22 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                             const trait = selectedSlot.traits?.find((item) => item.slotIndex === slotIndex);
                             const unlocked = slotIndex <= (selectedSlot.unlockedTraitSlots ?? 0);
                             const unlockLevel = slotIndex * 10;
+                            const breakthroughLevel = unlockLevel - 1;
                             return (
                               <div className={`task-row spirit-trait-row${trait?.sourceType === 'natural' ? ' is-natural' : ''}`} key={slotIndex}>
                                 <span className="task-index">{slotIndex}</span>
                                 <div>
                                   <div className="task-row-head">
-                                    <strong>{trait ? trait.label : unlocked ? '待洗练' : `Lv.${unlockLevel} 突破解锁`}</strong>
+                                    <strong>{trait ? trait.label : unlocked ? '待洗练' : `Lv.${breakthroughLevel} 突破解锁`}</strong>
                                     <span className="task-state-badge">{unlocked ? '已解锁' : '未解锁'}</span>
                                   </div>
-                                  <p>{trait?.description ?? (unlocked ? '洗练后生成词条' : `达到 Lv.${unlockLevel} 并完成突破后解锁`)}</p>
+                                  <p>{trait?.description ?? (unlocked ? '洗练后生成词条' : `达到 Lv.${breakthroughLevel} 满经验并完成突破后解锁`)}</p>
                                 </div>
                               </div>
                             );
                           })}
                         </div>
-                        {(selectedSlot.unlockedTraitSlots ?? 0) <= 0 ? <p className="panel-text">第一个词条会在 Lv.10 完成突破后随机生成。</p> : null}
+                        {(selectedSlot.unlockedTraitSlots ?? 0) <= 0 ? <p className="panel-text">第一个词条会在 Lv.9 满经验完成突破后随机生成。</p> : null}
                         <div className="spirit-element-picker">
                           {Array.from({ length: selectedSlot.unlockedTraitSlots ?? 0 }, (_, index) => index + 1).map((slotIndex) => (
                             <button className={`spirit-element-chip ${lockedTraitSlot === slotIndex ? ' is-selected' : ''}`} key={`lock-${slotIndex}`} onClick={() => setLockedTraitSlot(slotIndex)} type="button">锁 {slotIndex}</button>

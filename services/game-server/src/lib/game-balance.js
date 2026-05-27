@@ -463,7 +463,7 @@ export const DAILY_TASK_CONFIG = {
   },
   milestoneRewards: [
     { completedCount: 2, rewards: [{ type: 'gold', amount: 10 }, { type: 'seed-pack', packId: 'common-choice', amount: 1 }] },
-    { completedCount: 4, rewards: [{ type: 'gold', amount: 15 }, { type: 'faction-contribution', amount: 2 }] },
+    { completedCount: 4, rewards: [{ type: 'gold', amount: 15 }, { type: 'seed-pack', packId: 'common-choice', amount: 1 }] },
     { completedCount: 5, rewards: [{ type: 'gold', amount: 20 }, { type: 'seed-pack', packId: 'common-random', amount: 1 }] },
   ],
   fixedTasks: [
@@ -480,13 +480,6 @@ export const DAILY_TASK_CONFIG = {
       category: '经营',
       objective: { type: 'start-cultivation', count: 1 },
       rewards: [{ type: 'gold', amount: 16 }],
-    },
-    {
-      id: 'daily-faction-touch',
-      title: '领取 1 次阵营俸禄或完成 1 次上缴',
-      category: '阵营',
-      objective: { type: 'faction-interaction', count: 1 },
-      rewards: [{ type: 'gold', amount: 18 }],
     },
   ],
   randomTasks: [
@@ -505,10 +498,10 @@ export const DAILY_TASK_CONFIG = {
       rewards: [{ type: 'gold', amount: 20 }],
     },
     {
-      id: 'daily-donate-gold',
-      title: '完成 1 次金币上缴',
-      category: '阵营',
-      objective: { type: 'faction-donate', count: 1 },
+      id: 'daily-recruit-army',
+      title: '征召 1 次士兵',
+      category: '经营',
+      objective: { type: 'recruit-army', count: 1 },
       rewards: [{ type: 'gold', amount: 18 }],
     },
     {
@@ -535,11 +528,11 @@ export const DAILY_TASK_CONFIG = {
       rewards: [{ type: 'gold', amount: 40 }, { type: 'seed-pack', packId: 'common-choice', amount: 1 }],
     },
     {
-      id: 'catchup-first-donate',
-      title: '完成 1 次金币上缴',
+      id: 'catchup-first-recruit',
+      title: '征召 1 次士兵',
       category: '追赶',
-      objective: { type: 'faction-donate', count: 1 },
-      rewards: [{ type: 'gold', amount: 40 }, { type: 'faction-contribution', amount: 5 }],
+      objective: { type: 'recruit-army', count: 1 },
+      rewards: [{ type: 'gold', amount: 40 }, { type: 'seed-pack', packId: 'starter-common', amount: 1 }],
     },
   ],
 };
