@@ -909,7 +909,7 @@ function normalizeRaidRewardItems(value: unknown): ClientRaidRewardItem[] {
   return value
     .map((item) => item && typeof item === 'object' && !Array.isArray(item) ? item as Record<string, unknown> : null)
     .filter((item): item is Record<string, unknown> => Boolean(item && item.kind === 'essence' && typeof item.quantity === 'number'))
-    .map((item) => ({
+    .map((item): ClientRaidRewardItem => ({
       kind: 'essence',
       seedId: typeof item.seedId === 'string' ? item.seedId : typeof item.essenceType === 'string' ? item.essenceType : '',
       essenceType: typeof item.essenceType === 'string' ? item.essenceType : typeof item.seedId === 'string' ? item.seedId : undefined,

@@ -245,6 +245,7 @@ export interface SceneContentReadModel {
         lootGold: number;
         attackerLoss: number;
         defenderLoss: number;
+        rewardItemsJson: Prisma.JsonValue;
         battleReplayJson: unknown;
       } | null;
       raidMessage: {
@@ -688,6 +689,7 @@ export class ClientReadRepository {
                 lootGold: true,
                 attackerLoss: true,
                 defenderLoss: true,
+                rewardItemsJson: true,
                 battleReplayJson: true,
               },
             },

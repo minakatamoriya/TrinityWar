@@ -23,7 +23,7 @@ import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { LandDeedService } from '../land-deed/land-deed.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
-import { DAILY_TASK_CONFIG, GAME_BALANCE, getCastleExtensionLevelConfig, getFactionAdvantageConfig, getFactionStipendTier, getSeedStageGold, getSeedStageSeconds } from '../lib/game-balance.js';
+import { DAILY_TASK_CONFIG, GAME_BALANCE, getFactionAdvantageConfig, getFactionStipendTier, getSeedStageGold, getSeedStageSeconds } from '../lib/game-balance.js';
 import { getVaultCapacityGain } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PlayerInitializationService } from '../seed/player-initialization.service.js';
@@ -657,6 +657,7 @@ export class ClientCommandService {
       }
 
       await applyEssenceCollectRewards(client, input.playerId, resolution.rewards, field.id);
+      await applySeedCollectRewards(client, input.playerId, resolution.rewards);
       await applySpiritCropRewards(client, input.playerId, resolution.rewards);
 
       await this.auditService.createFieldHarvestLog(client, {
@@ -2035,7 +2036,12 @@ function validateCollectFieldRequest(request: CollectFieldRequestDto): void {
 function validateStartCultivationRequest(request: StartCultivationRequestDto): void {
   const body = assertRequestBody(request);
   assertRequiredString(body.fieldId, 'fieldId');
-  assertRequiredString(getRequestedPlantType(body as StartCultivationRequestDto), 'plantType');
+  const plantType = typeof body.plantType === 'string'
+    ? body.plantType
+    : typeof body.seedId === 'string'
+      ? body.seedId
+      : '';
+  assertRequiredString(plantType, 'plantType');
 }
 
 function validateRecruitArmyRequest(request: RecruitArmyRequestDto): void {
@@ -2500,6 +2506,39 @@ async function applySeedCollectRewards(
       discoveredAt: now,
     });
   }
+}
+
+async function ensureSeedDefinitionExists(
+  client: Prisma.TransactionClient,
+  seedId: string,
+): Promise<{ id: string; seedId: string; label: string } | null> {
+  const seed = SEED_DEFINITION_SEEDS.find((entry) => entry.seedId === seedId);
+  if (!seed) {
+    return null;
+  }
+
+  return client.seedDefinition.upsert({
+    where: { seedId: seed.seedId },
+    create: seed,
+    update: {
+      label: seed.label,
+      rarity: seed.rarity,
+      sortOrder: seed.sortOrder,
+      seedSeconds: seed.seedSeconds,
+      growSeconds: seed.growSeconds,
+      matureSeconds: seed.matureSeconds,
+      ripeWindowSeconds: seed.ripeWindowSeconds,
+      baseYieldGold: seed.baseYieldGold,
+      harvestSeedReturn: seed.harvestSeedReturn,
+      strategyNote: seed.strategyNote,
+      lore: seed.lore,
+    },
+    select: {
+      id: true,
+      seedId: true,
+      label: true,
+    },
+  });
 }
 
 async function applyEssenceCollectRewards(

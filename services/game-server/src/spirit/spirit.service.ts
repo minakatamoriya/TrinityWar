@@ -11,7 +11,6 @@ import { getLocalDateKey } from '../lib/date-key.js';
 import { DAILY_TASK_CONFIG, getFactionAdvantageConfig } from '../lib/game-balance.js';
 import { applyFactionSpiritPassiveExpBonus, getFactionSpiritFeedDurationSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { STARTER_SPIRIT_IDS } from '../seed/seed-data/spirits.js';
 
 const SPIRIT_SOUL_GOLD_PRICE = 100;
 const SPIRIT_MAX_LEVEL = 50;
@@ -206,24 +205,6 @@ export class SpiritService {
         note: `Buy ${soulGain} spirit soul.`,
       });
 
-      if (STARTER_SPIRIT_IDS.includes(codexEntry.spiritDefinition.spiritId as typeof STARTER_SPIRIT_IDS[number])) {
-        await client.playerSpiritCodex.updateMany({
-          where: {
-            playerId,
-            spiritDefinition: {
-              spiritId: { in: [...STARTER_SPIRIT_IDS] },
-            },
-            id: { not: codexEntry.id },
-          },
-          data: {
-            shardCount: 0,
-            readyToCompose: false,
-            readyAt: null,
-            codexVersion: { increment: 1 },
-          },
-        });
-      }
-
       const response = await this.buildSpiritMutationResponse(client, playerId, `已消耗 ${goldAmount} 金币，购入 ${soulGain} 点兽魂。`);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-resource', playerId);
       return response;
@@ -408,7 +389,7 @@ export class SpiritService {
       assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
 
       const now = new Date();
-      const factionCode = (resource.player?.faction?.code ?? null) as FactionAdvantageCode;
+      const factionCode = toFactionAdvantageCode(resource.player?.faction?.code);
       const settled = settleSpiritProgress(slot, now, factionCode);
       const satiatedRemainingSeconds = Math.max(Math.floor(((settled.satiatedUntil?.getTime() ?? now.getTime()) - now.getTime()) / 1000), 0);
       const satiatedSecondsAdded = getFactionSpiritFeedDurationSeconds(SPIRIT_FEED_ONCE_SECONDS, factionCode);
@@ -523,7 +504,7 @@ export class SpiritService {
       assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
 
       const now = new Date();
-      const settled = settleSpiritProgress(slot, now, (resource.player?.faction?.code ?? null) as FactionAdvantageCode);
+      const settled = settleSpiritProgress(slot, now, toFactionAdvantageCode(resource.player?.faction?.code));
       const targetStage = request.targetStage ?? getBreakthroughStageForLevel(settled.level);
       const expectedStage = getBreakthroughStageForLevel(settled.level);
       if (expectedStage === null || targetStage !== expectedStage || settled.breakthroughStage >= expectedStage) {
@@ -1658,7 +1639,7 @@ function buildSpiritState(
 ): ClientSpiritState {
   const now = new Date();
   const mappedSlots: ClientSpiritSlot[] = slots.map((slot) => {
-    const settled = slot.spiritDefinition ? settleSpiritProgress(slot, now, resource.factionCode ?? null) : {
+    const settled = slot.spiritDefinition ? settleSpiritProgress(slot, now, toFactionAdvantageCode(resource.factionCode)) : {
       level: slot.level,
       exp: slot.exp,
       breakthroughStage: slot.breakthroughStage,
@@ -1719,7 +1700,7 @@ function buildSpiritState(
     slots: mappedSlots,
     codex: mappedCodex,
     readyToCompose: mappedCodex.filter((entry) => entry.readyToCompose),
-    factionAdvantage: getFactionAdvantageConfig(resource.factionCode ?? null) ?? undefined,
+    factionAdvantage: getFactionAdvantageConfig(toFactionAdvantageCode(resource.factionCode)) ?? undefined,
     breakthroughRequirement: buildBreakthroughRequirement(mainSlot, resource),
     shop: {
       items: buildShopItemsForState(shopPurchases),
@@ -1843,6 +1824,10 @@ function mapTraits(traits: SpiritReadTrait[]): ClientSpiritTrait[] {
 
 function getUnlockedTraitSlots(breakthroughStage: number): number {
   return Math.min(Math.max(Math.floor(breakthroughStage), 0), 5);
+}
+
+function toFactionAdvantageCode(value: string | null | undefined): FactionAdvantageCode {
+  return value === 'human' || value === 'immortal' || value === 'demon' ? value : null;
 }
 
 function getBreakthroughStageForLevel(level: number): number | null {
