@@ -2,7 +2,7 @@ export interface BackpackResourceItem {
   id: string;
   label: string;
   quantity: number;
-  group: 'spirit' | 'farm' | 'other';
+  group: 'spirit' | 'soul' | 'raid-shard' | 'farm' | 'other';
   rarity?: 'common' | 'rare' | 'legendary';
   description?: string;
 }
@@ -14,12 +14,14 @@ interface ResourceBackpackModalProps {
 }
 
 const groupLabels: Record<BackpackResourceItem['group'], string> = {
-  spirit: '灵宠资材',
+  spirit: '灵宠养成材料',
+  soul: '兽魂突破材料',
+  'raid-shard': '掠夺精魄',
   farm: '田地精华',
   other: '其他资源',
 };
 
-const groupOrder: BackpackResourceItem['group'][] = ['spirit', 'farm', 'other'];
+const groupOrder: BackpackResourceItem['group'][] = ['spirit', 'soul', 'raid-shard', 'farm', 'other'];
 
 export function ResourceBackpackModal(props: ResourceBackpackModalProps): JSX.Element {
   const {
@@ -33,7 +35,7 @@ export function ResourceBackpackModal(props: ResourceBackpackModalProps): JSX.El
       <div className="seed-codex-topbar">
         <div className="seed-codex-title-block">
           <p className="eyebrow">我的资源</p>
-          <p className="seed-codex-tip">查看当前拥有的灵宠资材、田地精华和后续新增资源</p>
+          <p className="seed-codex-tip">查看当前拥有的灵宠材料、掠夺精魄、田地精华和其他资源</p>
         </div>
         <button className="ghost-button small" onClick={onClose} type="button">关闭</button>
       </div>

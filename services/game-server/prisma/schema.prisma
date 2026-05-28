@@ -130,6 +130,44 @@ enum PlayerNotificationClaimStatus {
   EXPIRED
 }
 
+enum SocialRelationType {
+  FRIEND
+  FOLLOWING
+  ENEMY
+  BLOCKED
+}
+
+enum SocialRelationStatus {
+  ACTIVE
+  PENDING
+  MUTED
+}
+
+enum SocialFeedType {
+  FRIEND_WATERED_FIELD
+  FRIEND_GUARDED_FIELD
+  TEAM_CHALLENGE_INVITED
+  TEAM_CHALLENGE_ACCEPTED
+  ENEMY_RAIDED
+  REVENGE_AVAILABLE
+  FACTION_HELP_REQUESTED
+}
+
+enum SocialAssistType {
+  WATER_FIELD
+  GUARD_FIELD
+  RECOVER_SPIRIT
+  FACTION_TASK_HELP
+}
+
+enum TeamChallengeStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  SETTLED
+}
+
 model Player {
   id               String    @id @default(cuid())
   nickname         String
@@ -182,6 +220,15 @@ model Player {
   notifications           PlayerNotification[]
   landDeedProgress        PlayerLandDeedProgress[]
   factionStipendStates    PlayerFactionStipendState[]
+  socialRelationsOwned    PlayerSocialRelation[]    @relation("SocialRelationOwner")
+  socialRelationsTargeted PlayerSocialRelation[]    @relation("SocialRelationTarget")
+  socialFeedsOwned        PlayerSocialFeed[]        @relation("SocialFeedOwner")
+  socialFeedsAuthored     PlayerSocialFeed[]        @relation("SocialFeedActor")
+  assistsGiven            PlayerAssistRecord[]      @relation("AssistHelper")
+  assistsReceived         PlayerAssistRecord[]      @relation("AssistTarget")
+  teamChallengesStarted   TeamChallenge[]           @relation("TeamChallengeInitiator")
+  teamChallengesAllied    TeamChallenge[]           @relation("TeamChallengeAlly")
+  teamChallengesTargeted  TeamChallenge[]           @relation("TeamChallengeTarget")
 
   @@index([factionId])
   @@index([lastLoginAt])
@@ -704,6 +751,98 @@ model PlayerNotification {
   @@index([playerId, claimStatus])
   @@index([systemNotificationId])
   @@map("player_notification")
+}
+
+model PlayerSocialRelation {
+  id               String               @id @default(cuid())
+  playerId         String               @map("player_id")
+  targetPlayerId   String               @map("target_player_id")
+  relationType     SocialRelationType   @map("relation_type")
+  status           SocialRelationStatus @default(ACTIVE)
+  sourceType       String               @default("manual") @map("source_type")
+  intimacy         Int                  @default(0)
+  lastInteractedAt DateTime?            @map("last_interacted_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  player       Player @relation("SocialRelationOwner", fields: [playerId], references: [id], onDelete: Cascade)
+  targetPlayer Player @relation("SocialRelationTarget", fields: [targetPlayerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, targetPlayerId, relationType])
+  @@index([playerId, relationType, status])
+  @@index([targetPlayerId, relationType, status])
+  @@index([lastInteractedAt])
+  @@map("player_social_relation")
+}
+
+model PlayerSocialFeed {
+  id                String         @id @default(cuid())
+  playerId          String         @map("player_id")
+  actorPlayerId     String?        @map("actor_player_id")
+  feedType          SocialFeedType @map("feed_type")
+  relatedEntityType String?        @map("related_entity_type")
+  relatedEntityId   String?        @map("related_entity_id")
+  summary           String
+  metadataJson      Json?          @map("metadata_json")
+  isRead            Boolean        @default(false) @map("is_read")
+  expiresAt         DateTime?      @map("expires_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+
+  player Player  @relation("SocialFeedOwner", fields: [playerId], references: [id], onDelete: Cascade)
+  actor  Player? @relation("SocialFeedActor", fields: [actorPlayerId], references: [id], onDelete: SetNull)
+
+  @@index([playerId, isRead, createdAt])
+  @@index([playerId, feedType, createdAt])
+  @@index([actorPlayerId, createdAt])
+  @@index([expiresAt])
+  @@map("player_social_feed")
+}
+
+model PlayerAssistRecord {
+  id               String           @id @default(cuid())
+  helperPlayerId   String           @map("helper_player_id")
+  targetPlayerId   String           @map("target_player_id")
+  assistType       SocialAssistType @map("assist_type")
+  targetEntityType String?          @map("target_entity_type")
+  targetEntityId   String?          @map("target_entity_id")
+  effectValue      Int              @default(0) @map("effect_value")
+  dateKey          String           @map("date_key")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  helperPlayer Player @relation("AssistHelper", fields: [helperPlayerId], references: [id], onDelete: Cascade)
+  targetPlayer Player @relation("AssistTarget", fields: [targetPlayerId], references: [id], onDelete: Cascade)
+
+  @@index([helperPlayerId, dateKey, assistType])
+  @@index([targetPlayerId, dateKey, assistType])
+  @@index([targetEntityType, targetEntityId])
+  @@map("player_assist_record")
+}
+
+model TeamChallenge {
+  id                     String              @id @default(cuid())
+  initiatorPlayerId      String              @map("initiator_player_id")
+  allyPlayerId           String              @map("ally_player_id")
+  targetPlayerId         String              @map("target_player_id")
+  status                 TeamChallengeStatus @default(PENDING)
+  initiatorPowerSnapshot Int                 @default(0) @map("initiator_power_snapshot")
+  allyPowerSnapshot      Int                 @default(0) @map("ally_power_snapshot")
+  targetPowerSnapshot    Int                 @default(0) @map("target_power_snapshot")
+  assistEfficiencyBps    Int                 @default(6000) @map("assist_efficiency_bps")
+  result                 String?
+  rewardJson             Json?               @map("reward_json")
+  expiresAt              DateTime            @map("expires_at")
+  createdAt              DateTime            @default(now()) @map("created_at")
+  settledAt              DateTime?           @map("settled_at")
+
+  initiator Player @relation("TeamChallengeInitiator", fields: [initiatorPlayerId], references: [id], onDelete: Cascade)
+  ally      Player @relation("TeamChallengeAlly", fields: [allyPlayerId], references: [id], onDelete: Cascade)
+  target    Player @relation("TeamChallengeTarget", fields: [targetPlayerId], references: [id], onDelete: Cascade)
+
+  @@index([initiatorPlayerId, status, createdAt])
+  @@index([allyPlayerId, status, createdAt])
+  @@index([targetPlayerId, createdAt])
+  @@index([expiresAt, status])
+  @@map("team_challenge")
 }
 
 model PlayerSeedInventory {

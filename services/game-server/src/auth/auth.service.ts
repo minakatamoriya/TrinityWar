@@ -46,8 +46,8 @@ interface DevVerificationAccount {
 
 const NEW_PLAYER_SEED_INVENTORY: PlayerInitializationInput['seedInventory'] = {
   qilingya: { quantity: 0, unlocked: true },
-  qinglingmai: { quantity: 0, unlocked: true },
-  xunyamai: { quantity: 0, unlocked: true },
+  qinglingmai: { quantity: 0, unlocked: false },
+  xunyamai: { quantity: 0, unlocked: false },
 };
 const NEW_PLAYER_SPIRIT_STATE: PlayerInitializationInput['spirit'] = {
   createStarterSpirit: false,
@@ -57,7 +57,7 @@ const NEW_PLAYER_SPIRIT_STATE: PlayerInitializationInput['spirit'] = {
 const NEW_PLAYER_PRIMARY_SEED_ID = 'qilingya';
 const TUTORIAL_RAID_TARGET_PROVIDER_ID = 'dev-tutorial-target';
 const TUTORIAL_RAID_TARGET_NAME = '引路守田人';
-const TUTORIAL_RAID_TARGET_ORDINARY_SOUL_REWARD = 2;
+const TUTORIAL_RAID_TARGET_ORDINARY_SOUL_REWARD = 0;
 
 const DEV_VERIFICATION_ACCOUNTS: DevVerificationAccount[] = [
   {

@@ -11,6 +11,7 @@ import { getLocalDateKey } from '../lib/date-key.js';
 import { DAILY_TASK_CONFIG, getFactionAdvantageConfig } from '../lib/game-balance.js';
 import { applyFactionSpiritPassiveExpBonus, getFactionSpiritFeedDurationSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { STARTER_SPIRIT_IDS } from '../seed/seed-data/spirits.js';
 
 const SPIRIT_SOUL_GOLD_PRICE = 100;
 const SPIRIT_MAX_LEVEL = 50;
@@ -1198,6 +1199,7 @@ export class SpiritService {
           select: {
             id: true,
             spiritDefinitionId: true,
+            isMain: true,
             slotVersion: true,
           },
         }),
@@ -1258,6 +1260,9 @@ export class SpiritService {
         });
       }
 
+      const isStarterComposeGift = codexEntry.readyToCompose
+        && codexEntry.shardCount < codexEntry.spiritDefinition.shardUnlockRequired
+        && STARTER_SPIRIT_IDS.includes(codexEntry.spiritDefinition.spiritId as typeof STARTER_SPIRIT_IDS[number]);
       if (!codexEntry.readyToCompose && codexEntry.shardCount < codexEntry.spiritDefinition.shardUnlockRequired) {
         throw new BusinessError({
           code: ErrorCode.Conflict,
@@ -1273,7 +1278,7 @@ export class SpiritService {
         where: { id: targetSlot.id },
         data: {
           spiritDefinitionId: codexEntry.spiritDefinitionId,
-          isMain: !existingMainSlot,
+          isMain: targetSlot.isMain || !existingMainSlot,
           level: 1,
           exp: 0,
           element: toPrismaElement(request.element),
@@ -1289,7 +1294,9 @@ export class SpiritService {
       await client.playerSpiritCodex.update({
         where: { id: codexEntry.id },
         data: {
-          shardCount: Math.max(codexEntry.shardCount - codexEntry.spiritDefinition.shardUnlockRequired, 0),
+          shardCount: isStarterComposeGift
+            ? 0
+            : Math.max(codexEntry.shardCount - codexEntry.spiritDefinition.shardUnlockRequired, 0),
           readyToCompose: false,
           ownedCurrent: true,
           ownedEver: true,
@@ -1301,6 +1308,35 @@ export class SpiritService {
       });
 
       const response = await this.buildSpiritMutationResponse(client, playerId, `${codexEntry.spiritDefinition.label} 已合成入栏。`);
+      if (isStarterComposeGift) {
+        await client.playerSpiritCodex.updateMany({
+          where: {
+            playerId,
+            id: { not: codexEntry.id },
+            ownedCurrent: false,
+            ownedEver: false,
+            spiritDefinition: {
+              spiritId: { in: [...STARTER_SPIRIT_IDS] },
+            },
+          },
+          data: {
+            shardCount: 0,
+            readyToCompose: false,
+            readyAt: null,
+            codexVersion: { increment: 1 },
+          },
+        });
+        response.spirit.codex = response.spirit.codex.map((entry) => (
+          STARTER_SPIRIT_IDS.includes(entry.spiritId as typeof STARTER_SPIRIT_IDS[number]) && entry.spiritId !== codexEntry.spiritDefinition.spiritId
+            ? { ...entry, shardCount: 0, readyToCompose: false }
+            : entry
+        ));
+        response.spirit.readyToCompose = response.spirit.readyToCompose.filter((entry) => (
+          !STARTER_SPIRIT_IDS.includes(entry.spiritId as typeof STARTER_SPIRIT_IDS[number])
+          || entry.spiritId === codexEntry.spiritDefinition.spiritId
+        ));
+      }
+
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', targetSlot.id);
       return response;
     });

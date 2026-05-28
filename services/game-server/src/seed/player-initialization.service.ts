@@ -61,8 +61,8 @@ export interface PlayerFieldInitializationInput {
 const fieldUnlockMilestones = [1, 5, 10, 15];
 const starterSeedInventory: Record<string, { quantity: number; unlocked: boolean }> = {
   qilingya: { quantity: 0, unlocked: true },
-  qinglingmai: { quantity: 0, unlocked: true },
-  xunyamai: { quantity: 0, unlocked: true },
+  qinglingmai: { quantity: 0, unlocked: false },
+  xunyamai: { quantity: 0, unlocked: false },
 };
 const STARTER_SEED_FALLBACKS = ['qilingya', 'qinglingmai'] as const;
 
@@ -513,7 +513,7 @@ export class PlayerInitializationService {
         && readyStarterSpirits
         && STARTER_SPIRIT_IDS.includes(definition.spiritId as typeof STARTER_SPIRIT_IDS[number]);
       const hasSeen = isStarter || isReadyStarter;
-      const shardCount = isReadyStarter ? 100 : 0;
+      const shardCount = 0;
 
       await client.playerSpiritCodex.upsert({
         where: {

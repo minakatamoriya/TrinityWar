@@ -11,12 +11,14 @@ import type {
   ClientSpiritState,
   ClientSpiritTraitCode,
 } from '@trinitywar/shared';
+import type { TutorialArmyUiRules } from '../../tutorial/tutorialFlow';
 
 interface ArmySceneProps {
   advantage?: ClientFactionAdvantagePanel;
   playerFaction: string;
   spirit: ClientSpiritState;
   busy: boolean;
+  uiRules: TutorialArmyUiRules;
   onSetMain: (slotIndex: number, slotVersion: number) => void;
   onRecover: (slotIndex: number, slotVersion: number) => void;
   onDissolve: (slotIndex: number, slotVersion: number) => void;
@@ -34,6 +36,7 @@ interface ArmySceneProps {
 type DisplayRarity = '普通' | '稀有' | '传说';
 type DisplayElement = '金' | '木' | '水' | '火' | '土';
 type SpiritPetActionTab = 'overview' | 'growth' | 'breakthrough' | 'traits' | 'manage';
+type SpiritComposeStep = 'choose-spirit' | 'choose-element';
 
 const elementChoices: Array<{ value: ClientSpiritElement; label: DisplayElement }> = [
   { value: 'metal', label: '金' },
@@ -268,6 +271,54 @@ function getElementLabel(element: ClientSpiritElement | null): DisplayElement | 
   return '';
 }
 
+function getElementChoiceText(element: DisplayElement): string {
+  if (element === '金') {
+    return '金克木';
+  }
+  if (element === '木') {
+    return '木克土';
+  }
+  if (element === '水') {
+    return '水克火';
+  }
+  if (element === '火') {
+    return '火克金';
+  }
+  return '土克水';
+}
+
+function getElementControlledByText(element: DisplayElement): string {
+  if (element === '金') {
+    return '被火克';
+  }
+  if (element === '木') {
+    return '被金克';
+  }
+  if (element === '水') {
+    return '被土克';
+  }
+  if (element === '火') {
+    return '被水克';
+  }
+  return '被木克';
+}
+
+function getElementPositionClass(element: DisplayElement): string {
+  if (element === '金') {
+    return 'is-metal';
+  }
+  if (element === '木') {
+    return 'is-wood';
+  }
+  if (element === '水') {
+    return 'is-water';
+  }
+  if (element === '火') {
+    return 'is-fire';
+  }
+  return 'is-earth';
+}
+
 function getElementClass(element: ClientSpiritElement | DisplayElement | null): string {
   if (element === 'metal' || element === '金') {
     return 'spirit-element-metal';
@@ -466,12 +517,13 @@ function SpiritStageCard(props: {
 }
 
 export function ArmyScene(props: ArmySceneProps): JSX.Element {
-  const { advantage, playerFaction, spirit, busy, onSetMain, onRecover, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits } = props;
+  const { advantage, playerFaction, spirit, busy, uiRules, onSetMain, onRecover, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits } = props;
   const [codexOpen, setCodexOpen] = useState(false);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [selectedCodexSpiritId, setSelectedCodexSpiritId] = useState<string | null>(() => spirit.codex.find((entry) => isDiscovered(entry))?.spiritId ?? spirit.codex[0]?.spiritId ?? null);
   const [selectedComposeSpiritId, setSelectedComposeSpiritId] = useState<string>(() => spirit.readyToCompose.find((entry) => !entry.ownedCurrent)?.spiritId ?? '');
   const [composeElement, setComposeElement] = useState<ClientSpiritElement>('wood');
+  const [composeStep, setComposeStep] = useState<SpiritComposeStep>('choose-spirit');
   const [lockedTraitSlot, setLockedTraitSlot] = useState(1);
   const [targetTraitSlot, setTargetTraitSlot] = useState(1);
   const [targetTraitCode, setTargetTraitCode] = useState<ClientSpiritTraitCode>('crit');
@@ -510,6 +562,8 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const selectedComposeEntry = availableComposePets.find((entry) => entry.spiritId === selectedComposeSpiritId) ?? availableComposePets[0] ?? null;
   const occupiedCount = slots.filter((slot) => slot.spiritId).length;
   const isStableFull = occupiedCount >= slots.length;
+  const canOpenOwnedPetDetail = uiRules.allowOwnedPetDetail;
+  const selectedComposeElementLabel = getElementLabel(composeElement) || '木';
   const availableTianjiTalisman = spirit.tianjiTalisman;
   const recoveryPlan = getRecoveryPlan(spirit.dailyRecoveryUsed);
   const codexGroups = codexRarityGroups.map((group) => ({
@@ -553,6 +607,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
 
   useEffect(() => {
     setSelectedPetTab('overview');
+    setComposeStep('choose-spirit');
   }, [selectedSlotIndex]);
 
   useEffect(() => {
@@ -586,7 +641,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   return (
     <div className="scene-shell">
       <div className="scene-scroll spirit-scene-scroll">
-        {advantage ? (
+        {advantage && uiRules.showFactionAdvantage ? (
           <article className="panel-card faction-advantage-panel">
             <div className="panel-head">
               <h4>{advantage.factionName}优势</h4>
@@ -602,13 +657,16 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
             ) : null}
           </article>
         ) : null}
+        {uiRules.showCodexButton ? (
         <section className="spirit-top-actions">
           <button className="spirit-codex-button-card" onClick={() => setCodexOpen(true)} type="button">
             <span>灵宠图鉴</span>
             <strong>打开图鉴</strong>
           </button>
         </section>
+        ) : null}
 
+        {uiRules.showResourcePanel ? (
         <section className="panel-card spirit-growth-card">
           <div className="panel-head">
             <h4>养成资源</h4>
@@ -623,10 +681,16 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
             ))}
           </div>
         </section>
+        ) : null}
 
         <section className="spirit-main-row">
           {mainSlot && mainEntry ? (
-            <article className="spirit-profile-card spirit-profile-card-horizontal" onClick={() => setSelectedSlotIndex(mainSlot.slotIndex)} role="button" tabIndex={0}>
+            <article
+              className={`spirit-profile-card spirit-profile-card-horizontal${canOpenOwnedPetDetail ? '' : ' is-tutorial-locked'}`}
+              onClick={canOpenOwnedPetDetail ? () => setSelectedSlotIndex(mainSlot.slotIndex) : undefined}
+              role={canOpenOwnedPetDetail ? 'button' : undefined}
+              tabIndex={canOpenOwnedPetDetail ? 0 : undefined}
+            >
               <div className="spirit-main-photo" aria-hidden="true">
                 <div className={`spirit-portrait spirit-main-portrait ${getElementClass(mainSlot.element)}`}>
                   <span>{mainEntry.definition.label.slice(0, 1)}</span>
@@ -638,14 +702,14 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                     <p className="eyebrow">主位灵宠</p>
                     <h4>{mainEntry.definition.label}</h4>
                   </div>
-                  <strong>Lv.{mainSlot.level}</strong>
+                  <strong>{canOpenOwnedPetDetail ? `Lv.${mainSlot.level}` : '已结契'}</strong>
                 </div>
                 <div className="spirit-tag-row">
                   <span className={`spirit-rarity ${getRarityClass(getRarityLabel(mainEntry.definition.rarity))}`}>{getRarityLabel(mainEntry.definition.rarity)}</span>
                   <span className="faction-badge">{getFactionLabel(mainEntry.definition.factionAffinity)}</span>
                   {mainSlot.element ? <span className={`spirit-element-chip ${getElementClass(mainSlot.element)}`}>{getElementLabel(mainSlot.element)}</span> : null}
                   <span className="soft-tag">{getRoleLabel(mainEntry.definition.role)}</span>
-                  <span className="soft-tag">{getPhaseForLevel(mainSlot.level)}</span>
+                  <span className="soft-tag">{canOpenOwnedPetDetail ? getPhaseForLevel(mainSlot.level) : '养成稍后开放'}</span>
                   {getFactionLabel(mainEntry.definition.factionAffinity) === playerFaction ? <span className="soft-tag">同阵营 {getFactionBonusLabel(getFactionLabel(mainEntry.definition.factionAffinity))}</span> : null}
                 </div>
               </div>
@@ -659,6 +723,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
           )}
         </section>
 
+        {uiRules.showStableSlots ? (
         <section className="panel-card spirit-stable-card">
           <div className="panel-head">
             <h4>兽栏</h4>
@@ -678,6 +743,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
             })}
           </div>
         </section>
+        ) : null}
       </div>
 
       {selectedSlot && portalTarget ? createPortal((
@@ -690,7 +756,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
           </div>
           <div className={`seed-codex-body${selectedSlotEntry ? ' spirit-pet-action-body' : ''}`}>
             <section className={`seed-codex-detail-card${selectedSlotEntry ? ' spirit-pet-detail-card' : ''}`}>
-              {selectedSlotEntry ? (
+              {selectedSlotEntry && uiRules.allowOwnedPetDetail && uiRules.showPetActionTabs ? (
                 <>
                   <SpiritStageCard
                     element={getElementLabel(selectedSlot.element) || undefined}
@@ -851,17 +917,22 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                     ) : null}
                   </div>
                 </>
-              ) : (
+              ) : !selectedSlotEntry ? (
                 <>
                   <div className="seed-codex-detail-head">
                     <div>
                       <p className="eyebrow">空栏位</p>
-                      <h3>{selectedSlot.isMain ? '主位' : `副位 ${selectedSlot.slotIndex - 1}`}</h3>
+                      <h3>{selectedSlot.isMain || selectedSlot.slotIndex === 1 ? '主位' : `副位 ${selectedSlot.slotIndex - 1}`}</h3>
                     </div>
                   </div>
                   {availableComposePets.length > 0 ? (
                     <>
+                      {composeStep === 'choose-spirit' ? (
                       <div className="spirit-compose-picker">
+                        <div className="panel-head">
+                          <h4>选择灵宠</h4>
+                          <span className="soft-tag">第一只灵宠将入主位</span>
+                        </div>
                         <div className="seed-codex-icon-grid spirit-compose-icon-grid">
                           {availableComposePets.map((entry) => (
                             <div className="spirit-compose-icon-item" key={entry.spiritId}>
@@ -873,28 +944,46 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                               >
                                 <span>{entry.definition.label.slice(0, 2)}</span>
                               </button>
-                              <small>{entry.shardCount} / {entry.definition.shardUnlockRequired}</small>
+                              {uiRules.allowOwnedPetDetail ? <small>{entry.shardCount} / {entry.definition.shardUnlockRequired}</small> : <small>可结契</small>}
                             </div>
                           ))}
                         </div>
+                        <button className="primary-button spirit-full-button" disabled={!selectedComposeEntry} onClick={() => setComposeStep('choose-element')} type="button">选定灵宠</button>
                       </div>
-                      {selectedComposeEntry ? (
-                        <>
-                          <SpiritStageCard
-                            level={1}
-                            name={selectedComposeEntry.definition.label}
-                            phase="灵胎期"
-                            rarity={getRarityLabel(selectedComposeEntry.definition.rarity)}
-                          />
-                          <div className="spirit-element-picker">
+                      ) : selectedComposeEntry ? (
+                        <div className="spirit-element-ritual">
+                          <div className="panel-head">
+                            <h4>注入五行灵力</h4>
+                            <span className="soft-tag">五行相克时，战斗属性翻倍</span>
+                          </div>
+                          <div className="five-element-star" aria-label="五行相克图">
+                            <div className="five-element-lines" aria-hidden="true" />
+                            <div className={`five-element-center ${getElementClass(selectedComposeElementLabel)}`}>
+                              <span>已选</span>
+                              <strong>{selectedComposeElementLabel}</strong>
+                            </div>
                             {elementChoices.map((element) => (
-                              <button className={`spirit-element-chip ${getElementClass(element.label)} ${composeElement === element.value ? ' is-selected' : ''}`} key={element.value} onClick={() => setComposeElement(element.value)} type="button">
+                              <button
+                                aria-label={`注入${element.label}灵力`}
+                                className={`five-element-node ${getElementClass(element.label)} ${getElementPositionClass(element.label)} ${composeElement === element.value ? 'is-selected' : ''}`}
+                                key={element.value}
+                                onClick={() => setComposeElement(element.value)}
+                                type="button"
+                              >
                                 {element.label}
                               </button>
                             ))}
                           </div>
-                          <button className="primary-button spirit-full-button" disabled={busy} onClick={() => onCompose(selectedComposeEntry.spiritId, selectedSlot.slotIndex, composeElement)} type="button">确认合成并入栏</button>
-                        </>
+                          <div className="five-element-explain">
+                            <strong>{selectedComposeElementLabel}灵力</strong>
+                            <span>{getElementChoiceText(selectedComposeElementLabel)}，{getElementControlledByText(selectedComposeElementLabel)}。</span>
+                            <small>战斗中若形成五行克制，相关战斗属性按翻倍计算。</small>
+                          </div>
+                          <div className="spirit-pet-action-grid">
+                            <button className="ghost-button" disabled={busy} onClick={() => setComposeStep('choose-spirit')} type="button">重选灵宠</button>
+                            <button className="primary-button" disabled={busy} onClick={() => onCompose(selectedComposeEntry.spiritId, selectedSlot.slotIndex, composeElement)} type="button">注入{selectedComposeElementLabel}灵力</button>
+                          </div>
+                        </div>
                       ) : null}
                     </>
                   ) : (
@@ -904,6 +993,8 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                     </div>
                   )}
                 </>
+              ) : (
+                <p className="seed-codex-undiscovered-text">新手引导完成后开放灵宠养成详情。</p>
               )}
             </section>
           </div>

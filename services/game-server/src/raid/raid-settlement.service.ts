@@ -3,7 +3,6 @@ import type { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { LandDeedService } from '../land-deed/land-deed.service.js';
-import { getLocalDateKey } from '../lib/date-key.js';
 import { applyFactionBattlePostRecovery } from '../lib/faction-advantage-formulas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { buildRaidBattleReplay } from './raid-battle-replay.js';
@@ -80,6 +79,7 @@ export class RaidSettlementService {
         attackerSpirit: readSpiritSnapshot(raidOrder.attackerSnapshotJson) ?? buildSpiritSnapshotFromSlot(raidOrder.attacker.spiritSlots[0] ?? null),
         defenderSpirit: readSpiritSnapshot(raidOrder.defenderSnapshotJson) ?? buildSpiritSnapshotFromSlot(raidOrder.defender.spiritSlots[0] ?? null),
         guaranteedOrdinarySoul: readGuaranteedOrdinarySoul(raidOrder.defenderSnapshotJson),
+        suppressRandomRewards: readTutorialTarget(raidOrder.defenderSnapshotJson),
       });
       const now = new Date();
       const nextVaultGold = raidOrder.attacker.wallet.vaultGold + settlementResult.depositedGold;
@@ -96,22 +96,7 @@ export class RaidSettlementService {
       const essenceLoot = settlementResult.result === 'WIN'
         ? await this.applyEssenceLoot(client, raidOrder)
         : [];
-      const contributionGain = settlementResult.result === 'WIN' ? 15 : 0;
-      if (contributionGain > 0 && raidOrder.attacker.faction) {
-        await grantFactionContribution(client, {
-          playerId: raidOrder.attackerPlayerId,
-          factionId: raidOrder.attacker.faction.id,
-          contribution: contributionGain,
-          sourceType: 'raid-success',
-          sourceId: raidOrder.id,
-          metadata: { lootGold: settlementResult.lootGold },
-        });
-        await this.completeConflictFactionTasks(client, raidOrder.attackerPlayerId, raidOrder.attacker.faction.id);
-      }
-      rewardItemsJson.push(
-        ...essenceLoot,
-        ...(contributionGain > 0 ? [{ kind: 'contribution', label: '阵营贡献', quantity: contributionGain }] : []),
-      );
+      rewardItemsJson.push(...essenceLoot);
       const battleReplay = buildRaidBattleReplay(raidOrder.id, {
         result: settlementResult.result,
         lootGold: settlementResult.lootGold,
@@ -320,53 +305,6 @@ export class RaidSettlementService {
     }
 
     return rewards;
-  }
-
-  private async completeConflictFactionTasks(
-    client: Prisma.TransactionClient,
-    playerId: string,
-    factionId: string,
-  ): Promise<void> {
-    const dateKey = getLocalDateKey();
-    const tasks = await client.dailyFactionTask.findMany({
-      where: {
-        playerId,
-        factionId,
-        taskDate: dateKey,
-        taskType: 'CONFLICT_RAID',
-        status: 'IN_PROGRESS',
-      },
-      select: {
-        id: true,
-        requiredAmount: true,
-        progressAmount: true,
-        rewardContribution: true,
-      },
-    });
-
-    for (const task of tasks) {
-      const nextProgress = Math.min(task.progressAmount + 1, task.requiredAmount);
-      const completed = nextProgress >= task.requiredAmount;
-      await client.dailyFactionTask.update({
-        where: { id: task.id },
-        data: {
-          progressAmount: nextProgress,
-          status: completed ? 'CLAIMED' : 'IN_PROGRESS',
-          completedAt: completed ? new Date() : null,
-        },
-      });
-
-      if (completed) {
-        await grantFactionContribution(client, {
-          playerId,
-          factionId,
-          contribution: task.rewardContribution,
-          sourceType: 'faction-task-conflict',
-          sourceId: task.id,
-          metadata: { raidOrderId: task.id },
-        });
-      }
-    }
   }
 
   async settleDueRaidOrders(input: { take?: number } = {}): Promise<{ settled: number; failed: number }> {
@@ -679,6 +617,11 @@ function readGuaranteedOrdinarySoul(value: Prisma.JsonValue): number {
   return typeof rawValue === 'number' ? Math.max(Math.floor(rawValue), 0) : 0;
 }
 
+function readTutorialTarget(value: Prisma.JsonValue): boolean {
+  const snapshot = value as { targetSnapshotJson?: { tutorialTarget?: unknown } };
+  return snapshot.targetSnapshotJson?.tutorialTarget === true;
+}
+
 function buildSpiritSnapshotFromSlot(slot: {
   id: string;
   slotIndex: number;
@@ -858,48 +801,6 @@ async function discoverPlant(
     },
     update: {
       researchVersion: { increment: 1 },
-    },
-  });
-}
-
-async function grantFactionContribution(
-  client: Prisma.TransactionClient,
-  input: {
-    playerId: string;
-    factionId: string;
-    contribution: number;
-    sourceType: string;
-    sourceId?: string | null;
-    metadata?: Prisma.InputJsonValue;
-  },
-): Promise<void> {
-  const contribution = Math.max(Math.floor(input.contribution), 0);
-  if (contribution <= 0) {
-    return;
-  }
-
-  await client.faction.update({
-    where: { id: input.factionId },
-    data: { contributionScore: { increment: contribution } },
-  });
-
-  await client.factionMember.updateMany({
-    where: {
-      playerId: input.playerId,
-      factionId: input.factionId,
-    },
-    data: { contributionScore: { increment: contribution } },
-  });
-
-  await client.factionContributionLog.create({
-    data: {
-      factionId: input.factionId,
-      playerId: input.playerId,
-      donatedGold: 0,
-      contributionDelta: contribution,
-      sourceType: input.sourceType,
-      sourceId: input.sourceId,
-      metadataJson: input.metadata,
     },
   });
 }

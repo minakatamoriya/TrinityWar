@@ -1518,9 +1518,11 @@ export class ClientCommandService {
             playerId: input.playerId,
             seedDefinitionId: seedDefinition.id,
             quantity: reward.quantity,
+            unlockedAt: now,
           },
           update: {
             quantity: { increment: reward.quantity },
+            unlockedAt: now,
             inventoryVersion: { increment: 1 },
           },
         });
@@ -1555,6 +1557,24 @@ export class ClientCommandService {
         },
       });
 
+      if (priorClaimCount <= 0) {
+        await client.playerSpiritSlot.updateMany({
+          where: {
+            playerId: input.playerId,
+            spiritDefinitionId: { not: null },
+            dissolvedAt: null,
+          },
+          data: {
+            exp: 0,
+            lastExpSettledAt: now,
+            slotVersion: { increment: 1 },
+          },
+        });
+      }
+
+      const home = await this.clientReadService.getHomeSummary(input.playerId, client);
+      const scenes = await this.clientReadService.getSceneContent(input.playerId, client);
+      const bootstrap = await this.clientReadService.getBootstrap(input.playerId, client);
       const responseSnapshot: ClientClaimFactionStipendResponse = {
         app: APP_NAME,
         summary: `阵营俸禄已领取：${formatRewardSummary(rewards)}。`,
@@ -1571,8 +1591,9 @@ export class ClientCommandService {
           action: null,
         },
         rewards,
-        home: await this.clientReadService.getHomeSummary(input.playerId, client),
-        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
+        home,
+        scenes,
+        bootstrap,
       };
 
       if (idempotencyRecord?.id) {
@@ -2582,6 +2603,36 @@ async function applyEssenceCollectRewards(
 
     const seedDefinition = seedDefinitionBySeedId.get(essenceType);
     if (!seedDefinition) {
+      continue;
+    }
+
+    if (essenceType === TUTORIAL_STARTER_SEED_ID) {
+      const inventory = await client.playerSeedInventory.findUnique({
+        where: {
+          playerId_seedDefinitionId: {
+            playerId,
+            seedDefinitionId: seedDefinition.id,
+          },
+        },
+        select: {
+          quantity: true,
+        },
+      });
+
+      await discoverPlant(client, {
+        playerId,
+        seedDefinitionId: seedDefinition.id,
+        discoveredAt: now,
+      });
+
+      await createEssenceTransaction(client, {
+        playerId,
+        essenceType,
+        delta: quantity,
+        reason: 'field-harvest',
+        sourceId,
+        balanceAfter: inventory?.quantity ?? 0,
+      });
       continue;
     }
 

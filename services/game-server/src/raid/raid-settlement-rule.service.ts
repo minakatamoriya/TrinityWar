@@ -40,6 +40,7 @@ export interface RaidSettlementRuleInput {
   attackerSpirit: SpiritBattleSnapshot | null;
   defenderSpirit: SpiritBattleSnapshot | null;
   guaranteedOrdinarySoul?: number;
+  suppressRandomRewards?: boolean;
 }
 
 export interface RaidSettlementRuleResult {
@@ -96,11 +97,13 @@ export class RaidSettlementRuleService {
     const depositedGold = lootGold;
     const attackerNextHp = input.attackerSpirit ? clampHpForPersistence(battle.attackerHpAfter, input.attackerSpirit.maxHp) : null;
     const defenderNextHp = input.defenderSpirit ? clampHpForPersistence(battle.defenderHpAfter, input.defenderSpirit.maxHp) : null;
-    const soulRewards = buildSoulRewards(input.defenderSpirit, battle.result);
-    if (battle.result === 'WIN' && (input.guaranteedOrdinarySoul ?? 0) > 0) {
+    const soulRewards = input.suppressRandomRewards
+      ? { ordinary: 0, rare: 0, legendary: 0 }
+      : buildSoulRewards(input.defenderSpirit, battle.result);
+    if (!input.suppressRandomRewards && battle.result === 'WIN' && (input.guaranteedOrdinarySoul ?? 0) > 0) {
       soulRewards.ordinary = Math.max(soulRewards.ordinary, Math.floor(input.guaranteedOrdinarySoul ?? 0));
     }
-    const shardDrop = buildShardDrop(input.defenderSpirit, tier, scoreDeltaRatio);
+    const shardDrop = input.suppressRandomRewards ? null : buildShardDrop(input.defenderSpirit, tier, scoreDeltaRatio);
     const rewardItems = buildRewardItems(soulRewards, shardDrop);
     const rewardSummary = formatRewardSummary(soulRewards, shardDrop);
     const attackerHpLossPercent = input.attackerSpirit ? Math.max(Math.round((1 - (attackerNextHp ?? 0) / Math.max(input.attackerSpirit.maxHp, 1)) * 100), 0) : 0;

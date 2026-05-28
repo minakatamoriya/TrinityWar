@@ -49,6 +49,11 @@
   type ClientSpiritMutationResponse,
   type ClientSpiritState,
   type ClientSpiritStateResponse,
+  type ClientSocialAssistResponse,
+  type ClientSocialFeedResponse,
+  type ClientSocialRelationListResponse,
+  type ClientSocialSummaryResponse,
+  type ClientSocialWaterFieldRequest,
   type ClientRollSpiritTraitsRequest,
   type ClientUpgradeBuildingRequest,
   type ClientUpgradeSpiritRequest,
@@ -1716,6 +1721,33 @@ export async function upgradeSpirit(input: ClientUpgradeSpiritRequest): Promise<
 
 export async function loadRaidBattleReplay(orderId: string): Promise<ClientRaidBattleReplayResponse> {
   return fetchJson<ClientRaidBattleReplayResponse>(`${CLIENT_API_PREFIX}/raid-orders/${encodeURIComponent(orderId)}/battle-replay`);
+}
+
+export async function loadSocialSummary(): Promise<ClientSocialSummaryResponse> {
+  return fetchJson<ClientSocialSummaryResponse>(`${CLIENT_API_PREFIX}/social/summary`);
+}
+
+export async function loadSocialFeed(): Promise<ClientSocialFeedResponse> {
+  return fetchJson<ClientSocialFeedResponse>(`${CLIENT_API_PREFIX}/social/feed`);
+}
+
+export async function loadSocialRelations(kind: 'friends' | 'following' | 'enemies'): Promise<ClientSocialRelationListResponse> {
+  return fetchJson<ClientSocialRelationListResponse>(`${CLIENT_API_PREFIX}/social/${kind}`);
+}
+
+export async function waterSocialField(input: ClientSocialWaterFieldRequest): Promise<ClientSocialAssistResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('social-water-field');
+  return fetchJson<ClientSocialAssistResponse>(`${CLIENT_API_PREFIX}/social/assist/water-field`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
 }
 
 export async function feedSpirit(input: ClientFeedSpiritRequest): Promise<ClientSpiritMutationResponse> {

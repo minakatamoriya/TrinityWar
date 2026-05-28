@@ -1,6 +1,7 @@
 import type { ClientFactionAdvantagePanel, ClientRaidTarget, ClientReportEntry, ClientSceneAction } from '@trinitywar/shared';
 import { ReportCard } from '../ReportCard';
 import { RaidTargetCard } from '../raid/RaidTargetCard';
+import type { TutorialRaidUiRules } from '../../tutorial/tutorialFlow';
 
 type RaidHubTabKey = 'targets' | 'follows' | 'reports' | 'warrants';
 
@@ -20,6 +21,7 @@ interface ReportSceneProps {
   followedTargetIds: string[];
   followedTargets: FollowedRaidTargetRow[];
   reportEntries: ClientReportEntry[];
+  uiRules: TutorialRaidUiRules;
   onChangeTab: (tab: RaidHubTabKey) => void;
   onOpenTarget: (target: ClientRaidTarget) => void;
   onOpenFollowedTarget: (target: FollowedRaidTargetRow) => void;
@@ -39,6 +41,7 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
     followedTargetIds,
     followedTargets,
     reportEntries,
+    uiRules,
     onChangeTab,
     onOpenTarget,
     onOpenFollowedTarget,
@@ -46,19 +49,22 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
     onRefresh,
     onAction,
   } = props;
+  const visibleTargets = uiRules.visibleTargetLimit === null ? targets : targets.slice(0, uiRules.visibleTargetLimit);
 
   return (
     <div className="scene-shell">
+      {uiRules.showTabs ? (
       <div className="tab-row">
         <button className={`tab-button ${activeTab === 'targets' ? 'active' : ''}`} onClick={() => onChangeTab('targets')} type="button">掠夺</button>
         <button className={`tab-button ${activeTab === 'follows' ? 'active' : ''}`} onClick={() => onChangeTab('follows')} type="button">关注</button>
         <button className={`tab-button ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => onChangeTab('reports')} type="button">战报</button>
         <button className={`tab-button ${activeTab === 'warrants' ? 'active' : ''}`} onClick={() => onChangeTab('warrants')} type="button">通缉令</button>
       </div>
+      ) : null}
 
       {activeTab === 'targets' ? (
         <div className="scene-scroll raid-scene-scroll">
-          {advantage ? (
+          {advantage && uiRules.showFactionAdvantage ? (
             <article className="panel-card faction-advantage-panel">
               <div className="panel-head">
                 <h4>{advantage.factionName}优势</h4>
@@ -74,21 +80,23 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
               ) : null}
             </article>
           ) : null}
+          {uiRules.showToolbar ? (
           <div className="raid-toolbar panel-card compact-raid-toolbar">
             <p className="raid-toolbar-text">{heroTitle}</p>
             <button className="secondary-button" disabled={refreshPending} onClick={onRefresh} type="button">
               {refreshPending ? '刷新中...' : refreshLabel}
             </button>
           </div>
+          ) : null}
 
           <div className="raid-list-shell">
             <div className="target-list target-list-raid">
-              {targets.map((target) => (
+              {visibleTargets.map((target) => (
                 <RaidTargetCard
                   followed={followedTargetIds.includes(target.id)}
                   key={target.id}
                   onSelect={onOpenTarget}
-                  onToggleFollow={onToggleFollowTarget}
+                  onToggleFollow={uiRules.allowFollow ? onToggleFollowTarget : undefined}
                   target={target}
                 />
               ))}

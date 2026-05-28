@@ -16,6 +16,9 @@ import type {
   ClientSceneKey,
   ClientPlantResearchState,
   ClientFarmBoardState,
+  ClientSocialFeedItem,
+  ClientSocialRelationItem,
+  ClientSocialSummaryResponse,
   ClientSpiritElement,
   ClientSpiritRollMode,
   ClientSpiritTraitCode,
@@ -25,7 +28,7 @@ import type {
   ClientUpgradeBuildingRequest,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidBattleReplay, loadRaidTargetDetail, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, submitFactionTask, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidBattleReplay, loadRaidTargetDetail, loadSocialFeed, loadSocialRelations, loadSocialSummary, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, submitFactionTask, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding, waterSocialField } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
@@ -35,20 +38,35 @@ import { FarmScene } from './ui/scenes/FarmScene';
 import { HomeScene } from './ui/scenes/HomeScene';
 import { ReportScene } from './ui/scenes/ReportScene';
 import { SeedSelectionScreen } from './ui/scenes/SeedSelectionScreen';
+import { SocialScene, type SocialTabKey } from './ui/scenes/SocialScene';
 import { GlobalFeatureModal } from './ui/common/GlobalFeatureModal';
 import { FarmBoardEditorModal } from './ui/common/FarmBoardEditorModal';
 import { GlobalFeatureModalContent } from './ui/common/GlobalFeatureModalContent';
+import { GlobalUnlockModal, type GlobalUnlockItem } from './ui/common/GlobalUnlockModal';
 import { PlantCodexModal } from './ui/common/PlantCodexModal';
 import { ResourceBackpackModal, type BackpackResourceItem } from './ui/common/ResourceBackpackModal';
 import { SpiritCodexModal } from './ui/common/SpiritCodexModal';
 import { SeedRewardModal, type SeedRewardModalItem } from './ui/common/SeedRewardModal';
+import { ShareAssistPage, type ShareAssistAudience, type ShareAssistKind, type ShareAssistStatus } from './ui/share/ShareAssistPage';
 import { CharacterDialogProvider } from './dialog/CharacterDialogProvider';
 import { useCharacterDialog } from './dialog/useCharacterDialog';
 import { RaidBattleScreen } from './battle/RaidBattleScreen';
+import {
+  TUTORIAL_STARTER_SEED_ID,
+  buildTutorialTask,
+  canOpenSceneInTutorial,
+  getInitialTutorialStage,
+  getLockedSceneMessage,
+  getTutorialFlowActions,
+  getTutorialStageStorageKey,
+  getTutorialUiRules,
+  isNewUserInTutorial,
+  type TutorialFlowAction,
+  type TutorialStage,
+} from './tutorial/tutorialFlow';
 
 type RaidHubTabKey = 'targets' | 'follows' | 'reports' | 'warrants';
 type FactionTabKey = 'overview' | 'donate' | 'rank';
-type TutorialStage = 'home' | 'farm' | 'spirit' | 'raid' | 'faction' | 'building' | 'completed';
 
 interface ToastState {
   id: number;
@@ -92,7 +110,8 @@ type TopResourcePanel = 'spirit-codex' | 'resources';
 interface SeedRewardModalState {
   title: string;
   summary: string;
-  confirmAction?: 'claim-faction-stipend' | 'claim-spirit-ad-reward' | 'claim-starter-seeds';
+  confirmAction?: 'claim-faction-stipend' | 'claim-spirit-ad-reward' | 'claim-starter-seeds' | 'tutorial-farm-collect';
+  afterConfirmActions?: TutorialFlowAction[];
   items: SeedRewardModalItem[];
 }
 
@@ -111,6 +130,19 @@ interface FarmBoardEditorState {
   initialMessage: string;
   message: string;
   saving: boolean;
+}
+
+interface GlobalUnlockModalState {
+  title: string;
+  summary: string;
+  items: GlobalUnlockItem[];
+  afterConfirmActions?: TutorialFlowAction[];
+}
+
+interface ShareAssistDemoState {
+  audience: ShareAssistAudience;
+  kind: ShareAssistKind;
+  status: ShareAssistStatus;
 }
 
 interface FollowedRaidTargetSummary {
@@ -335,29 +367,11 @@ const sceneNavLabels: Record<ClientSceneKey, string> = {
   raid: '灵宠',
   report: '掠夺',
   faction: '阵营',
+  social: '社交',
 };
 
-const sceneKeys: ClientSceneKey[] = ['home', 'farm', 'raid', 'report', 'building', 'faction'];
-const tutorialStageStorageKeyPrefix = 'trinitywar.tutorialStage';
-const TUTORIAL_STARTER_SEED_ID = 'qilingya';
-const tutorialStageRank: Record<TutorialStage, number> = {
-  home: 0,
-  farm: 1,
-  spirit: 2,
-  raid: 3,
-  faction: 4,
-  building: 5,
-  completed: 6,
-};
-
-const sceneTutorialUnlockStage: Record<ClientSceneKey, TutorialStage> = {
-  home: 'home',
-  farm: 'farm',
-  raid: 'spirit',
-  report: 'raid',
-  building: 'building',
-  faction: 'faction',
-};
+const sceneKeys: ClientSceneKey[] = ['home', 'farm', 'raid', 'report', 'faction', 'social'];
+const playableSeedCatalog = seedCatalog.filter((seed) => seed.id !== TUTORIAL_STARTER_SEED_ID);
 
 const factionBackgroundMap: Record<string, string> = {
   人界: '/assets/backgrounds/renjie.png',
@@ -371,6 +385,7 @@ const sceneBackgroundMap: Record<Exclude<ClientSceneKey, 'home'>, string> = {
   raid: '/assets/backgrounds/lueduo.png',
   report: '/assets/backgrounds/zhanbao.png',
   faction: '/assets/backgrounds/zhenying.png',
+  social: '/assets/backgrounds/zhenying.png',
 };
 
 const factionChoiceCards: FactionChoiceCard[] = [
@@ -409,118 +424,11 @@ function normalizeScene(scene: string): ClientSceneKey {
     return 'farm';
   }
 
-  if (scene === 'home' || scene === 'building' || scene === 'farm' || scene === 'raid' || scene === 'report' || scene === 'faction') {
+  if (scene === 'home' || scene === 'building' || scene === 'farm' || scene === 'raid' || scene === 'report' || scene === 'faction' || scene === 'social') {
     return scene;
   }
 
   return 'home';
-}
-
-function getTutorialStageStorageKey(playerId: string): string {
-  return `${tutorialStageStorageKeyPrefix}:${playerId}`;
-}
-
-function isTutorialStage(value: string | null | undefined): value is TutorialStage {
-  return value === 'home' || value === 'farm' || value === 'spirit' || value === 'raid' || value === 'faction' || value === 'building' || value === 'completed';
-}
-
-function getInitialTutorialStage(session: DevLoginSession | null): TutorialStage {
-  if (!session || session.mode !== 'new-user') {
-    return 'completed';
-  }
-
-  if (typeof window === 'undefined') {
-    return 'home';
-  }
-
-  const storedStage = window.localStorage.getItem(getTutorialStageStorageKey(session.player.id));
-  return isTutorialStage(storedStage) ? storedStage : 'home';
-}
-
-function canOpenSceneInTutorial(scene: ClientSceneKey, stage: TutorialStage): boolean {
-  return tutorialStageRank[stage] >= tutorialStageRank[sceneTutorialUnlockStage[scene]];
-}
-
-function getLockedSceneMessage(scene: ClientSceneKey): string {
-  if (scene === 'farm') {
-    return '先从首页任务进入农场。';
-  }
-
-  if (scene === 'raid') {
-    return '先完成第一轮种田，再创建灵宠。';
-  }
-
-  if (scene === 'report') {
-    return '先完成首宠创建，再进入掠夺教程。';
-  }
-
-  if (scene === 'faction') {
-    return '先完成教程掠夺，再领取阵营俸禄。';
-  }
-
-  if (scene === 'building') {
-    return '先领取阵营俸禄，再修习第一项法术。';
-  }
-
-  return '完成新手引导后开放。';
-}
-
-function buildTutorialTask(stage: TutorialStage): { title: string; description: string; actionLabel: string; targetScene: ClientSceneKey } | null {
-  if (stage === 'home') {
-    return {
-      title: '领取启灵芽 x1',
-      description: '先收下引导者给你的启灵芽。拿到种子后，再去第一块田播下它。',
-      actionLabel: '领取启灵芽',
-      targetScene: 'home',
-    };
-  }
-
-  if (stage === 'farm') {
-    return {
-      title: '收获启灵芽',
-      description: '启灵芽成熟后会给第一笔金币。收获后去创建第一只灵宠。',
-      actionLabel: '查看农场',
-      targetScene: 'farm',
-    };
-  }
-
-  if (stage === 'spirit') {
-    return {
-      title: '创建第一只灵宠',
-      description: '在空栏位中选择初始灵宠，并设定五行属性。创建后会自动设为主位。',
-      actionLabel: '创建灵宠',
-      targetScene: 'raid',
-    };
-  }
-
-  if (stage === 'raid') {
-    return {
-      title: '完成教程掠夺',
-      description: '挑战教程对象，理解战斗结果、掠夺收益和战报回放。',
-      actionLabel: '进入掠夺',
-      targetScene: 'report',
-    };
-  }
-
-  if (stage === 'faction') {
-    return {
-      title: '领取阵营俸禄',
-      description: '完成首战后回到阵营领取补给。第一次领取会固定获得青灵麦和风云稻各 1 个。',
-      actionLabel: '前往阵营',
-      targetScene: 'faction',
-    };
-  }
-
-  if (stage === 'building') {
-    return {
-      title: '修习第一项法术',
-      description: '去法术阁修习护灵阵，完成后会开放全部功能。',
-      actionLabel: '前往法术',
-      targetScene: 'building',
-    };
-  }
-
-  return null;
 }
 
 function formatServerTime(serverTime: string): string {
@@ -733,6 +641,10 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value);
 }
 
+function isDisplayableFarmReward(reward: { kind?: string; seedId?: string }): boolean {
+  return !(reward.kind === 'essence' && reward.seedId === TUTORIAL_STARTER_SEED_ID);
+}
+
 function formatProtectionCountdown(totalSeconds: number): string {
   const safeSeconds = Math.max(totalSeconds, 0);
   const hours = Math.floor(safeSeconds / 3600);
@@ -788,6 +700,15 @@ function App(): JSX.Element {
   const [tutorialStage, setTutorialStage] = useState<TutorialStage>(() => getInitialTutorialStage(storedLoginSession));
   const [raidHubTab, setRaidHubTab] = useState<RaidHubTabKey>('targets');
   const [factionTab, setFactionTab] = useState<FactionTabKey>('overview');
+  const [socialTab, setSocialTab] = useState<SocialTabKey>('feed');
+  const [socialSummary, setSocialSummary] = useState<ClientSocialSummaryResponse | null>(null);
+  const [socialFeed, setSocialFeed] = useState<ClientSocialFeedItem[]>([]);
+  const [socialFriends, setSocialFriends] = useState<ClientSocialRelationItem[]>([]);
+  const [socialFollowing, setSocialFollowing] = useState<ClientSocialRelationItem[]>([]);
+  const [socialEnemies, setSocialEnemies] = useState<ClientSocialRelationItem[]>([]);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [socialError, setSocialError] = useState<string | null>(null);
+  const [shareAssistDemo, setShareAssistDemo] = useState<ShareAssistDemoState | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -824,6 +745,7 @@ function App(): JSX.Element {
   const [followedTargetIds, setFollowedTargetIds] = useState<string[]>([]);
   const [raidTargetDetailsById, setRaidTargetDetailsById] = useState<Record<string, ClientRaidTargetDetailResponse>>({});
   const [globalFeatureModal, setGlobalFeatureModal] = useState<GlobalFeatureModalState | null>(null);
+  const [globalUnlockModal, setGlobalUnlockModal] = useState<GlobalUnlockModalState | null>(null);
   const [seasonSignInRecord, setSeasonSignInRecord] = useState<SeasonSignInRecord>(() => readSeasonSignInRecord(getStoredDevLoginSession()?.player.id));
   const characterDialog = useCharacterDialog();
   const { playDialogScene } = characterDialog;
@@ -838,10 +760,48 @@ function App(): JSX.Element {
     }
   };
 
+  const runTutorialFlowActions = (actions: TutorialFlowAction[]): void => {
+    actions.forEach((action) => {
+      if (action.type === 'setStage') {
+        advanceTutorialStage(action.stage);
+        return;
+      }
+
+      if (action.type === 'navigate') {
+        setActiveScene(action.scene);
+        if (action.raidHubTab) {
+          setRaidHubTab(action.raidHubTab);
+        }
+        if (action.factionTab) {
+          setFactionTab(action.factionTab);
+        }
+        return;
+      }
+
+      if (action.type === 'dialog') {
+        window.setTimeout(() => {
+          playDialogScene(action.sceneId, {
+            force: action.force ?? true,
+            onComplete: action.onCompleteActions
+              ? () => runTutorialFlowActions(action.onCompleteActions ?? [])
+              : undefined,
+          });
+        }, action.delayMs ?? 0);
+        return;
+      }
+
+      setGlobalUnlockModal({
+        ...action.modal,
+        afterConfirmActions: action.afterConfirmActions,
+      });
+    });
+  };
+
   const getPreferredSeedId = (): string => (
-    unlockedSeedIds.find((seedId) => (seedInventory[seedId] ?? 0) > 0)
+    unlockedSeedIds.find((seedId) => seedId !== TUTORIAL_STARTER_SEED_ID && (seedInventory[seedId] ?? 0) > 0)
+    ?? unlockedSeedIds.find((seedId) => seedId !== TUTORIAL_STARTER_SEED_ID)
     ?? unlockedSeedIds[0]
-    ?? 'qilingya'
+    ?? 'qinglingmai'
   );
 
   const cacheRaidTargetDetail = (detail: ClientRaidTargetDetailResponse): void => {
@@ -1023,6 +983,61 @@ function App(): JSX.Element {
     void loadNotificationPage(1);
   };
 
+  const resetSocialState = (): void => {
+    setSocialSummary(null);
+    setSocialFeed([]);
+    setSocialFriends([]);
+    setSocialFollowing([]);
+    setSocialEnemies([]);
+    setSocialError(null);
+    setSocialLoading(false);
+  };
+
+  const loadSocialBundle = async (): Promise<void> => {
+    setSocialLoading(true);
+    setSocialError(null);
+
+    try {
+      const [summary, feedResult, friendsResult, followingResult, enemiesResult] = await Promise.all([
+        loadSocialSummary(),
+        loadSocialFeed(),
+        loadSocialRelations('friends'),
+        loadSocialRelations('following'),
+        loadSocialRelations('enemies'),
+      ]);
+
+      setSocialSummary(summary);
+      setSocialFeed(feedResult.items);
+      setSocialFriends(friendsResult.items);
+      setSocialFollowing(followingResult.items);
+      setSocialEnemies(enemiesResult.items);
+    } catch (error) {
+      setSocialError(error instanceof Error && error.message ? error.message : '当前无法读取社交数据，请稍后重试。');
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
+  const handleSocialAssistBack = async (targetPlayerId: string): Promise<void> => {
+    if (socialLoading) {
+      return;
+    }
+
+    setSocialLoading(true);
+    setSocialError(null);
+
+    try {
+      const result = await waterSocialField({ targetPlayerId });
+      setSocialSummary((current) => current ? { ...current, counts: result.counts } : current);
+      showToast(result.summary, 'success');
+      void loadSocialBundle();
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法完成助力，请稍后重试。', 'error');
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
   const handleMarkNotificationRead = async (notificationId: string): Promise<void> => {
     setNotificationActionId(`read:${notificationId}`);
     try {
@@ -1134,6 +1149,17 @@ function App(): JSX.Element {
     }
   };
 
+  const handleShareAssistSuccessExit = async (audience: ShareAssistAudience): Promise<void> => {
+    setShareAssistDemo(null);
+
+    if (audience === 'new-user') {
+      setAuthScreen('faction-select');
+      return;
+    }
+
+    await handleDevLogin('existing-user');
+  };
+
   const handleSwitchDevUser = (): void => {
     setSettingsOpen(false);
     clearDevLoginSession();
@@ -1147,6 +1173,7 @@ function App(): JSX.Element {
     setActiveScene('home');
     setRaidHubTab('targets');
     setFactionTab('overview');
+    setSocialTab('feed');
     setSelectedRaidTargetId('');
     setRaidTargetModal(null);
     setRaidTargetDetail(null);
@@ -1154,11 +1181,14 @@ function App(): JSX.Element {
     setSeedRewardModal(null);
     setSeedSelectionState(null);
     setSeedCodexState(null);
+    setShareAssistDemo(null);
     setFarmCollectPresentation(null);
     setGlobalFeatureModal(null);
+    setGlobalUnlockModal(null);
     setPendingActionKey(null);
     setAuthScreen('account-select');
     resetNotificationState();
+    resetSocialState();
     setLoginError(null);
     welcomeDialogSessionIdRef.current = null;
     farmEnterDialogRef.current = null;
@@ -1200,6 +1230,23 @@ function App(): JSX.Element {
       setActiveScene('home');
     }
   }, [activeScene, tutorialStage]);
+
+  useEffect(() => {
+    if (!loginSession) {
+      resetSocialState();
+      return;
+    }
+
+    void loadSocialBundle();
+  }, [loginSession]);
+
+  useEffect(() => {
+    if (!loginSession || activeScene !== 'social') {
+      return;
+    }
+
+    void loadSocialBundle();
+  }, [activeScene, loginSession]);
 
   useEffect(() => {
     if (!loginSession) {
@@ -1256,13 +1303,12 @@ function App(): JSX.Element {
       return;
     }
 
-    if (loginSession.mode === 'new-user' && tutorialStage !== 'home') {
-      welcomeDialogSessionIdRef.current = loginSession.player.id;
+    if (loginSession.mode === 'new-user') {
       return;
     }
 
     welcomeDialogSessionIdRef.current = loginSession.player.id;
-    playDialogScene(loginSession.mode === 'new-user' ? 'home.welcome.leader1' : 'home.welcome.fox');
+    playDialogScene('home.welcome.fox');
   }, [loginSession, playDialogScene, tutorialStage, viewModel]);
 
   useEffect(() => {
@@ -1413,6 +1459,25 @@ function App(): JSX.Element {
   }, [armyQueueRefreshReadyAt, farmTick, viewModel]);
 
   if (!viewModel || !spiritState) {
+    if (shareAssistDemo) {
+      return (
+        <CharacterDialogProvider controller={characterDialog} portalTarget={characterDialogPortalRef.current}>
+          <ShareAssistPage
+            audience={shareAssistDemo.audience}
+            kind={shareAssistDemo.kind}
+            onBack={() => setShareAssistDemo(null)}
+            onConfirm={() => {
+              setShareAssistDemo((current) => current ? { ...current, status: 'completed' } : current);
+            }}
+            onSuccessExit={() => {
+              void handleShareAssistSuccessExit(shareAssistDemo.audience);
+            }}
+            status={shareAssistDemo.status}
+          />
+        </CharacterDialogProvider>
+      );
+    }
+
     if (!loginSession) {
       return (
         <main className="loading-shell auth-shell">
@@ -1481,53 +1546,77 @@ function App(): JSX.Element {
               </>
             ) : (
               <>
-                <h1>选择账号入口</h1>
-                <p className="panel-text">已有档案和验证账号从这里进入。新用户建档入口在阵营选择页。</p>
-                <div className="auth-choice-grid">
-                  <button
-                    className="auth-choice-button primary-choice"
-                    disabled={loginLoadingMode !== null}
-                    onClick={() => {
-                      setAuthScreen('faction-select');
-                    }}
-                    type="button"
-                  >
-                    <span>新用户</span>
-                    <strong>前往阵营选择</strong>
-                  </button>
-                  <button
-                    className="auth-choice-button"
-                    disabled={loginLoadingMode !== null}
-                    onClick={() => {
-                      void handleDevLogin('existing-user');
-                    }}
-                    type="button"
-                  >
-                    <span>我是已注册用户</span>
-                    <strong>{loginLoadingMode === 'existing-user' ? '登录中...' : '进入已有档案'}</strong>
-                  </button>
-                  <button
-                    className="auth-choice-button"
-                    disabled={loginLoadingMode !== null}
-                    onClick={() => {
-                      void handleDevLogin('test-user-1');
-                    }}
-                    type="button"
-                  >
-                    <span>验证账号</span>
-                    <strong>{loginLoadingMode === 'test-user-1' ? '登录中...' : '测试用户1'}</strong>
-                  </button>
-                  <button
-                    className="auth-choice-button"
-                    disabled={loginLoadingMode !== null}
-                    onClick={() => {
-                      void handleDevLogin('test-user-2');
-                    }}
-                    type="button"
-                  >
-                    <span>验证账号</span>
-                    <strong>{loginLoadingMode === 'test-user-2' ? '登录中...' : '测试用户2'}</strong>
-                  </button>
+                <div className="auth-browser-layout">
+                  <section className="auth-account-column">
+                    <h1>选择账号入口</h1>
+                    <p className="panel-text">已有档案和验证账号从这里进入。新用户建档入口在阵营选择页。</p>
+                    <div className="auth-choice-grid">
+                      <button
+                        className="auth-choice-button primary-choice"
+                        disabled={loginLoadingMode !== null}
+                        onClick={() => {
+                          setAuthScreen('faction-select');
+                        }}
+                        type="button"
+                      >
+                        <span>新用户</span>
+                        <strong>前往阵营选择</strong>
+                      </button>
+                      <button
+                        className="auth-choice-button"
+                        disabled={loginLoadingMode !== null}
+                        onClick={() => {
+                          void handleDevLogin('existing-user');
+                        }}
+                        type="button"
+                      >
+                        <span>我是已注册用户</span>
+                        <strong>{loginLoadingMode === 'existing-user' ? '登录中...' : '进入已有档案'}</strong>
+                      </button>
+                      <button
+                        className="auth-choice-button"
+                        disabled={loginLoadingMode !== null}
+                        onClick={() => {
+                          void handleDevLogin('test-user-1');
+                        }}
+                        type="button"
+                      >
+                        <span>验证账号</span>
+                        <strong>{loginLoadingMode === 'test-user-1' ? '登录中...' : '测试用户1'}</strong>
+                      </button>
+                      <button
+                        className="auth-choice-button"
+                        disabled={loginLoadingMode !== null}
+                        onClick={() => {
+                          void handleDevLogin('test-user-2');
+                        }}
+                        type="button"
+                      >
+                        <span>验证账号</span>
+                        <strong>{loginLoadingMode === 'test-user-2' ? '登录中...' : '测试用户2'}</strong>
+                      </button>
+                    </div>
+                  </section>
+                  <section className="auth-share-assist-section">
+                    <div>
+                      <h2>微信助力测试入口</h2>
+                      <p>模拟玩家从微信分享链接进入。被助力人固定为“已注册用户”，助力者分新用户和老用户两种路径。</p>
+                    </div>
+                    <div className="auth-share-assist-grid">
+                      <button className="primary-button" onClick={() => setShareAssistDemo({ audience: 'new-user', kind: 'water', status: 'pending' })} type="button">
+                        新用户助力浇水流程
+                      </button>
+                      <button className="secondary-button" onClick={() => setShareAssistDemo({ audience: 'new-user', kind: 'raid', status: 'pending' })} type="button">
+                        新用户助力掠夺流程
+                      </button>
+                      <button className="primary-button" onClick={() => setShareAssistDemo({ audience: 'returning-user', kind: 'water', status: 'pending' })} type="button">
+                        老用户助力浇水流程
+                      </button>
+                      <button className="secondary-button" onClick={() => setShareAssistDemo({ audience: 'returning-user', kind: 'raid', status: 'pending' })} type="button">
+                        老用户助力掠夺流程
+                      </button>
+                    </div>
+                  </section>
                 </div>
               </>
             )}
@@ -1550,15 +1639,20 @@ function App(): JSX.Element {
 
   const { bootstrap, home, scenes, usingMock, sources } = viewModel;
   const selectedRaidTarget = scenes.raid.targets.find((target) => target.id === selectedRaidTargetId) ?? scenes.raid.targets[0];
+  const isTutorialUser = isNewUserInTutorial(loginSession, tutorialStage);
+  const raidTargetsForTutorial = isTutorialUser
+    ? scenes.raid.targets.filter((target) => target.tutorialTarget)
+    : scenes.raid.targets;
+  const visibleRaidTargets = isTutorialUser ? raidTargetsForTutorial : scenes.raid.targets;
   const mergedReportEntries = [...scenes.report.attack, ...scenes.report.defense]
     .filter((entry) => entry.title !== '系统结算')
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
   const activeBackgroundImage = `url(${getSceneBackground(activeScene, home.factionName)})`;
-  const isTutorialUser = loginSession?.mode === 'new-user' && tutorialStage !== 'completed';
+  const tutorialUiRules = getTutorialUiRules(tutorialStage, isTutorialUser);
   const vaultResource = findResourceByTone('vault', home.resources);
   const devLoginModeLabel = getDevLoginModeLabel(loginSession?.mode);
   const currentAccountName = loginSession?.player.nickname ?? home.playerName;
-  const dailyTasks = isTutorialUser ? [] : (home.dailyTasks ?? []);
+  const dailyTasks = tutorialUiRules.showHomeDailyTasks ? (home.dailyTasks ?? []) : [];
   const tutorialTask = buildTutorialTask(tutorialStage);
   const vaultProgress = vaultResource ? parseCapacityResourceValue(vaultResource.value) : { current: 0, capacity: 0, ratio: 0 };
   const seasonProgress = buildSeasonProgress(bootstrap.season);
@@ -1568,7 +1662,7 @@ function App(): JSX.Element {
   const seasonSignInTodayReward = getSeasonSignInReward(seasonSignInDay);
   const seasonSignInMilestones = buildSeasonSignInMilestones(seasonSignInRecord.claimedDays.length);
   const tianjiTalismanCount = spiritState?.tianjiTalisman ?? globalItemInventory.tianjiTalisman ?? 0;
-  const visibleSeedCatalog = seedCatalog.filter((seed) => isTutorialUser || seed.id !== TUTORIAL_STARTER_SEED_ID);
+  const visibleSeedCatalog = playableSeedCatalog;
   const seedCatalogMap = new Map(seedCatalog.map((seed) => [seed.id, seed]));
   const seedGroups = (['common', 'rare', 'legendary'] as const).map((rarity) => ({
     rarity,
@@ -1585,19 +1679,34 @@ function App(): JSX.Element {
     : null;
   const firstVisibleUnlockedSeedId = seedGroups.flatMap((group) => group.seeds).find((seed) => seed.unlocked)?.id
     ?? visibleSeedCatalog[0]?.id
-    ?? 'qilingya';
+    ?? 'qinglingmai';
   const topSpiritCodexSelectedId = topSpiritCodexSpiritId
     ?? spiritState?.codex.find((entry) => entry.hasSeen || entry.ownedEver || entry.shardCount > 0 || entry.ownedCurrent)?.spiritId
     ?? spiritState?.codex[0]?.spiritId
     ?? null;
   const spiritStableFull = spiritState ? spiritState.slots.filter((slot) => slot.spiritId).length >= spiritState.slots.length : false;
+  const raidShardResourceItems: BackpackResourceItem[] = (spiritState?.codex ?? [])
+    .filter((entry) => entry.hasSeen || entry.ownedEver || entry.ownedCurrent || entry.shardCount > 0)
+    .sort((left, right) => {
+      const rarityOrder: Record<SeedRarity, number> = { common: 0, rare: 1, legendary: 2 };
+      const rarityDiff = rarityOrder[left.definition.rarity] - rarityOrder[right.definition.rarity];
+      return rarityDiff !== 0 ? rarityDiff : left.definition.label.localeCompare(right.definition.label, 'zh-Hans-CN');
+    })
+    .map((entry) => ({
+      id: `spirit-shard-${entry.spiritId}`,
+      label: entry.definition.shardName,
+      quantity: entry.shardCount,
+      group: 'raid-shard' as const,
+      rarity: entry.definition.rarity,
+    }));
   const backpackResourceItems: BackpackResourceItem[] = [
     { id: 'spirit-root', label: '灵根', quantity: spiritState?.spiritRoot ?? 0, group: 'spirit', rarity: 'common' },
     { id: 'spirit-marrow', label: '灵髓', quantity: spiritState?.spiritMarrow ?? 0, group: 'spirit', rarity: 'rare' },
     { id: 'spirit-jade', label: '灵玉', quantity: spiritState?.spiritJade ?? 0, group: 'spirit', rarity: 'legendary' },
-    { id: 'ordinary-soul', label: '普通兽魂', quantity: spiritState?.ordinarySoul ?? 0, group: 'spirit', rarity: 'common' },
-    { id: 'rare-soul', label: '稀有兽魂', quantity: spiritState?.rareSoul ?? 0, group: 'spirit', rarity: 'rare' },
-    { id: 'legendary-soul', label: '传说兽魂', quantity: spiritState?.legendarySoul ?? 0, group: 'spirit', rarity: 'legendary' },
+    { id: 'ordinary-soul', label: '普通兽魂', quantity: spiritState?.ordinarySoul ?? 0, group: 'soul', rarity: 'common' },
+    { id: 'rare-soul', label: '稀有兽魂', quantity: spiritState?.rareSoul ?? 0, group: 'soul', rarity: 'rare' },
+    { id: 'legendary-soul', label: '传说兽魂', quantity: spiritState?.legendarySoul ?? 0, group: 'soul', rarity: 'legendary' },
+    ...raidShardResourceItems,
     ...visibleSeedCatalog.filter((seed) => unlockedSeedIds.includes(seed.id)).map((seed) => ({
       id: `essence-${seed.id}`,
       label: `${seed.name}精华`,
@@ -1656,6 +1765,8 @@ function App(): JSX.Element {
       tone,
     });
   };
+  const visibleHomeFactionTasks = tutorialUiRules.showHomeFactionTasks ? home.factionTasks ?? [] : [];
+  const visibleSceneFactionTasks = tutorialUiRules.faction.showTodayTasks ? scenes.faction.tasks ?? [] : [];
 
   const handleSetMainSpiritAction = async (slotIndex: number, slotVersion: number): Promise<void> => {
     if (pendingActionKey === `spirit:set-main:${slotIndex}`) {
@@ -1733,10 +1844,26 @@ function App(): JSX.Element {
       });
       applySpiritMutationResult(result);
       if (tutorialStage === 'spirit') {
-        advanceTutorialStage('raid');
-        setActiveScene('report');
-        setRaidHubTab('targets');
-        playDialogScene('tutorial.raid.start', { force: true });
+        const composedSlot = result.spirit.slots.find((slot) => slot.slotIndex === slotIndex);
+        const composedEntry = result.spirit.codex.find((entry) => entry.spiritId === spiritId);
+        const elementLabelMap: Record<ClientSpiritElement, string> = {
+          metal: '金',
+          wood: '木',
+          water: '水',
+          fire: '火',
+          earth: '土',
+        };
+        setGlobalUnlockModal({
+          title: '灵宠已结契',
+          summary: `你获得了${elementLabelMap[element]}属性灵宠 ${composedEntry?.definition.label ?? result.spirit.mainSlot?.spiritId ?? '首只灵宠'}。`,
+          items: [{
+            id: spiritId,
+            label: composedEntry?.definition.label ?? '第一只灵宠',
+            kind: 'spirit',
+            description: composedSlot?.isMain ? '已入主位' : '已结契',
+          }],
+          afterConfirmActions: getTutorialFlowActions('spiritAwardConfirmed'),
+        });
       }
     } catch {
       showToast('当前无法合成灵宠，请稍后重试。', 'error');
@@ -2032,6 +2159,9 @@ function App(): JSX.Element {
         walletVersion: home.stateVersions.walletVersion,
       });
       applyMutationResult(result);
+      if (result.bootstrap?.backpack) {
+        syncSeedBackpackState(result.bootstrap.backpack);
+      }
       setGlobalItemInventory((current) => {
         const nextItems = { ...current };
         result.rewards
@@ -2042,11 +2172,14 @@ function App(): JSX.Element {
         return nextItems;
       });
       setSeedRewardModal(null);
-      showToast(result.summary, 'success');
+      showToast(
+        tutorialStage === 'faction'
+          ? '阵营俸禄已领取，青灵麦和风云稻种植资格已解锁。'
+          : result.summary,
+        'success',
+      );
       if (tutorialStage === 'faction') {
-        advanceTutorialStage('building');
-        setActiveScene('building');
-        playDialogScene('tutorial.building.start', { force: true });
+        runTutorialFlowActions(getTutorialFlowActions('factionStipendClaimed'));
       }
     } catch {
       showToast('当前无法领取阵营俸禄，请稍后重试。', 'error');
@@ -2273,10 +2406,8 @@ function App(): JSX.Element {
         home: result.home,
         scenes: result.scenes,
       });
-      advanceTutorialStage('farm');
-      setActiveScene('farm');
-      playDialogScene('tutorial.farm.start', { force: true });
       showToast(result.summary, 'success');
+      runTutorialFlowActions(getTutorialFlowActions('starterSeedsClaimed'));
     } catch (error) {
       const message = error instanceof Error && error.message ? error.message : '当前无法领取启灵芽，请稍后重试。';
       showToast(message, 'error');
@@ -2329,9 +2460,6 @@ function App(): JSX.Element {
       return;
     }
 
-    if (tutorialStage === 'building') {
-      setActiveScene('building');
-    }
   };
 
   const handleBuildingAction = async (action: ClientSceneAction, upgradeId: ClientBuildingUpgradeId | ClientCastleExtensionUpgradeId, context: string, targetType: ClientUpgradeTargetType, costText: string): Promise<void> => {
@@ -2347,12 +2475,6 @@ function App(): JSX.Element {
         const result = await upgradeClientBuilding(buildUpgradeRequest(targetType, upgradeId, home.stateVersions.buildingVersion, home.stateVersions.walletVersion));
         applyMutationResult(result);
         applyLocalTianjiSpend(costText);
-        if (tutorialStage === 'building' && upgradeId === 'protectionTech') {
-          advanceTutorialStage('completed');
-          playDialogScene('tutorial.completed', {
-            force: true,
-          });
-        }
       } catch {
         showToast(`${context} 当前修习失败，请稍后重试。`, 'error');
       } finally {
@@ -2372,8 +2494,17 @@ function App(): JSX.Element {
 
     if (action.label === '开始培育') {
       setSelectedSeedId(getPreferredSeedId());
-      if (tutorialStage === 'farm' && selectedSeedId === TUTORIAL_STARTER_SEED_ID) {
+      if (tutorialStage === 'farm') {
         void handleStartCultivation(fieldId, context, TUTORIAL_STARTER_SEED_ID);
+        return;
+      }
+
+      if (isTutorialUser) {
+        showToast('先领取阵营俸禄，领取后会解锁青灵麦和风云稻种植资格。', 'info');
+        if (tutorialStage === 'faction') {
+          setActiveScene('faction');
+          setFactionTab('overview');
+        }
         return;
       }
 
@@ -2398,11 +2529,12 @@ function App(): JSX.Element {
           walletVersion: home.stateVersions.walletVersion,
         });
         applyMutationResult(result);
-        if (result.result.rewards.length > 0) {
+        const displayableRewards = result.result.rewards.filter(isDisplayableFarmReward);
+        if (displayableRewards.length > 0) {
           setSeedInventory((current) => {
             const nextInventory = { ...current };
-            result.result.rewards
-              .filter((reward) => ((reward.kind ?? 'seed') === 'seed' || reward.kind === 'essence') && reward.seedId)
+            displayableRewards
+              .filter((reward) => (((reward.kind ?? 'seed') === 'seed' || reward.kind === 'essence') && reward.seedId && reward.seedId !== TUTORIAL_STARTER_SEED_ID))
               .forEach((reward) => {
                 nextInventory[reward.seedId as string] = (nextInventory[reward.seedId as string] ?? 0) + reward.quantity;
               });
@@ -2410,12 +2542,12 @@ function App(): JSX.Element {
           });
           setUnlockedSeedIds((current) => {
             const nextIds = new Set(current);
-            result.result.rewards
-              .filter((reward) => ((reward.kind ?? 'seed') === 'seed' || reward.kind === 'essence') && reward.seedId)
+            displayableRewards
+              .filter((reward) => (((reward.kind ?? 'seed') === 'seed' || reward.kind === 'essence') && reward.seedId && reward.seedId !== TUTORIAL_STARTER_SEED_ID))
               .forEach((reward) => nextIds.add(reward.seedId as string));
             return Array.from(nextIds);
           });
-          const spiritRewardDelta = result.result.rewards.reduce((delta, reward) => {
+          const spiritRewardDelta = displayableRewards.reduce((delta, reward) => {
             if (reward.kind === 'spirit-root') {
               delta.spiritRoot += reward.quantity;
             }
@@ -2440,13 +2572,15 @@ function App(): JSX.Element {
         const rewardModalPayload: SeedRewardModalState = {
           title: '收取所得',
           summary: `获得 ${formatNumber(result.result.collectedGold)} 金币。`,
+          confirmAction: tutorialStage === 'farm' ? 'tutorial-farm-collect' : undefined,
+          afterConfirmActions: tutorialStage === 'farm' ? getTutorialFlowActions('farmRewardConfirmed') : undefined,
           items: [
             {
               seedId: 'field-gold',
               label: '金币',
               quantity: result.result.collectedGold,
             },
-            ...result.result.rewards.map((reward) => ({
+            ...displayableRewards.map((reward) => ({
               seedId: reward.seedId,
               quantity: reward.quantity,
               label: reward.label,
@@ -2455,14 +2589,9 @@ function App(): JSX.Element {
         };
         setFarmCollectPresentation({
           fieldId,
-          tier: result.result.rewards.length > 0 ? 'critical' : 'harvest',
-          showSeeds: result.result.rewards.length > 0,
+          tier: displayableRewards.length > 0 ? 'critical' : 'harvest',
+          showSeeds: displayableRewards.length > 0,
         });
-        if (tutorialStage === 'farm') {
-          advanceTutorialStage('spirit');
-          setActiveScene('raid');
-          playDialogScene('tutorial.spirit.start', { force: true });
-        }
         window.setTimeout(() => {
           setSeedRewardModal(rewardModalPayload);
         }, FARM_COLLECT_PRESENTATION_MS);
@@ -2582,18 +2711,24 @@ function App(): JSX.Element {
           }
 
           setRaidTargetModal(null);
-          if (response.result.battleReplay) {
+          if (tutorialStage === 'raid') {
+            const tutorialRewardModal: SeedRewardModalState = {
+              ...settledRaidRewardModal,
+              afterConfirmActions: getTutorialFlowActions('raidSettled'),
+            };
+            if (response.result.battleReplay) {
+              setPendingRaidRewardModal(tutorialRewardModal);
+              setRaidBattleAutoStart(true);
+              setRaidBattleReplay(response.result.battleReplay);
+            } else {
+              setSeedRewardModal(tutorialRewardModal);
+            }
+          } else if (response.result.battleReplay) {
             setPendingRaidRewardModal(settledRaidRewardModal);
             setRaidBattleAutoStart(true);
             setRaidBattleReplay(response.result.battleReplay);
           } else {
             setSeedRewardModal(settledRaidRewardModal);
-          }
-          if (tutorialStage === 'raid') {
-            advanceTutorialStage('faction');
-            setActiveScene('faction');
-            setFactionTab('overview');
-            playDialogScene('tutorial.faction.start', { force: true });
           }
         } catch (error) {
           if (error instanceof ApiError && error.code === 'RAID_NOT_ALLOWED') {
@@ -2740,7 +2875,7 @@ function App(): JSX.Element {
       setSeedSelectionState(null);
       showToast(`${fieldCode} 已投入 ${seed.name}，开始培育。`, 'success');
       if (tutorialStage === 'farm') {
-        playDialogScene('tutorial.farm.wait', { force: true });
+        runTutorialFlowActions(getTutorialFlowActions('fieldCultivationStarted'));
       }
     } catch {
       showToast(`${fieldCode} 当前无法开始培育，请稍后重试。`, 'error');
@@ -2756,9 +2891,21 @@ function App(): JSX.Element {
     await handleStartCultivation(seedSelectionState.fieldId, seedSelectionState.fieldCode, selectedSeedId);
   };
 
-  return (
-    <CharacterDialogProvider controller={characterDialog} portalTarget={characterDialogPortalRef.current}>
-      <main className="app-shell">
+  const appContent = shareAssistDemo ? (
+    <ShareAssistPage
+      audience={shareAssistDemo.audience}
+      kind={shareAssistDemo.kind}
+      onBack={() => setShareAssistDemo(null)}
+      onConfirm={() => {
+        setShareAssistDemo((current) => current ? { ...current, status: 'completed' } : current);
+      }}
+      onSuccessExit={() => {
+        void handleShareAssistSuccessExit(shareAssistDemo.audience);
+      }}
+      status={shareAssistDemo.status}
+    />
+  ) : (
+    <main className="app-shell">
       <aside className="left-rail">
         <div className="brand-block">
           <p className="eyebrow">TRINITY WAR</p>
@@ -2938,6 +3085,8 @@ function App(): JSX.Element {
                 <span className="global-gold-icon" aria-hidden="true">金</span>
                 <strong>{formatNumber(vaultProgress.current)}</strong>
               </div>
+              {tutorialUiRules.showTopResourceButtons ? (
+              <>
               <div className="global-resource-pill global-tianji-pill">
                 <span className="global-tianji-icon" aria-hidden="true">符</span>
                 <strong>{formatNumber(tianjiTalismanCount)}</strong>
@@ -2956,6 +3105,8 @@ function App(): JSX.Element {
               <button className="global-resource-pill global-resource-entry" onClick={() => setTopResourcePanel('resources')} type="button">
                 我的资源
               </button>
+              </>
+              ) : null}
             </section>
           </section>
 
@@ -2964,7 +3115,7 @@ function App(): JSX.Element {
               <HomeScene
                 claimingTaskId={pendingActionKey?.startsWith('home:daily-task:') ? pendingActionKey.replace('home:daily-task:', '') : null}
                 dailyTasks={dailyTasks}
-                factionTasks={home.factionTasks ?? []}
+                factionTasks={visibleHomeFactionTasks}
                 todayContribution={home.todayContribution ?? 0}
                 tutorialTask={tutorialTask}
                 onClaimTask={(taskId) => {
@@ -2996,6 +3147,7 @@ function App(): JSX.Element {
                 farmBoardUpdatedAt={farmBoard?.farmBoardUpdatedAt ?? null}
                 fields={farmFields}
                 landDeeds={scenes.farm.landDeeds ?? []}
+                uiRules={tutorialUiRules.farm}
                 onAction={(action, fieldId, fieldCode) => {
                   void handleFarmAction(action, fieldId, fieldCode);
                 }}
@@ -3007,6 +3159,7 @@ function App(): JSX.Element {
                 <ArmyScene
                 advantage={scenes.army.advantage}
                 busy={pendingActionKey?.startsWith('spirit:') ?? false}
+                uiRules={tutorialUiRules.army}
                 onCompose={(spiritId, slotIndex, element) => {
                   void handleComposeSpiritAction(spiritId, slotIndex, element);
                 }}
@@ -3051,7 +3204,8 @@ function App(): JSX.Element {
                 refreshLabel={scenes.raid.hero.action.label}
                 refreshPending={pendingActionKey === 'raid:refresh-targets'}
                 reportEntries={mergedReportEntries}
-                targets={scenes.raid.targets}
+                targets={visibleRaidTargets}
+                uiRules={tutorialUiRules.raid}
               />
             ) : null}
 
@@ -3085,9 +3239,30 @@ function App(): JSX.Element {
                 }}
                 onTransferFaction={handleTransferFaction}
                 comparison={scenes.faction.comparison}
-                tasks={scenes.faction.tasks ?? []}
+                tasks={visibleSceneFactionTasks}
                 contributionLogs={scenes.faction.contributionLogs ?? []}
                 rankings={scenes.faction.rankings}
+                uiRules={tutorialUiRules.faction}
+              />
+            ) : null}
+
+            {activeScene === 'social' ? (
+              <SocialScene
+                activeTab={socialTab}
+                busy={socialLoading}
+                enemies={socialEnemies}
+                error={socialError}
+                feed={socialFeed}
+                following={socialFollowing}
+                friends={socialFriends}
+                onAssistBack={(targetPlayerId) => {
+                  void handleSocialAssistBack(targetPlayerId);
+                }}
+                onChangeTab={setSocialTab}
+                onRefresh={() => {
+                  void loadSocialBundle();
+                }}
+                summary={socialSummary}
               />
             ) : null}
           </section>
@@ -3112,6 +3287,8 @@ function App(): JSX.Element {
 
           {raidTargetModal ? (
             <RaidIntelScreen
+              allowDeepIntel={tutorialUiRules.raid.allowDeepIntel}
+              allowFollow={tutorialUiRules.raid.allowFollow}
               detail={raidTargetDetail}
               error={raidTargetDetailError}
               followed={followedTargetIds.includes(raidTargetModal.targetId)}
@@ -3210,6 +3387,20 @@ function App(): JSX.Element {
               saving={farmBoardEditor.saving}
             />
           ) : null}
+          {globalUnlockModal ? (
+            <GlobalUnlockModal
+              items={globalUnlockModal.items}
+              onConfirm={() => {
+                const afterConfirmActions = globalUnlockModal.afterConfirmActions ?? [];
+                setGlobalUnlockModal(null);
+                if (afterConfirmActions.length > 0) {
+                  runTutorialFlowActions(afterConfirmActions);
+                }
+              }}
+              summary={globalUnlockModal.summary}
+              title={globalUnlockModal.title}
+            />
+          ) : null}
           {seedCodexState && selectedSeedCodexItem ? (
             <PlantCodexModal
               formatDuration={formatProtectionCountdown}
@@ -3252,6 +3443,7 @@ function App(): JSX.Element {
               }}
               items={seedRewardModal.items}
               onConfirm={() => {
+                const confirmAction = seedRewardModal.confirmAction;
                 if (seedRewardModal.confirmAction === 'claim-faction-stipend') {
                   void handleConfirmFactionStipendClaim();
                   return;
@@ -3265,7 +3457,17 @@ function App(): JSX.Element {
                   return;
                 }
 
+                const afterConfirmActions = seedRewardModal.afterConfirmActions ?? [];
                 setSeedRewardModal(null);
+                if (confirmAction === 'tutorial-farm-collect' && tutorialStage === 'farm') {
+                  runTutorialFlowActions(afterConfirmActions.length > 0
+                    ? afterConfirmActions
+                    : getTutorialFlowActions('farmRewardConfirmed'));
+                  return;
+                }
+                if (afterConfirmActions.length > 0) {
+                  runTutorialFlowActions(afterConfirmActions);
+                }
               }}
               summary={seedRewardModal.summary}
               title={seedRewardModal.title}
@@ -3294,6 +3496,11 @@ function App(): JSX.Element {
       </section>
 
       </main>
+  );
+
+  return (
+    <CharacterDialogProvider controller={characterDialog} portalTarget={characterDialogPortalRef.current}>
+      {appContent}
     </CharacterDialogProvider>
   );
 }

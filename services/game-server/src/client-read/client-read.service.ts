@@ -102,7 +102,8 @@ export class ClientReadService {
 
     for (const seedDefinition of seedDefinitions) {
       const inventoryEntry = seedDefinition.playerInventory[0];
-      const quantity = inventoryEntry?.quantity ?? 0;
+      const isTutorialSeed = seedDefinition.seedId === 'qilingya';
+      const quantity = isTutorialSeed ? 0 : inventoryEntry?.quantity ?? 0;
       const unlocked = (inventoryEntry?.unlockedAt ?? null) !== null;
       const discovered = unlocked || quantity > 0 || Boolean(seedDefinition.plantResearch[0]?.discoveredAt);
       const unlockRequirement = getPlantUnlockRequirement(seedDefinition.seedId, seedDefinition.rarity, seedDefinition.sortOrder);

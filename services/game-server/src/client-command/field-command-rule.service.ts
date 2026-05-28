@@ -80,6 +80,10 @@ function buildFieldRewards(field: FieldStateForCollect, collectMode: ClientColle
     return [];
   }
 
+  if (field.seedDefinition.seedId === 'qilingya') {
+    return [];
+  }
+
   const essenceYield = Math.max((field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition.rarity)) - field.stolenEssenceYield, 0);
 
   const rewards: ClientCollectRewardItem[] = [{

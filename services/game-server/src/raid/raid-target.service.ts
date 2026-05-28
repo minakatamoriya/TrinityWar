@@ -447,6 +447,15 @@ export class RaidTargetService {
     if (response.result.orderId) {
       try {
         const settlement = await this.raidSettlementService.settleRaidOrder(response.result.orderId);
+        await this.prisma.db.raidTargetPool.updateMany({
+          where: {
+            id: input.targetId,
+            ownerPlayerId: input.playerId,
+          },
+          data: {
+            expiresAt: new Date(),
+          },
+        });
         const [home, scenes, order] = await Promise.all([
           this.clientReadService.getHomeSummary(input.playerId),
           this.clientReadService.getSceneContent(input.playerId),
@@ -662,6 +671,7 @@ function buildRaidTargetDetailResponse(
     defenseStatus?: string;
     protectionStatus?: string;
     detail?: string;
+    tutorialTarget?: boolean;
   } | null;
   const mainPetPreview = buildRaidSpiritPreview(target?.targetPlayer.spiritSlots[0] ?? null, hasSeen);
   const fields = target?.targetPlayer.fieldSlots.map((field) => ({
@@ -685,6 +695,7 @@ function buildRaidTargetDetailResponse(
     name: targetSnapshot?.name ?? '未知目标',
     faction: targetSnapshot?.faction ?? target?.targetPlayer.faction?.name ?? '未知阵营',
     level: targetSnapshot?.level ?? target?.targetPlayer.castleLevelCache ?? 1,
+    tutorialTarget: targetSnapshot?.tutorialTarget === true,
     combatPower: String(targetSnapshot?.combatPower ?? 0),
     fieldPreviewTone: 'seeded',
     fieldStatus: '目标已接入真实目标池',

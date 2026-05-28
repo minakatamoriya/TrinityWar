@@ -14,16 +14,19 @@ interface RaidIntelScreenProps {
   onRevealDeepIntel: (targetId: string) => Promise<ClientRaidDeepIntelResponse>;
   followed: boolean;
   onToggleFollow: () => void;
+  allowFollow?: boolean;
+  allowDeepIntel?: boolean;
 }
 
 export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
   const [intelState, setIntelState] = useState<ClientRaidSpiritIntel | null>(null);
   const [intelLoading, setIntelLoading] = useState(false);
   const [intelError, setIntelError] = useState<string | null>(null);
-  const { mode, targetName, detail, loading, error, onClose, onAction, onRevealDeepIntel, followed, onToggleFollow } = props;
+  const { mode, targetName, detail, loading, error, onClose, onAction, onRevealDeepIntel, followed, onToggleFollow, allowFollow = true, allowDeepIntel = true } = props;
   const title = mode === 'revenge' ? '复仇' : '掠夺';
   const visibleActions = detail ? detail.actions.filter((action) => action.label !== '分享目标') : [];
   const spiritPreview = detail ? getRaidSpiritPreview(detail) : null;
+  const directIntel = detail && !allowDeepIntel ? buildDirectTutorialIntel(detail) : null;
   const remainingFreeIntel = intelState?.remainingFreeIntel ?? detail?.remainingFreeIntel ?? 0;
   const remainingTalismanIntel = intelState?.remainingTalismanIntel ?? detail?.remainingTalismanIntel ?? 0;
   const intelQuotaText = getIntelQuotaText(remainingFreeIntel, remainingTalismanIntel);
@@ -86,20 +89,20 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
                     <strong>Lv.{spiritPreview.level}</strong>
                   </div>
                 </div>
-                {intelState ? (
+                {intelState || directIntel ? (
                   <div className="raid-spirit-revealed">
-                    <div><span>五行</span><strong>{formatSpiritElement(intelState.element)}</strong></div>
-                    <div><span>攻击</span><strong>{intelState.attackRating}</strong></div>
-                    <div><span>状态</span><strong>{intelState.healthStatus}</strong></div>
+                    <div><span>五行</span><strong>{formatSpiritElement((intelState ?? directIntel)?.element ?? null)}</strong></div>
+                    <div><span>攻击</span><strong>{(intelState ?? directIntel)?.attackRating}</strong></div>
+                    <div><span>状态</span><strong>{(intelState ?? directIntel)?.healthStatus}</strong></div>
                   </div>
-                ) : (
+                ) : allowDeepIntel ? (
                   <div className="raid-spirit-intel-action">
                     <button className="secondary-button" disabled={intelLoading} onClick={handleRevealDeepIntel} type="button">
                       {intelLoading ? '窥视中...' : '深度窥视'}
                     </button>
                     {intelError ? <span>{intelError}</span> : <span>{intelQuotaText}</span>}
                   </div>
-                )}
+                ) : null}
               </article>
             ) : null}
 
@@ -153,7 +156,9 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
             {visibleActions.map((action) => (
               <ActionButton action={action} disabled={action.label === '发布通缉令'} key={`${detail.targetId}-${action.label}`} onClick={onAction} />
             ))}
-            <button className="action-button ghost" onClick={onToggleFollow} type="button">{followed ? '取消关注' : '关注'}</button>
+            {allowFollow ? (
+              <button className="action-button ghost" onClick={onToggleFollow} type="button">{followed ? '取消关注' : '关注'}</button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -169,6 +174,36 @@ function getRaidSpiritPreview(detail: ClientRaidTargetDetailResponse): ClientRai
     rarity: null,
     avatarGlyph: detail.faction.slice(0, 1) || '灵',
   };
+}
+
+function buildDirectTutorialIntel(detail: ClientRaidTargetDetailResponse): ClientRaidSpiritIntel {
+  return {
+    element: getTutorialTargetElement(detail),
+    attackRating: detail.combatPower || '教程目标',
+    healthStatus: detail.defenseStatus || detail.protectionStatus || '可出战',
+    remainingFreeIntel: detail.remainingFreeIntel,
+    remainingTalismanIntel: detail.remainingTalismanIntel,
+  };
+}
+
+function getTutorialTargetElement(detail: ClientRaidTargetDetailResponse): ClientRaidSpiritIntel['element'] {
+  const sourceText = `${detail.name} ${detail.faction} ${detail.detail}`;
+  if (sourceText.includes('金')) {
+    return 'metal';
+  }
+  if (sourceText.includes('木')) {
+    return 'wood';
+  }
+  if (sourceText.includes('水')) {
+    return 'water';
+  }
+  if (sourceText.includes('火')) {
+    return 'fire';
+  }
+  if (sourceText.includes('土') || sourceText.includes('田')) {
+    return 'earth';
+  }
+  return 'earth';
 }
 
 function getIntelQuotaText(remainingFreeIntel: number, remainingTalismanIntel: number): string {

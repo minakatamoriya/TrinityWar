@@ -61,7 +61,7 @@
       "steps": [
         {
           "actorId": "leader1",
-          "text": "从现在开始，我带你走完第一轮开荒。先收下启灵芽，再用它种出第一笔收益。"
+          "text": "从现在开始，我带你走完第一轮开荒。先收下启灵芽，再用它种出第一笔收获。"
         }
       ]
     },
@@ -124,7 +124,7 @@
       "steps": [
         {
           "actorId": "leader1",
-          "text": "启灵芽已经入土。等它成熟后收获，这笔金币会帮你走完第一轮开荒。"
+          "text": "启灵芽会先成熟，再进入丰熟。成熟即可收取；若等到丰熟，收取收益会更高。"
         }
       ]
     },
@@ -142,7 +142,7 @@
       "steps": [
         {
           "actorId": "leader1",
-          "text": "第一笔收获已经到手。现在去灵宠页，在空栏位中合成你的首宠，并选定五行属性。经验会自动挂机成长，投喂灵粮可以加速；每 10 级需要手动点击兽魂突破。"
+          "text": "第一笔收获已经到手。现在去灵宠页，在空栏位中合成你的首宠，并选定五行属性。"
         }
       ]
     },
@@ -182,24 +182,6 @@
         }
       ]
     },
-    "tutorial.building.start": {
-      "mode": "sequence",
-      "chance": 1,
-      "priority": 40,
-      "interrupt": "replace",
-      "advance": "click",
-      "options": {
-        "showCloseButton": false,
-        "closeOnMaskClick": false,
-        "autoCloseMs": null
-      },
-      "steps": [
-        {
-          "actorId": "leader1",
-          "text": "补给已经到手。最后去法术阁修习一次护灵阵，之后各处功能就会全部开放。"
-        }
-      ]
-    },
     "tutorial.completed": {
       "mode": "sequence",
       "chance": 1,
@@ -214,7 +196,7 @@
       "steps": [
         {
           "actorId": "leader1",
-          "text": "第一轮修行已经走通：耕种、灵宠、掠夺、阵营和法术都已接上。接下来全部功能开放，你可以按自己的节奏继续经营。"
+          "text": "第一轮修行已经走通：耕种、灵宠、掠夺、阵营都已接上。接下来全部功能开放，你可以按自己的节奏继续经营。"
         }
       ]
     }

@@ -1,4 +1,5 @@
 import type { ClientFactionAdvantagePanel, ClientFarmField, ClientSceneAction, ClientSceneContentResponse } from '@trinitywar/shared';
+import type { TutorialFarmUiRules } from '../../tutorial/tutorialFlow';
 import { buildFarmFieldStatusView, FarmStatusCard } from '../farm/FarmStatusCard';
 
 interface FarmCollectPresentationState {
@@ -14,6 +15,7 @@ interface FarmSceneProps {
   landDeeds: NonNullable<ClientSceneContentResponse['farm']['landDeeds']>;
   farmBoardMessage: string;
   farmBoardUpdatedAt: string | null;
+  uiRules: TutorialFarmUiRules;
   onAction: (action: ClientSceneAction, fieldId: string, fieldCode: string) => void;
   onOpenFarmBoard: () => void;
 }
@@ -25,15 +27,17 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
     fields,
     landDeeds,
     farmBoardMessage,
+    uiRules,
     onAction,
     onOpenFarmBoard,
   } = props;
   const boardPreview = farmBoardMessage.trim() || '还没有留言，点击写下农场留言。';
+  const visibleFields = uiRules.visibleFieldLimit === null ? fields : fields.slice(0, uiRules.visibleFieldLimit);
 
   return (
     <div className="scene-shell">
       <div className="scene-scroll farm-scene-scroll">
-        {advantage ? (
+        {advantage && uiRules.showFactionAdvantage ? (
           <article className="panel-card faction-advantage-panel">
             <div className="panel-head">
               <h4>{advantage.factionName}优势</h4>
@@ -50,17 +54,19 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
           </article>
         ) : null}
 
-        <div className="farm-top-card-grid">
-          <button className="panel-card farm-top-action-card farm-board-panel-card" onClick={onOpenFarmBoard} type="button">
-            <span className="farm-board-icon" aria-hidden="true">田</span>
-            <span className="farm-board-copy">
-              <strong>{boardPreview}</strong>
-            </span>
-          </button>
-        </div>
+        {uiRules.showFarmBoard ? (
+          <div className="farm-top-card-grid">
+            <button className="panel-card farm-top-action-card farm-board-panel-card" onClick={onOpenFarmBoard} type="button">
+              <span className="farm-board-icon" aria-hidden="true">田</span>
+              <span className="farm-board-copy">
+                <strong>{boardPreview}</strong>
+              </span>
+            </button>
+          </div>
+        ) : null}
 
         <div className="card-grid farm-field-grid">
-          {fields.map((field) => {
+          {visibleFields.map((field) => {
             const primaryAction = field.actions[0];
             const canClick = field.tone === 'empty' || Boolean(primaryAction?.label.includes('收取') || primaryAction?.label.includes('收获'));
 
@@ -93,7 +99,7 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
           })}
         </div>
 
-        {landDeeds.length > 0 ? (
+        {landDeeds.length > 0 && uiRules.showLandDeeds ? (
           <article className="panel-card">
             <div className="panel-head">
               <h4>地契任务</h4>

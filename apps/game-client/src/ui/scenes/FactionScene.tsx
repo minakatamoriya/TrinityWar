@@ -1,4 +1,5 @@
 import type { ClientFactionStipendSummary, ClientHomeFactionTaskSummary, ClientSceneContentResponse } from '@trinitywar/shared';
+import type { TutorialFactionUiRules } from '../../tutorial/tutorialFlow';
 
 interface FactionSceneProps {
   hero: ClientSceneContentResponse['faction']['hero'];
@@ -13,6 +14,7 @@ interface FactionSceneProps {
   tasks?: ClientHomeFactionTaskSummary[];
   contributionLogs?: NonNullable<ClientSceneContentResponse['faction']['contributionLogs']>;
   rankings: ClientSceneContentResponse['faction']['rankings'];
+  uiRules: TutorialFactionUiRules;
   onClaimStipend: () => void;
   onChangeTab: (tab: 'overview' | 'donate' | 'rank') => void;
   onContributionGuide: () => void;
@@ -33,6 +35,7 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
     tasks = [],
     contributionLogs = [],
     rankings,
+    uiRules,
     onClaimStipend,
     onChangeTab,
     onContributionGuide,
@@ -50,38 +53,44 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
             <button className="pending-claim-button pending-claim-button-faction" disabled={!canClaimStipend || claimingStipend} onClick={onClaimStipend} type="button">
               <strong>{stipendButtonLabel}</strong>
             </button>
-            <div className="faction-overview-note-block">
-              <p className="faction-breakdown-line">{hero.advantage}</p>
-              <p className="faction-breakdown-line">{hero.breakdown}</p>
-            </div>
+            {uiRules.showHeroNotes ? (
+              <div className="faction-overview-note-block">
+                <p className="faction-breakdown-line">{hero.advantage}</p>
+                <p className="faction-breakdown-line">{hero.breakdown}</p>
+              </div>
+            ) : null}
           </div>
 
-          <div className="faction-overview-column faction-overview-column-right">
-            <button className="faction-contribution-box" onClick={onContributionGuide} type="button">
-              <span className="faction-contribution-title">贡献值</span>
-              <strong className="faction-contribution-value">{contribution.value}</strong>
-            </button>
-            <div className="faction-overview-note-block">
-              <p className="faction-contribution-description">{contribution.description}</p>
+          {uiRules.showContributionPanel ? (
+            <div className="faction-overview-column faction-overview-column-right">
+              <button className="faction-contribution-box" onClick={onContributionGuide} type="button">
+                <span className="faction-contribution-title">贡献值</span>
+                <strong className="faction-contribution-value">{contribution.value}</strong>
+              </button>
+              <div className="faction-overview-note-block">
+                <p className="faction-contribution-description">{contribution.description}</p>
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </section>
 
-      <div className="tab-row">
-        <button className={`tab-button ${factionTab === 'overview' ? 'active' : ''}`} onClick={() => onChangeTab('overview')} type="button">
-          阵营对比
-        </button>
-        <button className={`tab-button ${factionTab === 'donate' ? 'active' : ''}`} onClick={() => onChangeTab('donate')} type="button">
-          今日任务
-        </button>
-        <button className={`tab-button ${factionTab === 'rank' ? 'active' : ''}`} onClick={() => onChangeTab('rank')} type="button">
-          贡献排行
-        </button>
-      </div>
+      {uiRules.showTabs ? (
+        <div className="tab-row">
+          <button className={`tab-button ${factionTab === 'overview' ? 'active' : ''}`} onClick={() => onChangeTab('overview')} type="button">
+            阵营对比
+          </button>
+          <button className={`tab-button ${factionTab === 'donate' ? 'active' : ''}`} onClick={() => onChangeTab('donate')} type="button">
+            今日任务
+          </button>
+          <button className={`tab-button ${factionTab === 'rank' ? 'active' : ''}`} onClick={() => onChangeTab('rank')} type="button">
+            贡献排行
+          </button>
+        </div>
+      ) : null}
 
       <div className="scene-scroll">
-        {factionTab === 'overview' ? (
+        {factionTab === 'overview' && uiRules.showComparison ? (
           <div className="faction-comparison-list">
             {comparison.map((item) => (
               <article className={`panel-card faction-comparison-card${item.isCurrent ? ' is-current' : ''}`} key={item.faction}>
@@ -109,7 +118,7 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
           </div>
         ) : null}
 
-        {factionTab === 'donate' ? (
+        {factionTab === 'donate' && uiRules.showTodayTasks ? (
           <>
             <article className="panel-card faction-donate-card">
               <div className="faction-donate-copy">
@@ -143,7 +152,7 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
               </div>
             </article>
 
-            {contributionLogs.length > 0 ? (
+            {contributionLogs.length > 0 && uiRules.showContributionLogs ? (
               <article className="panel-card">
                 <div className="panel-head">
                   <h4>贡献记录</h4>
@@ -159,7 +168,7 @@ export function FactionScene(props: FactionSceneProps): JSX.Element {
           </>
         ) : null}
 
-        {factionTab === 'rank' ? (
+        {factionTab === 'rank' && uiRules.showRankings ? (
           <article className="panel-card ranking-card faction-ranking-card">
             {rankings.map((item) => (
               <div className="stat-row faction-ranking-row" key={item.label}>

@@ -956,6 +956,7 @@ export interface ClientClaimFactionStipendResponse {
   summary: string;
   stipend: ClientFactionStipendSummary;
   rewards: ClientFactionStipendReward[];
+  bootstrap?: ClientBootstrapResponse;
   home: HomeSummaryResponse;
   scenes: ClientSceneContentResponse;
 }
@@ -967,7 +968,7 @@ export interface ClientResetDemoStateResponse {
   scenes: ClientSceneContentResponse;
 }
 
-export type ClientSceneKey = 'home' | 'building' | 'farm' | 'raid' | 'report' | 'faction';
+export type ClientSceneKey = 'home' | 'building' | 'farm' | 'raid' | 'report' | 'faction' | 'social';
 
 export type ClientButtonTone = 'primary' | 'secondary' | 'ghost';
 
@@ -1073,6 +1074,7 @@ export interface ClientRaidTarget {
   name: string;
   faction: string;
   level: number;
+  tutorialTarget?: boolean;
   mainPetPreview: ClientRaidSpiritPreview | null;
   combatPower: string;
   summary: string;
@@ -1088,6 +1090,7 @@ export interface ClientRaidTargetDetailResponse {
   name: string;
   faction: string;
   level: number;
+  tutorialTarget?: boolean;
   combatPower: string;
   fieldPreviewTone: ClientFarmField['tone'];
   fieldStatus: string;
@@ -1189,6 +1192,151 @@ export interface ClientFactionTaskSubmitRequest {
 
 export interface ClientFactionTaskSubmitResponse extends ClientStateMutationResponse {
   task: ClientHomeFactionTaskSummary;
+}
+
+export type ClientSocialRelationType = 'friend' | 'following' | 'enemy' | 'blocked';
+export type ClientSocialRelationStatus = 'active' | 'pending' | 'muted';
+export type ClientSocialFeedType =
+  | 'friend_watered_field'
+  | 'friend_guarded_field'
+  | 'team_challenge_invited'
+  | 'team_challenge_accepted'
+  | 'enemy_raided'
+  | 'revenge_available'
+  | 'faction_help_requested';
+export type ClientSocialAssistType = 'water_field' | 'guard_field' | 'recover_spirit' | 'faction_task_help';
+export type ClientTeamChallengeStatus = 'pending' | 'accepted' | 'rejected' | 'expired' | 'settled';
+
+export interface ClientSocialPlayerSummary {
+  playerId: string;
+  nickname: string;
+  factionName: string | null;
+  castleLevel: number;
+  lastActiveAt: string | null;
+}
+
+export interface ClientSocialRelationItem {
+  id: string;
+  relationType: ClientSocialRelationType;
+  status: ClientSocialRelationStatus;
+  sourceType: string;
+  intimacy: number;
+  lastInteractedAt: string | null;
+  createdAt: string;
+  target: ClientSocialPlayerSummary;
+}
+
+export interface ClientSocialFeedItem {
+  id: string;
+  feedType: ClientSocialFeedType;
+  summary: string;
+  isRead: boolean;
+  createdAt: string;
+  expiresAt: string | null;
+  actor: ClientSocialPlayerSummary | null;
+  actions: Array<{
+    label: string;
+    action: 'assist_back' | 'revenge' | 'follow' | 'team_challenge' | 'view_report' | 'ignore';
+    targetPlayerId?: string;
+    relatedEntityId?: string;
+  }>;
+}
+
+export interface ClientSocialSummaryResponse {
+  app: string;
+  counts: {
+    feedUnread: number;
+    friends: number;
+    following: number;
+    enemies: number;
+    pendingTeamChallenges: number;
+    todayWaterUsed: number;
+    todayWaterLimit: number;
+  };
+  quickActions: ClientSocialFeedItem[];
+}
+
+export interface ClientSocialFeedResponse {
+  app: string;
+  items: ClientSocialFeedItem[];
+  pagination: AdminPagination;
+}
+
+export interface ClientSocialRelationListResponse {
+  app: string;
+  items: ClientSocialRelationItem[];
+  pagination: AdminPagination;
+}
+
+export interface ClientSocialFollowRequest {
+  targetPlayerId: string;
+}
+
+export interface ClientSocialFriendRequest {
+  targetPlayerId: string;
+  sourceType?: string;
+}
+
+export interface ClientSocialRelationMutationResponse {
+  app: string;
+  summary: string;
+  relation: ClientSocialRelationItem;
+}
+
+export interface ClientSocialWaterFieldRequest {
+  targetPlayerId: string;
+  fieldSlotId?: string;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientSocialAssistResponse {
+  app: string;
+  summary: string;
+  assist: {
+    id: string;
+    assistType: ClientSocialAssistType;
+    targetPlayerId: string;
+    targetEntityType: string | null;
+    targetEntityId: string | null;
+    effectValue: number;
+    dateKey: string;
+    createdAt: string;
+  };
+  field?: {
+    fieldSlotId: string;
+    status: 'SEEDED' | 'GROWING' | 'MATURE' | 'WITHERED' | 'EMPTY' | 'LOCKED';
+    shortenedSeconds: number;
+    beforeStageEndsAt: string;
+    afterStageEndsAt: string;
+    fieldVersion: number;
+  };
+  counts: ClientSocialSummaryResponse['counts'];
+}
+
+export interface ClientTeamChallengeRequest {
+  allyPlayerId: string;
+  targetPlayerId: string;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientTeamChallengeItem {
+  id: string;
+  status: ClientTeamChallengeStatus;
+  initiator: ClientSocialPlayerSummary;
+  ally: ClientSocialPlayerSummary;
+  target: ClientSocialPlayerSummary;
+  assistEfficiencyBps: number;
+  result: string | null;
+  reward: Record<string, unknown> | null;
+  expiresAt: string;
+  createdAt: string;
+  settledAt: string | null;
+}
+
+export interface ClientTeamChallengeResponse {
+  app: string;
+  summary: string;
+  challenge: ClientTeamChallengeItem;
 }
 
 export interface ClientUnlockPlantRequest {

@@ -92,7 +92,7 @@ const DAILY_FACTION_DEFAULTS: ResolvedDailyFactionTaskConfig[] = [
     taskType: 'CONFLICT_RAID',
     targetCount: 1,
     rewardContribution: 25,
-    isEnabled: true,
+    isEnabled: false,
   },
 ];
 

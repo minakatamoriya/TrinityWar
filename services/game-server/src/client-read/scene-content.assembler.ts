@@ -99,6 +99,7 @@ export class SceneContentAssembler {
         raidableGold?: number;
         risk?: string;
         detail?: string;
+        tutorialTarget?: boolean;
       };
 
       const targetName = snapshot.name ?? targetPool.targetPlayer.nickname;
@@ -119,6 +120,7 @@ export class SceneContentAssembler {
         name: targetName,
         faction: factionName,
         level: snapshot.level ?? targetPool.targetPlayer.castleLevelCache,
+        tutorialTarget: snapshot.tutorialTarget === true,
         mainPetPreview,
         combatPower: formatNumber(combatPower),
         summary: mainPetPreview
@@ -299,7 +301,7 @@ export class SceneContentAssembler {
   private buildPlants(readModel: SceneContentReadModel): ClientPlantInventoryItem[] {
     const contribution = readModel.player.factionMembers[0]?.contributionScore ?? 0;
 
-    return readModel.seedInventory.map((inventory) => {
+    return readModel.seedInventory.filter((inventory) => inventory.seedDefinition.seedId !== 'qilingya').map((inventory) => {
       const unlocked = Boolean(inventory.unlockedAt);
       const discovered = unlocked || inventory.quantity > 0 || inventory.seedDefinition.plantResearch.length > 0;
       const requirement = getPlantUnlockRequirement(
