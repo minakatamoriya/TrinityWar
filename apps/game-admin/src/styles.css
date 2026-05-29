@@ -421,6 +421,16 @@ h3 {
   font-weight: 700;
 }
 
+.admin-section-tabs {
+  margin-top: 14px;
+}
+
+.panel-note {
+  margin: 12px 0 0;
+  color: #516174;
+  font-size: 13px;
+}
+
 .inline-form {
   align-items: center;
 }

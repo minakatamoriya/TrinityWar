@@ -328,8 +328,8 @@ export class ClientReadService {
             exposedFruit: fields.length > 0 ? '可侦察农场收益' : '暂无暴露田地',
             raidRule: '目标池为空时自动补入现存玩家，便于开发测试。',
             defenseStatus: `可用战力 ${target.army?.availableCount ?? 0}`,
-            protectionStatus: '可发起掠夺',
-            detail: '由当前数据库玩家自动生成的掠夺测试目标。',
+            protectionStatus: '可发起战斗',
+            detail: '由当前数据库玩家自动生成的探索测试目标。',
           },
           fieldSnapshotJson: fields,
           riskSnapshotJson: {

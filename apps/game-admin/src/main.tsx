@@ -26,6 +26,7 @@ import { OrderView } from './views/OrderView';
 import { NotificationsView } from './views/NotificationsView';
 import { PlayerDetailTables, PlayerInfoView, PlayerRaidContent } from './views/PlayerInfoView';
 import { SeedConfigView } from './views/SeedConfigView';
+import { ShareAssistView } from './views/ShareAssistView';
 import { SpiritConfigView } from './views/SpiritConfigView';
 import { SystemView } from './views/SystemView';
 import { TaskConfigView, type TaskConfigGroup } from './views/TaskConfigView';
@@ -57,6 +58,9 @@ function App(): JSX.Element {
   const [notificationHistory, setNotificationHistory] = useState<AdminListResponse<AdminNotificationHistoryItem> | null>(null);
   const [playerNotificationHistory, setPlayerNotificationHistory] = useState<AdminListResponse<AdminPlayerNotificationItem> | null>(null);
   const [playerNotificationHistoryPlayerId, setPlayerNotificationHistoryPlayerId] = useState('');
+  const [shareAssistCampaigns, setShareAssistCampaigns] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [shareAssistRecords, setShareAssistRecords] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [shareInviteRelations, setShareInviteRelations] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [seedDefinitions, setSeedDefinitions] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [seedForm, setSeedForm] = useState<Record<string, string>>(() => createEmptyConfigForm(seedConfigFields));
   const [editingSeedId, setEditingSeedId] = useState('');
@@ -72,6 +76,7 @@ function App(): JSX.Element {
   const [editingTaskGroup, setEditingTaskGroup] = useState<TaskConfigGroup>('daily');
   const [isTaskEditorOpen, setIsTaskEditorOpen] = useState(false);
   const [castleLevels, setCastleLevels] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [lightweightRuleTab, setLightweightRuleTab] = useState<'land-deed' | 'faction-stipend'>('land-deed');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -95,6 +100,9 @@ function App(): JSX.Element {
     }
     if (activeModule === 'notifications' && !seedDefinitions) {
       void loadSeedDefinitions();
+    }
+    if (activeModule === 'shareAssist' && (!shareAssistCampaigns || !shareAssistRecords || !shareInviteRelations)) {
+      void loadShareAssistDashboard();
     }
     if (activeModule === 'spiritConfig' && !spiritDefinitions) {
       void loadSpiritDefinitions();
@@ -515,6 +523,46 @@ function App(): JSX.Element {
     }
   };
 
+  const loadShareAssistCampaigns = async (page = shareAssistCampaigns?.pagination.page ?? 1): Promise<void> => {
+    const result = await run('share-assist-campaigns', () => adminFetch<AdminListResponse<AdminRecord>>(`/share-assist/campaigns?page=${page}&pageSize=10`));
+    if (result) {
+      setShareAssistCampaigns(result);
+    }
+  };
+
+  const loadShareAssistRecords = async (page = shareAssistRecords?.pagination.page ?? 1): Promise<void> => {
+    const result = await run('share-assist-records', () => adminFetch<AdminListResponse<AdminRecord>>(`/share-assist/records?page=${page}&pageSize=10`));
+    if (result) {
+      setShareAssistRecords(result);
+    }
+  };
+
+  const loadShareInviteRelations = async (page = shareInviteRelations?.pagination.page ?? 1): Promise<void> => {
+    const result = await run('share-assist-invites', () => adminFetch<AdminListResponse<AdminRecord>>(`/share-assist/invite-relations?page=${page}&pageSize=10`));
+    if (result) {
+      setShareInviteRelations(result);
+    }
+  };
+
+  const loadShareAssistDashboard = async (): Promise<void> => {
+    setBusy('share-assist');
+    setError(null);
+    try {
+      const [campaigns, records, inviteRelations] = await Promise.all([
+        adminFetch<AdminListResponse<AdminRecord>>('/share-assist/campaigns?page=1&pageSize=10'),
+        adminFetch<AdminListResponse<AdminRecord>>('/share-assist/records?page=1&pageSize=10'),
+        adminFetch<AdminListResponse<AdminRecord>>('/share-assist/invite-relations?page=1&pageSize=10'),
+      ]);
+      setShareAssistCampaigns(campaigns);
+      setShareAssistRecords(records);
+      setShareInviteRelations(inviteRelations);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '助力记录请求失败');
+    } finally {
+      setBusy('');
+    }
+  };
+
   const metricItems = [
     { label: '数据库', value: status?.database.status ?? '-', tone: status?.database.status === 'up' ? 'ok' : 'bad' },
     { label: '环境', value: status?.environment ?? '-', tone: 'neutral' },
@@ -632,6 +680,19 @@ function App(): JSX.Element {
             />
           ) : null}
 
+          {activeModule === 'shareAssist' ? (
+            <ShareAssistView
+              busy={busy}
+              campaigns={shareAssistCampaigns}
+              inviteRelations={shareInviteRelations}
+              records={shareAssistRecords}
+              onCampaignPageChange={(page) => void loadShareAssistCampaigns(page)}
+              onInvitePageChange={(page) => void loadShareInviteRelations(page)}
+              onRecordPageChange={(page) => void loadShareAssistRecords(page)}
+              onRefresh={() => void loadShareAssistDashboard()}
+            />
+          ) : null}
+
           {activeModule === 'spiritConfig' ? (
             <SpiritConfigView
               busy={busy}
@@ -706,9 +767,11 @@ function App(): JSX.Element {
 
           {activeModule === 'castleLevels' ? (
             <CastleLevelsView
+              activeTab={lightweightRuleTab}
               busy={busy}
               levels={castleLevels}
               onRefresh={() => void loadCastleLevels()}
+              onTabChange={setLightweightRuleTab}
             />
           ) : null}
 

@@ -106,6 +106,8 @@ interface UnlockPlantCommandInput {
 
 type ResolvableStipendReward = ClientFactionStipendReward & {
   seedPoolIds?: string[];
+  essencePoolIds?: string[];
+  spiritPoolIds?: string[];
 };
 
 const TUTORIAL_STARTER_SEED_ID = 'qilingya';
@@ -1449,6 +1451,8 @@ export class ClientCommandService {
       const ordinarySoulReward = sumRewardQuantity(rewards, 'ordinary-soul');
       const rareSoulReward = sumRewardQuantity(rewards, 'rare-soul');
       const legendarySoulReward = sumRewardQuantity(rewards, 'legendary-soul');
+      const essenceRewards = rewards.filter((entry) => entry.kind === 'essence' && entry.essenceType);
+      const spiritShardRewards = rewards.filter((entry) => entry.kind === 'spirit-shard' && entry.spiritId);
 
       if (goldReward > 0) {
         const nextVaultGold = playerState.wallet.vaultGold + goldReward;
@@ -1493,13 +1497,13 @@ export class ClientCommandService {
         });
       }
 
-      for (const reward of rewards.filter((entry) => entry.kind === 'seed')) {
-        if (!reward.seedId) {
+      for (const reward of essenceRewards) {
+        if (!reward.essenceType) {
           continue;
         }
 
         const seedDefinition = await client.seedDefinition.findUnique({
-          where: { seedId: reward.seedId },
+          where: { seedId: reward.essenceType },
           select: { id: true },
         });
 
@@ -1518,19 +1522,63 @@ export class ClientCommandService {
             playerId: input.playerId,
             seedDefinitionId: seedDefinition.id,
             quantity: reward.quantity,
-            unlockedAt: now,
           },
           update: {
             quantity: { increment: reward.quantity },
-            unlockedAt: now,
             inventoryVersion: { increment: 1 },
           },
         });
+      }
 
-        await discoverPlant(client, {
-          playerId: input.playerId,
-          seedDefinitionId: seedDefinition.id,
-          discoveredAt: now,
+      for (const reward of spiritShardRewards) {
+        if (!reward.spiritId) {
+          continue;
+        }
+
+        const spiritDefinition = await client.spiritDefinition.findUnique({
+          where: { spiritId: reward.spiritId },
+          select: { id: true, shardUnlockRequired: true },
+        });
+
+        if (!spiritDefinition) {
+          continue;
+        }
+
+        const existing = await client.playerSpiritCodex.findUnique({
+          where: {
+            playerId_spiritDefinitionId: {
+              playerId: input.playerId,
+              spiritDefinitionId: spiritDefinition.id,
+            },
+          },
+          select: { shardCount: true },
+        });
+        const nextShardCount = Math.min((existing?.shardCount ?? 0) + reward.quantity, spiritDefinition.shardUnlockRequired);
+
+        await client.playerSpiritCodex.upsert({
+          where: {
+            playerId_spiritDefinitionId: {
+              playerId: input.playerId,
+              spiritDefinitionId: spiritDefinition.id,
+            },
+          },
+          create: {
+            playerId: input.playerId,
+            spiritDefinitionId: spiritDefinition.id,
+            hasSeen: true,
+            shardCount: nextShardCount,
+            readyToCompose: nextShardCount >= spiritDefinition.shardUnlockRequired,
+            firstSeenAt: now,
+            readyAt: nextShardCount >= spiritDefinition.shardUnlockRequired ? now : null,
+          },
+          update: {
+            hasSeen: true,
+            shardCount: nextShardCount,
+            readyToCompose: nextShardCount >= spiritDefinition.shardUnlockRequired,
+            firstSeenAt: existing ? undefined : now,
+            readyAt: nextShardCount >= spiritDefinition.shardUnlockRequired ? now : undefined,
+            codexVersion: { increment: 1 },
+          },
         });
       }
 
@@ -1580,7 +1628,7 @@ export class ClientCommandService {
         summary: `阵营俸禄已领取：${formatRewardSummary(rewards)}。`,
         stipend: {
           title: '每日阵营俸禄',
-          description: '每日按当前个人贡献领取一次，随机种子已抽取为具体整种子。',
+          description: '每日按当前个人贡献领取一次，精华和灵宠精魄会抽取为具体碎片。',
           status: 'claimed',
           dateKey,
           contribution,
@@ -2316,6 +2364,8 @@ function normalizeStipendRewards(rewards: ClientFactionStipendReward[]): ClientF
       label: reward.label,
       quantity: Math.max(Math.floor(reward.quantity), 0),
       seedId: reward.seedId,
+      essenceType: reward.essenceType,
+      spiritId: reward.spiritId,
     }))
     .filter((reward) => reward.label.trim().length > 0 && reward.quantity > 0);
 }
@@ -2324,22 +2374,7 @@ async function resolveStipendRewards(
   client: Prisma.TransactionClient,
   rewards: ResolvableStipendReward[],
 ): Promise<ClientFactionStipendReward[]> {
-  const normalizedRewards = normalizeStipendRewards(rewards);
-  const seedPoolIds = Array.from(new Set(
-    rewards
-      .flatMap((reward) => reward.kind === 'seed' ? reward.seedPoolIds ?? [] : [])
-      .filter((seedId) => typeof seedId === 'string' && seedId.trim().length > 0),
-  ));
-
-  if (seedPoolIds.length <= 0) {
-    return normalizedRewards;
-  }
-
-  const seedDefinitions = await client.seedDefinition.findMany({
-    where: { seedId: { in: seedPoolIds } },
-    select: { seedId: true, label: true },
-  });
-  const seedLabelById = new Map(seedDefinitions.map((seed) => [seed.seedId, seed.label]));
+  const [essenceLabelById, spiritLabelById] = await loadStipendRewardLabels(client, rewards);
   const resolvedRewards: ClientFactionStipendReward[] = [];
 
   for (const reward of rewards) {
@@ -2349,38 +2384,59 @@ async function resolveStipendRewards(
       continue;
     }
 
-    if (reward.kind !== 'seed' || !reward.seedPoolIds?.length) {
-      resolvedRewards.push(...normalizeStipendRewards([reward]));
+    if (reward.kind === 'essence' && reward.essencePoolIds?.length) {
+      resolvedRewards.push(...drawGroupedRewards({
+        kind: 'essence',
+        poolIds: reward.essencePoolIds,
+        quantity,
+        labelById: essenceLabelById,
+        missingMessage: 'Faction stipend essence pool definitions not found. Please seed plant definitions first.',
+      }));
       continue;
     }
 
-    const availablePool = reward.seedPoolIds.filter((seedId) => seedLabelById.has(seedId));
-    if (availablePool.length <= 0) {
-      throw new BusinessError({
-        code: ErrorCode.NotFound,
-        message: 'Faction stipend seed pool definitions not found. Please seed seed definitions first.',
-        statusCode: 404,
+    if (reward.kind === 'spirit-shard' && reward.spiritPoolIds?.length) {
+      resolvedRewards.push(...drawGroupedRewards({
+        kind: 'spirit-shard',
+        poolIds: reward.spiritPoolIds,
+        quantity,
+        labelById: spiritLabelById,
+        missingMessage: 'Faction stipend spirit pool definitions not found. Please seed spirit definitions first.',
+      }));
+      continue;
+    }
+
+    if (reward.kind === 'seed' && reward.seedPoolIds?.length) {
+      resolvedRewards.push(...drawGroupedRewards({
+        kind: 'seed',
+        poolIds: reward.seedPoolIds,
+        quantity,
+        labelById: essenceLabelById,
+        missingMessage: 'Faction stipend seed pool definitions not found. Please seed seed definitions first.',
+      }));
+      continue;
+    }
+
+    if (reward.kind === 'essence' && reward.essenceType) {
+      resolvedRewards.push({
+        ...reward,
+        label: reward.label || `${essenceLabelById.get(reward.essenceType) ?? reward.essenceType}精华`,
       });
+      continue;
     }
 
-    const groupedSeeds = new Map<string, ClientFactionStipendReward>();
-    for (let index = 0; index < quantity; index += 1) {
-      const seedId = availablePool[Math.floor(Math.random() * availablePool.length)];
-      const existing = groupedSeeds.get(seedId);
-
-      if (existing) {
-        existing.quantity += 1;
-      } else {
-        groupedSeeds.set(seedId, {
-          kind: 'seed',
-          seedId,
-          label: seedLabelById.get(seedId) ?? seedId,
-          quantity: 1,
-        });
-      }
+    if (reward.kind === 'spirit-shard' && reward.spiritId) {
+      resolvedRewards.push({
+        ...reward,
+        label: reward.label || `${spiritLabelById.get(reward.spiritId) ?? reward.spiritId}精魄`,
+      });
+      continue;
     }
 
-    resolvedRewards.push(...groupedSeeds.values());
+    if (reward.kind !== 'seed') {
+      resolvedRewards.push(...normalizeStipendRewards([reward]));
+      continue;
+    }
   }
 
   return normalizeStipendRewards(resolvedRewards);
@@ -2390,7 +2446,10 @@ async function resolveFirstFactionStipendRewards(
   client: Prisma.TransactionClient,
   rewards: ResolvableStipendReward[],
 ): Promise<ClientFactionStipendReward[]> {
-  const nonSeedRewards = rewards.filter((reward) => reward.kind !== 'seed');
+  const resolvedNonEssenceRewards = await resolveStipendRewards(
+    client,
+    rewards.filter((reward) => reward.kind !== 'essence' && reward.kind !== 'seed'),
+  );
   const seedDefinitions = await client.seedDefinition.findMany({
     where: { seedId: { in: ['qinglingmai', 'xunyamai'] } },
     select: { seedId: true, label: true },
@@ -2406,10 +2465,92 @@ async function resolveFirstFactionStipendRewards(
   }
 
   return normalizeStipendRewards([
-    ...nonSeedRewards,
-    { kind: 'seed', seedId: 'qinglingmai', label: seedLabelById.get('qinglingmai') ?? 'qinglingmai', quantity: 1 },
-    { kind: 'seed', seedId: 'xunyamai', label: seedLabelById.get('xunyamai') ?? 'xunyamai', quantity: 1 },
+    ...resolvedNonEssenceRewards,
+    { kind: 'essence', essenceType: 'qinglingmai', label: `${seedLabelById.get('qinglingmai') ?? '青灵麦'}精华`, quantity: 3 },
+    { kind: 'essence', essenceType: 'xunyamai', label: `${seedLabelById.get('xunyamai') ?? '风云稻'}精华`, quantity: 3 },
   ]);
+}
+
+async function loadStipendRewardLabels(
+  client: Prisma.TransactionClient,
+  rewards: ResolvableStipendReward[],
+): Promise<[Map<string, string>, Map<string, string>]> {
+  const essencePoolIds = Array.from(new Set(
+    rewards
+      .flatMap((reward) => [
+        ...(reward.kind === 'essence' ? reward.essencePoolIds ?? [] : []),
+        ...(reward.kind === 'seed' ? reward.seedPoolIds ?? [] : []),
+        reward.kind === 'essence' ? reward.essenceType : undefined,
+      ])
+      .filter((id): id is string => typeof id === 'string' && id.trim().length > 0),
+  ));
+  const spiritPoolIds = Array.from(new Set(
+    rewards
+      .flatMap((reward) => [
+        ...(reward.kind === 'spirit-shard' ? reward.spiritPoolIds ?? [] : []),
+        reward.kind === 'spirit-shard' ? reward.spiritId : undefined,
+      ])
+      .filter((id): id is string => typeof id === 'string' && id.trim().length > 0),
+  ));
+  const [seedDefinitions, spiritDefinitions] = await Promise.all([
+    essencePoolIds.length > 0
+      ? client.seedDefinition.findMany({
+        where: { seedId: { in: essencePoolIds } },
+        select: { seedId: true, label: true },
+      })
+      : Promise.resolve([]),
+    spiritPoolIds.length > 0
+      ? client.spiritDefinition.findMany({
+        where: { spiritId: { in: spiritPoolIds } },
+        select: { spiritId: true, label: true },
+      })
+      : Promise.resolve([]),
+  ]);
+
+  return [
+    new Map(seedDefinitions.map((seed) => [seed.seedId, seed.label])),
+    new Map(spiritDefinitions.map((spirit) => [spirit.spiritId, spirit.label])),
+  ];
+}
+
+function drawGroupedRewards(input: {
+  kind: 'seed' | 'essence' | 'spirit-shard';
+  poolIds: string[];
+  quantity: number;
+  labelById: Map<string, string>;
+  missingMessage: string;
+}): ClientFactionStipendReward[] {
+  const availablePool = input.poolIds.filter((id) => input.labelById.has(id));
+  if (availablePool.length <= 0) {
+    throw new BusinessError({
+      code: ErrorCode.NotFound,
+      message: input.missingMessage,
+      statusCode: 404,
+    });
+  }
+
+  const groupedRewards = new Map<string, ClientFactionStipendReward>();
+  for (let index = 0; index < input.quantity; index += 1) {
+    const id = availablePool[Math.floor(Math.random() * availablePool.length)];
+    const existing = groupedRewards.get(id);
+
+    if (existing) {
+      existing.quantity += 1;
+      continue;
+    }
+
+    const baseLabel = input.labelById.get(id) ?? id;
+    groupedRewards.set(id, {
+      kind: input.kind,
+      ...(input.kind === 'seed' ? { seedId: id } : {}),
+      ...(input.kind === 'essence' ? { essenceType: id } : {}),
+      ...(input.kind === 'spirit-shard' ? { spiritId: id } : {}),
+      label: input.kind === 'essence' ? `${baseLabel}精华` : input.kind === 'spirit-shard' ? `${baseLabel}精魄` : baseLabel,
+      quantity: 1,
+    });
+  }
+
+  return Array.from(groupedRewards.values());
 }
 
 function sumRewardQuantity(rewards: ClientFactionStipendReward[], kind: ClientFactionStipendReward['kind']): number {

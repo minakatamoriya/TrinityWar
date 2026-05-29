@@ -3,7 +3,7 @@ import type { DevLoginSession } from '../api';
 import type { CharacterDialogSceneId } from '../dialog/dialogLibrary';
 
 export type TutorialStage = 'home' | 'farm' | 'spirit' | 'raid' | 'faction' | 'completed';
-export type TutorialRaidHubTab = 'targets' | 'follows' | 'reports' | 'warrants';
+export type TutorialRaidHubTab = 'targets' | 'reports' | 'warrants';
 export type TutorialFactionTab = 'overview' | 'donate' | 'rank';
 
 export interface TutorialTask {
@@ -127,9 +127,9 @@ const tutorialTasks: Partial<Record<TutorialStage, TutorialTask>> = {
     targetScene: 'raid',
   },
   raid: {
-    title: '完成教程掠夺',
-    description: '挑战教程对象，理解战斗结果和掠夺收益。',
-    actionLabel: '进入掠夺',
+    title: '完成教程战斗',
+    description: '挑战教程对象，理解战斗结果和收益。',
+    actionLabel: '进入探索',
     targetScene: 'report',
   },
   faction: {
@@ -202,11 +202,11 @@ export function getLockedSceneMessage(scene: ClientSceneKey): string {
   }
 
   if (scene === 'report') {
-    return '先完成首宠创建，再进入掠夺教程。';
+    return '先完成首宠创建，再进入探索教程。';
   }
 
   if (scene === 'faction') {
-    return '先完成教程掠夺，再领取阵营俸禄。';
+    return '先完成教程战斗，再领取阵营俸禄。';
   }
 
   if (scene === 'building') {

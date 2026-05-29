@@ -23,7 +23,7 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
   const [intelLoading, setIntelLoading] = useState(false);
   const [intelError, setIntelError] = useState<string | null>(null);
   const { mode, targetName, detail, loading, error, onClose, onAction, onRevealDeepIntel, followed, onToggleFollow, allowFollow = true, allowDeepIntel = true } = props;
-  const title = mode === 'revenge' ? '复仇' : '掠夺';
+  const title = mode === 'revenge' ? '复仇' : '战斗';
   const visibleActions = detail ? detail.actions.filter((action) => action.label !== '分享目标') : [];
   const spiritPreview = detail ? getRaidSpiritPreview(detail) : null;
   const directIntel = detail && !allowDeepIntel ? buildDirectTutorialIntel(detail) : null;
@@ -120,7 +120,7 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
 
             <div className="raid-asset-strip raid-intel-assets">
               <div className="target-meta raid-asset-card raid-visual-card">
-                <span>可掠收益</span>
+                <span>可争夺收益</span>
                 <div className="raid-gold-preview" aria-hidden="true">
                   <span className="raid-gold-stack raid-gold-stack-back" />
                   <span className="raid-gold-stack raid-gold-stack-mid" />
@@ -154,7 +154,7 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
         <div className="raid-intel-actionbar">
           <div className="raid-action-row">
             {visibleActions.map((action) => (
-              <ActionButton action={action} disabled={action.label === '发布通缉令'} key={`${detail.targetId}-${action.label}`} onClick={onAction} />
+              <ActionButton action={action} disabled={action.label === '发布通缉'} key={`${detail.targetId}-${action.label}`} onClick={onAction} />
             ))}
             {allowFollow ? (
               <button className="action-button ghost" onClick={onToggleFollow} type="button">{followed ? '取消关注' : '关注'}</button>

@@ -8,7 +8,7 @@ interface BuildingSceneProps {
 }
 
 const upgradeDescriptions: Record<string, string> = {
-  protectionTech: '结阵护住灵田与本命灵宠，延长被成功掠夺后的保护时间。',
+  protectionTech: '结阵护住灵田与本命灵宠，延长被挑战成功后的保护时间。',
   farmYieldTech: '引灵雨滋养田垄，提升作物成长与丰熟阶段的金币收益。',
   ripeWindowTech: '观天象定农时，延长作物进入丰熟后的可收窗口。',
   factionOfferingTech: '凝聚同道心念，提升金币上缴时获得的个人阵营贡献。',

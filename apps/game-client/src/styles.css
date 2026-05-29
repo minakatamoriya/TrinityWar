@@ -59,12 +59,6 @@ body {
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
 }
 
-.share-assist-page-raid {
-  background:
-    linear-gradient(180deg, rgba(18, 12, 9, 0.1) 0%, rgba(18, 12, 9, 0.26) 36%, rgba(18, 12, 9, 0.9) 76%, rgba(18, 12, 9, 0.98) 100%),
-    url('/assets/backgrounds/lueduo.png') center top / cover;
-}
-
 .share-assist-focus,
 .share-assist-action-bar {
   position: relative;
@@ -352,6 +346,33 @@ button {
   margin-top: 22px;
 }
 
+.auth-invite-faction-notice {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 205, 121, 0.3);
+  background: rgba(58, 42, 20, 0.34);
+}
+
+.auth-invite-faction-notice span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.auth-invite-faction-notice strong {
+  color: #ffe3b2;
+  font-size: 16px;
+}
+
+.auth-invite-faction-notice p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .auth-faction-page-card {
   min-height: 0;
   display: grid;
@@ -379,6 +400,32 @@ button {
   background: rgba(46, 33, 25, 0.82);
   box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
   transform: translateY(-1px);
+}
+
+.auth-faction-page-card.is-invite-recommended {
+  border-color: rgba(255, 205, 121, 0.7);
+}
+
+.auth-faction-page-card.is-invite-mismatch {
+  border-color: rgba(255, 248, 234, 0.12);
+}
+
+.auth-faction-invite-hint {
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.auth-faction-invite-hint.match {
+  color: #ffe3b2;
+  background: rgba(255, 205, 121, 0.16);
+}
+
+.auth-faction-invite-hint.mismatch {
+  color: rgba(255, 240, 210, 0.68);
+  background: rgba(255, 248, 234, 0.07);
 }
 
 .auth-faction-page-card p,
@@ -1336,6 +1383,84 @@ button {
   min-height: 42px;
   white-space: normal;
   line-height: 1.35;
+}
+
+.auth-friend-invite-link-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-friend-invite-paste-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-friend-invite-paste-grid label {
+  display: grid;
+  gap: 7px;
+}
+
+.auth-friend-invite-paste-grid span {
+  color: #ffe3b2;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.auth-friend-invite-paste-grid input {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 248, 234, 0.12);
+  border-radius: 10px;
+  background: rgba(16, 14, 12, 0.32);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.auth-friend-invite-paste-grid input::placeholder {
+  color: rgba(255, 240, 210, 0.42);
+}
+
+.auth-friend-invite-links {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-friend-invite-links > div {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  border-radius: 10px;
+  background: rgba(16, 14, 12, 0.24);
+}
+
+.auth-friend-invite-links span {
+  color: #ffe3b2;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.auth-friend-invite-links code {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.auth-friend-invite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.auth-friend-invite-actions .ghost-button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
 }
 
 @media (min-width: 520px) {
@@ -3005,6 +3130,25 @@ button {
 .compact-raid-toolbar {
   padding: 8px 10px;
   gap: 12px;
+}
+
+.raid-rule-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.raid-rule-strip span {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(255, 248, 234, 0.07);
+  font-size: 13px;
+  font-weight: 600;
+  color: #f7e8cf;
 }
 
 .raid-toolbar-text {
@@ -5884,86 +6028,217 @@ button.spirit-element-chip {
 
 .social-scene {
   display: grid;
-  gap: 12px;
-}
-
-.social-hero-panel {
-  align-items: flex-start;
-}
-
-.social-metric-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-content: start;
   gap: 8px;
 }
 
-.social-metric-card {
-  display: grid;
+.social-metric-strip {
+  display: flex;
+  flex-wrap: nowrap;
   gap: 4px;
-  min-width: 0;
-  min-height: 58px;
-  padding: 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 248, 234, 0.08);
-  background: rgba(20, 15, 13, 0.62);
+  min-height: 30px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.social-metric-card span {
-  color: var(--text-secondary);
+.social-metric-strip span {
+  flex: 0 0 auto;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 9px;
+  background: rgba(255, 248, 234, 0.045);
+  border: 1px solid rgba(255, 248, 234, 0.075);
+  color: #f7e8cf;
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.social-metric-card strong {
-  color: #fff1d2;
-  font-size: 18px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+.social-metric-strip::-webkit-scrollbar {
+  display: none;
 }
 
-.social-tab-row {
-  justify-content: flex-start;
-  overflow-x: auto;
+.social-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.social-filter-bar select {
+  min-width: 96px;
+  min-height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 248, 234, 0.14);
+  background: rgba(20, 15, 13, 0.9);
+  color: #f7e8cf;
+  padding: 0 28px 0 12px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .social-list {
   display: grid;
-  gap: 10px;
+  gap: 7px;
+}
+
+.social-friend-toolbar {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 205, 121, 0.22);
+  border-radius: 10px;
+  background: rgba(58, 42, 20, 0.34);
+}
+
+.social-friend-toolbar span {
+  color: #ffe3b2;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.social-invite-button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.social-friend-invite-url {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  border-radius: 10px;
+  background: rgba(16, 14, 12, 0.24);
+}
+
+.social-friend-invite-url span {
+  color: #ffe3b2;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.social-friend-invite-url code {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.social-friend-invite-url .ghost-button {
+  justify-self: start;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
 }
 
 .social-feed-card,
 .social-relation-card,
 .social-empty-state {
-  border-radius: 18px;
+  border-radius: 12px;
+  padding: 10px 12px;
 }
 
 .social-feed-card {
   display: grid;
-  gap: 10px;
+  gap: 7px;
+}
+
+.social-feed-card .panel-head {
+  min-height: 24px;
+  gap: 8px;
+}
+
+.social-feed-card .button-row {
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.social-feed-card .ghost-button,
+.social-relation-card .ghost-button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
 }
 
 .social-feed-card p,
 .social-empty-state p {
   margin: 0;
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.social-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .social-relation-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  min-height: 60px;
+}
+
+.social-relation-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
 }
 
 .social-relation-card h4 {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
+  font-size: 14px;
 }
 
 .social-relation-card p {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.social-relation-card .ghost-button.danger {
+  color: #ffd1d1;
+  border-color: rgba(239, 124, 124, 0.45);
+}
+
+.social-relation-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.social-relation-tags .soft-tag {
+  padding: 2px 6px;
+  font-size: 10px;
 }
 
 .social-error {
@@ -6042,8 +6317,7 @@ button.spirit-element-chip {
   .farm-field-grid,
   .card-grid,
   .quick-actions,
-  .seed-option-grid,
-  .social-metric-grid {
+  .seed-option-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -6185,8 +6459,7 @@ button.spirit-element-chip {
 
   .card-grid,
   .quick-actions,
-  .seed-option-grid,
-  .social-metric-grid {
+  .seed-option-grid {
     grid-template-columns: 1fr;
   }
 

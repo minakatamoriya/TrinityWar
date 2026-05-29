@@ -77,7 +77,7 @@ export function RaidBattleScreen(props: RaidBattleScreenProps): JSX.Element {
   };
 
   return (
-    <section className={`raid-battle-screen phase-${playback.phase}`} role="dialog" aria-modal="true" aria-label="掠夺战斗">
+    <section className={`raid-battle-screen phase-${playback.phase}`} role="dialog" aria-modal="true" aria-label="战斗回放">
       <BattleUnitPanel fallbackText={eventText} hp={playback.defenderHp} position="top" unit={replay.defender} />
 
       <div className="raid-battle-arena">

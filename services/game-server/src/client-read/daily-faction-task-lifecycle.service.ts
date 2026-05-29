@@ -46,6 +46,7 @@ export class DailyFactionTaskLifecycleService {
     if (!player?.factionId) {
       return;
     }
+    const factionId = player.factionId;
 
     await client.dailyFactionTask.deleteMany({
       where: {
@@ -96,29 +97,24 @@ export class DailyFactionTaskLifecycleService {
       });
     }
 
-    for (const task of tasks) {
-      await client.dailyFactionTask.upsert({
-        where: {
-          playerId_taskDate_taskType: {
-            playerId,
-            taskDate: dateKey,
-            taskType: task.taskType,
-          },
-        },
-        create: {
-          playerId,
-          factionId: player.factionId,
-          taskDate: dateKey,
-          taskType: task.taskType,
-          requiredEssenceType: task.requiredEssenceType,
-          requiredAmount: task.requiredAmount,
-          progressAmount: 0,
-          rewardContribution: task.rewardContribution,
-          status: 'IN_PROGRESS',
-        },
-        update: {},
-      });
+    if (tasks.length <= 0) {
+      return;
     }
+
+    await client.dailyFactionTask.createMany({
+      data: tasks.map((task) => ({
+        playerId,
+        factionId,
+        taskDate: dateKey,
+        taskType: task.taskType,
+        requiredEssenceType: task.requiredEssenceType,
+        requiredAmount: task.requiredAmount,
+        progressAmount: 0,
+        rewardContribution: task.rewardContribution,
+        status: 'IN_PROGRESS',
+      })),
+      skipDuplicates: true,
+    });
   }
 }
 

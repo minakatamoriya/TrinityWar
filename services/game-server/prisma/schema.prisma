@@ -146,6 +146,9 @@ enum SocialRelationStatus {
 enum SocialFeedType {
   FRIEND_WATERED_FIELD
   FRIEND_GUARDED_FIELD
+  FRIEND_REQUESTED
+  FRIEND_ACCEPTED
+  FRIEND_REJECTED
   TEAM_CHALLENGE_INVITED
   TEAM_CHALLENGE_ACCEPTED
   ENEMY_RAIDED
@@ -166,6 +169,38 @@ enum TeamChallengeStatus {
   REJECTED
   EXPIRED
   SETTLED
+}
+
+enum ShareAssistCampaignType {
+  WATER
+  FRIEND_INVITE
+}
+
+enum ShareAssistCampaignStatus {
+  ACTIVE
+  FULL
+  EXPIRED
+  CANCELLED
+}
+
+enum ShareAssistRecordAudience {
+  GUEST
+  PLAYER
+}
+
+enum ShareAssistRecordStatus {
+  CONFIRMED
+  BOUND
+  REWARDED
+  REJECTED
+}
+
+enum PlayerInviteRelationStatus {
+  PENDING_BIND
+  BOUND
+  TUTORIAL_COMPLETED
+  REWARDED
+  INVALID
 }
 
 model Player {
@@ -229,6 +264,10 @@ model Player {
   teamChallengesStarted   TeamChallenge[]           @relation("TeamChallengeInitiator")
   teamChallengesAllied    TeamChallenge[]           @relation("TeamChallengeAlly")
   teamChallengesTargeted  TeamChallenge[]           @relation("TeamChallengeTarget")
+  shareAssistCampaigns    ShareAssistCampaign[]     @relation("ShareAssistCampaignOwner")
+  shareAssistRecords      ShareAssistRecord[]       @relation("ShareAssistRecordHelper")
+  inviteRelationsSent     PlayerInviteRelation[]    @relation("InviteRelationInviter")
+  inviteRelationsReceived PlayerInviteRelation[]    @relation("InviteRelationInvited")
 
   @@index([factionId])
   @@index([lastLoginAt])
@@ -843,6 +882,75 @@ model TeamChallenge {
   @@index([targetPlayerId, createdAt])
   @@index([expiresAt, status])
   @@map("team_challenge")
+}
+
+model ShareAssistCampaign {
+  id                 String                    @id @default(cuid())
+  ownerPlayerId      String                    @map("owner_player_id")
+  campaignType       ShareAssistCampaignType   @map("campaign_type")
+  targetEntityType   String?                   @map("target_entity_type")
+  targetEntityId     String?                   @map("target_entity_id")
+  status             ShareAssistCampaignStatus @default(ACTIVE)
+  maxAssistCount     Int                       @default(3) @map("max_assist_count")
+  currentAssistCount Int                       @default(0) @map("current_assist_count")
+  expiresAt          DateTime                  @map("expires_at")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+
+  owner             Player                 @relation("ShareAssistCampaignOwner", fields: [ownerPlayerId], references: [id], onDelete: Cascade)
+  records           ShareAssistRecord[]
+  inviteRelations   PlayerInviteRelation[]
+
+  @@index([ownerPlayerId, campaignType, status, createdAt])
+  @@index([expiresAt, status])
+  @@map("share_assist_campaign")
+}
+
+model ShareAssistRecord {
+  id                 String                    @id @default(cuid())
+  campaignId         String                    @map("campaign_id")
+  helperPlayerId     String?                   @map("helper_player_id")
+  helperOpenidHash   String?                   @map("helper_openid_hash")
+  helperDeviceHash   String?                   @map("helper_device_hash")
+  helperAudience     ShareAssistRecordAudience @map("helper_audience")
+  status             ShareAssistRecordStatus   @default(CONFIRMED)
+  assistRecordId     String?                   @map("assist_record_id")
+  rewardClaimedAt    DateTime?                 @map("reward_claimed_at")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  boundAt            DateTime?                 @map("bound_at")
+
+  campaign     ShareAssistCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  helperPlayer Player?             @relation("ShareAssistRecordHelper", fields: [helperPlayerId], references: [id], onDelete: SetNull)
+
+  @@unique([campaignId, helperPlayerId])
+  @@unique([campaignId, helperOpenidHash])
+  @@unique([campaignId, helperDeviceHash])
+  @@index([campaignId, status, createdAt])
+  @@index([helperPlayerId, createdAt])
+  @@map("share_assist_record")
+}
+
+model PlayerInviteRelation {
+  id                 String                     @id @default(cuid())
+  inviterPlayerId    String                     @map("inviter_player_id")
+  invitedPlayerId    String?                    @map("invited_player_id")
+  invitedOpenidHash  String?                    @map("invited_openid_hash")
+  sourceCampaignId   String?                    @map("source_campaign_id")
+  status             PlayerInviteRelationStatus @default(PENDING_BIND)
+  createdAt          DateTime                   @default(now()) @map("created_at")
+  boundAt            DateTime?                  @map("bound_at")
+  rewardedAt         DateTime?                  @map("rewarded_at")
+
+  inviter       Player               @relation("InviteRelationInviter", fields: [inviterPlayerId], references: [id], onDelete: Cascade)
+  invitedPlayer Player?              @relation("InviteRelationInvited", fields: [invitedPlayerId], references: [id], onDelete: SetNull)
+  campaign      ShareAssistCampaign? @relation(fields: [sourceCampaignId], references: [id], onDelete: SetNull)
+
+  @@unique([inviterPlayerId, invitedPlayerId])
+  @@unique([inviterPlayerId, invitedOpenidHash])
+  @@index([inviterPlayerId, status, createdAt])
+  @@index([invitedPlayerId])
+  @@index([sourceCampaignId])
+  @@map("player_invite_relation")
 }
 
 model PlayerSeedInventory {

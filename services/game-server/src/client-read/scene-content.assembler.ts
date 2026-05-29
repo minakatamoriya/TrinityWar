@@ -56,7 +56,7 @@ export class SceneContentAssembler {
         targets: visibleRaidTargets,
         detail: {
           advice: visibleRaidTargets.length > 0
-            ? '目标来自 raid_target_pool，发起掠夺会先创建订单并等待异步结算。'
+            ? '目标来自 raid_target_pool，发起战斗会先创建订单并等待异步结算。'
             : '当前没有可用目标池记录，执行 seed 后会生成开发联调目标。',
           actions: [{ label: '刷新目标', target: 'raid', tone: 'secondary' }],
         },
@@ -78,7 +78,7 @@ export class SceneContentAssembler {
     const targetCount = this.buildRaidTargets(readModel).length;
 
     return {
-      eyebrow: '可掠夺目标',
+      eyebrow: '可探索目标',
       title: targetCount > 0 ? `可出征目标 ${targetCount} 个` : '暂无可出征目标',
       description: `当前可用战力 ${formatNumber(availableCount)}，第 16 步只创建订单并进入异步结算链路。`,
       action: { label: targetCount > 0 ? '查看目标' : '等待目标', target: 'raid', tone: targetCount > 0 ? 'primary' : 'ghost' },
@@ -129,7 +129,7 @@ export class SceneContentAssembler {
         loot: `${formatNumber(Math.max(Math.floor(raidableGold * 0.35), 0))}~${formatNumber(raidableGold)} 金币`,
         risk: snapshot.risk ?? '异步结算',
         detail: snapshot.detail ?? `目标池有效至 ${targetPool.expiresAt.toISOString()}`,
-        action: { label: '发起掠夺', target: 'raid', tone: 'primary' },
+        action: { label: '发起战斗', target: 'raid', tone: 'primary' },
       };
     });
   }
@@ -384,7 +384,7 @@ export class SceneContentAssembler {
       contribution: {
         title: '个人阵营贡献',
         value: formatNumber(contribution),
-        description: `贡献用于提升每日俸禄档位，俸禄以种子和分档兽魂等材料为主。当前档位：${stipendTier?.label ?? '基础俸禄'}。`,
+        description: `贡献用于提升每日俸禄档位，俸禄以植物精华、灵宠精魄和分档兽魂为主。当前档位：${stipendTier?.label ?? '基础俸禄'}。`,
       },
       comparison: readModel.factions.map((faction) => ({
         faction: faction.name,
@@ -412,7 +412,7 @@ export class SceneContentAssembler {
       stipend: currentFaction
         ? {
           title: '每日阵营俸禄',
-          description: '每日可按当前贡献档位领取一次，材料为主、少量金币为辅。',
+          description: '每日可按当前贡献档位领取一次，主要发放植物精华、灵宠精魄和分档兽魂。',
           status: stipendState?.claimedAt ? 'claimed' : 'available',
           dateKey: stipendState?.dateKey ?? getLocalDateKeyForAssembler(),
           contribution: stipendState?.contributionSnapshot ?? contribution,
@@ -480,6 +480,8 @@ function normalizeFactionStipendRewards(value: unknown): ClientFactionStipendRew
       label: item.label ?? '',
       quantity: Math.max(Math.floor(item.quantity ?? 0), 0),
       seedId: item.seedId,
+      essenceType: item.essenceType,
+      spiritId: item.spiritId,
     }));
 }
 
@@ -490,15 +492,17 @@ function toPublicFactionStipendRewards(rewards: ClientFactionStipendReward[]): C
       label: item.label,
       quantity: Math.max(Math.floor(item.quantity), 0),
       seedId: item.seedId,
+      essenceType: item.essenceType,
+      spiritId: item.spiritId,
     }))
     .filter((item) => item.label.trim().length > 0 && item.quantity > 0);
 }
 
 function buildFirstFactionStipendPreview(rewards: ClientFactionStipendReward[]): ClientFactionStipendReward[] {
   return [
-    ...rewards.filter((reward) => reward.kind !== 'seed'),
-    { kind: 'seed', seedId: 'qinglingmai', label: '青灵麦', quantity: 1 },
-    { kind: 'seed', seedId: 'xunyamai', label: '风云稻', quantity: 1 },
+    ...rewards.filter((reward) => reward.kind !== 'essence' && reward.kind !== 'seed'),
+    { kind: 'essence', essenceType: 'qinglingmai', label: '青灵麦精华', quantity: 3 },
+    { kind: 'essence', essenceType: 'xunyamai', label: '风云稻精华', quantity: 3 },
   ];
 }
 
@@ -537,7 +541,7 @@ function buildFactionTasks(readModel: SceneContentReadModel): ClientHomeFactionT
         label: status === 'claimed'
           ? '已完成'
           : type === 'conflict-raid'
-            ? '去掠夺'
+            ? '去战斗'
             : (requiredEssence?.quantity ?? 0) >= Math.max(remaining, 1) ? '上缴' : '去种植',
         target: type === 'conflict-raid' ? 'raid' : (requiredEssence?.quantity ?? 0) >= Math.max(remaining, 1) ? 'faction' : 'farm',
         tone: status === 'claimed' ? 'ghost' : 'primary',
@@ -580,7 +584,7 @@ function buildConfiguredFactionTaskTitle(
     return type === 'conflict-raid' ? configuredTitle : `${configuredTitle}：${essenceLabel ?? '精华'}`;
   }
 
-  return type === 'conflict-raid' ? '完成 1 次成功掠夺' : `上缴${essenceLabel ?? '精华'}`;
+  return type === 'conflict-raid' ? '完成 1 次战斗胜利' : `上缴${essenceLabel ?? '精华'}`;
 }
 
 function findFactionTaskConfig(
@@ -604,7 +608,7 @@ function getContributionSourceLabel(sourceType: string): string {
   }
 
   if (sourceType === 'raid-success') {
-    return '成功掠夺';
+    return '战斗胜利';
   }
 
   if (sourceType === 'field-steal') {

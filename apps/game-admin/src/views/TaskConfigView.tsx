@@ -46,11 +46,21 @@ export function TaskConfigView(props: {
               <h3>任务配置</h3>
             </div>
             <div className="action-group">
-              <select value={props.group} onChange={(event) => props.onGroupChange(event.target.value as TaskConfigGroup)}>
-                {groupOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
-              </select>
               <button disabled={isBusy} type="button" onClick={props.onRefresh}>刷新列表</button>
             </div>
+          </div>
+          <div className="tab-list admin-section-tabs" role="tablist" aria-label="任务配置分类">
+            {groupOptions.map((option) => (
+              <button
+                className={`tab-button${props.group === option.key ? ' active' : ''}`}
+                disabled={isBusy}
+                key={option.key}
+                onClick={() => props.onGroupChange(option.key)}
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
         </section>
 

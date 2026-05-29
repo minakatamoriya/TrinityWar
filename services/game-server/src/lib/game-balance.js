@@ -32,7 +32,7 @@ const CASTLE_LEVEL_CONFIG = [
   { level: 1, upgradeCost: 100, cumulativeCost: 100, taxPerHour: 8, unlocks: ['初始主城，默认开田 1'] },
   { level: 2, upgradeCost: 150, cumulativeCost: 250, taxPerHour: 10, unlocks: ['开放基础建筑升级引导', '开放灵宠上限第 1 档'] },
   { level: 3, upgradeCost: 200, cumulativeCost: 450, taxPerHour: 13, unlocks: ['开放基础灵宠培育引导'] },
-  { level: 4, upgradeCost: 250, cumulativeCost: 700, taxPerHour: 18, unlocks: ['开放基础掠夺指引', '开放灵宠上限第 2 档'] },
+  { level: 4, upgradeCost: 250, cumulativeCost: 700, taxPerHour: 18, unlocks: ['开放基础探索指引', '开放灵宠上限第 2 档'] },
   { level: 5, upgradeCost: 300, cumulativeCost: 1000, taxPerHour: 24, unlocks: ['开田 2', '解锁护灵阵', '解锁祈雨术'] },
   { level: 6, upgradeCost: 400, cumulativeCost: 1400, taxPerHour: 30, unlocks: ['开放灵宠上限第 3 档'] },
   { level: 7, upgradeCost: 500, cumulativeCost: 1900, taxPerHour: 36, unlocks: ['开放防守强化 2'] },
@@ -210,10 +210,10 @@ export const LAND_DEED_CONFIG = [
     deedKey: 'field-2',
     targetFieldSlotIndex: 2,
     title: '二号地契',
-    description: '完成基础收菜和首次掠夺后开启第二块田。',
+    description: '完成基础收菜和首次战斗胜利后开启第二块田。',
     requirements: [
       { key: 'harvestCount', label: '累计收菜', target: 3 },
-      { key: 'successfulRaidCount', label: '成功掠夺', target: 1 },
+      { key: 'successfulRaidCount', label: '战斗胜利', target: 1 },
     ],
     alternativeRequirements: [],
   },
@@ -221,11 +221,12 @@ export const LAND_DEED_CONFIG = [
     deedKey: 'field-3',
     targetFieldSlotIndex: 3,
     title: '三号地契',
-    description: '通过稳定收菜、掠夺和阵营上缴开启第三块田。',
+    description: '通过稳定收菜、战斗和阵营精华上缴开启第三块田。',
     requirements: [
-      { key: 'harvestCount', label: '累计收菜', target: 10 },
-      { key: 'successfulRaidCount', label: '成功掠夺', target: 8 },
+      { key: 'harvestCount', label: '累计收菜', target: 12 },
+      { key: 'successfulRaidCount', label: '战斗胜利', target: 5 },
       { key: 'factionDonateCount', label: '阵营上缴次数', target: 3 },
+      { key: 'factionContribution', label: '个人阵营贡献', target: 80 },
     ],
     alternativeRequirements: [],
   },
@@ -233,12 +234,12 @@ export const LAND_DEED_CONFIG = [
     deedKey: 'field-4',
     targetFieldSlotIndex: 4,
     title: '四号地契',
-    description: '完成更高强度的收菜、掠夺、阵营上缴和升级后开启第四块田。',
+    description: '完成更高强度的收菜、战斗和阵营贡献积累后开启第四块田。',
     requirements: [
       { key: 'harvestCount', label: '累计收菜', target: 30 },
-      { key: 'successfulRaidCount', label: '成功掠夺', target: 20 },
+      { key: 'successfulRaidCount', label: '战斗胜利', target: 15 },
       { key: 'factionDonateCount', label: '阵营上缴次数', target: 8 },
-      { key: 'buildingUpgradeCount', label: '修习法术次数', target: 5 },
+      { key: 'factionContribution', label: '个人阵营贡献', target: 260 },
     ],
     alternativeRequirements: [],
   },
@@ -253,7 +254,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '基础俸禄',
       rewards: [
         { kind: 'gold', quantity: 20, label: '金币' },
-        { kind: 'seed', seedPoolIds: ['qinglingmai', 'xunyamai', 'ninglucao'], quantity: 1, label: '随机普通种子' },
+        { kind: 'essence', essencePoolIds: ['qinglingmai', 'xunyamai', 'ninglucao'], quantity: 3, label: '随机普通精华' },
         { kind: 'ordinary-soul', quantity: 2, label: '普通兽魂' },
       ],
     },
@@ -263,7 +264,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '小有供奉',
       rewards: [
         { kind: 'gold', quantity: 30, label: '金币' },
-        { kind: 'seed', seedPoolIds: ['qinglingmai', 'xunyamai', 'ninglucao', 'suixinhua', 'baiyulian', 'yingyuezhu'], quantity: 2, label: '随机普通种子' },
+        { kind: 'essence', essencePoolIds: ['qinglingmai', 'xunyamai', 'ninglucao', 'suixinhua', 'baiyulian', 'yingyuezhu'], quantity: 5, label: '随机普通精华' },
         { kind: 'ordinary-soul', quantity: 5, label: '普通兽魂' },
       ],
     },
@@ -273,7 +274,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '稳定供奉',
       rewards: [
         { kind: 'gold', quantity: 40, label: '金币' },
-        { kind: 'seed', seedPoolIds: ['suixinhua', 'baiyulian', 'yingyuezhu', 'qianjiteng'], quantity: 2, label: '随机普通种子' },
+        { kind: 'essence', essencePoolIds: ['suixinhua', 'baiyulian', 'yingyuezhu', 'qianjiteng'], quantity: 8, label: '指定普通精华' },
         { kind: 'ordinary-soul', quantity: 10, label: '普通兽魂' },
       ],
     },
@@ -283,8 +284,9 @@ export const FACTION_STIPEND_CONFIG = {
       label: '阵营骨干',
       rewards: [
         { kind: 'gold', quantity: 50, label: '金币' },
-        { kind: 'seed', seedPoolIds: ['huichuncao', 'xueyuehua', 'jingdaosong', 'hundunguo'], quantity: 1, label: '随机稀有种子' },
+        { kind: 'essence', essencePoolIds: ['huichuncao', 'xueyuehua', 'jingdaosong', 'hundunguo'], quantity: 6, label: '随机稀有精华' },
         { kind: 'rare-soul', quantity: 4, label: '稀有兽魂' },
+        { kind: 'spirit-shard', spiritPoolIds: ['canglang', 'linglu', 'qingyuan', 'xuanhu'], quantity: 2, label: '随机普通灵宠精魄' },
       ],
     },
     {
@@ -293,8 +295,9 @@ export const FACTION_STIPEND_CONFIG = {
       label: '高阶供奉',
       rewards: [
         { kind: 'gold', quantity: 60, label: '金币' },
-        { kind: 'seed', seedPoolIds: ['xueyuehua', 'jingdaosong', 'hundunguo'], quantity: 2, label: '随机稀有种子' },
+        { kind: 'essence', essencePoolIds: ['xueyuehua', 'jingdaosong', 'hundunguo'], quantity: 10, label: '指定稀有精华' },
         { kind: 'rare-soul', quantity: 8, label: '稀有兽魂' },
+        { kind: 'spirit-shard', spiritPoolIds: ['chenghuang', 'guishou', 'xuangui'], quantity: 3, label: '随机稀有灵宠精魄' },
       ],
     },
     {
@@ -303,8 +306,9 @@ export const FACTION_STIPEND_CONFIG = {
       label: '阵营重臣',
       rewards: [
         { kind: 'gold', quantity: 80, label: '金币' },
-        { kind: 'seed', seedPoolIds: ['zhanqingsi', 'wangchuanying', 'zhaoyouming'], quantity: 1, label: '随机传说种子' },
+        { kind: 'essence', essencePoolIds: ['zhanqingsi', 'wangchuanying', 'zhaoyouming'], quantity: 8, label: '随机传说精华' },
         { kind: 'legendary-soul', quantity: 2, label: '传说兽魂' },
+        { kind: 'spirit-shard', spiritPoolIds: ['fenghuang', 'xueyan', 'yinglong'], quantity: 2, label: '随机传说灵宠精魄' },
       ],
     },
   ],
@@ -353,11 +357,11 @@ export const FACTION_ADVANTAGE_CONFIG = {
     factionCode: 'demon',
     factionName: '魔界',
     title: '战斗更强',
-    summary: '战斗伤害更高，战后恢复更强，适合主动出击。',
+    summary: '战斗伤害更高，战后恢复更强，适合主动战斗。',
     details: [
       '战斗伤害 +5%',
       '战后恢复已损生命 20%',
-      '更适合连续掠夺和压制节奏',
+      '更适合连续战斗和压制节奏',
     ],
     modifiers: {
       farmMatureYieldBonusPercent: 0,
@@ -374,7 +378,7 @@ export const TERRITORY_TECH_TRACKS = {
   protectionTech: {
     id: 'protectionTech',
     title: '护灵阵',
-    description: '结阵护住灵田与本命灵宠，延长被成功掠夺后的保护时间。',
+    description: '结阵护住灵田与本命灵宠，延长被挑战成功后的保护时间。',
     effectKey: 'protectionMinutes',
     levels: [
       { level: 1, costResource: 'gold', costAmount: 50, upgradeCost: 50, effectValue: 10 },
@@ -557,7 +561,7 @@ export const GAME_DESIGN_CONFIG = {
  *
  * 这里的 completionRate 不是强制公式，而是给数值反推时用的目标参考：
  * - 第 1 周让玩家快速建立基础盘。
- * - 第 2 周拉开外场、掠夺、分红的经营差距。
+ * - 第 2 周拉开外场、战斗、分红的经营差距。
  * - 第 3 周进入 75%~85% 的主成长完成度，仍然保留继续冲刺的理由。
  * - 第 4 周更偏向收成果、冲榜、打仗和做最后的资金调度。
  */
@@ -578,7 +582,7 @@ export const SEASON_WEEK_PLAN = [
     week: 3,
     phase: '高峰成型',
     completionRate: 0.82,
-    focus: '达到主体成长的 80% 左右，同时把掠夺、防守、榜单与阵营俸禄差距拉开。',
+    focus: '达到主体成长的 80% 左右，同时把战斗、防守、榜单与阵营俸禄差距拉开。',
   },
   {
     week: 4,

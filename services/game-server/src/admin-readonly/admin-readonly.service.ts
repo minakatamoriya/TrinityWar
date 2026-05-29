@@ -46,7 +46,153 @@ export class AdminReadonlyService {
         'spirit-config',
         'task-config',
         'castle-level-config',
+        'share-assist-readonly',
       ],
+    };
+  }
+
+  async listShareAssistCampaigns(query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const where: Prisma.ShareAssistCampaignWhereInput = {};
+    if (query.status?.trim()) {
+      where.status = query.status.trim().toUpperCase() as Prisma.EnumShareAssistCampaignStatusFilter;
+    }
+    if (query.ownerPlayerId?.trim()) {
+      where.ownerPlayerId = query.ownerPlayerId.trim();
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.db.shareAssistCampaign.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take,
+        include: {
+          owner: { select: { id: true, nickname: true, castleLevelCache: true } },
+          _count: { select: { records: true, inviteRelations: true } },
+        },
+      }),
+      this.prisma.db.shareAssistCampaign.count({ where }),
+    ]);
+
+    return {
+      items: items.map((item) => normalizeDates({
+        id: item.id,
+        ownerPlayerId: item.ownerPlayerId,
+        ownerNickname: item.owner.nickname,
+        ownerCastleLevel: item.owner.castleLevelCache,
+        campaignType: item.campaignType,
+        status: item.status,
+        currentAssistCount: item.currentAssistCount,
+        maxAssistCount: item.maxAssistCount,
+        targetEntityType: item.targetEntityType,
+        targetEntityId: item.targetEntityId,
+        recordCount: item._count.records,
+        inviteCount: item._count.inviteRelations,
+        expiresAt: item.expiresAt,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })),
+      pagination: { page, pageSize, total },
+    };
+  }
+
+  async listShareAssistRecords(query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const where: Prisma.ShareAssistRecordWhereInput = {};
+    if (query.campaignId?.trim()) {
+      where.campaignId = query.campaignId.trim();
+    }
+    if (query.helperPlayerId?.trim()) {
+      where.helperPlayerId = query.helperPlayerId.trim();
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.db.shareAssistRecord.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take,
+        include: {
+          campaign: {
+            select: {
+              id: true,
+              ownerPlayerId: true,
+              campaignType: true,
+              owner: { select: { nickname: true } },
+            },
+          },
+          helperPlayer: { select: { id: true, nickname: true } },
+        },
+      }),
+      this.prisma.db.shareAssistRecord.count({ where }),
+    ]);
+
+    return {
+      items: items.map((item) => normalizeDates({
+        id: item.id,
+        campaignId: item.campaignId,
+        campaignType: item.campaign.campaignType,
+        ownerPlayerId: item.campaign.ownerPlayerId,
+        ownerNickname: item.campaign.owner.nickname,
+        helperAudience: item.helperAudience,
+        helperPlayerId: item.helperPlayerId,
+        helperNickname: item.helperPlayer?.nickname ?? null,
+        helperOpenidHash: item.helperOpenidHash,
+        helperDeviceHash: item.helperDeviceHash,
+        status: item.status,
+        assistRecordId: item.assistRecordId,
+        rewardClaimedAt: item.rewardClaimedAt,
+        boundAt: item.boundAt,
+        createdAt: item.createdAt,
+      })),
+      pagination: { page, pageSize, total },
+    };
+  }
+
+  async listShareInviteRelations(query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const where: Prisma.PlayerInviteRelationWhereInput = {};
+    if (query.status?.trim()) {
+      where.status = query.status.trim().toUpperCase() as Prisma.EnumPlayerInviteRelationStatusFilter;
+    }
+    if (query.playerId?.trim()) {
+      const playerId = query.playerId.trim();
+      where.OR = [{ inviterPlayerId: playerId }, { invitedPlayerId: playerId }];
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.db.playerInviteRelation.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take,
+        include: {
+          inviter: { select: { id: true, nickname: true } },
+          invitedPlayer: { select: { id: true, nickname: true } },
+          campaign: { select: { id: true, campaignType: true, status: true } },
+        },
+      }),
+      this.prisma.db.playerInviteRelation.count({ where }),
+    ]);
+
+    return {
+      items: items.map((item) => normalizeDates({
+        id: item.id,
+        inviterPlayerId: item.inviterPlayerId,
+        inviterNickname: item.inviter.nickname,
+        invitedPlayerId: item.invitedPlayerId,
+        invitedNickname: item.invitedPlayer?.nickname ?? null,
+        invitedOpenidHash: item.invitedOpenidHash,
+        sourceCampaignId: item.sourceCampaignId,
+        campaignType: item.campaign?.campaignType ?? null,
+        campaignStatus: item.campaign?.status ?? null,
+        status: item.status,
+        createdAt: item.createdAt,
+        boundAt: item.boundAt,
+        rewardedAt: item.rewardedAt,
+      })),
+      pagination: { page, pageSize, total },
     };
   }
 
@@ -198,6 +344,7 @@ export class AdminReadonlyService {
   async listCastleLevels(): Promise<AdminListResponse<Record<string, unknown>>> {
     const landDeeds = GAME_DESIGN_CONFIG.landDeeds.map((deed: Record<string, unknown>) => ({
       type: 'land-deed',
+      ruleGroup: 'land-deed',
       key: deed['deedKey'],
       title: deed['title'],
       requirements: formatRuleRequirements(deed['requirements'], deed['alternativeRequirements']),
@@ -205,19 +352,10 @@ export class AdminReadonlyService {
       effect: `unlock field ${deed['targetFieldSlotIndex']}`,
       rewards: '-',
     }));
-    const territoryTechs = Object.entries(GAME_DESIGN_CONFIG.territoryTechs as Record<string, { title?: string; levels?: Array<Record<string, unknown>> }>)
-      .flatMap(([key, track]) => (track.levels ?? []).map((level) => ({
-        type: 'spell',
-        key: `${key}-lv-${level['level']}`,
-        title: track.title ?? key,
-        requirements: 'no castle-level requirement',
-        cost: formatRuleCost(level),
-        effect: level['effectValue'],
-        rewards: '-',
-      })));
     const factionStipends = ((GAME_DESIGN_CONFIG.factionStipends as { tiers?: Array<Record<string, unknown>> }).tiers ?? [])
       .map((tier) => ({
         type: 'faction-stipend',
+        ruleGroup: 'faction-stipend',
         key: tier['tierKey'],
         title: tier['label'],
         requirements: `contribution >= ${tier['minContribution']}`,
@@ -225,7 +363,7 @@ export class AdminReadonlyService {
         effect: '-',
         rewards: formatRuleRewards(tier['rewards']),
       }));
-    const items = [...landDeeds, ...territoryTechs, ...factionStipends];
+    const items = [...landDeeds, ...factionStipends];
     return {
       items,
       pagination: { page: 1, pageSize: items.length, total: items.length },
@@ -913,12 +1051,6 @@ function formatRequirementList(requirements: unknown): string {
     .join(' + ');
 }
 
-function formatRuleCost(level: Record<string, unknown>): string {
-  const amount = Number(level['costAmount'] ?? level['upgradeCost'] ?? 0);
-  const resource = level['costResource'] === 'tianjiTalisman' ? '天机符' : '金币';
-  return `${Number.isFinite(amount) ? Math.max(Math.floor(amount), 0) : 0} ${resource}`;
-}
-
 function formatRuleRewards(rewards: unknown): string {
   if (!Array.isArray(rewards)) {
     return '';
@@ -927,7 +1059,9 @@ function formatRuleRewards(rewards: unknown): string {
   return rewards
     .map((reward) => {
       const record = reward && typeof reward === 'object' ? reward as Record<string, unknown> : {};
-      return `${record['label'] ?? record['kind'] ?? 'reward'} x${record['quantity'] ?? 0}`;
+      const poolIds = record['essencePoolIds'] ?? record['spiritPoolIds'] ?? record['seedPoolIds'];
+      const poolLabel = Array.isArray(poolIds) && poolIds.length > 0 ? ` (${poolIds.join('/')})` : '';
+      return `${record['label'] ?? record['kind'] ?? 'reward'}${poolLabel} x${record['quantity'] ?? 0}`;
     })
     .join(', ');
 }

@@ -1,8 +1,11 @@
 ﻿import {
+  API_PREFIX,
   CLIENT_API_PREFIX,
   type ClientClaimNotificationResponse,
   type ClientClaimStarterSeedRequest,
   type ClientClaimStarterSeedResponse,
+  type ClientCompleteShareInviteTutorialRequest,
+  type ClientCompleteShareInviteTutorialResponse,
   type ClientDeleteNotificationResponse,
   type ClientBuySpiritSoulRequest,
   type ClientBuySpiritShopItemRequest,
@@ -46,12 +49,19 @@
   type ClientUnlockPlantResponse,
   type ClientUnreadNotificationCountResponse,
   type ClientSetMainSpiritRequest,
+  type ClientCreateShareAssistCampaignRequest,
+  type ClientCreateShareAssistCampaignResponse,
   type ClientSpiritMutationResponse,
   type ClientSpiritState,
   type ClientSpiritStateResponse,
+  type PublicShareAssistCampaignResponse,
+  type PublicShareAssistConfirmRequest,
+  type PublicShareAssistConfirmResponse,
   type ClientSocialAssistResponse,
   type ClientSocialFeedResponse,
+  type ClientSocialFriendRequest,
   type ClientSocialRelationListResponse,
+  type ClientSocialRelationMutationResponse,
   type ClientSocialSummaryResponse,
   type ClientSocialWaterFieldRequest,
   type ClientRollSpiritTraitsRequest,
@@ -66,6 +76,7 @@ const forceMockReads = parseViteBoolean(import.meta.env.VITE_FORCE_MOCK_READS);
 const allowMockReadFallback = parseViteBoolean(import.meta.env.VITE_ALLOW_MOCK_READ_FALLBACK);
 const forceMockCommands = parseViteBoolean(import.meta.env.VITE_FORCE_MOCK_COMMANDS);
 const AUTH_STORAGE_KEY = 'trinitywar.devAuth';
+const PUBLIC_API_PREFIX = `${API_PREFIX}/public`;
 
 type DataSource = 'api' | 'mock';
 type ClientReadEndpoint = 'bootstrap' | 'home' | 'scenes';
@@ -461,10 +472,10 @@ export class ApiError extends Error {
 function toUserFacingApiMessage(message: string, code?: string): string {
   if (code === 'RAID_NOT_ALLOWED') {
     if (message.includes('no health')) {
-      return '主位灵宠当前 0 血，无法出战。请先恢复血量，或更换主位灵宠后再发起掠夺。';
+      return '主位灵宠当前 0 血，无法出战。请先恢复血量，或更换主位灵宠后再发起战斗。';
     }
     if (message.includes('Main spirit is required')) {
-      return '当前没有可出战的主位灵宠。请先设置主位灵宠后再发起掠夺。';
+      return '当前没有可出战的主位灵宠。请先设置主位灵宠后再发起战斗。';
     }
   }
 
@@ -974,13 +985,13 @@ function syncMockFactionScene(): void {
     title: '人界阵营',
     description: '上缴金币积累个人贡献，每日按贡献档位领取材料俸禄。',
     advantage: '今日俸禄档位：入门俸禄',
-    breakdown: '预计每日俸禄：随机普通种子 x1、普通兽魂 x2、金币 x20',
+    breakdown: '预计每日俸禄：青灵麦精华 x3、普通兽魂 x2、金币 x20',
     action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
   };
   mockSceneSnapshot.faction.contribution = {
     title: '当前贡献值',
     value: formatNumber(mockFactionContribution),
-    description: '贡献用于提升每日俸禄档位，俸禄以种子和分档兽魂等材料为主。',
+    description: '贡献用于提升每日俸禄档位，俸禄以植物精华、灵宠精魄和分档兽魂为主。',
   };
   mockSceneSnapshot.faction.comparison = [
     { faction: '人界', advantage: `总贡献 ${formatNumber(mockFactionArmyPower)}`, gold: formatNumber(mockFactionTreasuryGold), power: formatNumber(mockFactionArmyPower), isCurrent: true },
@@ -1002,7 +1013,7 @@ function syncMockFactionScene(): void {
     tierKey: 'contribution-0',
     tierLabel: '入门俸禄',
     rewards: [
-      { kind: 'seed', label: '随机普通种子', quantity: 1 },
+      { kind: 'essence', essenceType: 'qinglingmai', label: '青灵麦精华', quantity: 3 },
       { kind: 'ordinary-soul', label: '普通兽魂', quantity: 2 },
       { kind: 'gold', label: '金币', quantity: 20 },
     ],
@@ -1315,7 +1326,7 @@ void applyMockRecruitArmy;
       label: '待领取',
       goldAmount: (mockHomeSnapshot.temporaryClaim?.goldAmount ?? 0) + overflowGold,
       expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-      description: '掠夺时金库已满，超出的金币会临时保留在这里，过期后消失。',
+      description: '战斗结算时金库已满，超出的金币会临时保留在这里，过期后消失。',
     };
   }
   applyMockSeedRewards(rewards);
@@ -1323,10 +1334,10 @@ void applyMockRecruitArmy;
   mockSceneSnapshot.raid.targets = mockSceneSnapshot.raid.targets.filter((item) => item.id !== input.targetId);
   mockSceneSnapshot.report.attack.unshift({
     title: `${target.faction} · ${target.name}`,
-    tag: success ? '掠夺成功' : '强袭试探',
+    tag: success ? '战斗胜利' : '强袭试探',
     tone: success ? 'success' : 'neutral',
     createdAt: new Date().toISOString(),
-    summary: `你对${target.name}发起黑盒掠夺，带回 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库${overflowGold > 0 ? `，另有 ${formatNumber(overflowGold)} 已转入待领取` : ''}，折损 ${formatNumber(casualties)} 只灵宠${rewards.length > 0 ? `，额外获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : ''}。目标已进入 1 小时防护。`,
+    summary: `你对${target.name}发起战斗，带回 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库${overflowGold > 0 ? `，另有 ${formatNumber(overflowGold)} 已转入待领取` : ''}，折损 ${formatNumber(casualties)} 只灵宠${rewards.length > 0 ? `，额外获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : ''}。目标已进入 1 小时防护。`,
     actions: [{ label: '查看详情', target: 'report', tone: 'ghost' }],
   });
   mockSceneSnapshot.report.attack = mockSceneSnapshot.report.attack.slice(0, 6);
@@ -1343,16 +1354,16 @@ void applyMockRecruitArmy;
   targetDetail.protectionStatus = '防护中，约 60 分钟后解除';
   targetDetail.actions = [{ label: '保护中', target: 'raid', tone: 'ghost' }];
   const remainingRaidCount = Math.max(mockSceneSnapshot.raid.targets.length, 0);
-  mockSceneSnapshot.raid.hero.title = `剩余可掠夺目标 ${formatNumber(remainingRaidCount)} 个`;
+  mockSceneSnapshot.raid.hero.title = `剩余可探索目标 ${formatNumber(remainingRaidCount)} 个`;
   const protectedUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   mockHomeSnapshot.protectedUntil = protectedUntil;
 
   const rewardSummary = rewards.length > 0 ? `，额外获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : '';
-  const reportSummary = `你对${target.name}发起黑盒掠夺，带回 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库${overflowGold > 0 ? `，另有 ${formatNumber(overflowGold)} 已转入待领取` : ''}，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`;
+  const reportSummary = `你对${target.name}发起战斗，带回 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库${overflowGold > 0 ? `，另有 ${formatNumber(overflowGold)} 已转入待领取` : ''}，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`;
   return {
     app: mockHomeSnapshot.app,
     summary: overflowGold > 0
-      ? `${target.name} 已进入 1 小时防护，本次掠夺 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库，另有 ${formatNumber(overflowGold)} 转入待领取，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`
+      ? `${target.name} 已进入 1 小时防护，本次战斗获得 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库，另有 ${formatNumber(overflowGold)} 转入待领取，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`
       : `${target.name} 已进入 1 小时防护，本次获得 ${formatNumber(rawGoldLoot)} 金币，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`,
     home: cloneHomeSummary(mockHomeSnapshot),
     scenes: cloneSceneContent(mockSceneSnapshot),
@@ -1735,9 +1746,86 @@ export async function loadSocialRelations(kind: 'friends' | 'following' | 'enemi
   return fetchJson<ClientSocialRelationListResponse>(`${CLIENT_API_PREFIX}/social/${kind}`);
 }
 
+export async function requestSocialFriend(input: ClientSocialFriendRequest): Promise<ClientSocialRelationMutationResponse> {
+  return fetchJson<ClientSocialRelationMutationResponse>(`${CLIENT_API_PREFIX}/social/friend-request`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function acceptSocialFriendRequest(relationId: string): Promise<ClientSocialRelationMutationResponse> {
+  return fetchJson<ClientSocialRelationMutationResponse>(`${CLIENT_API_PREFIX}/social/friend-request/${encodeURIComponent(relationId)}/accept`, {
+    method: 'POST',
+  });
+}
+
+export async function rejectSocialFriendRequest(relationId: string): Promise<ClientSocialRelationMutationResponse> {
+  return fetchJson<ClientSocialRelationMutationResponse>(`${CLIENT_API_PREFIX}/social/friend-request/${encodeURIComponent(relationId)}/reject`, {
+    method: 'POST',
+  });
+}
+
+export async function deleteSocialFriend(targetPlayerId: string): Promise<ClientSocialRelationMutationResponse> {
+  return fetchJson<ClientSocialRelationMutationResponse>(`${CLIENT_API_PREFIX}/social/friend/${encodeURIComponent(targetPlayerId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function waterSocialField(input: ClientSocialWaterFieldRequest): Promise<ClientSocialAssistResponse> {
   const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('social-water-field');
   return fetchJson<ClientSocialAssistResponse>(`${CLIENT_API_PREFIX}/social/assist/water-field`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
+}
+
+export async function createShareAssistCampaign(input: ClientCreateShareAssistCampaignRequest): Promise<ClientCreateShareAssistCampaignResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('share-assist-campaign');
+  return fetchJson<ClientCreateShareAssistCampaignResponse>(`${CLIENT_API_PREFIX}/share-assist/campaigns`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
+}
+
+export async function loadPublicShareAssistCampaign(campaignId: string): Promise<PublicShareAssistCampaignResponse> {
+  return fetchJson<PublicShareAssistCampaignResponse>(`${PUBLIC_API_PREFIX}/share-assist/campaigns/${encodeURIComponent(campaignId)}`);
+}
+
+export async function confirmPublicShareAssist(campaignId: string, input: PublicShareAssistConfirmRequest): Promise<PublicShareAssistConfirmResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('share-assist-confirm');
+  return fetchJson<PublicShareAssistConfirmResponse>(`${PUBLIC_API_PREFIX}/share-assist/campaigns/${encodeURIComponent(campaignId)}/assist`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
+}
+
+export async function completeShareInviteTutorial(input: ClientCompleteShareInviteTutorialRequest): Promise<ClientCompleteShareInviteTutorialResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('share-invite-tutorial-complete');
+  return fetchJson<ClientCompleteShareInviteTutorialResponse>(`${CLIENT_API_PREFIX}/share-assist/invite-tutorial-complete`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -2004,9 +2092,10 @@ export function getDevLoginModeLabel(mode: DevLoginMode | null | undefined): str
 
 function buildDevLoginRequest(mode: DevLoginMode, options?: { factionCode?: DevFactionChoice }): { providerUserId: string; nickname: string; factionCode: string } {
   if (mode === 'new-user') {
+    const id = Date.now();
     return {
-      providerUserId: `dev-ui-${Date.now()}`,
-      nickname: '新测试玩家',
+      providerUserId: `dev-ui-${id}`,
+      nickname: `新用户_${id}`,
       factionCode: options?.factionCode ?? 'human',
     };
   }

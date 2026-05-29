@@ -33,6 +33,7 @@ const TEAM_CHALLENGE_EXPIRES_MS = 2 * 60 * 60 * 1000;
 type DbClient = Prisma.TransactionClient | PrismaClient;
 
 type PlayerSummaryProjection = Pick<Player, 'id' | 'nickname' | 'castleLevelCache' | 'lastLoginAt'> & {
+  factionId: string | null;
   faction: { name: string } | null;
 };
 
@@ -127,13 +128,16 @@ export class SocialService {
   }
 
   async listRelations(playerId: string, relationType: SocialRelationType, page = 1): Promise<ClientSocialRelationListResponse> {
-    await this.assertPlayerExists(this.prisma.db, playerId);
+    const player = await this.assertPlayerExists(this.prisma.db, playerId);
     const safePage = Math.max(Math.floor(page), 1);
     const where: Prisma.PlayerSocialRelationWhereInput = {
       playerId,
       relationType,
       status: { not: SocialRelationStatus.MUTED },
     };
+    if (relationType === SocialRelationType.FRIEND) {
+      where.targetPlayer = { factionId: player.factionId };
+    }
     const [total, relations] = await Promise.all([
       this.prisma.db.playerSocialRelation.count({ where }),
       this.prisma.db.playerSocialRelation.findMany({
@@ -162,40 +166,230 @@ export class SocialService {
   }
 
   async requestFriend(playerId: string, request: ClientSocialFriendRequest): Promise<ClientSocialRelationMutationResponse> {
-    const reverseRelation = await this.prisma.db.playerSocialRelation.findUnique({
-      where: {
-        playerId_targetPlayerId_relationType: {
-          playerId: request.targetPlayerId,
-          targetPlayerId: playerId,
-          relationType: SocialRelationType.FRIEND,
-        },
-      },
-    });
-    const status = reverseRelation ? SocialRelationStatus.ACTIVE : SocialRelationStatus.PENDING;
-    const relation = await this.upsertRelation(playerId, request.targetPlayerId, SocialRelationType.FRIEND, request.sourceType ?? 'manual-friend-request', status);
+    const result = await this.prisma.transaction(async (client) => {
+      const player = await this.assertPlayerExists(client, playerId);
+      const target = await this.assertPlayerExists(client, request.targetPlayerId);
+      if (playerId === request.targetPlayerId) {
+        throw this.invalidRequest('Cannot create a social relation to yourself.');
+      }
+      this.assertSameFactionForFriend(playerId, target.id, player, target);
 
-    if (reverseRelation && reverseRelation.status !== SocialRelationStatus.ACTIVE) {
-      await this.prisma.db.playerSocialRelation.update({
-        where: { id: reverseRelation.id },
-        data: { status: SocialRelationStatus.ACTIVE, lastInteractedAt: new Date() },
+      const existingRelation = await client.playerSocialRelation.findUnique({
+        where: {
+          playerId_targetPlayerId_relationType: {
+            playerId,
+            targetPlayerId: request.targetPlayerId,
+            relationType: SocialRelationType.FRIEND,
+          },
+        },
       });
-    }
+      const reverseRelation = await client.playerSocialRelation.findUnique({
+        where: {
+          playerId_targetPlayerId_relationType: {
+            playerId: request.targetPlayerId,
+            targetPlayerId: playerId,
+            relationType: SocialRelationType.FRIEND,
+          },
+        },
+      });
+      const shouldActivate =
+        existingRelation?.status === SocialRelationStatus.ACTIVE ||
+        reverseRelation?.status === SocialRelationStatus.ACTIVE ||
+        (existingRelation?.status === SocialRelationStatus.PENDING && existingRelation.sourceType.endsWith(':incoming'));
+      const now = new Date();
+      const sourceBase = request.sourceType ?? 'manual-friend-request';
+      const relation = await this.upsertRelationRecord(client, {
+        playerId,
+        targetPlayerId: request.targetPlayerId,
+        relationType: SocialRelationType.FRIEND,
+        sourceType: shouldActivate ? 'friend-accepted' : `${sourceBase}:outgoing`,
+        status: shouldActivate ? SocialRelationStatus.ACTIVE : SocialRelationStatus.PENDING,
+        now,
+      });
+      const targetRelation = await this.upsertRelationRecord(client, {
+        playerId: request.targetPlayerId,
+        targetPlayerId: playerId,
+        relationType: SocialRelationType.FRIEND,
+        sourceType: shouldActivate ? 'friend-accepted' : `${sourceBase}:incoming`,
+        status: shouldActivate ? SocialRelationStatus.ACTIVE : SocialRelationStatus.PENDING,
+        now,
+      });
+
+      if (shouldActivate) {
+        await this.createFriendAcceptedFeeds(client, playerId, request.targetPlayerId);
+        await this.expireFriendRequestFeeds(client, playerId, request.targetPlayerId, now);
+      } else if (existingRelation?.status !== SocialRelationStatus.PENDING) {
+        await client.playerSocialFeed.create({
+          data: {
+            playerId: request.targetPlayerId,
+            actorPlayerId: playerId,
+            feedType: SocialFeedType.FRIEND_REQUESTED,
+            relatedEntityType: 'player_social_relation',
+            relatedEntityId: targetRelation.id,
+            summary: '对方请求加你为好友。',
+            metadataJson: { relationId: targetRelation.id, requesterPlayerId: playerId },
+          },
+        });
+      }
+
+      return {
+        target,
+        relation,
+        targetRelation,
+        active: Boolean(shouldActivate),
+      };
+    });
 
     return {
       app: APP_NAME,
-      summary: status === SocialRelationStatus.ACTIVE ? `Became friends with ${relation.target.nickname}.` : `Friend request sent to ${relation.target.nickname}.`,
-      relation,
+      summary: result.active ? `已和 ${result.target.nickname} 成为好友。` : `已向 ${result.target.nickname} 发送好友申请。`,
+      relation: this.mapRelation(result.relation),
+      reverseRelation: this.mapRelation(result.targetRelation),
+    };
+  }
+
+  async acceptFriendRequest(playerId: string, relationId: string): Promise<ClientSocialRelationMutationResponse> {
+    const result = await this.prisma.transaction(async (client) => {
+      const currentPlayer = await this.assertPlayerExists(client, playerId);
+      const existing = await this.findPendingIncomingFriendRelation(client, playerId, relationId);
+      const target = existing.targetPlayer;
+      this.assertSameFactionForFriend(playerId, existing.targetPlayerId, currentPlayer, target);
+      const now = new Date();
+      const relation = await this.upsertRelationRecord(client, {
+        playerId,
+        targetPlayerId: existing.targetPlayerId,
+        relationType: SocialRelationType.FRIEND,
+        sourceType: 'friend-accepted',
+        status: SocialRelationStatus.ACTIVE,
+        now,
+      });
+      const reverseRelation = await this.upsertRelationRecord(client, {
+        playerId: existing.targetPlayerId,
+        targetPlayerId: playerId,
+        relationType: SocialRelationType.FRIEND,
+        sourceType: 'friend-accepted',
+        status: SocialRelationStatus.ACTIVE,
+        now,
+      });
+
+      await this.createFriendAcceptedFeeds(client, playerId, existing.targetPlayerId);
+      await this.expireFriendRequestFeeds(client, playerId, existing.targetPlayerId, now);
+      return { target, relation, reverseRelation };
+    });
+
+    return {
+      app: APP_NAME,
+      summary: `已和 ${result.target.nickname} 成为好友。`,
+      relation: this.mapRelation(result.relation),
+      reverseRelation: this.mapRelation(result.reverseRelation),
+    };
+  }
+
+  async rejectFriendRequest(playerId: string, relationId: string): Promise<ClientSocialRelationMutationResponse> {
+    const result = await this.prisma.transaction(async (client) => {
+      const existing = await this.findPendingIncomingFriendRelation(client, playerId, relationId);
+      const target = existing.targetPlayer;
+      const now = new Date();
+      const relation = await this.upsertRelationRecord(client, {
+        playerId,
+        targetPlayerId: existing.targetPlayerId,
+        relationType: SocialRelationType.FRIEND,
+        sourceType: 'friend-rejected',
+        status: SocialRelationStatus.MUTED,
+        now,
+      });
+      const reverseRelation = await this.upsertRelationRecord(client, {
+        playerId: existing.targetPlayerId,
+        targetPlayerId: playerId,
+        relationType: SocialRelationType.FRIEND,
+        sourceType: 'friend-rejected',
+        status: SocialRelationStatus.MUTED,
+        now,
+      });
+
+      await client.playerSocialFeed.create({
+        data: {
+          playerId: existing.targetPlayerId,
+          actorPlayerId: playerId,
+          feedType: SocialFeedType.FRIEND_REJECTED,
+          relatedEntityType: 'player_social_relation',
+          relatedEntityId: reverseRelation.id,
+          summary: '对方暂未通过你的好友申请。',
+          metadataJson: { relationId: reverseRelation.id },
+        },
+      });
+      await client.playerSocialFeed.create({
+        data: {
+          playerId,
+          actorPlayerId: existing.targetPlayerId,
+          feedType: SocialFeedType.FRIEND_REJECTED,
+          relatedEntityType: 'player_social_relation',
+          relatedEntityId: relation.id,
+          summary: '你已拒绝这条好友申请。',
+          metadataJson: { relationId: relation.id },
+        },
+      });
+      await this.expireFriendRequestFeeds(client, playerId, existing.targetPlayerId, now);
+
+      return { target, relation, reverseRelation };
+    });
+
+    return {
+      app: APP_NAME,
+      summary: `已拒绝 ${result.target.nickname} 的好友申请。`,
+      relation: this.mapRelation(result.relation),
+      reverseRelation: this.mapRelation(result.reverseRelation),
+    };
+  }
+
+  async deleteFriend(playerId: string, targetPlayerId: string): Promise<ClientSocialRelationMutationResponse> {
+    if (playerId === targetPlayerId) {
+      throw this.invalidRequest('Cannot delete yourself from friend list.');
+    }
+
+    const result = await this.prisma.transaction(async (client) => {
+      await this.assertPlayerExists(client, playerId);
+      const target = await this.assertPlayerExists(client, targetPlayerId);
+      const now = new Date();
+      const relation = await this.upsertRelationRecord(client, {
+        playerId,
+        targetPlayerId,
+        relationType: SocialRelationType.FRIEND,
+        sourceType: 'friend-deleted',
+        status: SocialRelationStatus.MUTED,
+        now,
+      });
+      const reverseRelation = await this.upsertRelationRecord(client, {
+        playerId: targetPlayerId,
+        targetPlayerId: playerId,
+        relationType: SocialRelationType.FRIEND,
+        sourceType: 'friend-deleted',
+        status: SocialRelationStatus.MUTED,
+        now,
+      });
+
+      await this.expireFriendRequestFeeds(client, playerId, targetPlayerId, now);
+      return { target, relation, reverseRelation };
+    });
+
+    return {
+      app: APP_NAME,
+      summary: `已删除 ${result.target.nickname}。`,
+      relation: this.mapRelation(result.relation),
+      reverseRelation: this.mapRelation(result.reverseRelation),
     };
   }
 
   async waterField(playerId: string, request: ClientSocialWaterFieldRequest): Promise<ClientSocialAssistResponse> {
     const result = await this.prisma.transaction(async (client) => {
-      await this.assertPlayerExists(client, playerId);
-      await this.assertPlayerExists(client, request.targetPlayerId);
+      const helper = await this.assertPlayerExists(client, playerId);
+      const target = await this.assertPlayerExists(client, request.targetPlayerId);
 
       if (playerId === request.targetPlayerId) {
         throw this.invalidRequest('Cannot assist your own field.');
       }
+      this.assertSameFactionForFriend(playerId, request.targetPlayerId, helper, target);
+      await this.assertActiveFriendRelation(client, playerId, request.targetPlayerId);
 
       const dateKey = getLocalDateKey();
       const used = await client.playerAssistRecord.count({
@@ -397,30 +591,143 @@ export class SocialService {
 
     await this.assertPlayerExists(this.prisma.db, playerId);
     await this.assertPlayerExists(this.prisma.db, targetPlayerId);
-    const relation = await this.prisma.db.playerSocialRelation.upsert({
+    const relation = await this.upsertRelationRecord(this.prisma.db, {
+      playerId,
+      targetPlayerId,
+      relationType,
+      sourceType,
+      status,
+      now: new Date(),
+    });
+
+    return this.mapRelation(relation);
+  }
+
+  private async upsertRelationRecord(
+    client: DbClient,
+    input: {
+      playerId: string;
+      targetPlayerId: string;
+      relationType: SocialRelationType;
+      sourceType: string;
+      status: SocialRelationStatus;
+      now: Date;
+    },
+  ): Promise<RelationWithTarget> {
+    return client.playerSocialRelation.upsert({
       where: {
         playerId_targetPlayerId_relationType: {
-          playerId,
-          targetPlayerId,
-          relationType,
+          playerId: input.playerId,
+          targetPlayerId: input.targetPlayerId,
+          relationType: input.relationType,
         },
       },
       create: {
-        playerId,
-        targetPlayerId,
-        relationType,
-        status,
-        sourceType,
+        playerId: input.playerId,
+        targetPlayerId: input.targetPlayerId,
+        relationType: input.relationType,
+        status: input.status,
+        sourceType: input.sourceType,
+        lastInteractedAt: input.status === SocialRelationStatus.ACTIVE ? input.now : undefined,
       },
       update: {
-        status,
-        sourceType,
-        lastInteractedAt: new Date(),
+        status: input.status,
+        sourceType: input.sourceType,
+        lastInteractedAt: input.status === SocialRelationStatus.ACTIVE ? input.now : undefined,
+      },
+      include: { targetPlayer: this.playerSummaryInclude() },
+    });
+  }
+
+  private async createFriendAcceptedFeeds(client: DbClient, firstPlayerId: string, secondPlayerId: string): Promise<void> {
+    await Promise.all([
+      client.playerSocialFeed.create({
+        data: {
+          playerId: firstPlayerId,
+          actorPlayerId: secondPlayerId,
+          feedType: SocialFeedType.FRIEND_ACCEPTED,
+          relatedEntityType: 'player',
+          relatedEntityId: secondPlayerId,
+          summary: '你们已经成为好友，可以互相浇水了。',
+          metadataJson: { friendPlayerId: secondPlayerId },
+        },
+      }),
+      client.playerSocialFeed.create({
+        data: {
+          playerId: secondPlayerId,
+          actorPlayerId: firstPlayerId,
+          feedType: SocialFeedType.FRIEND_ACCEPTED,
+          relatedEntityType: 'player',
+          relatedEntityId: firstPlayerId,
+          summary: '你们已经成为好友，可以互相浇水了。',
+          metadataJson: { friendPlayerId: firstPlayerId },
+        },
+      }),
+    ]);
+  }
+
+  private async expireFriendRequestFeeds(client: DbClient, firstPlayerId: string, secondPlayerId: string, now: Date): Promise<void> {
+    await client.playerSocialFeed.updateMany({
+      where: {
+        feedType: SocialFeedType.FRIEND_REQUESTED,
+        expiresAt: null,
+        OR: [
+          { playerId: firstPlayerId, actorPlayerId: secondPlayerId },
+          { playerId: secondPlayerId, actorPlayerId: firstPlayerId },
+        ],
+      },
+      data: {
+        expiresAt: now,
+        isRead: true,
+      },
+    });
+  }
+
+  private async findPendingIncomingFriendRelation(client: DbClient, playerId: string, relationId: string): Promise<RelationWithTarget> {
+    const relation = await client.playerSocialRelation.findFirst({
+      where: {
+        id: relationId,
+        playerId,
+        relationType: SocialRelationType.FRIEND,
+        status: SocialRelationStatus.PENDING,
+        sourceType: { endsWith: ':incoming' },
       },
       include: { targetPlayer: this.playerSummaryInclude() },
     });
 
-    return this.mapRelation(relation);
+    if (!relation) {
+      throw this.invalidRequest('Friend request is no longer pending.');
+    }
+
+    return relation;
+  }
+
+  private assertSameFactionForFriend(
+    playerId: string,
+    targetPlayerId: string,
+    player: PlayerSummaryProjection,
+    target: PlayerSummaryProjection,
+  ): void {
+    if (!player.factionId || !target.factionId || player.factionId !== target.factionId) {
+      throw this.invalidRequest(`Players ${playerId} and ${targetPlayerId} are in different factions and cannot become friends or water each other.`);
+    }
+  }
+
+  private async assertActiveFriendRelation(client: DbClient, playerId: string, targetPlayerId: string): Promise<void> {
+    const relation = await client.playerSocialRelation.findUnique({
+      where: {
+        playerId_targetPlayerId_relationType: {
+          playerId,
+          targetPlayerId,
+          relationType: SocialRelationType.FRIEND,
+        },
+      },
+      select: { status: true },
+    });
+
+    if (relation?.status !== SocialRelationStatus.ACTIVE) {
+      throw this.invalidRequest('Only active friends can water each other.');
+    }
   }
 
   private async bumpInteraction(client: DbClient, playerId: string, targetPlayerId: string): Promise<void> {
@@ -559,6 +866,7 @@ export class SocialService {
       select: {
         id: true,
         nickname: true,
+        factionId: true,
         castleLevelCache: true,
         lastLoginAt: true,
         faction: { select: { name: true } },
@@ -572,11 +880,21 @@ export class SocialService {
     return player;
   }
 
-  private playerSummaryInclude(): { select: { id: true; nickname: true; castleLevelCache: true; lastLoginAt: true; faction: { select: { name: true } } } } {
+  private playerSummaryInclude(): {
+    select: {
+      id: true;
+      nickname: true;
+      factionId: true;
+      castleLevelCache: true;
+      lastLoginAt: true;
+      faction: { select: { name: true } };
+    };
+  } {
     return {
       select: {
         id: true,
         nickname: true,
+        factionId: true,
         castleLevelCache: true,
         lastLoginAt: true,
         faction: { select: { name: true } },
@@ -600,6 +918,7 @@ export class SocialService {
     return {
       playerId: player.id,
       nickname: player.nickname,
+      factionId: player.factionId,
       factionName: player.faction?.name ?? null,
       castleLevel: player.castleLevelCache,
       lastActiveAt: player.lastLoginAt?.toISOString() ?? null,
@@ -650,19 +969,25 @@ export class SocialService {
   }
 
   private buildFeedActions(feedType: SocialFeedType, targetPlayerId?: string, relatedEntityId?: string): ClientSocialFeedItem['actions'] {
+    if (feedType === SocialFeedType.FRIEND_REQUESTED) {
+      return [
+        { label: '同意', action: 'accept_friend', targetPlayerId, relatedEntityId },
+        { label: '拒绝', action: 'reject_friend', targetPlayerId, relatedEntityId },
+      ];
+    }
     if (feedType === SocialFeedType.FRIEND_WATERED_FIELD) {
-      return [{ label: 'Assist back', action: 'assist_back', targetPlayerId }];
+      return [{ label: '回浇', action: 'assist_back', targetPlayerId }];
     }
     if (feedType === SocialFeedType.REVENGE_AVAILABLE || feedType === SocialFeedType.ENEMY_RAIDED) {
       return [
-        { label: 'Revenge', action: 'revenge', targetPlayerId, relatedEntityId },
-        { label: 'Follow', action: 'follow', targetPlayerId },
+        { label: '复仇', action: 'revenge', targetPlayerId, relatedEntityId },
+        { label: '关注', action: 'follow', targetPlayerId },
       ];
     }
     if (feedType === SocialFeedType.TEAM_CHALLENGE_INVITED) {
-      return [{ label: 'View invite', action: 'team_challenge', targetPlayerId, relatedEntityId }];
+      return [{ label: '查看邀请', action: 'team_challenge', targetPlayerId, relatedEntityId }];
     }
-    return [{ label: 'Ignore', action: 'ignore', targetPlayerId, relatedEntityId }];
+    return [{ label: '忽略', action: 'ignore', targetPlayerId, relatedEntityId }];
   }
 
   private mapRelationType(type: SocialRelationType): ClientSocialRelationItem['relationType'] {

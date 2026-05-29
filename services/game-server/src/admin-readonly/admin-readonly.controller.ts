@@ -90,6 +90,24 @@ export class AdminReadonlyController {
     return this.adminReadonlyService.listTaskConfigs(query);
   }
 
+  @Get('share-assist/campaigns')
+  @ApiOkResponse({ description: 'List share assist campaigns.' })
+  listShareAssistCampaigns(@Query() query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
+    return this.adminReadonlyService.listShareAssistCampaigns(query);
+  }
+
+  @Get('share-assist/records')
+  @ApiOkResponse({ description: 'List share assist records.' })
+  listShareAssistRecords(@Query() query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
+    return this.adminReadonlyService.listShareAssistRecords(query);
+  }
+
+  @Get('share-assist/invite-relations')
+  @ApiOkResponse({ description: 'List player invite relations created by share assist.' })
+  listShareInviteRelations(@Query() query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
+    return this.adminReadonlyService.listShareInviteRelations(query);
+  }
+
   @Patch('config/tasks/:taskGroup/:taskId')
   @ApiOkResponse({ description: 'Update task config override.' })
   updateTaskConfig(
@@ -172,6 +190,9 @@ defineRouteParamTypes(AdminReadonlyController.prototype, 'updateSpiritDefinition
 defineRouteParamTypes(AdminReadonlyController.prototype, 'deleteSpiritDefinition', [String]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listCastleLevels', []);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listTaskConfigs', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'listShareAssistCampaigns', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'listShareAssistRecords', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'listShareInviteRelations', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'updateTaskConfig', [String, String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getPlayerOverview', [String]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'deletePlayer', [String]);

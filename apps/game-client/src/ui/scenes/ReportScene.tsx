@@ -3,28 +3,24 @@ import { ReportCard } from '../ReportCard';
 import { RaidTargetCard } from '../raid/RaidTargetCard';
 import type { TutorialRaidUiRules } from '../../tutorial/tutorialFlow';
 
-type RaidHubTabKey = 'targets' | 'follows' | 'reports' | 'warrants';
-
-interface FollowedRaidTargetRow {
-  id: string;
-  name: string;
-  faction: string;
-}
+type RaidHubTabKey = 'targets' | 'reports' | 'warrants';
 
 interface ReportSceneProps {
   activeTab: RaidHubTabKey;
   advantage?: ClientFactionAdvantagePanel;
-  heroTitle: string;
   refreshLabel: string;
   refreshPending: boolean;
+  battleUsed: number;
+  battleLimit: number;
+  refreshUsed: number;
+  refreshLimit: number;
+  isTutorial: boolean;
   targets: ClientRaidTarget[];
   followedTargetIds: string[];
-  followedTargets: FollowedRaidTargetRow[];
   reportEntries: ClientReportEntry[];
   uiRules: TutorialRaidUiRules;
   onChangeTab: (tab: RaidHubTabKey) => void;
   onOpenTarget: (target: ClientRaidTarget) => void;
-  onOpenFollowedTarget: (target: FollowedRaidTargetRow) => void;
   onToggleFollowTarget: (target: ClientRaidTarget) => void;
   onRefresh: () => void;
   onAction: (action: ClientSceneAction, context?: string) => void;
@@ -34,31 +30,33 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
   const {
     activeTab,
     advantage,
-    heroTitle,
     refreshLabel,
     refreshPending,
+    battleUsed,
+    battleLimit,
+    refreshUsed,
+    refreshLimit,
+    isTutorial,
     targets,
     followedTargetIds,
-    followedTargets,
     reportEntries,
     uiRules,
     onChangeTab,
     onOpenTarget,
-    onOpenFollowedTarget,
     onToggleFollowTarget,
     onRefresh,
     onAction,
   } = props;
-  const visibleTargets = uiRules.visibleTargetLimit === null ? targets : targets.slice(0, uiRules.visibleTargetLimit);
+  const targetLimit = uiRules.visibleTargetLimit === null ? 3 : uiRules.visibleTargetLimit;
+  const visibleTargets = targets.slice(0, targetLimit);
 
   return (
     <div className="scene-shell">
       {uiRules.showTabs ? (
       <div className="tab-row">
-        <button className={`tab-button ${activeTab === 'targets' ? 'active' : ''}`} onClick={() => onChangeTab('targets')} type="button">掠夺</button>
-        <button className={`tab-button ${activeTab === 'follows' ? 'active' : ''}`} onClick={() => onChangeTab('follows')} type="button">关注</button>
+        <button className={`tab-button ${activeTab === 'targets' ? 'active' : ''}`} onClick={() => onChangeTab('targets')} type="button">战斗</button>
         <button className={`tab-button ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => onChangeTab('reports')} type="button">战报</button>
-        <button className={`tab-button ${activeTab === 'warrants' ? 'active' : ''}`} onClick={() => onChangeTab('warrants')} type="button">通缉令</button>
+        <button className={`tab-button ${activeTab === 'warrants' ? 'active' : ''}`} onClick={() => onChangeTab('warrants')} type="button">通缉</button>
       </div>
       ) : null}
 
@@ -81,12 +79,22 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
             </article>
           ) : null}
           {uiRules.showToolbar ? (
-          <div className="raid-toolbar panel-card compact-raid-toolbar">
-            <p className="raid-toolbar-text">{heroTitle}</p>
-            <button className="secondary-button" disabled={refreshPending} onClick={onRefresh} type="button">
-              {refreshPending ? '刷新中...' : refreshLabel}
-            </button>
-          </div>
+            <div className="raid-toolbar compact-raid-toolbar">
+              <div className="raid-rule-strip" aria-label="探索规则">
+                {isTutorial ? (
+                  <span>教程目标 · 完成一次战斗后解锁完整探索</span>
+                ) : (
+                  <>
+                    <span>今日战斗 {battleUsed}/{battleLimit}</span>
+                    <span>刷新 {refreshUsed}/{refreshLimit}</span>
+                    <span>推荐目标 {visibleTargets.length}</span>
+                  </>
+                )}
+              </div>
+              <button className="secondary-button" disabled={refreshPending || (!isTutorial && refreshUsed >= refreshLimit)} onClick={onRefresh} type="button">
+                {refreshPending ? '刷新中...' : refreshUsed >= refreshLimit && !isTutorial ? '刷新已用完' : refreshLabel}
+              </button>
+            </div>
           ) : null}
 
           <div className="raid-list-shell">
@@ -102,28 +110,6 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
               ))}
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {activeTab === 'follows' ? (
-        <div className="scene-scroll stack-panel compact">
-          {followedTargets.length > 0 ? (
-            <div className="followed-target-list">
-              {followedTargets.map((target) => (
-                <button className="followed-target-row" key={target.id} onClick={() => onOpenFollowedTarget(target)} type="button">
-                  <span className="followed-target-faction">{target.faction}</span>
-                  <strong>{target.name}</strong>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <article className="panel-card followed-target-empty">
-              <div className="panel-head">
-                <h4>当前还没有关注目标</h4>
-              </div>
-              <p className="panel-text">先在掠夺或复仇详情里点击关注，之后会收进这里，便于反复观察田地和金币状态。</p>
-            </article>
-          )}
         </div>
       ) : null}
 
@@ -143,10 +129,10 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
         <div className="scene-scroll stack-panel compact">
           <article className="panel-card warrant-placeholder-card">
             <div className="panel-head">
-              <h4>通缉令内容待定</h4>
+              <h4>通缉内容待定</h4>
               <span className="soft-tag">占位稿</span>
             </div>
-            <p className="panel-text">这一栏先预留为通缉令模块，后续再按你定的规则补待接受、进行中和已结算内容。</p>
+            <p className="panel-text">这一栏先预留为通缉模块，后续再按你定的规则补待接受、进行中和已结算内容。</p>
           </article>
           <article className="panel-card warrant-placeholder-card">
             <div className="panel-head">

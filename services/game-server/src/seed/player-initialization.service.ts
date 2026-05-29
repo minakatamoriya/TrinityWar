@@ -416,6 +416,7 @@ export class PlayerInitializationService {
       select: {
         id: true,
         spiritId: true,
+        shardUnlockRequired: true,
         baseHp: true,
         growthHp: true,
       },
@@ -513,7 +514,7 @@ export class PlayerInitializationService {
         && readyStarterSpirits
         && STARTER_SPIRIT_IDS.includes(definition.spiritId as typeof STARTER_SPIRIT_IDS[number]);
       const hasSeen = isStarter || isReadyStarter;
-      const shardCount = 0;
+      const shardCount = isReadyStarter ? definition.shardUnlockRequired : 0;
 
       await client.playerSpiritCodex.upsert({
         where: {
@@ -531,6 +532,7 @@ export class PlayerInitializationService {
           ownedCurrent: isStarter,
           ownedEver: isStarter,
           firstSeenAt: hasSeen ? now : null,
+          readyAt: isReadyStarter ? now : null,
           lastOwnedAt: isStarter ? now : null,
           codexVersion: 1,
         },

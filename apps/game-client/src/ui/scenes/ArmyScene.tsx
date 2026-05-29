@@ -670,7 +670,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
         <section className="panel-card spirit-growth-card">
           <div className="panel-head">
             <h4>养成资源</h4>
-            <span className="soft-tag">种田养成 · 掠夺突破</span>
+            <span className="soft-tag">种田养成 · 战斗突破</span>
           </div>
           <div className="spirit-resource-icon-row">
             {spiritResourceItems.map((item) => (
@@ -989,7 +989,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                   ) : (
                     <div className="seed-codex-strategy">
                       <strong>暂无待合成灵宠</strong>
-                      <p>继续通过掠夺和主城赠送收集精魄。精魄满 100 后会在这里出现可合成项。</p>
+                      <p>继续通过战斗和主城赠送收集精魄。精魄满 100 后会在这里出现可合成项。</p>
                     </div>
                   )}
                 </>

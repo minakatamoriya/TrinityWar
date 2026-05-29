@@ -110,7 +110,7 @@ export function buildRaidFieldStatusView(detail: ClientRaidTargetDetailResponse)
     progressTotalSeconds: 1,
     yieldGold: 0,
     description: detail.exposedFruit,
-    emphasis: `可掠收益 ${detail.raidableGold}`,
+    emphasis: `可争夺收益 ${detail.raidableGold}`,
     note: detail.raidRule,
   };
 }

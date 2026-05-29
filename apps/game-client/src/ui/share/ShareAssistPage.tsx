@@ -1,11 +1,15 @@
-type ShareAssistKind = 'water' | 'raid';
+import type { PublicShareAssistCampaignResponse } from '@trinitywar/shared';
+
+type ShareAssistKind = 'water';
 type ShareAssistAudience = 'new-user' | 'returning-user';
-type ShareAssistStatus = 'pending' | 'completed';
+type ShareAssistStatus = 'pending' | 'completed' | 'expired' | 'full';
 
 interface ShareAssistPageProps {
   audience: ShareAssistAudience;
   kind: ShareAssistKind;
   status: ShareAssistStatus;
+  campaign?: PublicShareAssistCampaignResponse | null;
+  error?: string | null;
   onConfirm: () => void;
   onBack: () => void;
   onSuccessExit?: () => void;
@@ -26,13 +30,6 @@ const shareAssistCopy: Record<ShareAssistKind, ShareAssistKindCopy> = {
     pendingTitle: '青禾道友邀请你帮他浇水培育灵草',
     actionLabel: '帮 TA 浇水',
     completedTitle: '浇水成功',
-  },
-  raid: {
-    eyebrow: '微信助力掠夺',
-    requester: '玄刃道友',
-    pendingTitle: '玄刃道友邀请你助阵夺取灵田机缘',
-    actionLabel: '帮 TA 助阵',
-    completedTitle: '助阵成功',
   },
 };
 
@@ -56,10 +53,15 @@ const audienceCopy: Record<ShareAssistAudience, {
   },
 };
 
-export function ShareAssistPage({ audience, kind, status, onConfirm, onBack, onSuccessExit }: ShareAssistPageProps): JSX.Element {
+export function ShareAssistPage({ audience, kind, status, campaign, error, onConfirm, onBack, onSuccessExit }: ShareAssistPageProps): JSX.Element {
   const copy = shareAssistCopy[kind];
   const audienceText = audienceCopy[audience];
   const completed = status === 'completed';
+  const blocked = status === 'expired' || status === 'full';
+  const requester = campaign?.campaign.owner.nickname ?? copy.requester;
+  const title = campaign?.copy.title ?? copy.pendingTitle;
+  const description = campaign?.copy.description ?? null;
+  const actionLabel = campaign?.copy.actionLabel ?? copy.actionLabel;
 
   return (
     <main className="share-assist-shell">
@@ -69,15 +71,16 @@ export function ShareAssistPage({ audience, kind, status, onConfirm, onBack, onS
         </button>
 
         <section className="share-assist-focus">
-          <div className="share-assist-avatar" aria-hidden="true">{copy.requester.slice(0, 1)}</div>
+          <div className="share-assist-avatar" aria-hidden="true">{requester.slice(0, 1)}</div>
           <p className="eyebrow">{copy.eyebrow} · {audienceText.testLabel}</p>
-          <h1>{completed ? copy.completedTitle : copy.pendingTitle}</h1>
+          <h1>{completed ? copy.completedTitle : blocked ? (status === 'expired' ? '助力已过期' : '助力次数已满') : title}</h1>
           {completed ? (
             <>
               <p>{audienceText.completedSummary}</p>
               <small>{audienceText.completedHint}</small>
             </>
-          ) : null}
+          ) : description ? <p>{description}</p> : null}
+          {error ? <small>{error}</small> : null}
         </section>
 
         <section className="share-assist-action-bar">
@@ -85,9 +88,13 @@ export function ShareAssistPage({ audience, kind, status, onConfirm, onBack, onS
             <button className="primary-button share-assist-primary" onClick={onSuccessExit ?? onBack} type="button">
               {audienceText.successActionLabel}
             </button>
+          ) : blocked ? (
+            <button className="primary-button share-assist-primary" onClick={onBack} type="button">
+              返回入口
+            </button>
           ) : (
             <button className="primary-button share-assist-primary" onClick={onConfirm} type="button">
-              {copy.actionLabel}
+              {actionLabel}
             </button>
           )}
           {!completed ? <p>助力者登录后可领取相应奖励</p> : null}

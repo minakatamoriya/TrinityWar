@@ -582,14 +582,15 @@ export interface ClientLandDeedProgress {
 
 export type ClientFactionStipendStatus = 'available' | 'claimed' | 'unavailable';
 
-export type ClientFactionStipendRewardKind = 'gold' | 'seed' | 'ordinary-soul' | 'rare-soul' | 'legendary-soul';
+export type ClientFactionStipendRewardKind = 'gold' | 'essence' | 'spirit-shard' | 'ordinary-soul' | 'rare-soul' | 'legendary-soul' | 'seed';
 
 export interface ClientFactionStipendReward {
-  kind: ClientFactionStipendRewardKind | 'essence';
+  kind: ClientFactionStipendRewardKind;
   label: string;
   quantity: number;
   seedId?: string;
   essenceType?: string;
+  spiritId?: string;
 }
 
 export type ClientPlantResearchStatus = 'undiscovered' | 'discovered' | 'ready' | 'unlocked';
@@ -1199,6 +1200,9 @@ export type ClientSocialRelationStatus = 'active' | 'pending' | 'muted';
 export type ClientSocialFeedType =
   | 'friend_watered_field'
   | 'friend_guarded_field'
+  | 'friend_requested'
+  | 'friend_accepted'
+  | 'friend_rejected'
   | 'team_challenge_invited'
   | 'team_challenge_accepted'
   | 'enemy_raided'
@@ -1210,6 +1214,7 @@ export type ClientTeamChallengeStatus = 'pending' | 'accepted' | 'rejected' | 'e
 export interface ClientSocialPlayerSummary {
   playerId: string;
   nickname: string;
+  factionId?: string | null;
   factionName: string | null;
   castleLevel: number;
   lastActiveAt: string | null;
@@ -1236,7 +1241,7 @@ export interface ClientSocialFeedItem {
   actor: ClientSocialPlayerSummary | null;
   actions: Array<{
     label: string;
-    action: 'assist_back' | 'revenge' | 'follow' | 'team_challenge' | 'view_report' | 'ignore';
+    action: 'assist_back' | 'accept_friend' | 'reject_friend' | 'revenge' | 'follow' | 'team_challenge' | 'view_report' | 'ignore';
     targetPlayerId?: string;
     relatedEntityId?: string;
   }>;
@@ -1281,6 +1286,7 @@ export interface ClientSocialRelationMutationResponse {
   app: string;
   summary: string;
   relation: ClientSocialRelationItem;
+  reverseRelation?: ClientSocialRelationItem;
 }
 
 export interface ClientSocialWaterFieldRequest {
@@ -1311,6 +1317,93 @@ export interface ClientSocialAssistResponse {
     fieldVersion: number;
   };
   counts: ClientSocialSummaryResponse['counts'];
+}
+
+export type ClientShareAssistCampaignType = 'water' | 'friend_invite';
+export type ClientShareAssistCampaignStatus = 'active' | 'full' | 'expired' | 'cancelled';
+export type ClientShareAssistAudience = 'new-user' | 'returning-user';
+export type ClientShareAssistRecordStatus = 'confirmed' | 'bound' | 'rewarded' | 'rejected';
+
+export interface ClientCreateShareAssistCampaignRequest {
+  campaignType: ClientShareAssistCampaignType;
+  targetEntityId?: string;
+  maxAssistCount?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientShareAssistCampaignView {
+  id: string;
+  campaignType: ClientShareAssistCampaignType;
+  status: ClientShareAssistCampaignStatus;
+  owner: ClientSocialPlayerSummary;
+  targetEntityType: string | null;
+  targetEntityId: string | null;
+  maxAssistCount: number;
+  currentAssistCount: number;
+  remainingAssistCount: number;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface ClientCreateShareAssistCampaignResponse {
+  app: string;
+  summary: string;
+  campaign: ClientShareAssistCampaignView;
+  sharePath: string;
+}
+
+export interface PublicShareAssistCampaignResponse {
+  app: string;
+  campaign: ClientShareAssistCampaignView;
+  copy: {
+    title: string;
+    description: string;
+    actionLabel: string;
+  };
+}
+
+export interface PublicShareAssistConfirmRequest {
+  audience: ClientShareAssistAudience;
+  helperPlayerId?: string;
+  helperOpenidHash?: string;
+  helperDeviceHash?: string;
+  requestIdempotencyKey?: string;
+}
+
+export interface PublicShareAssistConfirmResponse {
+  app: string;
+  summary: string;
+  campaign: ClientShareAssistCampaignView;
+  record: {
+    id: string;
+    audience: ClientShareAssistAudience;
+    status: ClientShareAssistRecordStatus;
+    helperPlayerId: string | null;
+    createdAt: string;
+  };
+  socialAssist?: ClientSocialAssistResponse;
+  deliveredEffect: {
+    applied: boolean;
+    shortenedSeconds: number;
+    reason: 'shortened' | 'no_active_field' | 'already_complete';
+  };
+  invitePending: boolean;
+  nextAction: 'start_tutorial' | 'enter_game' | 'already_assisted' | 'expired' | 'full';
+}
+
+export interface ClientCompleteShareInviteTutorialRequest {
+  campaignId?: string;
+  helperOpenidHash?: string;
+  helperDeviceHash?: string;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientCompleteShareInviteTutorialResponse {
+  app: string;
+  summary: string;
+  bound: boolean;
+  rewarded: boolean;
+  notificationId: string | null;
 }
 
 export interface ClientTeamChallengeRequest {

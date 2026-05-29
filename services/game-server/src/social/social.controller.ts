@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Inject, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Inject, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type {
   ClientSocialAssistResponse,
@@ -80,6 +80,33 @@ export class SocialController {
     return this.socialService.requestFriend(this.requirePlayerId(currentPlayer), body);
   }
 
+  @Post('friend-request/:id/accept')
+  @ApiOkResponse({ description: 'Accept a friend request.' })
+  async acceptFriendRequest(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Param('id') relationId: string,
+  ): Promise<ClientSocialRelationMutationResponse> {
+    return this.socialService.acceptFriendRequest(this.requirePlayerId(currentPlayer), relationId);
+  }
+
+  @Post('friend-request/:id/reject')
+  @ApiOkResponse({ description: 'Reject a friend request.' })
+  async rejectFriendRequest(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Param('id') relationId: string,
+  ): Promise<ClientSocialRelationMutationResponse> {
+    return this.socialService.rejectFriendRequest(this.requirePlayerId(currentPlayer), relationId);
+  }
+
+  @Delete('friend/:targetPlayerId')
+  @ApiOkResponse({ description: 'Delete a friend relation.' })
+  async deleteFriend(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Param('targetPlayerId') targetPlayerId: string,
+  ): Promise<ClientSocialRelationMutationResponse> {
+    return this.socialService.deleteFriend(this.requirePlayerId(currentPlayer), targetPlayerId);
+  }
+
   @Post('assist/water-field')
   @ApiBody({ type: SocialWaterFieldRequestDto })
   @ApiOkResponse({ description: 'Record a water-field assist.' })
@@ -142,6 +169,9 @@ defineRouteParamTypes(SocialController.prototype, 'getFollowing', [Object]);
 defineRouteParamTypes(SocialController.prototype, 'getEnemies', [Object]);
 defineRouteParamTypes(SocialController.prototype, 'follow', [Object, Object]);
 defineRouteParamTypes(SocialController.prototype, 'requestFriend', [Object, Object]);
+defineRouteParamTypes(SocialController.prototype, 'acceptFriendRequest', [Object, String]);
+defineRouteParamTypes(SocialController.prototype, 'rejectFriendRequest', [Object, String]);
+defineRouteParamTypes(SocialController.prototype, 'deleteFriend', [Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'waterField', [Object, Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'createTeamChallenge', [Object, Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'acceptTeamChallenge', [Object, String]);

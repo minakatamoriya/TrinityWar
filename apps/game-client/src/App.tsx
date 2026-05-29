@@ -1,6 +1,7 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import type {
   ClientNotificationListResponse,
+  ClientNotificationItem,
   ClientCastleExtensionUpgradeId,
   ClientCollectFieldRequest,
   ClientCollectFieldResponse,
@@ -23,12 +24,13 @@ import type {
   ClientSpiritRollMode,
   ClientSpiritTraitCode,
   ClientSpiritState,
+  PublicShareAssistCampaignResponse,
   HomeSummaryResponse,
   ClientTerritoryUpgradeId,
   ClientUpgradeBuildingRequest,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, deleteNotification, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadRaidBattleReplay, loadRaidTargetDetail, loadSocialFeed, loadSocialRelations, loadSocialSummary, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, submitFactionTask, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding, waterSocialField } from './api';
+import { acceptSocialFriendRequest, ApiError, breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, deleteNotification, deleteSocialFriend, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSocialFeed, loadSocialRelations, loadSocialSummary, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, rejectSocialFriendRequest, requestSocialFriend, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, submitFactionTask, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding, waterSocialField } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
@@ -38,7 +40,7 @@ import { FarmScene } from './ui/scenes/FarmScene';
 import { HomeScene } from './ui/scenes/HomeScene';
 import { ReportScene } from './ui/scenes/ReportScene';
 import { SeedSelectionScreen } from './ui/scenes/SeedSelectionScreen';
-import { SocialScene, type SocialTabKey } from './ui/scenes/SocialScene';
+import { SocialScene, type SocialRelationFilter, type SocialTabKey } from './ui/scenes/SocialScene';
 import { GlobalFeatureModal } from './ui/common/GlobalFeatureModal';
 import { FarmBoardEditorModal } from './ui/common/FarmBoardEditorModal';
 import { GlobalFeatureModalContent } from './ui/common/GlobalFeatureModalContent';
@@ -65,7 +67,7 @@ import {
   type TutorialStage,
 } from './tutorial/tutorialFlow';
 
-type RaidHubTabKey = 'targets' | 'follows' | 'reports' | 'warrants';
+type RaidHubTabKey = 'targets' | 'reports' | 'warrants';
 type FactionTabKey = 'overview' | 'donate' | 'rank';
 
 interface ToastState {
@@ -110,7 +112,8 @@ type TopResourcePanel = 'spirit-codex' | 'resources';
 interface SeedRewardModalState {
   title: string;
   summary: string;
-  confirmAction?: 'claim-faction-stipend' | 'claim-spirit-ad-reward' | 'claim-starter-seeds' | 'tutorial-farm-collect';
+  confirmAction?: 'claim-faction-stipend' | 'claim-spirit-ad-reward' | 'claim-starter-seeds' | 'tutorial-farm-collect' | 'claim-notification';
+  notificationId?: string;
   afterConfirmActions?: TutorialFlowAction[];
   items: SeedRewardModalItem[];
 }
@@ -137,18 +140,31 @@ interface GlobalUnlockModalState {
   summary: string;
   items: GlobalUnlockItem[];
   afterConfirmActions?: TutorialFlowAction[];
+  completionKind?: 'friend-invite';
 }
 
 interface ShareAssistDemoState {
   audience: ShareAssistAudience;
   kind: ShareAssistKind;
   status: ShareAssistStatus;
+  campaignId: string;
+  campaign: PublicShareAssistCampaignResponse | null;
+  error: string | null;
 }
 
-interface FollowedRaidTargetSummary {
-  id: string;
-  name: string;
-  faction: string;
+interface PendingShareInviteState {
+  campaignId: string;
+  helperOpenidHash: string;
+  helperDeviceHash: string;
+}
+
+interface PendingFriendInviteState {
+  campaignId?: string;
+  inviterName: string;
+  inviterFactionCode: DevFactionChoice;
+  inviterFactionName: string;
+  boundFriend?: boolean;
+  notificationId?: string | null;
 }
 
 interface GlobalFeatureModalState {
@@ -365,7 +381,7 @@ const sceneNavLabels: Record<ClientSceneKey, string> = {
   building: '法术',
   farm: '农场',
   raid: '灵宠',
-  report: '掠夺',
+  report: '探索',
   faction: '阵营',
   social: '社交',
 };
@@ -411,6 +427,18 @@ const factionChoiceCards: FactionChoiceCard[] = [
     leaderSummary: '仙界更擅长培育灵宠，主宠成长更快，养成推进也更顺手。更容易把第一只灵宠尽快养成主力，适合喜欢围绕灵宠持续投入的玩家。',
   },
 ];
+
+const FRIEND_INVITE_DEMO_INVITER = {
+  name: '测试好友',
+  factionCode: 'human' as const,
+  factionName: '人界',
+};
+
+const factionCodeByName: Record<string, DevFactionChoice> = {
+  人界: 'human',
+  仙界: 'immortal',
+  魔界: 'demon',
+};
 
 const SEASON_SIGN_IN_STORAGE_KEY_PREFIX = 'trinitywar.seasonSignIn';
 const SEASON_SIGN_IN_MILESTONES: Array<Pick<SeasonSignInMilestone, 'dayCount' | 'title'>> = [
@@ -619,12 +647,12 @@ function buildActionMessage(label: string, context?: string): string {
 
 function buildFactionContributionTiers(): FactionContributionTier[] {
   return [
-    { threshold: '0 贡献', label: '基础俸禄', rewards: ['金币 x20', '随机普通种子 x1', '普通兽魂 x2'] },
-    { threshold: '100 贡献', label: '小有供奉', rewards: ['金币 x30', '随机普通种子 x2', '普通兽魂 x5'] },
-    { threshold: '300 贡献', label: '稳定供奉', rewards: ['金币 x40', '随机普通种子 x2', '普通兽魂 x10'] },
-    { threshold: '600 贡献', label: '阵营骨干', rewards: ['金币 x50', '随机稀有种子 x1', '稀有兽魂 x4'] },
-    { threshold: '1000 贡献', label: '高阶供奉', rewards: ['金币 x60', '随机稀有种子 x2', '稀有兽魂 x8'] },
-    { threshold: '2000 贡献', label: '阵营重臣', rewards: ['金币 x80', '随机传说种子 x1', '传说兽魂 x2'] },
+    { threshold: '0 贡献', label: '基础俸禄', rewards: ['金币 x20', '随机普通精华 x3', '普通兽魂 x2'] },
+    { threshold: '100 贡献', label: '小有供奉', rewards: ['金币 x30', '随机普通精华 x5', '普通兽魂 x5'] },
+    { threshold: '300 贡献', label: '稳定供奉', rewards: ['金币 x40', '指定普通精华 x8', '普通兽魂 x10'] },
+    { threshold: '600 贡献', label: '阵营骨干', rewards: ['金币 x50', '随机稀有精华 x6', '稀有兽魂 x4', '普通灵宠精魄 x2'] },
+    { threshold: '1000 贡献', label: '高阶供奉', rewards: ['金币 x60', '指定稀有精华 x10', '稀有兽魂 x8', '稀有灵宠精魄 x3'] },
+    { threshold: '2000 贡献', label: '阵营重臣', rewards: ['金币 x80', '随机传说精华 x8', '传说兽魂 x2', '传说灵宠精魄 x2'] },
   ];
 }
 
@@ -687,6 +715,34 @@ function resolveRaidTargetByContext(targets: ClientRaidTarget[], context?: strin
   return matchedTarget ?? targets[0] ?? null;
 }
 
+function readCampaignIdFromFriendInviteUrl(url: string | undefined): string | null {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    return new URL(url).searchParams.get('campaignId');
+  } catch {
+    return null;
+  }
+}
+
+function mapNotificationAttachmentToRewardItem(attachment: ClientNotificationItem['attachments'][number]): SeedRewardModalItem {
+  if (attachment.kind === 'seed') {
+    return {
+      seedId: attachment.seedId,
+      label: attachment.label,
+      quantity: attachment.quantity,
+    };
+  }
+
+  return {
+    itemId: attachment.kind,
+    label: attachment.label,
+    quantity: attachment.quantity,
+  };
+}
+
 function App(): JSX.Element {
   const storedLoginSession = getStoredDevLoginSession();
   const [viewModel, setViewModel] = useState<ClientViewModel | null>(null);
@@ -701,6 +757,7 @@ function App(): JSX.Element {
   const [raidHubTab, setRaidHubTab] = useState<RaidHubTabKey>('targets');
   const [factionTab, setFactionTab] = useState<FactionTabKey>('overview');
   const [socialTab, setSocialTab] = useState<SocialTabKey>('feed');
+  const [socialRelationFilter, setSocialRelationFilter] = useState<SocialRelationFilter>('all');
   const [socialSummary, setSocialSummary] = useState<ClientSocialSummaryResponse | null>(null);
   const [socialFeed, setSocialFeed] = useState<ClientSocialFeedItem[]>([]);
   const [socialFriends, setSocialFriends] = useState<ClientSocialRelationItem[]>([]);
@@ -709,6 +766,11 @@ function App(): JSX.Element {
   const [socialLoading, setSocialLoading] = useState(false);
   const [socialError, setSocialError] = useState<string | null>(null);
   const [shareAssistDemo, setShareAssistDemo] = useState<ShareAssistDemoState | null>(null);
+  const [pendingShareInvite, setPendingShareInvite] = useState<PendingShareInviteState | null>(null);
+  const [pendingFriendInvite, setPendingFriendInvite] = useState<PendingFriendInviteState | null>(null);
+  const [friendInviteDemoLinks, setFriendInviteDemoLinks] = useState<{ newUser: string; returningUser: string } | null>(null);
+  const [friendInviteNewUserUrlInput, setFriendInviteNewUserUrlInput] = useState('');
+  const [friendInviteReturningUserUrlInput, setFriendInviteReturningUserUrlInput] = useState('');
   const [toast, setToast] = useState<ToastState | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -753,6 +815,14 @@ function App(): JSX.Element {
   const welcomeDialogSessionIdRef = useRef<string | null>(null);
   const farmEnterDialogRef = useRef<{ sceneId: string; at: number } | null>(null);
 
+  const showToast = (message: string, tone: ToastState['tone'] = 'info'): void => {
+    setToast({
+      id: Date.now(),
+      message,
+      tone,
+    });
+  };
+
   const advanceTutorialStage = (nextStage: TutorialStage): void => {
     setTutorialStage(nextStage);
     if (loginSession?.mode === 'new-user' && typeof window !== 'undefined') {
@@ -760,10 +830,56 @@ function App(): JSX.Element {
     }
   };
 
+  const completePendingShareInviteTutorial = async (): Promise<void> => {
+    const campaignId = pendingShareInvite?.campaignId ?? pendingFriendInvite?.campaignId;
+    if (!campaignId || !loginSession || loginSession.mode !== 'new-user') {
+      return;
+    }
+
+    const invite = pendingShareInvite;
+    const friendInvite = pendingFriendInvite;
+    setPendingShareInvite(null);
+
+    try {
+      const result = await completeShareInviteTutorial({
+        campaignId,
+        helperOpenidHash: invite?.helperOpenidHash,
+        helperDeviceHash: invite?.helperDeviceHash,
+      });
+      if (result.rewarded) {
+        const shouldShowFriendBranch = Boolean(
+          friendInvite
+          && loginSession.player.factionCode
+          && loginSession.player.factionCode === friendInvite.inviterFactionCode,
+        );
+        if (friendInvite && shouldShowFriendBranch) {
+          setPendingFriendInvite({
+            ...friendInvite,
+            boundFriend: true,
+            notificationId: result.notificationId,
+          });
+        } else {
+          setPendingFriendInvite(null);
+        }
+        showToast(result.summary, 'success');
+        const unread = await loadUnreadNotificationCount();
+        setNotificationUnreadCount(unread.unreadCount);
+      } else {
+        setPendingFriendInvite(null);
+      }
+    } catch (error) {
+      setPendingFriendInvite(null);
+      showToast(error instanceof Error && error.message ? error.message : '当前无法绑定助力奖励，请稍后在通知中查看。', 'error');
+    }
+  };
+
   const runTutorialFlowActions = (actions: TutorialFlowAction[]): void => {
     actions.forEach((action) => {
       if (action.type === 'setStage') {
         advanceTutorialStage(action.stage);
+        if (action.stage === 'completed') {
+          void completePendingShareInviteTutorial();
+        }
         return;
       }
 
@@ -1038,6 +1154,82 @@ function App(): JSX.Element {
     }
   };
 
+  const handleSocialFriendRequest = async (targetPlayerId: string): Promise<void> => {
+    if (socialLoading) {
+      return;
+    }
+
+    setSocialLoading(true);
+    setSocialError(null);
+
+    try {
+      const result = await requestSocialFriend({ targetPlayerId });
+      showToast(result.summary, 'success');
+      void loadSocialBundle();
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法发送好友申请，请稍后重试。', 'error');
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
+  const handleAcceptSocialFriendRequest = async (relationId: string): Promise<void> => {
+    if (socialLoading) {
+      return;
+    }
+
+    setSocialLoading(true);
+    setSocialError(null);
+
+    try {
+      const result = await acceptSocialFriendRequest(relationId);
+      showToast(result.summary, 'success');
+      void loadSocialBundle();
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法确认好友申请，请稍后重试。', 'error');
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
+  const handleRejectSocialFriendRequest = async (relationId: string): Promise<void> => {
+    if (socialLoading) {
+      return;
+    }
+
+    setSocialLoading(true);
+    setSocialError(null);
+
+    try {
+      const result = await rejectSocialFriendRequest(relationId);
+      showToast(result.summary, 'success');
+      void loadSocialBundle();
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法处理好友申请，请稍后重试。', 'error');
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
+  const handleDeleteSocialFriend = async (targetPlayerId: string): Promise<void> => {
+    if (socialLoading) {
+      return;
+    }
+
+    setSocialLoading(true);
+    setSocialError(null);
+
+    try {
+      const result = await deleteSocialFriend(targetPlayerId);
+      showToast(result.summary, 'success');
+      void loadSocialBundle();
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法删除好友，请稍后重试。', 'error');
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
   const handleMarkNotificationRead = async (notificationId: string): Promise<void> => {
     setNotificationActionId(`read:${notificationId}`);
     try {
@@ -1055,7 +1247,30 @@ function App(): JSX.Element {
     }
   };
 
-  const handleClaimNotification = async (notificationId: string): Promise<void> => {
+  const handleOpenNotificationClaim = (notificationId: string): void => {
+    const notification = notificationList?.items.find((item) => item.id === notificationId);
+    if (!notification || notification.attachments.length <= 0) {
+      showToast('这条通知没有可领取附件。', 'error');
+      return;
+    }
+
+    setNotificationsOpen(false);
+    setSeedRewardModal({
+      title: notification.title || '领取附件',
+      summary: '确认后将以下附件入账。',
+      confirmAction: 'claim-notification',
+      notificationId,
+      items: notification.attachments.map(mapNotificationAttachmentToRewardItem),
+    });
+  };
+
+  const handleConfirmNotificationClaim = async (): Promise<void> => {
+    const notificationId = seedRewardModal?.notificationId;
+    if (!notificationId) {
+      setSeedRewardModal(null);
+      return;
+    }
+
     setNotificationActionId(`claim:${notificationId}`);
     try {
       const result = await claimNotification(notificationId);
@@ -1082,6 +1297,7 @@ function App(): JSX.Element {
         ...current,
         tianjiTalisman: nextSpirit.tianjiTalisman,
       }));
+      setSeedRewardModal(null);
       showToast(result.summary, 'success');
     } catch (error) {
       showToast(error instanceof Error && error.message ? error.message : '当前无法领取附件，请稍后重试。', 'error');
@@ -1160,6 +1376,171 @@ function App(): JSX.Element {
     await handleDevLogin('existing-user');
   };
 
+  const handleOpenShareAssistDemo = async (audience: ShareAssistAudience): Promise<void> => {
+    if (pendingActionKey === 'share-assist:create') {
+      return;
+    }
+
+    setPendingActionKey('share-assist:create');
+    setLoginError(null);
+
+    try {
+      let ownerSession = getStoredDevLoginSession();
+      if (!ownerSession) {
+        ownerSession = await devLogin('existing-user');
+      }
+
+      const created = await createShareAssistCampaign({ campaignType: 'water' });
+      const publicCampaign = await loadPublicShareAssistCampaign(created.campaign.id);
+      setShareAssistDemo({
+        audience,
+        kind: 'water',
+        status: publicCampaign.campaign.status === 'expired' ? 'expired' : publicCampaign.campaign.status === 'full' ? 'full' : 'pending',
+        campaignId: created.campaign.id,
+        campaign: publicCampaign,
+        error: null,
+      });
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : '当前无法创建浇水助力链接，请稍后重试。';
+      setLoginError(message);
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const openFriendInviteCampaign = async (campaignId: string, audience: ShareAssistAudience): Promise<void> => {
+    setLoginError(null);
+
+    try {
+      const publicCampaign = await loadPublicShareAssistCampaign(campaignId);
+      const owner = publicCampaign.campaign.owner;
+      const inviterFactionName = owner.factionName ?? FRIEND_INVITE_DEMO_INVITER.factionName;
+      const inviterFactionCode = factionCodeByName[inviterFactionName] ?? FRIEND_INVITE_DEMO_INVITER.factionCode;
+
+      if (audience === 'new-user') {
+        setPendingFriendInvite({
+          campaignId,
+          inviterName: owner.nickname,
+          inviterFactionCode,
+          inviterFactionName,
+        });
+        setPendingNewUserFaction(inviterFactionCode);
+        setAuthScreen('faction-select');
+        showToast(`${owner.nickname}邀请你加入${inviterFactionName}，同阵营可成为好友并领取奖励。`, 'info');
+        return;
+      }
+
+      showToast(`${owner.nickname}邀请你回归并成为好友。老友重逢不发拉新奖励，但可以继续并肩。`, 'info');
+      await handleDevLogin('test-user-1');
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : '当前无法读取好友邀请，请稍后重试。';
+      setLoginError(message);
+      showToast(message, 'error');
+    }
+  };
+
+  const handleCreateFriendInvite = async (): Promise<void> => {
+    if (pendingActionKey === 'friend-invite:create') {
+      return;
+    }
+
+    setPendingActionKey('friend-invite:create');
+    setLoginError(null);
+
+    try {
+      const created = await createShareAssistCampaign({ campaignType: 'friend_invite' });
+      const origin = typeof window === 'undefined' ? 'http://localhost:5175' : window.location.origin;
+      const baseUrl = `${origin}/?invite=friend&campaignId=${encodeURIComponent(created.campaign.id)}`;
+      setFriendInviteDemoLinks({
+        newUser: `${baseUrl}&audience=new-user`,
+        returningUser: `${baseUrl}&audience=returning-user`,
+      });
+      setFriendInviteNewUserUrlInput(`${baseUrl}&audience=new-user`);
+      setFriendInviteReturningUserUrlInput(`${baseUrl}&audience=returning-user`);
+      showToast(`${created.campaign.owner.nickname}的好友邀请已生成。你可以复制 URL 或直接打开模拟入口。`, 'success');
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : '当前无法生成好友邀请，请稍后重试。';
+      setLoginError(message);
+      showToast(message, 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const copyFriendInviteUrl = async (url: string): Promise<void> => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) {
+      showToast('当前浏览器不支持自动复制，请手动复制显示的 URL。', 'info');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('模拟邀请链接已复制。', 'success');
+    } catch {
+      showToast('复制失败，请手动复制显示的 URL。', 'error');
+    }
+  };
+
+  const handleSubmitFriendInviteUrl = (url: string, audience: ShareAssistAudience): void => {
+    const campaignId = readCampaignIdFromFriendInviteUrl(url.trim());
+    if (!campaignId) {
+      showToast('请粘贴有效的好友邀请 URL。', 'error');
+      return;
+    }
+
+    void openFriendInviteCampaign(campaignId, audience);
+  };
+
+  const handleConfirmShareAssistDemo = async (): Promise<void> => {
+    if (!shareAssistDemo || pendingActionKey === 'share-assist:confirm') {
+      return;
+    }
+
+    setPendingActionKey('share-assist:confirm');
+    setShareAssistDemo((current) => current ? { ...current, error: null } : current);
+
+    try {
+      let helperPlayerId: string | undefined;
+      if (shareAssistDemo.audience === 'returning-user') {
+        const helperSession = await devLogin('test-user-2');
+        helperPlayerId = helperSession.player.id;
+      }
+
+      const helperOpenidHash = shareAssistDemo.audience === 'new-user' ? `dev-new-user-${shareAssistDemo.campaignId}` : undefined;
+      const helperDeviceHash = shareAssistDemo.audience === 'new-user' ? `dev-device-${shareAssistDemo.campaignId}` : undefined;
+      const result = await confirmPublicShareAssist(shareAssistDemo.campaignId, {
+        audience: shareAssistDemo.audience,
+        helperPlayerId,
+        helperOpenidHash,
+        helperDeviceHash,
+      });
+
+      if (shareAssistDemo.audience === 'new-user' && result.invitePending && helperOpenidHash && helperDeviceHash) {
+        setPendingShareInvite({
+          campaignId: shareAssistDemo.campaignId,
+          helperOpenidHash,
+          helperDeviceHash,
+        });
+      }
+
+      setShareAssistDemo((current) => current ? {
+        ...current,
+        status: result.nextAction === 'expired' ? 'expired' : result.nextAction === 'full' ? 'full' : 'completed',
+        campaign: { app: result.app, campaign: result.campaign, copy: current.campaign?.copy ?? {
+          title: `${result.campaign.owner.nickname}邀请你帮 TA 浇水`,
+          description: '帮 TA 浇一次水，可以缩短田地成长时间。',
+          actionLabel: '帮 TA 浇水',
+        } },
+        error: null,
+      } : current);
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : '当前无法完成浇水助力，请稍后重试。';
+      setShareAssistDemo((current) => current ? { ...current, error: message } : current);
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
   const handleSwitchDevUser = (): void => {
     setSettingsOpen(false);
     clearDevLoginSession();
@@ -1174,6 +1555,7 @@ function App(): JSX.Element {
     setRaidHubTab('targets');
     setFactionTab('overview');
     setSocialTab('feed');
+    setSocialRelationFilter('all');
     setSelectedRaidTargetId('');
     setRaidTargetModal(null);
     setRaidTargetDetail(null);
@@ -1182,6 +1564,11 @@ function App(): JSX.Element {
     setSeedSelectionState(null);
     setSeedCodexState(null);
     setShareAssistDemo(null);
+    setPendingShareInvite(null);
+    setPendingFriendInvite(null);
+    setFriendInviteDemoLinks(null);
+    setFriendInviteNewUserUrlInput('');
+    setFriendInviteReturningUserUrlInput('');
     setFarmCollectPresentation(null);
     setGlobalFeatureModal(null);
     setGlobalUnlockModal(null);
@@ -1193,6 +1580,20 @@ function App(): JSX.Element {
     welcomeDialogSessionIdRef.current = null;
     farmEnterDialogRef.current = null;
   };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !loginSession) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('invite') === 'friend') {
+        const campaignId = params.get('campaignId');
+        const audience = params.get('audience') === 'returning-user' ? 'returning-user' : 'new-user';
+        if (campaignId) {
+          void openFriendInviteCampaign(campaignId, audience);
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      }
+    }
+  }, [loginSession]);
 
   useEffect(() => {
     if (!loginSession) {
@@ -1464,10 +1865,12 @@ function App(): JSX.Element {
         <CharacterDialogProvider controller={characterDialog} portalTarget={characterDialogPortalRef.current}>
           <ShareAssistPage
             audience={shareAssistDemo.audience}
+            campaign={shareAssistDemo.campaign}
+            error={shareAssistDemo.error}
             kind={shareAssistDemo.kind}
             onBack={() => setShareAssistDemo(null)}
             onConfirm={() => {
-              setShareAssistDemo((current) => current ? { ...current, status: 'completed' } : current);
+              void handleConfirmShareAssistDemo();
             }}
             onSuccessExit={() => {
               void handleShareAssistSuccessExit(shareAssistDemo.audience);
@@ -1486,12 +1889,24 @@ function App(): JSX.Element {
             {authScreen === 'faction-select' ? (
               <>
                 <h1>选择阵营</h1>
-                <p className="panel-text">这是用户第一次进入时看到的页面。先确定阵营，再创建新档案进入首页。</p>
+                {pendingFriendInvite ? (
+                  <div className="auth-invite-faction-notice">
+                    <span>邀请你的玩家</span>
+                    <strong>{pendingFriendInvite.inviterName} · {pendingFriendInvite.inviterFactionName}</strong>
+                    <p>选择相同阵营才能成为好友并领取新友奖励；选择其他阵营也可以进入游戏，但本次邀请不会建立好友关系。</p>
+                  </div>
+                ) : (
+                  <p className="panel-text">这是用户第一次进入时看到的页面。先确定阵营，再创建新档案进入首页。</p>
+                )}
                 <div className="auth-faction-page-grid">
-                  {factionChoiceCards.map((faction) => (
+                  {factionChoiceCards.map((faction) => {
+                    const matchesInviteFaction = pendingFriendInvite?.inviterFactionCode === faction.code;
+                    const differsFromInviteFaction = Boolean(pendingFriendInvite && !matchesInviteFaction);
+
+                    return (
                     <article
                       key={faction.code}
-                      className={`auth-faction-card auth-faction-page-card ${pendingNewUserFaction === faction.code ? 'is-selected' : ''}`}
+                      className={`auth-faction-card auth-faction-page-card ${pendingNewUserFaction === faction.code ? 'is-selected' : ''} ${matchesInviteFaction ? 'is-invite-recommended' : ''} ${differsFromInviteFaction ? 'is-invite-mismatch' : ''}`}
                       onClick={() => {
                         if (loginLoadingMode !== null) {
                           return;
@@ -1512,6 +1927,11 @@ function App(): JSX.Element {
                         <span>{faction.name}</span>
                         <strong>{faction.title}</strong>
                       </div>
+                      {pendingFriendInvite ? (
+                        <div className={`auth-faction-invite-hint ${matchesInviteFaction ? 'match' : 'mismatch'}`}>
+                          {matchesInviteFaction ? '推荐：与邀请人同阵营，可成为好友并领取奖励' : '可选：但与邀请人不同阵营，不能成为好友'}
+                        </div>
+                      ) : null}
                       <p>{faction.leaderSummary}</p>
                       <ul>
                         {faction.traits.map((trait) => (
@@ -1519,7 +1939,8 @@ function App(): JSX.Element {
                         ))}
                       </ul>
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="auth-faction-page-actions">
                   <button
@@ -1530,7 +1951,7 @@ function App(): JSX.Element {
                     }}
                     type="button"
                   >
-                    其他入口
+                    返回
                   </button>
                   <button
                     className="primary-button"
@@ -1603,24 +2024,88 @@ function App(): JSX.Element {
                       <p>模拟玩家从微信分享链接进入。被助力人固定为“已注册用户”，助力者分新用户和老用户两种路径。</p>
                     </div>
                     <div className="auth-share-assist-grid">
-                      <button className="primary-button" onClick={() => setShareAssistDemo({ audience: 'new-user', kind: 'water', status: 'pending' })} type="button">
+                      <button className="primary-button" disabled={pendingActionKey === 'share-assist:create'} onClick={() => { void handleOpenShareAssistDemo('new-user'); }} type="button">
                         新用户助力浇水流程
                       </button>
-                      <button className="secondary-button" onClick={() => setShareAssistDemo({ audience: 'new-user', kind: 'raid', status: 'pending' })} type="button">
-                        新用户助力掠夺流程
-                      </button>
-                      <button className="primary-button" onClick={() => setShareAssistDemo({ audience: 'returning-user', kind: 'water', status: 'pending' })} type="button">
+                      <button className="primary-button" disabled={pendingActionKey === 'share-assist:create'} onClick={() => { void handleOpenShareAssistDemo('returning-user'); }} type="button">
                         老用户助力浇水流程
                       </button>
-                      <button className="secondary-button" onClick={() => setShareAssistDemo({ audience: 'returning-user', kind: 'raid', status: 'pending' })} type="button">
-                        老用户助力掠夺流程
+                    </div>
+                  </section>
+                  <section className="auth-share-assist-section auth-friend-invite-section">
+                    <div>
+                      <h2>微信好友邀请测试入口</h2>
+                      <p>URL 只标识“哪位玩家发起邀请”。测试时由下面两个入口决定新玩家或老玩家；老玩家固定使用测试用户1。</p>
+                    </div>
+                    <div className="auth-friend-invite-paste-grid">
+                      <label>
+                        <span>新玩家邀请 URL</span>
+                        <input
+                          onChange={(event) => setFriendInviteNewUserUrlInput(event.target.value)}
+                          placeholder="粘贴好友邀请 URL"
+                          value={friendInviteNewUserUrlInput}
+                        />
+                        <button className="secondary-button" disabled={loginLoadingMode !== null} onClick={() => handleSubmitFriendInviteUrl(friendInviteNewUserUrlInput, 'new-user')} type="button">
+                          新玩家接受邀请并建档
+                        </button>
+                      </label>
+                      <label>
+                        <span>老玩家邀请 URL</span>
+                        <input
+                          onChange={(event) => setFriendInviteReturningUserUrlInput(event.target.value)}
+                          placeholder="粘贴好友邀请 URL"
+                          value={friendInviteReturningUserUrlInput}
+                        />
+                        <button className="secondary-button" disabled={loginLoadingMode !== null} onClick={() => handleSubmitFriendInviteUrl(friendInviteReturningUserUrlInput, 'returning-user')} type="button">
+                          老友回归并肩同行
+                        </button>
+                      </label>
+                    </div>
+                    <div className="auth-friend-invite-link-panel">
+                      <button className="primary-button" onClick={handleCreateFriendInvite} type="button">
+                        生成测试邀请 URL
                       </button>
+                      {friendInviteDemoLinks ? (
+                        <div className="auth-friend-invite-links">
+                          <div>
+                            <span>新玩家 URL</span>
+                            <code>{friendInviteDemoLinks.newUser}</code>
+                            <div className="auth-friend-invite-actions">
+                              <button className="ghost-button" onClick={() => { void copyFriendInviteUrl(friendInviteDemoLinks.newUser); }} type="button">复制</button>
+                              <button className="ghost-button" onClick={() => {
+                                const campaignId = readCampaignIdFromFriendInviteUrl(friendInviteDemoLinks.newUser);
+                                if (campaignId) {
+                                  void openFriendInviteCampaign(campaignId, 'new-user');
+                                }
+                              }} type="button">打开模拟链接</button>
+                            </div>
+                          </div>
+                          <div>
+                            <span>老玩家 URL</span>
+                            <code>{friendInviteDemoLinks.returningUser}</code>
+                            <div className="auth-friend-invite-actions">
+                              <button className="ghost-button" onClick={() => { void copyFriendInviteUrl(friendInviteDemoLinks.returningUser); }} type="button">复制</button>
+                              <button className="ghost-button" onClick={() => {
+                                const campaignId = readCampaignIdFromFriendInviteUrl(friendInviteDemoLinks.returningUser);
+                                if (campaignId) {
+                                  void openFriendInviteCampaign(campaignId, 'returning-user');
+                                }
+                              }} type="button">打开模拟链接</button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </section>
                 </div>
               </>
             )}
             {loginError ? <p className="auth-error">{loginError}</p> : null}
+            {toast ? (
+              <div className={`top-toast top-toast-${toast.tone}`}>
+                <span>{toast.message}</span>
+              </div>
+            ) : null}
           </section>
         </main>
       );
@@ -1643,10 +2128,14 @@ function App(): JSX.Element {
   const raidTargetsForTutorial = isTutorialUser
     ? scenes.raid.targets.filter((target) => target.tutorialTarget)
     : scenes.raid.targets;
-  const visibleRaidTargets = isTutorialUser ? raidTargetsForTutorial : scenes.raid.targets;
   const mergedReportEntries = [...scenes.report.attack, ...scenes.report.defense]
     .filter((entry) => entry.title !== '系统结算')
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+  const visibleRaidTargets = isTutorialUser ? raidTargetsForTutorial : scenes.raid.targets.slice(0, 3);
+  const raidBattleLimit = 5;
+  const raidRefreshLimit = 5;
+  const raidBattleUsed = Math.min(mergedReportEntries.length, raidBattleLimit);
+  const raidRefreshUsed = 0;
   const activeBackgroundImage = `url(${getSceneBackground(activeScene, home.factionName)})`;
   const tutorialUiRules = getTutorialUiRules(tutorialStage, isTutorialUser);
   const vaultResource = findResourceByTone('vault', home.resources);
@@ -1734,37 +2223,6 @@ function App(): JSX.Element {
     };
   });
   const raidTargetsById = new Map(scenes.raid.targets.map((target) => [target.id, target]));
-  const followedTargets = followedTargetIds
-    .map((targetId) => {
-      const target = raidTargetsById.get(targetId);
-      if (target) {
-        return {
-          id: target.id,
-          name: target.name,
-          faction: target.faction,
-        } satisfies FollowedRaidTargetSummary;
-      }
-
-      const detail = raidTargetDetailsById[targetId];
-      if (detail) {
-        return {
-          id: detail.targetId,
-          name: detail.name,
-          faction: detail.faction,
-        } satisfies FollowedRaidTargetSummary;
-      }
-
-      return null;
-    })
-    .filter((target): target is FollowedRaidTargetSummary => Boolean(target));
-
-  const showToast = (message: string, tone: ToastState['tone'] = 'info'): void => {
-    setToast({
-      id: Date.now(),
-      message,
-      tone,
-    });
-  };
   const visibleHomeFactionTasks = tutorialUiRules.showHomeFactionTasks ? home.factionTasks ?? [] : [];
   const visibleSceneFactionTasks = tutorialUiRules.faction.showTodayTasks ? scenes.faction.tasks ?? [] : [];
 
@@ -2174,7 +2632,7 @@ function App(): JSX.Element {
       setSeedRewardModal(null);
       showToast(
         tutorialStage === 'faction'
-          ? '阵营俸禄已领取，青灵麦和风云稻种植资格已解锁。'
+          ? '阵营俸禄已领取，青灵麦和风云稻精华已入库。'
           : result.summary,
         'success',
       );
@@ -2268,7 +2726,7 @@ function App(): JSX.Element {
       setViewModel(nextViewModel);
       setSelectedRaidTargetId(nextViewModel.scenes.raid.targets[0]?.id ?? '');
       syncSeedBackpackState(nextViewModel.bootstrap.backpack);
-      showToast('目标列表已刷新，可以重新挑选掠夺对象。', 'success');
+      showToast('目标列表已刷新，可以重新挑选战斗对象。', 'success');
     } catch {
       showToast('当前无法刷新目标列表，请稍后重试。', 'error');
     } finally {
@@ -2305,22 +2763,13 @@ function App(): JSX.Element {
     setRaidTargetModal(null);
   };
 
-  const handleOpenFollowedRaidTarget = (target: FollowedRaidTargetSummary): void => {
-    setSelectedRaidTargetId(target.id);
-    setRaidTargetModal({
-      targetId: target.id,
-      targetName: target.name,
-      mode: 'raid',
-    });
-  };
-
   const handleToggleFollowTarget = (target: ClientRaidTarget): void => {
     const isFollowing = followedTargetIds.includes(target.id);
 
     setFollowedTargetIds((current) => isFollowing
       ? current.filter((targetId) => targetId !== target.id)
       : [...current, target.id]);
-    showToast(isFollowing ? `已取消关注 ${target.name}。` : `已关注 ${target.name}，可在掠夺页的关注列表持续观察田地状态。`, 'success');
+    showToast(isFollowing ? `已取消关注 ${target.name}。` : `已关注 ${target.name}，可在社交页的关系列表持续观察。`, 'success');
   };
 
   const findRaidTargetByContext = (context?: string): ClientRaidTarget | null => {
@@ -2622,11 +3071,11 @@ function App(): JSX.Element {
   const handleSceneAction = (action: ClientSceneAction, context?: string): void => {
     const actionContext = context ?? raidTargetDetail?.name ?? selectedRaidTarget?.name;
 
-    if ((action.label === '确认出兵' || action.label === '发起掠夺') && actionContext) {
+    if ((action.label === '确认出兵' || action.label === '发起掠夺' || action.label === '发起战斗') && actionContext) {
       const targetId = raidTargetModal?.targetId ?? selectedRaidTarget?.id;
 
       if (!targetId) {
-        showToast('当前缺少可掠夺目标，请先重新选择目标。', 'error');
+        showToast('当前缺少可战斗目标，请先重新选择目标。', 'error');
         return;
       }
 
@@ -2667,9 +3116,9 @@ function App(): JSX.Element {
           setSelectedRaidTargetId(response.scenes.raid.targets[0]?.id ?? '');
 
           const raidRewardModal: SeedRewardModalState = {
-            title: '掠夺所得',
+            title: '战斗所得',
             summary: response.result.overflowGold > 0
-              ? `本次掠夺 ${formatNumber(response.result.goldLoot)} 金币，其中 ${formatNumber(response.result.depositedGold)} 已入库，另有 ${formatNumber(response.result.overflowGold)} 转入待领取，战损 ${formatNumber(response.result.casualties)} 兵。`
+              ? `本次战斗获得 ${formatNumber(response.result.goldLoot)} 金币，其中 ${formatNumber(response.result.depositedGold)} 已入库，另有 ${formatNumber(response.result.overflowGold)} 转入待领取，战损 ${formatNumber(response.result.casualties)} 兵。`
               : `获得 ${formatNumber(response.result.goldLoot)} 金币，战损 ${formatNumber(response.result.casualties)} 兵。`,
             items: [
               {
@@ -2686,9 +3135,9 @@ function App(): JSX.Element {
           };
           const settledRaidRewardModal: SeedRewardModalState = {
             ...raidRewardModal,
-            title: '掠夺所得',
+            title: '战斗所得',
             summary: response.result.overflowGold > 0
-              ? `本次掠夺 ${formatNumber(response.result.goldLoot)} 金币，其中 ${formatNumber(response.result.depositedGold)} 已入库，另有 ${formatNumber(response.result.overflowGold)} 转入待领取。${response.result.reportSummary}${response.result.battleEvents?.length ? ` 关键事件：${response.result.battleEvents.map((event) => event.label).join('、')}` : ''}`
+              ? `本次战斗获得 ${formatNumber(response.result.goldLoot)} 金币，其中 ${formatNumber(response.result.depositedGold)} 已入库，另有 ${formatNumber(response.result.overflowGold)} 转入待领取。${response.result.reportSummary}${response.result.battleEvents?.length ? ` 关键事件：${response.result.battleEvents.map((event) => event.label).join('、')}` : ''}`
               : `获得 ${formatNumber(response.result.goldLoot)} 金币。${response.result.reportSummary}${response.result.battleEvents?.length ? ` 关键事件：${response.result.battleEvents.map((event) => event.label).join('、')}` : ''}`,
             items: raidRewardModal.items.map((item) => item.seedId === 'raid-gold' ? { ...item, label: '金币' } : item),
           };
@@ -2734,7 +3183,7 @@ function App(): JSX.Element {
           if (error instanceof ApiError && error.code === 'RAID_NOT_ALLOWED') {
             showToast(error.message, 'error');
           } else {
-            showToast(`${actionContext} 当前无法完成掠夺，请稍后重试。`, 'error');
+            showToast(`${actionContext} 当前无法完成战斗，请稍后重试。`, 'error');
           }
         } finally {
           setPendingActionKey(null);
@@ -2894,10 +3343,12 @@ function App(): JSX.Element {
   const appContent = shareAssistDemo ? (
     <ShareAssistPage
       audience={shareAssistDemo.audience}
+      campaign={shareAssistDemo.campaign}
+      error={shareAssistDemo.error}
       kind={shareAssistDemo.kind}
       onBack={() => setShareAssistDemo(null)}
       onConfirm={() => {
-        setShareAssistDemo((current) => current ? { ...current, status: 'completed' } : current);
+        void handleConfirmShareAssistDemo();
       }}
       onSuccessExit={() => {
         void handleShareAssistSuccessExit(shareAssistDemo.audience);
@@ -2949,9 +3400,9 @@ function App(): JSX.Element {
           </div>
           <button className="rail-alert" onClick={() => {
             navigateToScene('report', 'reports');
-            showToast('最近 1 次被掠已解锁免费复仇，已切到掠夺模块的战报页签。');
+            showToast('最近 1 次被挑战已解锁免费复仇，已切到探索模块的战报页签。');
           }} type="button">
-            掠夺动态 2
+            探索动态 2
           </button>
         </div>
 
@@ -3039,7 +3490,7 @@ function App(): JSX.Element {
             data={notificationList}
             error={notificationError}
             onClaim={(notificationId) => {
-              void handleClaimNotification(notificationId);
+              handleOpenNotificationClaim(notificationId);
             }}
             onClose={() => setNotificationsOpen(false)}
             onDelete={(notificationId) => {
@@ -3061,6 +3512,10 @@ function App(): JSX.Element {
                 <h2>测试登录</h2>
                 <div className="settings-row">
                   <span>当前账号</span>
+                  <strong>{currentAccountName}</strong>
+                </div>
+                <div className="settings-row">
+                  <span>测试身份</span>
                   <strong>{devLoginModeLabel}</strong>
                 </div>
                 <div className="settings-row">
@@ -3190,12 +3645,11 @@ function App(): JSX.Element {
               <ReportScene
                 activeTab={raidHubTab}
                 advantage={scenes.raid.advantage}
-                followedTargets={followedTargets}
-                heroTitle={scenes.raid.hero.title}
+                battleLimit={raidBattleLimit}
+                battleUsed={raidBattleUsed}
                 onAction={handleSceneAction}
                 onChangeTab={setRaidHubTab}
                 followedTargetIds={followedTargetIds}
-                onOpenFollowedTarget={handleOpenFollowedRaidTarget}
                 onOpenTarget={handleOpenRaidTargetModal}
                 onToggleFollowTarget={handleToggleFollowTarget}
                 onRefresh={() => {
@@ -3203,7 +3657,10 @@ function App(): JSX.Element {
                 }}
                 refreshLabel={scenes.raid.hero.action.label}
                 refreshPending={pendingActionKey === 'raid:refresh-targets'}
+                refreshLimit={raidRefreshLimit}
+                refreshUsed={raidRefreshUsed}
                 reportEntries={mergedReportEntries}
+                isTutorial={isTutorialUser}
                 targets={visibleRaidTargets}
                 uiRules={tutorialUiRules.raid}
               />
@@ -3222,7 +3679,7 @@ function App(): JSX.Element {
                   setGlobalFeatureModal({
                     title: '贡献俸禄档位',
                     eyebrow: '阵营贡献',
-                    description: '每日按当前个人贡献匹配一个档位；随机种子会在确认领取时抽取为具体整种子。',
+                    description: '每日按当前个人贡献匹配一个档位；随机精华和灵宠精魄会在确认领取时抽取为具体碎片。',
                     contributionTiers: buildFactionContributionTiers(),
                   });
                 }}
@@ -3254,14 +3711,34 @@ function App(): JSX.Element {
                 error={socialError}
                 feed={socialFeed}
                 following={socialFollowing}
+                friendInviteUrl={friendInviteDemoLinks?.newUser ?? null}
                 friends={socialFriends}
+                playerFactionName={home.factionName}
                 onAssistBack={(targetPlayerId) => {
                   void handleSocialAssistBack(targetPlayerId);
                 }}
+                onAcceptFriendRequest={(relationId) => {
+                  void handleAcceptSocialFriendRequest(relationId);
+                }}
                 onChangeTab={setSocialTab}
+                onChangeRelationFilter={setSocialRelationFilter}
+                onRejectFriendRequest={(relationId) => {
+                  void handleRejectSocialFriendRequest(relationId);
+                }}
                 onRefresh={() => {
                   void loadSocialBundle();
                 }}
+                onDeleteFriend={(targetPlayerId) => {
+                  void handleDeleteSocialFriend(targetPlayerId);
+                }}
+                onInviteFriend={handleCreateFriendInvite}
+                onCopyFriendInviteUrl={(url) => {
+                  void copyFriendInviteUrl(url);
+                }}
+                onRequestFriend={(targetPlayerId) => {
+                  void handleSocialFriendRequest(targetPlayerId);
+                }}
+                relationFilter={socialRelationFilter}
                 summary={socialSummary}
               />
             ) : null}
@@ -3391,8 +3868,43 @@ function App(): JSX.Element {
             <GlobalUnlockModal
               items={globalUnlockModal.items}
               onConfirm={() => {
+                if (pendingFriendInvite && pendingFriendInvite.boundFriend === undefined && globalUnlockModal.completionKind !== 'friend-invite') {
+                  showToast('正在确认好友邀请，请稍候。', 'info');
+                  return;
+                }
+
+                if (pendingFriendInvite?.boundFriend && globalUnlockModal.completionKind !== 'friend-invite') {
+                  setGlobalUnlockModal({
+                    title: '你们已成为好友',
+                    summary: `你已和 ${pendingFriendInvite.inviterName} 成为好友。新友奖励已发送到通知中心，请在通知附件中确认领取。接下来先去好友页查看这位好友。`,
+                    completionKind: 'friend-invite',
+                    items: [
+                      {
+                        id: 'social-friends',
+                        label: '社交 · 好友',
+                        kind: 'feature',
+                        description: '查看好友关系；新用户帮好友浇水会在后续版本接入。',
+                      },
+                      {
+                        id: pendingFriendInvite.notificationId ?? 'friend-invite-reward',
+                        label: '通知附件奖励',
+                        kind: 'feature',
+                        description: '奖励不会自动入账，需要在通知中心点击领取并确认。',
+                      },
+                    ],
+                    afterConfirmActions: [
+                      { type: 'navigate', scene: 'social' },
+                    ],
+                  });
+                  return;
+                }
+
                 const afterConfirmActions = globalUnlockModal.afterConfirmActions ?? [];
                 setGlobalUnlockModal(null);
+                if (globalUnlockModal.completionKind === 'friend-invite') {
+                  setPendingFriendInvite(null);
+                  setSocialTab('friends');
+                }
                 if (afterConfirmActions.length > 0) {
                   runTutorialFlowActions(afterConfirmActions);
                 }
@@ -3433,7 +3945,12 @@ function App(): JSX.Element {
           ) : null}
           {seedRewardModal ? (
             <SeedRewardModal
-              confirming={pendingActionKey === 'faction:stipend' || pendingActionKey === 'spirit:ad-reward' || pendingActionKey === 'tutorial:starter-seeds'}
+              confirming={
+                pendingActionKey === 'faction:stipend'
+                || pendingActionKey === 'spirit:ad-reward'
+                || pendingActionKey === 'tutorial:starter-seeds'
+                || (seedRewardModal.confirmAction === 'claim-notification' && notificationActionId === `claim:${seedRewardModal.notificationId}`)
+              }
               getItemLabel={(item) => {
                 const seed = item.seedId ? seedCatalogMap.get(item.seedId) : undefined;
                 if (seedRewardModal.confirmAction === 'claim-faction-stipend' && seed) {
@@ -3454,6 +3971,10 @@ function App(): JSX.Element {
                 }
                 if (seedRewardModal.confirmAction === 'claim-starter-seeds') {
                   void handleConfirmStarterSeedClaim();
+                  return;
+                }
+                if (seedRewardModal.confirmAction === 'claim-notification') {
+                  void handleConfirmNotificationClaim();
                   return;
                 }
 
