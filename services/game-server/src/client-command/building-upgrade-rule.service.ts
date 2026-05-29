@@ -24,7 +24,7 @@ export interface PlayerBuildingStateForUpgrade {
   watchtowerLevel: number;
   protectionTechLevel: number;
   farmYieldTechLevel: number;
-  ripeWindowTechLevel: number;
+  collectWindowTechLevel: number;
   pendingClaimTechLevel: number;
 }
 
@@ -73,8 +73,8 @@ function getExtensionLevel(buildings: PlayerBuildingStateForUpgrade, extensionId
     return buildings.farmYieldTechLevel;
   }
 
-  if (extensionId === 'ripeWindowTech') {
-    return buildings.ripeWindowTechLevel;
+  if (extensionId === 'collectWindowTech') {
+    return buildings.collectWindowTechLevel;
   }
 
   if (extensionId === 'factionOfferingTech') {

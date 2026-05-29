@@ -1,6 +1,6 @@
 import type { PublicShareAssistCampaignResponse } from '@trinitywar/shared';
 
-type ShareAssistKind = 'water';
+type ShareAssistKind = 'water' | 'friend_invite';
 type ShareAssistAudience = 'new-user' | 'returning-user';
 type ShareAssistStatus = 'pending' | 'completed' | 'expired' | 'full';
 
@@ -31,6 +31,13 @@ const shareAssistCopy: Record<ShareAssistKind, ShareAssistKindCopy> = {
     actionLabel: '帮 TA 浇水',
     completedTitle: '浇水成功',
   },
+  friend_invite: {
+    eyebrow: '微信好友邀请',
+    requester: '测试好友',
+    pendingTitle: '好友邀请你加入同一阵营',
+    actionLabel: '接受好友邀请',
+    completedTitle: '邀请已确认',
+  },
 };
 
 const audienceCopy: Record<ShareAssistAudience, {
@@ -41,7 +48,7 @@ const audienceCopy: Record<ShareAssistAudience, {
 }> = {
   'new-user': {
     testLabel: '新用户测试',
-    completedSummary: '你的朋友已在仙界安营扎寨。一起开辟灵田、培养灵宠吗？马上就能拥有自己的第一块田。',
+    completedSummary: '你的朋友已在三界安营扎寨。一起开辟灵田、培养灵宠吗？马上就能拥有自己的第一块田。',
     completedHint: '选择阵营时，可以优先考虑和好友同阵营。',
     successActionLabel: '开始新手流程',
   },

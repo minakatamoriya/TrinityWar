@@ -1,4 +1,4 @@
-﻿import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type {
   AdminDeletePlayerResponse,
@@ -523,7 +523,7 @@ export class AdminReadonlyService {
         playerId: player.id,
         protectionTechLevel: player.buildings?.protectionTechLevel ?? 0,
         farmYieldTechLevel: player.buildings?.farmYieldTechLevel ?? 0,
-        ripeWindowTechLevel: player.buildings?.ripeWindowTechLevel ?? 0,
+        collectWindowTechLevel: player.buildings?.collectWindowTechLevel ?? 0,
         pendingClaimTechLevel: player.buildings?.pendingClaimTechLevel ?? 0,
         spellStateVersion: player.buildings?.buildingVersion ?? null,
       },
@@ -564,7 +564,7 @@ export class AdminReadonlyService {
         seedId: field.seedDefinition?.seedId ?? null,
         currentClaimableGold: field.currentClaimableGold,
         matureAt: field.matureAt,
-        fullMatureAt: field.fullMatureAt,
+        readyAt: field.readyAt,
         overripeAt: field.overripeAt,
         statusVersion: field.statusVersion,
         updatedAt: field.updatedAt,
@@ -764,7 +764,7 @@ function parseSeedDefinitionPayload(body: unknown, requireAll: boolean): Record<
   copyIntegerField(payload, record, 'seedSeconds', requireAll, 1);
   copyIntegerField(payload, record, 'growSeconds', requireAll, 1);
   copyIntegerField(payload, record, 'matureSeconds', requireAll, 1);
-  copyIntegerField(payload, record, 'ripeWindowSeconds', requireAll, 0);
+  copyIntegerField(payload, record, 'collectWindowSeconds', requireAll, 0);
   copyIntegerField(payload, record, 'baseYieldGold', requireAll, 0);
   copyIntegerField(payload, record, 'harvestSeedReturn', requireAll, 0);
   copyNullableStringField(payload, record, 'strategyNote', requireAll);

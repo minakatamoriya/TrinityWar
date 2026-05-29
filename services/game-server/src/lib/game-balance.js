@@ -103,7 +103,7 @@ const SEED_LEVEL_CONFIG = {
     label: '启灵芽',
     rarity: 'common',
     stageGold: { growing: 20, mature: 50, withered: 50 },
-    stageSeconds: { seeded: 10, growing: 10 },
+    stageSeconds: { seeded: 10, growing: 0 },
   },
   qinglingmai: {
     label: '青灵麦',
@@ -319,15 +319,15 @@ export const FACTION_ADVANTAGE_CONFIG = {
     factionCode: 'human',
     factionName: '人界',
     title: '种田更强',
-    summary: '成熟收益更高，丰熟窗口更长，适合稳定经营。',
+    summary: '成熟收益更高，可收窗口更长，适合稳定经营。',
     details: [
-      '丰熟窗口 +20%',
+      '可收窗口 +20%',
       '成熟收益 +5%',
       '已解锁种子和灵宠图鉴赛季内保留可见',
     ],
     modifiers: {
       farmMatureYieldBonusPercent: 5,
-      farmRipeWindowBonusPercent: 20,
+      farmCollectWindowBonusPercent: 20,
       spiritPassiveExpBonusPercent: 0,
       spiritFeedDurationBonusPercent: 0,
       battleAttackBonusPercent: 0,
@@ -346,7 +346,7 @@ export const FACTION_ADVANTAGE_CONFIG = {
     ],
     modifiers: {
       farmMatureYieldBonusPercent: 0,
-      farmRipeWindowBonusPercent: 0,
+      farmCollectWindowBonusPercent: 0,
       spiritPassiveExpBonusPercent: 10,
       spiritFeedDurationBonusPercent: 25,
       battleAttackBonusPercent: 0,
@@ -365,7 +365,7 @@ export const FACTION_ADVANTAGE_CONFIG = {
     ],
     modifiers: {
       farmMatureYieldBonusPercent: 0,
-      farmRipeWindowBonusPercent: 0,
+      farmCollectWindowBonusPercent: 0,
       spiritPassiveExpBonusPercent: 0,
       spiritFeedDurationBonusPercent: 0,
       battleAttackBonusPercent: 5,
@@ -396,7 +396,7 @@ export const TERRITORY_TECH_TRACKS = {
   farmYieldTech: {
     id: 'farmYieldTech',
     title: '祈雨术',
-    description: '引灵雨滋养田垄，提升作物成长与丰熟阶段的金币收益。',
+    description: '引灵雨滋养田垄，提升作物培育与成熟阶段的金币收益。',
     effectKey: 'yieldBonusPercent',
     levels: [
       { level: 1, costResource: 'gold', costAmount: 400, upgradeCost: 400, effectValue: 2 },
@@ -411,11 +411,11 @@ export const TERRITORY_TECH_TRACKS = {
       { level: 10, costResource: 'tianjiTalisman', costAmount: 7, upgradeCost: 7, effectValue: 25 },
     ],
   },
-  ripeWindowTech: {
-    id: 'ripeWindowTech',
+  collectWindowTech: {
+    id: 'collectWindowTech',
     title: '观星术',
-    description: '观天象定农时，延长作物进入丰熟后的可收窗口。',
-    effectKey: 'ripeWindowMinutes',
+    description: '观天象定农时，延长作物成熟后的可收窗口。',
+    effectKey: 'collectWindowMinutes',
     levels: [
       { level: 1, costResource: 'gold', costAmount: 360, upgradeCost: 360, effectValue: 5 },
       { level: 2, costResource: 'gold', costAmount: 540, upgradeCost: 540, effectValue: 10 },
@@ -642,7 +642,7 @@ export const GAME_BALANCE = {
       watchtower: buildUpgradeCostTable(WATCHTOWER_LEVEL_CONFIG),
       protectionTech: buildUpgradeCostTable(TERRITORY_TECH_TRACKS.protectionTech.levels),
       farmYieldTech: buildUpgradeCostTable(TERRITORY_TECH_TRACKS.farmYieldTech.levels),
-      ripeWindowTech: buildUpgradeCostTable(TERRITORY_TECH_TRACKS.ripeWindowTech.levels),
+      collectWindowTech: buildUpgradeCostTable(TERRITORY_TECH_TRACKS.collectWindowTech.levels),
       factionOfferingTech: buildUpgradeCostTable(TERRITORY_TECH_TRACKS.factionOfferingTech.levels),
     },
     effects: {

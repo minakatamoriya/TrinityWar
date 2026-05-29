@@ -1,4 +1,4 @@
-﻿import { createHash } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   APP_NAME,
@@ -23,7 +23,8 @@ import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { LandDeedService } from '../land-deed/land-deed.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
-import { DAILY_TASK_CONFIG, GAME_BALANCE, getFactionAdvantageConfig, getFactionStipendTier, getSeedStageGold, getSeedStageSeconds } from '../lib/game-balance.js';
+import { DAILY_TASK_CONFIG, GAME_BALANCE, getFactionAdvantageConfig, getFactionStipendTier, getSeedStageGold } from '../lib/game-balance.js';
+import { buildFieldReadyAtUpdate, getCultivationSeconds } from '../lib/field-timing.js';
 import { getVaultCapacityGain } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PlayerInitializationService } from '../seed/player-initialization.service.js';
@@ -357,7 +358,7 @@ export class ClientCommandService {
       });
 
       const responseSnapshot = await this.buildClaimDailyTaskResponse(client, input.playerId, {
-        summary: `${getDailyTaskTitle(taskState.taskId)} 已结算，入账 ${claimedGold} 金币。`,
+        summary: `${getDailyTaskTitle(taskState.taskId)} \u5df2\u7ed3\u7b97\uff0c\u5165\u8d26 ${claimedGold} \u91d1\u5e01\u3002`,
         taskId: taskState.taskId,
         rewardGold,
         claimedGold,
@@ -626,7 +627,7 @@ export class ClientCommandService {
           harvestedGoldTotal: { increment: resolution.collectedGold + resolution.overflowGold },
           seedAt: null,
           matureAt: null,
-          fullMatureAt: null,
+          readyAt: null,
           overripeAt: null,
           lastCalculatedAt: new Date(),
           statusVersion: { increment: 1 },
@@ -812,6 +813,7 @@ export class ClientCommandService {
       }
 
       const now = new Date();
+      const readyAt = addSeconds(now, getCultivationSeconds(seedDefinition.seedId));
       await client.playerFieldSlot.update({
         where: { id: field.id },
         data: {
@@ -824,8 +826,7 @@ export class ClientCommandService {
           investedGold: 0,
           currentClaimableGold: getCultivationStageGold(seedDefinition.seedId, 'seeded', field.player?.faction?.code ?? null),
           seedAt: now,
-          matureAt: addSeconds(now, getSeedStageSeconds(seedDefinition.seedId, 'seeded')),
-          fullMatureAt: null,
+          ...buildFieldReadyAtUpdate(readyAt),
           overripeAt: null,
           lastCalculatedAt: now,
           statusVersion: { increment: 1 },
@@ -1012,10 +1013,10 @@ export class ClientCommandService {
       const responseSnapshot: ClientStateMutationResponse = {
         app: APP_NAME,
         summary: actualRecruitCount < requestedCount
-          ? `本次新增 ${actualRecruitCount} 名士兵进入训练队列，已立即扣除 ${totalCost} 金币；其余部分受金币或兵力上限限制。`
+          ? `\u672c\u6b21\u65b0\u589e ${actualRecruitCount} \u540d\u5175\u58eb\u8fdb\u5165\u8bad\u7ec3\u961f\u5217\uff0c\u5df2\u6263\u9664 ${totalCost} \u91d1\u5e01\uff1b\u5176\u4f59\u90e8\u5206\u53d7\u91d1\u5e01\u6216\u5bb9\u91cf\u9650\u5236\u3002`
           : currentQueue
-            ? `已追加 ${actualRecruitCount} 名士兵到当前训练队列，金币已立即扣除，剩余训练时间已重算。`
-            : `已开始训练 ${actualRecruitCount} 名士兵，金币已立即扣除，倒计时结束后才会增加战力。`,
+            ? `\u5df2\u8ffd\u52a0 ${actualRecruitCount} \u540d\u5175\u58eb\u5230\u5f53\u524d\u8bad\u7ec3\u961f\u5217\uff0c\u91d1\u5e01\u5df2\u6263\u9664\uff0c\u5269\u4f59\u8bad\u7ec3\u65f6\u95f4\u5df2\u91cd\u7b97\u3002`
+            : `\u5df2\u5f00\u59cb\u8bad\u7ec3 ${actualRecruitCount} \u540d\u5175\u58eb\uff0c\u91d1\u5e01\u5df2\u6263\u9664\uff0c\u8bad\u7ec3\u5b8c\u6210\u540e\u4f1a\u52a0\u5165\u53ef\u7528\u6218\u529b\u3002`,
         home: await this.clientReadService.getHomeSummary(input.playerId, client),
         scenes: await this.clientReadService.getSceneContent(input.playerId, client),
       };
@@ -1177,7 +1178,7 @@ export class ClientCommandService {
 
       const responseSnapshot: ClientStateMutationResponse = {
         app: APP_NAME,
-        summary: `已修习 ${target.title}：Lv.${target.currentLevel} -> Lv.${target.nextLevel}`,
+        summary: `\u5df2\u4fee\u4e60 ${target.title}\uff1aLv.${target.currentLevel} -> Lv.${target.nextLevel}`,
         home: await this.clientReadService.getHomeSummary(input.playerId, client),
         scenes: await this.clientReadService.getSceneContent(input.playerId, client),
       };
@@ -1200,7 +1201,7 @@ export class ClientCommandService {
     return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
       return {
         app: APP_NAME,
-        summary: '金币不再直接兑换阵营贡献，请在今日阵营任务中上缴精华。',
+        summary: '\u5df2\u5151\u6362\u4e00\u4efd\u9635\u8425\u8d21\u732e\uff0c\u5f53\u524d\u8d21\u732e\u5df2\u540c\u6b65\u3002',
         home: await this.clientReadService.getHomeSummary(input.playerId, client),
         scenes: await this.clientReadService.getSceneContent(input.playerId, client),
       };
@@ -1348,8 +1349,8 @@ export class ClientCommandService {
       const responseSnapshot: ClientFactionTaskSubmitResponse = {
         app: APP_NAME,
         summary: completed
-          ? `已上缴${seedDefinition.label}精华 x${submitAmount}，贡献 +${task.rewardContribution}。`
-          : `已上缴${seedDefinition.label}精华 x${submitAmount}。`,
+          ? `\u5df2\u4e0a\u7f34${seedDefinition.label}\u7cbe\u534e x${submitAmount}\uff0c\u8d21\u732e +${task.rewardContribution}\u3002`
+          : `\u5df2\u4e0a\u7f34${seedDefinition.label}\u7cbe\u534e x${submitAmount}\u3002`,
         home,
         scenes: await this.clientReadService.getSceneContent(input.playerId, client),
         task: home.factionTasks.find((item) => item.id === task.id) ?? home.factionTasks[0],
@@ -1625,15 +1626,15 @@ export class ClientCommandService {
       const bootstrap = await this.clientReadService.getBootstrap(input.playerId, client);
       const responseSnapshot: ClientClaimFactionStipendResponse = {
         app: APP_NAME,
-        summary: `阵营俸禄已领取：${formatRewardSummary(rewards)}。`,
+        summary: `\u9635\u8425\u4ff8\u7984\u5df2\u9886\u53d6\uff1a${formatRewardSummary(rewards)}\u3002`,
         stipend: {
-          title: '每日阵营俸禄',
-          description: '每日按当前个人贡献领取一次，精华和灵宠精魄会抽取为具体碎片。',
+          title: '\u6bcf\u65e5\u9635\u8425\u4ff8\u7984',
+          description: '\u6bcf\u65e5\u6309\u5f53\u524d\u4e2a\u4eba\u8d21\u732e\u9886\u53d6\u4e00\u6b21\uff0c\u5956\u52b1\u4ee5\u690d\u7269\u7cbe\u534e\u3001\u7075\u5ba0\u8d44\u6e90\u548c\u9b42\u7c7b\u6750\u6599\u4e3a\u4e3b\u3002',
           status: 'claimed',
           dateKey,
           contribution,
           tierKey: stipendState.tierKey,
-          tierLabel: tier?.label ?? '基础俸禄',
+          tierLabel: tier?.label ?? '\u9635\u8425\u4ff8\u7984',
           rewards,
           claimedAt: stipendState.claimedAt?.toISOString() ?? now.toISOString(),
           action: null,
@@ -1796,7 +1797,7 @@ export class ClientCommandService {
       const plant = scenes.farm.plants?.find((item) => item.plantType === seedDefinition.seedId);
       const responseSnapshot: ClientUnlockPlantResponse = {
         app: APP_NAME,
-        summary: `已解锁${seedDefinition.label}，现在可以永久播种。`,
+        summary: `\u5df2\u89e3\u9501${seedDefinition.label}\uff0c\u53ef\u5728\u519c\u573a\u9009\u62e9\u79cd\u690d\u3002`,
         bootstrap: await this.clientReadService.getBootstrap(input.playerId, client),
         home: await this.clientReadService.getHomeSummary(input.playerId, client),
         scenes,
@@ -1804,7 +1805,7 @@ export class ClientCommandService {
           plantType: seedDefinition.seedId,
           essenceType: seedDefinition.seedId,
           plantName: seedDefinition.label,
-          essenceLabel: `${seedDefinition.label}精华`,
+          essenceLabel: `${seedDefinition.label}\u7cbe\u534e`,
           rarity: seedDefinition.rarity === 'legendary' ? 'legendary' : seedDefinition.rarity === 'rare' ? 'rare' : 'common',
           unlocked: true,
           discovered: true,
@@ -2332,14 +2333,14 @@ function buildPendingClaimWalletUpdate(
 
 function getPendingClaimSourceLabel(source: ClaimPendingRequestDto['source']): string {
   if (source === 'tax') {
-    return '主城税收';
+    return '\u4e3b\u57ce\u7a0e\u6536';
   }
 
   if (source === 'faction') {
-    return '阵营分红';
+    return '\u9635\u8425\u5206\u7ea2';
   }
 
-  return '临时待领取';
+  return '\u4e34\u65f6\u5f85\u9886\u53d6';
 }
 
 function buildClaimPendingSummary(
@@ -2351,10 +2352,10 @@ function buildClaimPendingSummary(
   const sourceLabel = getPendingClaimSourceLabel(source);
 
   if (claimedGold > 0) {
-    return `${sourceLabel}本次入账 ${claimedGold} 金币，剩余待领取 ${remainingPendingGold}。`;
+    return `${sourceLabel}\u672c\u6b21\u5165\u5e93 ${claimedGold} \u91d1\u5e01\uff0c\u5269\u4f59\u5f85\u9886\u53d6 ${remainingPendingGold}\u3002`;
   }
 
-  return `当前没有可入账的${sourceLabel}。`;
+  return `\u5f53\u524d\u6ca1\u6709\u53ef\u5165\u5e93\u7684${sourceLabel}\u3002`;
 }
 
 function normalizeStipendRewards(rewards: ClientFactionStipendReward[]): ClientFactionStipendReward[] {
@@ -2420,7 +2421,7 @@ async function resolveStipendRewards(
     if (reward.kind === 'essence' && reward.essenceType) {
       resolvedRewards.push({
         ...reward,
-        label: reward.label || `${essenceLabelById.get(reward.essenceType) ?? reward.essenceType}精华`,
+        label: reward.label || `${essenceLabelById.get(reward.essenceType) ?? reward.essenceType}\u7cbe\u534e`,
       });
       continue;
     }
@@ -2428,7 +2429,7 @@ async function resolveStipendRewards(
     if (reward.kind === 'spirit-shard' && reward.spiritId) {
       resolvedRewards.push({
         ...reward,
-        label: reward.label || `${spiritLabelById.get(reward.spiritId) ?? reward.spiritId}精魄`,
+        label: reward.label || `${spiritLabelById.get(reward.spiritId) ?? reward.spiritId}\u788e\u7247`,
       });
       continue;
     }
@@ -2466,8 +2467,8 @@ async function resolveFirstFactionStipendRewards(
 
   return normalizeStipendRewards([
     ...resolvedNonEssenceRewards,
-    { kind: 'essence', essenceType: 'qinglingmai', label: `${seedLabelById.get('qinglingmai') ?? '青灵麦'}精华`, quantity: 3 },
-    { kind: 'essence', essenceType: 'xunyamai', label: `${seedLabelById.get('xunyamai') ?? '风云稻'}精华`, quantity: 3 },
+    { kind: 'essence', essenceType: 'qinglingmai', label: `${seedLabelById.get('qinglingmai') ?? '\u9752\u7075\u9ea6'}\u7cbe\u534e`, quantity: 3 },
+    { kind: 'essence', essenceType: 'xunyamai', label: `${seedLabelById.get('xunyamai') ?? '\u98ce\u4e91\u7a3b'}\u7cbe\u534e`, quantity: 3 },
   ]);
 }
 
@@ -2545,7 +2546,7 @@ function drawGroupedRewards(input: {
       ...(input.kind === 'seed' ? { seedId: id } : {}),
       ...(input.kind === 'essence' ? { essenceType: id } : {}),
       ...(input.kind === 'spirit-shard' ? { spiritId: id } : {}),
-      label: input.kind === 'essence' ? `${baseLabel}精华` : input.kind === 'spirit-shard' ? `${baseLabel}精魄` : baseLabel,
+      label: input.kind === 'essence' ? `${baseLabel}\u7cbe\u534e` : input.kind === 'spirit-shard' ? `${baseLabel}\u788e\u7247` : baseLabel,
       quantity: 1,
     });
   }
@@ -2560,8 +2561,8 @@ function sumRewardQuantity(rewards: ClientFactionStipendReward[], kind: ClientFa
 }
 
 function formatRewardSummary(rewards: ClientFactionStipendReward[]): string {
-  const summary = rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、');
-  return summary || '暂无奖励';
+  const summary = rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('\u3001');
+  return summary || '\u6682\u65e0\u5956\u52b1';
 }
 
 async function applySpiritCropRewards(
@@ -2689,7 +2690,7 @@ async function ensureSeedDefinitionExists(
       seedSeconds: seed.seedSeconds,
       growSeconds: seed.growSeconds,
       matureSeconds: seed.matureSeconds,
-      ripeWindowSeconds: seed.ripeWindowSeconds,
+      collectWindowSeconds: seed.collectWindowSeconds,
       baseYieldGold: seed.baseYieldGold,
       harvestSeedReturn: seed.harvestSeedReturn,
       strategyNote: seed.strategyNote,
@@ -2950,11 +2951,11 @@ function sumCollectRewardQuantity(rewards: ClientCollectRewardItem[], kind: NonN
 
 function getDailyTaskTitle(taskId: string): string {
   const titleMap: Record<string, string> = {
-    'daily-harvest-once': '收一次田地',
-    'daily-start-cultivation': '开始一次培育',
-    'daily-upgrade-building': '修习一次法术',
-    'daily-feed-spirit': '投喂一次灵宠',
-    'daily-recruit-army': '征召一次士兵',
+    'daily-harvest-once': '\u6536\u53d6\u4e00\u6b21\u7530\u5730',
+    'daily-start-cultivation': '\u5f00\u59cb\u4e00\u6b21\u57f9\u80b2',
+    'daily-upgrade-building': '\u4fee\u4e60\u4e00\u6b21\u5efa\u7b51',
+    'daily-feed-spirit': '\u6295\u5582\u4e00\u6b21\u7075\u5ba0',
+    'daily-recruit-army': '\u8bad\u7ec3\u4e00\u540d\u5175\u58eb',
   };
 
   return titleMap[taskId] ?? taskId;
@@ -3019,8 +3020,8 @@ function buildBuildingUpdateData(target: BuildingUpgradeTarget): Prisma.PlayerBu
     data.protectionTechLevel = target.nextLevel;
   } else if (target.key === 'farmYieldTech') {
     data.farmYieldTechLevel = target.nextLevel;
-  } else if (target.key === 'ripeWindowTech') {
-    data.ripeWindowTechLevel = target.nextLevel;
+  } else if (target.key === 'collectWindowTech') {
+    data.collectWindowTechLevel = target.nextLevel;
   } else if (target.key === 'factionOfferingTech' || target.key === 'pendingClaimTech') {
     data.pendingClaimTechLevel = target.nextLevel;
   }

@@ -1,8 +1,10 @@
 import type {
   ClientSocialFeedItem,
+  ClientSocialFriendFieldVisitResponse,
   ClientSocialRelationItem,
   ClientSocialSummaryResponse,
 } from '@trinitywar/shared';
+import { FarmStatusCard, type FarmStatusViewModel } from '../farm/FarmStatusCard';
 
 type SocialTabKey = 'feed' | 'friends' | 'relations';
 type SocialRelationFilter = 'all' | 'friends' | 'following' | 'enemies' | 'same-faction';
@@ -19,10 +21,14 @@ interface SocialSceneProps {
   friends: ClientSocialRelationItem[];
   following: ClientSocialRelationItem[];
   enemies: ClientSocialRelationItem[];
+  fieldVisit: ClientSocialFriendFieldVisitResponse | null;
   onChangeTab: (tab: SocialTabKey) => void;
   onChangeRelationFilter: (filter: SocialRelationFilter) => void;
   onRefresh: () => void;
-  onAssistBack: (targetPlayerId: string) => void;
+  onAssistBack: (targetPlayerId: string, fieldSlotId?: string) => void;
+  onOpenFieldVisit: (targetPlayerId: string) => void;
+  onConfirmHarvest: (fieldSlotId?: string) => void;
+  onCloseFieldVisit: () => void;
   onRequestFriend: (targetPlayerId: string) => void;
   onDeleteFriend: (targetPlayerId: string) => void;
   onInviteFriend: () => void;
@@ -57,9 +63,13 @@ export function SocialScene({
   friends,
   following,
   enemies,
+  fieldVisit,
   onChangeTab,
   onChangeRelationFilter,
   onAssistBack,
+  onOpenFieldVisit,
+  onConfirmHarvest,
+  onCloseFieldVisit,
   onRequestFriend,
   onDeleteFriend,
   onInviteFriend,
@@ -81,7 +91,6 @@ export function SocialScene({
           <span>好友 {summary.counts.friends}</span>
           <span>关注 {summary.counts.following}</span>
           <span>仇敌 {summary.counts.enemies}</span>
-          <span>浇水 {summary.counts.todayWaterUsed}/{summary.counts.todayWaterLimit}</span>
         </section>
       ) : null}
 
@@ -117,7 +126,7 @@ export function SocialScene({
                     key={`${item.id}-${action.action}`}
                     onClick={() => {
                       if (action.action === 'assist_back' && action.targetPlayerId) {
-                        onAssistBack(action.targetPlayerId);
+                        onOpenFieldVisit(action.targetPlayerId);
                       }
                       if (action.action === 'accept_friend' && action.relatedEntityId) {
                         onAcceptFriendRequest(action.relatedEntityId);
@@ -177,20 +186,22 @@ export function SocialScene({
                 </div>
               </div>
               <div className="social-relation-actions">
-                <button
-                  className="ghost-button"
-                  disabled={busy || relation.friendStatus === 'pending' || !relation.sameFaction}
-                  onClick={() => {
-                    if (relation.friendStatus === 'active') {
-                      onAssistBack(relation.target.playerId);
-                      return;
-                    }
-                    onRequestFriend(relation.target.playerId);
-                  }}
-                  type="button"
-                >
-                  {getRelationActionLabel(relation)}
-                </button>
+                {relation.friendStatus === 'active' ? (
+                  <>
+                    <button className="ghost-button" disabled={busy || !relation.sameFaction} onClick={() => onOpenFieldVisit(relation.target.playerId)} type="button">
+                      拜访灵田
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="ghost-button"
+                    disabled={busy || relation.friendStatus === 'pending' || !relation.sameFaction}
+                    onClick={() => onRequestFriend(relation.target.playerId)}
+                    type="button"
+                  >
+                    {getRelationActionLabel(relation)}
+                  </button>
+                )}
                 {relation.friendStatus === 'active' ? (
                   <button className="ghost-button danger" disabled={busy} onClick={() => onDeleteFriend(relation.target.playerId)} type="button">
                     删除
@@ -205,6 +216,15 @@ export function SocialScene({
           )}
         </section>
       )}
+      {fieldVisit ? (
+        <FriendFieldVisitModal
+          busy={busy}
+          onClose={onCloseFieldVisit}
+          onHarvest={onConfirmHarvest}
+          onWater={(fieldSlotId) => onAssistBack(fieldVisit.friend.playerId, fieldSlotId)}
+          visit={fieldVisit}
+        />
+      ) : null}
     </div>
   );
 }
@@ -214,6 +234,7 @@ interface RelationRow {
   relationIds: string[];
   tags: string[];
   intimacy: number;
+  lastInteractedAt: string | null;
   friendStatus: ClientSocialRelationItem['status'] | null;
   sameFaction: boolean;
   target: ClientSocialRelationItem['target'];
@@ -235,6 +256,7 @@ function buildRelationRows(input: {
         relationIds: [relation.id],
         tags: [tag],
         intimacy: relation.intimacy,
+        lastInteractedAt: relation.lastInteractedAt,
         friendStatus: relation.relationType === 'friend' ? relation.status : null,
         sameFaction: Boolean(input.playerFactionName && relation.target.factionName === input.playerFactionName),
         target: relation.target,
@@ -247,6 +269,7 @@ function buildRelationRows(input: {
       existing.tags.push(tag);
     }
     existing.intimacy = Math.max(existing.intimacy, relation.intimacy);
+    existing.lastInteractedAt = pickRecentInteraction(existing.lastInteractedAt, relation.lastInteractedAt);
     if (relation.relationType === 'friend') {
       existing.friendStatus = relation.status;
     }
@@ -256,7 +279,22 @@ function buildRelationRows(input: {
   input.following.forEach((relation) => append(relation, '关注'));
   input.enemies.forEach((relation) => append(relation, '仇敌'));
 
-  return Array.from(rowMap.values()).sort((left, right) => right.intimacy - left.intimacy || left.target.nickname.localeCompare(right.target.nickname, 'zh-CN'));
+  return Array.from(rowMap.values()).sort((left, right) => {
+    const interactionDiff = getInteractionTime(right.lastInteractedAt) - getInteractionTime(left.lastInteractedAt);
+    return interactionDiff || right.intimacy - left.intimacy || left.target.nickname.localeCompare(right.target.nickname, 'zh-CN');
+  });
+}
+
+function pickRecentInteraction(left: string | null, right: string | null): string | null {
+  return getInteractionTime(right) > getInteractionTime(left) ? right : left;
+}
+
+function getInteractionTime(value: string | null): number {
+  if (!value) {
+    return 0;
+  }
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
 }
 
 function filterRelationRows(rows: RelationRow[], filter: SocialRelationFilter): RelationRow[] {
@@ -313,6 +351,130 @@ function EmptySocialState({ actionLabel, onAction, text }: { actionLabel?: strin
       ) : null}
     </div>
   );
+}
+
+function FriendFieldVisitModal(props: {
+  busy: boolean;
+  visit: ClientSocialFriendFieldVisitResponse;
+  onClose: () => void;
+  onWater: (fieldSlotId: string) => void;
+  onHarvest: (fieldSlotId: string) => void;
+}): JSX.Element {
+  const hasActionableField = props.visit.fields.some((field) => field.nextAction !== null);
+  const handleFieldAction = (field: ClientSocialFriendFieldVisitResponse['fields'][number]): void => {
+    if (props.busy) {
+      return;
+    }
+    if (field.nextAction === 'harvest') {
+      props.onHarvest(field.fieldSlotId);
+      return;
+    }
+    if (field.nextAction === 'water') {
+      props.onWater(field.fieldSlotId);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop social-field-visit-backdrop" onClick={props.onClose} role="presentation">
+      <div
+        aria-labelledby="social-field-visit-title"
+        aria-modal="true"
+        className="modal-card transfer-card social-field-visit-card"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <p className="eyebrow">好友灵田</p>
+        <h3 id="social-field-visit-title">拜访灵田</h3>
+        <p>{props.visit.friend.nickname}</p>
+        <small>{props.visit.ruleText}</small>
+        <div className="card-grid farm-field-grid social-field-visit-grid">
+          {props.visit.fields.map((field) => {
+            const view = buildFriendFieldStatusView(field);
+            const canClick = Boolean(field.nextAction) && !props.busy;
+
+            return (
+              <FarmStatusCard
+                className={`social-field-plot ${field.nextAction ? 'actionable' : ''}`}
+                compact
+                key={field.fieldSlotId}
+                onClick={() => handleFieldAction(field)}
+                onKeyDown={(event) => {
+                  if (!canClick || (event.key !== 'Enter' && event.key !== ' ')) {
+                    return;
+                  }
+                  event.preventDefault();
+                  handleFieldAction(field);
+                }}
+                role={canClick ? 'button' : undefined}
+                tabIndex={canClick ? 0 : undefined}
+                view={view}
+              />
+            );
+          })}
+        </div>
+        {!hasActionableField ? <p className="muted">好友当前没有可助力的田地。等 TA 播种或作物进入成长阶段后再来。</p> : null}
+        <div className="transfer-foot-row seed-reward-actions">
+          <button className="secondary-button" disabled={props.busy} onClick={props.onClose} type="button">
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatFriendFieldStatus(status: ClientSocialFriendFieldVisitResponse['fields'][number]['status']): string {
+  if (status === 'LOCKED') {
+    return '未解锁';
+  }
+  if (status === 'EMPTY') {
+    return '空地';
+  }
+  if (status === 'SEEDED') {
+    return '播种中';
+  }
+  if (status === 'GROWING') {
+    return '成长中';
+  }
+  if (status === 'MATURE') {
+    return '成熟';
+  }
+  return '枯萎';
+}
+
+function buildFriendFieldStatusView(field: ClientSocialFriendFieldVisitResponse['fields'][number]): FarmStatusViewModel {
+  return {
+    id: field.fieldSlotId,
+    badge: field.badge,
+    title: field.title,
+    cropName: field.cropName ?? undefined,
+    tone: field.tone,
+    progressRemainingSeconds: field.progressRemainingSeconds,
+    progressTotalSeconds: field.progressTotalSeconds,
+    yieldGold: field.yieldGold,
+    description: field.unavailableReason ?? getFriendFieldDescription(field),
+    emphasis: field.nextAction === 'harvest' && field.rewardPreview
+      ? `点击采摘 +${field.rewardPreview.gold} 金币`
+      : field.nextAction === 'water'
+        ? '点击帮好友浇水'
+        : undefined,
+    centerActionLabel: field.nextAction === 'harvest'
+      ? '采摘'
+      : field.nextAction === 'water'
+        ? '浇水'
+        : undefined,
+    harvestable: field.nextAction !== null,
+  };
+}
+
+function getFriendFieldDescription(field: ClientSocialFriendFieldVisitResponse['fields'][number]): string {
+  if (field.nextAction === 'harvest') {
+    return '采摘一缕灵田余韵，不影响好友收成。';
+  }
+  if (field.nextAction === 'water') {
+    return '本轮已采摘，再点击可帮好友浇水。';
+  }
+  return formatFriendFieldStatus(field.status);
 }
 
 function formatDateTime(value: string): string {

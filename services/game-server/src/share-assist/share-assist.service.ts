@@ -13,6 +13,7 @@ import {
   ShareAssistRecordAudience,
   ShareAssistRecordStatus,
   type ShareAssistCampaign,
+  type ShareAssistRecord,
 } from '@prisma/client';
 import {
   APP_NAME,
@@ -29,7 +30,11 @@ import {
 } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
-import { getSeedStageSeconds } from '../lib/game-balance.js';
+import {
+  buildFieldReadyAtUpdate,
+  getFieldReadyAt,
+  getLegacyGrowingReadyAt,
+} from '../lib/field-timing.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 const WATER_CAMPAIGN_EXPIRES_MS = 24 * 60 * 60 * 1000;
@@ -68,7 +73,7 @@ const shareWaterableFieldSelect = {
   status: true,
   seedAt: true,
   matureAt: true,
-  fullMatureAt: true,
+  readyAt: true,
   lastCalculatedAt: true,
   seedDefinition: {
     select: {
@@ -380,6 +385,28 @@ export class ShareAssistService {
 
       const existingRecord = await findExistingRecord(client, campaign.id, request);
       if (existingRecord) {
+        if (
+          campaign.campaignType === ShareAssistCampaignType.FRIEND_INVITE
+          && audience === 'returning-user'
+          && request.helperPlayerId
+          && existingRecord.status === ShareAssistRecordStatus.CONFIRMED
+        ) {
+          const returningFriendInvite = await this.completeReturningFriendInvite(client, {
+            campaign,
+            record: existingRecord,
+            helperPlayerId: request.helperPlayerId,
+          });
+
+          return {
+            campaign: returningFriendInvite.campaign,
+            record: returningFriendInvite.record,
+            socialAssist: null,
+            deliveredEffect: noDeliveredEffect('already_complete'),
+            invitePending: false,
+            nextAction: 'enter_game' as const,
+          };
+        }
+
         return {
           campaign: runtimeCampaign,
           record: existingRecord,
@@ -387,6 +414,64 @@ export class ShareAssistService {
           deliveredEffect: noDeliveredEffect('already_complete'),
           invitePending: audience === 'new-user',
           nextAction: 'already_assisted' as const,
+        };
+      }
+
+      if (campaign.campaignType === ShareAssistCampaignType.FRIEND_INVITE) {
+        const record = await client.shareAssistRecord.create({
+          data: {
+            campaignId: campaign.id,
+            helperPlayerId: audience === 'returning-user' ? request.helperPlayerId : undefined,
+            helperOpenidHash: request.helperOpenidHash,
+            helperDeviceHash: request.helperDeviceHash,
+            helperAudience: mapAudienceToDb(audience),
+            status: ShareAssistRecordStatus.CONFIRMED,
+          },
+        });
+
+        if (audience === 'returning-user' && request.helperPlayerId) {
+          const returningFriendInvite = await this.completeReturningFriendInvite(client, {
+            campaign,
+            record,
+            helperPlayerId: request.helperPlayerId,
+          });
+
+          return {
+            campaign: returningFriendInvite.campaign,
+            record: returningFriendInvite.record,
+            socialAssist: null,
+            deliveredEffect: noDeliveredEffect('already_complete'),
+            invitePending: false,
+            nextAction: 'enter_game' as const,
+          };
+        }
+
+        if (audience === 'new-user') {
+          await upsertPendingInviteRelation(client, {
+            campaignId: campaign.id,
+            inviterPlayerId: campaign.ownerPlayerId,
+            invitedOpenidHash: request.helperOpenidHash ?? request.helperDeviceHash ?? null,
+          });
+        }
+
+        const updatedCampaign = audience === 'new-user'
+          ? await client.shareAssistCampaign.update({
+            where: { id: campaign.id },
+            data: {
+              currentAssistCount: { increment: 1 },
+              status: campaign.currentAssistCount + 1 >= campaign.maxAssistCount ? ShareAssistCampaignStatus.FULL : ShareAssistCampaignStatus.ACTIVE,
+            },
+            include: campaignInclude(),
+          })
+          : campaign;
+
+        return {
+          campaign: updatedCampaign,
+          record,
+          socialAssist: null,
+          deliveredEffect: noDeliveredEffect('already_complete'),
+          invitePending: audience === 'new-user',
+          nextAction: audience === 'new-user' ? 'start_tutorial' as const : 'enter_game' as const,
         };
       }
 
@@ -444,7 +529,7 @@ export class ShareAssistService {
 
     return {
       app: APP_NAME,
-      summary: buildSummary(request.audience, result.nextAction),
+      summary: buildSummary(request.audience, result.nextAction, result.campaign.campaignType),
       campaign: this.mapCampaign(result.campaign),
       record: result.record
         ? {
@@ -504,6 +589,112 @@ export class ShareAssistService {
 
   private invalidRequest(message: string): BusinessError {
     return new BusinessError({ code: ErrorCode.BadRequest, message, statusCode: 400 });
+  }
+
+  private async completeReturningFriendInvite(
+    client: Prisma.TransactionClient,
+    input: { campaign: CampaignWithOwner; record: ShareAssistRecord; helperPlayerId: string },
+  ): Promise<{ campaign: CampaignWithOwner; record: ShareAssistRecord }> {
+    if (input.helperPlayerId === input.campaign.ownerPlayerId) {
+      throw this.invalidRequest('Cannot accept your own friend invite.');
+    }
+
+    const now = new Date();
+    const helper = await client.player.findUnique({
+      where: { id: input.helperPlayerId },
+      select: { id: true, nickname: true },
+    });
+
+    if (!helper) {
+      throw new BusinessError({ code: ErrorCode.NotFound, message: 'Helper player not found.', statusCode: 404 });
+    }
+
+    await upsertFriendPair(client, {
+      firstPlayerId: input.campaign.ownerPlayerId,
+      secondPlayerId: input.helperPlayerId,
+      sourceType: 'friend-invite',
+      now,
+    });
+
+    await client.playerInviteRelation.updateMany({
+      where: {
+        inviterPlayerId: input.campaign.ownerPlayerId,
+        sourceCampaignId: input.campaign.id,
+        status: PlayerInviteRelationStatus.PENDING_BIND,
+      },
+      data: {
+        invitedPlayerId: input.helperPlayerId,
+        status: PlayerInviteRelationStatus.REWARDED,
+        boundAt: now,
+        rewardedAt: now,
+      },
+    });
+
+    const record = await client.shareAssistRecord.update({
+      where: { id: input.record.id },
+      data: {
+        helperPlayerId: input.helperPlayerId,
+        status: ShareAssistRecordStatus.REWARDED,
+        boundAt: input.record.boundAt ?? now,
+        rewardClaimedAt: input.record.rewardClaimedAt ?? now,
+      },
+    });
+
+    const campaign = await client.shareAssistCampaign.update({
+      where: { id: input.campaign.id },
+      data: {
+        currentAssistCount: Math.max(input.campaign.currentAssistCount, 1),
+        status: ShareAssistCampaignStatus.FULL,
+      },
+      include: campaignInclude(),
+    });
+
+    await createRewardNotification(client, {
+      playerId: input.helperPlayerId,
+      title: '好友邀请奖励',
+      body: `你已和 ${input.campaign.owner.nickname} 成为好友，奖励可在附件中领取。`,
+      attachments: RETURNING_HELPER_WATER_ASSIST_REWARD,
+    });
+
+    await createRewardNotification(client, {
+      playerId: input.campaign.ownerPlayerId,
+      title: '邀请好友奖励',
+      body: `${helper.nickname} 已接受邀请并成为你的好友，邀请奖励已送达。`,
+      attachments: OWNER_WATER_ASSIST_REWARD,
+    });
+
+    await Promise.all([
+      client.playerSocialFeed.create({
+        data: {
+          playerId: input.helperPlayerId,
+          actorPlayerId: input.campaign.ownerPlayerId,
+          feedType: SocialFeedType.FRIEND_ACCEPTED,
+          relatedEntityType: 'share_assist_campaign',
+          relatedEntityId: input.campaign.id,
+          summary: `你已和 ${input.campaign.owner.nickname} 成为好友。`,
+          metadataJson: {
+            shareAssistCampaignId: input.campaign.id,
+            reward: 'returning_friend_invite',
+          },
+        },
+      }),
+      client.playerSocialFeed.create({
+        data: {
+          playerId: input.campaign.ownerPlayerId,
+          actorPlayerId: input.helperPlayerId,
+          feedType: SocialFeedType.FRIEND_ACCEPTED,
+          relatedEntityType: 'share_assist_campaign',
+          relatedEntityId: input.campaign.id,
+          summary: `${helper.nickname} 已接受邀请并成为你的好友。`,
+          metadataJson: {
+            shareAssistCampaignId: input.campaign.id,
+            reward: 'friend_invite_owner',
+          },
+        },
+      }),
+    ]);
+
+    return { campaign, record };
   }
 
   private async deliverWaterAssist(
@@ -666,6 +857,29 @@ async function upsertFriendPair(
   ]);
 }
 
+async function upsertPendingInviteRelation(
+  client: Prisma.TransactionClient,
+  input: {
+    campaignId: string;
+    inviterPlayerId: string;
+    invitedOpenidHash: string | null;
+  },
+): Promise<void> {
+  await client.playerInviteRelation.create({
+    data: {
+      inviterPlayerId: input.inviterPlayerId,
+      invitedOpenidHash: input.invitedOpenidHash,
+      sourceCampaignId: input.campaignId,
+      status: PlayerInviteRelationStatus.PENDING_BIND,
+    },
+  }).catch((error: unknown) => {
+    if (isKnownUniqueError(error)) {
+      return null;
+    }
+    throw error;
+  });
+}
+
 function clampAssistCount(value: number): number {
   return Math.min(Math.max(Math.floor(value), 1), MAX_WATER_MAX_ASSIST_COUNT);
 }
@@ -732,7 +946,7 @@ async function findFirstShareWaterableField(client: Prisma.TransactionClient, ta
       seedDefinitionId: { not: null },
     },
     orderBy: [
-      { fullMatureAt: 'asc' },
+      { readyAt: 'asc' },
       { matureAt: 'asc' },
       { slotIndex: 'asc' },
     ],
@@ -755,15 +969,13 @@ async function applyShareWaterFieldEffect(client: Prisma.TransactionClient, fiel
     remainingSeconds,
   );
   const afterStageEndsAt = new Date(currentStageEndsAt.getTime() - shortenedSeconds * 1000);
-  const updateData = field.status === 'SEEDED'
-    ? { matureAt: afterStageEndsAt, statusVersion: { increment: 1 } }
-    : { fullMatureAt: afterStageEndsAt, statusVersion: { increment: 1 } };
 
   await client.playerFieldSlot.update({
     where: { id: field.id },
     data: {
-      ...updateData,
+      ...buildFieldReadyAtUpdate(afterStageEndsAt),
       lastCalculatedAt: now,
+      statusVersion: { increment: 1 },
     },
   });
 
@@ -785,14 +997,10 @@ function getShareWaterableStageStartedAt(field: ShareWaterableField, now: Date):
 
 function getShareWaterableStageEndsAt(field: ShareWaterableField, stageStartedAt: Date): Date {
   if (field.status === 'SEEDED') {
-    return field.matureAt ?? addSeconds(stageStartedAt, getSeedStageSeconds(field.seedDefinition?.seedId ?? '', 'seeded'));
+    return getFieldReadyAt(field, field.seedDefinition?.seedId ?? '', stageStartedAt);
   }
 
-  return field.fullMatureAt ?? addSeconds(stageStartedAt, getSeedStageSeconds(field.seedDefinition?.seedId ?? '', 'growing'));
-}
-
-function addSeconds(source: Date, seconds: number): Date {
-  return new Date(source.getTime() + Math.max(Math.floor(seconds), 0) * 1000);
+  return getLegacyGrowingReadyAt(field, field.seedDefinition?.seedId ?? '', stageStartedAt);
 }
 
 async function createRewardNotification(
@@ -898,15 +1106,24 @@ function mapPlayerSummary(player: CampaignWithOwner['owner']): ClientSocialPlaye
   };
 }
 
-function buildSummary(audience: ClientShareAssistAudience, nextAction: PublicShareAssistConfirmResponse['nextAction']): string {
+function buildSummary(
+  audience: ClientShareAssistAudience,
+  nextAction: PublicShareAssistConfirmResponse['nextAction'],
+  campaignType: ShareAssistCampaignType,
+): string {
   if (nextAction === 'already_assisted') {
-    return '你已经帮过这个助力链接。';
+    return campaignType === ShareAssistCampaignType.FRIEND_INVITE ? '你已经确认过这个好友邀请。' : '你已经帮过这个助力链接。';
   }
   if (nextAction === 'expired') {
-    return '这个助力链接已过期。';
+    return campaignType === ShareAssistCampaignType.FRIEND_INVITE ? '这个好友邀请已过期。' : '这个助力链接已过期。';
   }
   if (nextAction === 'full') {
-    return '这个助力链接的次数已满。';
+    return campaignType === ShareAssistCampaignType.FRIEND_INVITE ? '这个好友邀请已经被接受。' : '这个助力链接的次数已满。';
+  }
+  if (campaignType === ShareAssistCampaignType.FRIEND_INVITE) {
+    return audience === 'new-user'
+      ? '邀请已确认，完成新手流程后可绑定好友并领取新友奖励。'
+      : '好友邀请已确认，欢迎回归。';
   }
   return audience === 'new-user'
     ? '助力成功，完成新手流程后可以领取新友奖励。'

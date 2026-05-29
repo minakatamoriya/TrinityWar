@@ -35,7 +35,7 @@ export interface ClientSpiritDefinition {
 
 export interface ClientFactionAdvantageModifiers {
   farmMatureYieldBonusPercent: number;
-  farmRipeWindowBonusPercent: number;
+  farmCollectWindowBonusPercent: number;
   spiritPassiveExpBonusPercent: number;
   spiritFeedDurationBonusPercent: number;
   battleAttackBonusPercent: number;
@@ -764,7 +764,7 @@ export interface ClientClaimDailyTaskResponse {
  * Use territory tech upgrades instead.
  */
 export type ClientBuildingUpgradeId = 'castle' | 'vault' | 'field-slot' | 'watchtower';
-export type ClientTerritoryUpgradeId = 'protectionTech' | 'farmYieldTech' | 'ripeWindowTech' | 'factionOfferingTech';
+export type ClientTerritoryUpgradeId = 'protectionTech' | 'farmYieldTech' | 'collectWindowTech' | 'factionOfferingTech';
 /**
  * @deprecated Castle extension naming is kept temporarily for compatibility.
  * `pendingClaimTech` is retired; new code should use ClientTerritoryUpgradeId.
@@ -1208,7 +1208,7 @@ export type ClientSocialFeedType =
   | 'enemy_raided'
   | 'revenge_available'
   | 'faction_help_requested';
-export type ClientSocialAssistType = 'water_field' | 'guard_field' | 'recover_spirit' | 'faction_task_help';
+export type ClientSocialAssistType = 'water_field' | 'harvest_field' | 'guard_field' | 'recover_spirit' | 'faction_task_help';
 export type ClientTeamChallengeStatus = 'pending' | 'accepted' | 'rejected' | 'expired' | 'settled';
 
 export interface ClientSocialPlayerSummary {
@@ -1255,8 +1255,6 @@ export interface ClientSocialSummaryResponse {
     following: number;
     enemies: number;
     pendingTeamChallenges: number;
-    todayWaterUsed: number;
-    todayWaterLimit: number;
   };
   quickActions: ClientSocialFeedItem[];
 }
@@ -1295,6 +1293,65 @@ export interface ClientSocialWaterFieldRequest {
   requestIdempotencyKey?: string;
 }
 
+export interface ClientSocialHarvestFieldPreviewRequest {
+  targetPlayerId: string;
+}
+
+export type ClientSocialFriendFieldStatus = 'LOCKED' | 'EMPTY' | 'SEEDED' | 'GROWING' | 'MATURE' | 'WITHERED';
+
+export interface ClientSocialFriendFieldVisitField {
+  fieldSlotId: string;
+  fieldCode: string;
+  slotIndex: number;
+  status: ClientSocialFriendFieldStatus;
+  tone: ClientFarmField['tone'];
+  badge: string;
+  title: string;
+  cropName: string | null;
+  cropRarity: string | null;
+  canWater: boolean;
+  canHarvest: boolean;
+  nextAction: 'harvest' | 'water' | null;
+  unavailableReason: string | null;
+  rewardPreview: {
+    gold: number;
+  } | null;
+  progressRemainingSeconds: number;
+  progressTotalSeconds: number;
+  yieldGold: number;
+}
+
+export interface ClientSocialFriendFieldVisitResponse {
+  app: string;
+  friend: ClientSocialPlayerSummary;
+  fields: ClientSocialFriendFieldVisitField[];
+  ruleText: string;
+}
+
+export interface ClientSocialHarvestableFieldPreview {
+  fieldSlotId: string;
+  fieldCode: string;
+  status: 'SEEDED' | 'GROWING' | 'MATURE';
+  cropName: string;
+  cropRarity: string;
+  rewardPreview: {
+    gold: number;
+  };
+}
+
+export interface ClientSocialHarvestFieldPreviewResponse {
+  app: string;
+  friend: ClientSocialPlayerSummary;
+  fields: ClientSocialHarvestableFieldPreview[];
+  ruleText: string;
+}
+
+export interface ClientSocialHarvestFieldRequest {
+  targetPlayerId: string;
+  fieldSlotId?: string;
+  requestIdempotencyKey?: string;
+}
+
 export interface ClientSocialAssistResponse {
   app: string;
   summary: string;
@@ -1316,6 +1373,11 @@ export interface ClientSocialAssistResponse {
     afterStageEndsAt: string;
     fieldVersion: number;
   };
+  rewards?: Array<{
+    kind: 'gold';
+    quantity: number;
+    label: string;
+  }>;
   counts: ClientSocialSummaryResponse['counts'];
 }
 

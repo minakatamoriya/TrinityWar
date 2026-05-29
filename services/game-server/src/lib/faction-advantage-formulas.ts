@@ -6,14 +6,14 @@ export function getFactionFarmMatureYieldMultiplier(factionCode: FactionAdvantag
   return 1 + ((getFactionAdvantageConfig(factionCode)?.modifiers.farmMatureYieldBonusPercent ?? 0) / 100);
 }
 
-export function getFactionFarmRipeWindowSeconds(
-  baseRipeWindowSeconds: number,
+export function getFactionFarmCollectWindowSeconds(
+  baseCollectWindowSeconds: number,
   techBonusSeconds: number,
   factionCode: FactionAdvantageCode,
 ): number {
-  const safeBaseSeconds = Math.max(Math.floor(baseRipeWindowSeconds), 0);
+  const safeBaseSeconds = Math.max(Math.floor(baseCollectWindowSeconds), 0);
   const safeTechBonusSeconds = Math.max(Math.floor(techBonusSeconds), 0);
-  const bonusPercent = getFactionAdvantageConfig(factionCode)?.modifiers.farmRipeWindowBonusPercent ?? 0;
+  const bonusPercent = getFactionAdvantageConfig(factionCode)?.modifiers.farmCollectWindowBonusPercent ?? 0;
   const factionBonusSeconds = Math.round(safeBaseSeconds * bonusPercent / 100);
 
   return Math.max(safeBaseSeconds + safeTechBonusSeconds + factionBonusSeconds, 1);

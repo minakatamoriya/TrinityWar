@@ -5,6 +5,9 @@ import type {
   ClientSocialFeedResponse,
   ClientSocialFollowRequest,
   ClientSocialFriendRequest,
+  ClientSocialFriendFieldVisitResponse,
+  ClientSocialHarvestFieldPreviewResponse,
+  ClientSocialHarvestFieldRequest,
   ClientSocialRelationListResponse,
   ClientSocialRelationMutationResponse,
   ClientSocialSummaryResponse,
@@ -17,7 +20,7 @@ import { AuthPlaceholderGuard } from '../auth/auth-placeholder.guard.js';
 import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
 import { createUnauthorizedError } from '../common/errors/index.js';
-import { SocialFollowRequestDto, SocialFriendRequestDto, SocialWaterFieldRequestDto, TeamChallengeRequestDto } from './dto.js';
+import { SocialFollowRequestDto, SocialFriendRequestDto, SocialHarvestFieldRequestDto, SocialWaterFieldRequestDto, TeamChallengeRequestDto } from './dto.js';
 import { SocialService } from './social.service.js';
 
 @ApiTags('client-social')
@@ -121,6 +124,38 @@ export class SocialController {
     });
   }
 
+  @Get('friends/:targetPlayerId/fields')
+  @ApiOkResponse({ description: 'Preview a friend field board for social assists.' })
+  async visitFriendFields(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Param('targetPlayerId') targetPlayerId: string,
+  ): Promise<ClientSocialFriendFieldVisitResponse> {
+    return this.socialService.visitFriendFields(this.requirePlayerId(currentPlayer), { targetPlayerId });
+  }
+
+  @Get('friends/:targetPlayerId/harvest-preview')
+  @ApiOkResponse({ description: 'Preview harvest assist rewards for a friend.' })
+  async previewHarvestField(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Param('targetPlayerId') targetPlayerId: string,
+  ): Promise<ClientSocialHarvestFieldPreviewResponse> {
+    return this.socialService.previewHarvestField(this.requirePlayerId(currentPlayer), { targetPlayerId });
+  }
+
+  @Post('assist/harvest-field')
+  @ApiBody({ type: SocialHarvestFieldRequestDto })
+  @ApiOkResponse({ description: 'Record a friend harvest assist.' })
+  async harvestField(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: ClientSocialHarvestFieldRequest,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<ClientSocialAssistResponse> {
+    return this.socialService.harvestField(this.requirePlayerId(currentPlayer), {
+      ...body,
+      requestIdempotencyKey: body.requestIdempotencyKey ?? idempotencyKey,
+    });
+  }
+
   @Post('team-challenge')
   @ApiBody({ type: TeamChallengeRequestDto })
   @ApiOkResponse({ description: 'Create a team challenge invitation.' })
@@ -173,6 +208,9 @@ defineRouteParamTypes(SocialController.prototype, 'acceptFriendRequest', [Object
 defineRouteParamTypes(SocialController.prototype, 'rejectFriendRequest', [Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'deleteFriend', [Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'waterField', [Object, Object, String]);
+defineRouteParamTypes(SocialController.prototype, 'visitFriendFields', [Object, String]);
+defineRouteParamTypes(SocialController.prototype, 'previewHarvestField', [Object, String]);
+defineRouteParamTypes(SocialController.prototype, 'harvestField', [Object, Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'createTeamChallenge', [Object, Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'acceptTeamChallenge', [Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'rejectTeamChallenge', [Object, String]);

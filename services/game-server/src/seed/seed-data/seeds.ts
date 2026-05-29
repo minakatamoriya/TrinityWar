@@ -6,7 +6,7 @@ export interface SeedDefinitionSeedData {
   seedSeconds: number;
   growSeconds: number;
   matureSeconds: number;
-  ripeWindowSeconds: number;
+  collectWindowSeconds: number;
   baseYieldGold: number;
   harvestSeedReturn: number;
   strategyNote: string;
@@ -14,7 +14,7 @@ export interface SeedDefinitionSeedData {
 }
 
 const hour = 60 * 60;
-const defaultRipeWindowSeconds = 30 * 60;
+const defaultCollectWindowSeconds = 30 * 60;
 
 export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
   {
@@ -22,10 +22,10 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     label: '启灵芽',
     rarity: 'common',
     sortOrder: 1,
-    seedSeconds: 5,
-    growSeconds: 5,
+    seedSeconds: 10,
+    growSeconds: 0,
     matureSeconds: 10,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 50,
     harvestSeedReturn: 0,
     strategyNote: '新手教程种，十秒完成第一轮收获，用来串起种田、灵宠和首次掠夺。',
@@ -39,10 +39,10 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 2 * hour,
     growSeconds: 1 * hour,
     matureSeconds: 3 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 200,
     harvestSeedReturn: 2,
-    strategyNote: '标准稳收基准种，适合新玩家理解成熟、丰熟和枯萎收益。',
+    strategyNote: '标准稳收基准种，适合新玩家理解成熟和枯萎收益。',
     lore: '田野间最常见的灵粮，穗头泛淡青光泽，脱壳后熬粥清香回甘。',
   },
   {
@@ -53,7 +53,7 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 15 * 60,
     growSeconds: 15 * 60,
     matureSeconds: 30 * 60,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 200,
     harvestSeedReturn: 2,
     strategyNote: '半小时快收种，适合碎片时间上线后迅速完成一轮收益。',
@@ -67,7 +67,7 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 1.5 * hour,
     growSeconds: 0.5 * hour,
     matureSeconds: 2 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 140,
     harvestSeedReturn: 1,
     strategyNote: '短线抢收种，适合高频上线卡成熟。',
@@ -81,10 +81,10 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 2 * hour,
     growSeconds: 1 * hour,
     matureSeconds: 3 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 300,
     harvestSeedReturn: 2,
-    strategyNote: '高折损高回报种，丰熟收益波动很强。',
+    strategyNote: '高折损高回报种，高收益波动很强。',
     lore: '花瓣薄如蝉翼，嫣红带紫纹，采摘时指尖会传来短暂刺痛。',
   },
   {
@@ -95,7 +95,7 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 3 * hour,
     growSeconds: 1.5 * hour,
     matureSeconds: 4.5 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 220,
     harvestSeedReturn: 2,
     strategyNote: '低频保值种，错过窗口也不容易血亏。',
@@ -109,10 +109,10 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 2.5 * hour,
     growSeconds: 1 * hour,
     matureSeconds: 3.5 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 230,
     harvestSeedReturn: 2,
-    strategyNote: '稳健中速种，方便不想极端赌丰熟的玩家切换。',
+    strategyNote: '稳健中速种，方便不想极端卡点的玩家切换。',
     lore: '竹节映月生辉，夜风吹过时会留下淡淡银影。',
   },
   {
@@ -123,10 +123,10 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 2.5 * hour,
     growSeconds: 1 * hour,
     matureSeconds: 3.5 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 360,
     harvestSeedReturn: 3,
-    strategyNote: '丰熟爆发种，用来制造“等还是收”的核心博弈。',
+    strategyNote: '高收益种，用来制造“等还是收”的核心博弈。',
     lore: '藤蔓天生细密纹路，如牵机阵法，常被低阶阵法师采作材料。',
   },
   {
@@ -137,7 +137,7 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 3 * hour,
     growSeconds: 1 * hour,
     matureSeconds: 4 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 480,
     harvestSeedReturn: 2,
     strategyNote: '回种保值种，服务上线不稳但不想亏的玩家。',
@@ -151,10 +151,10 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 2.5 * hour,
     growSeconds: 1 * hour,
     matureSeconds: 3.5 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 760,
     harvestSeedReturn: 3,
-    strategyNote: '高丰熟倍率种，适合高活跃和高风险偏好的玩家。',
+    strategyNote: '高成熟收益种，适合高活跃和高风险偏好的玩家。',
     lore: '只在高寒雪山顶的月圆之夜盛开，花瓣冰白带银纹。',
   },
   {
@@ -165,7 +165,7 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 4 * hour,
     growSeconds: 1 * hour,
     matureSeconds: 5 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 620,
     harvestSeedReturn: 2,
     strategyNote: '长周期高保值种，适合赛季后段稳定囤种和慢收策略。',
@@ -179,7 +179,7 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 4 * hour,
     growSeconds: 1.5 * hour,
     matureSeconds: 5.5 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 880,
     harvestSeedReturn: 2,
     strategyNote: '后期抽水种，适合作为强回收和高价值诱盗目标。',
@@ -193,7 +193,7 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 3 * hour,
     growSeconds: 1 * hour,
     matureSeconds: 4 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 1200,
     harvestSeedReturn: 3,
     strategyNote: '高风险斩杀种，高收益与高失败代价都很极端。',
@@ -207,7 +207,7 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 5 * hour,
     growSeconds: 1 * hour,
     matureSeconds: 6 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 1200,
     harvestSeedReturn: 2,
     strategyNote: '长周期隐性暴利种，适合赛季后段高投入慢兑现。',
@@ -221,10 +221,10 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     seedSeconds: 4 * hour,
     growSeconds: 1 * hour,
     matureSeconds: 5 * hour,
-    ripeWindowSeconds: defaultRipeWindowSeconds,
+    collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 1600,
     harvestSeedReturn: 3,
-    strategyNote: '极限丰熟回种种，负责把终局上线卡点收益推到天花板。',
+    strategyNote: '极限成熟回种种，负责把终局上线卡点收益推到天花板。',
     lore: '通体漆黑，夜里发出微弱青光，能照亮脚下三尺的地气。',
   },
 ];

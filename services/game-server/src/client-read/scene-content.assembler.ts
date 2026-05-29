@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { APP_NAME, type ClientFactionStipendReward, type ClientFarmField, type ClientHomeFactionTaskSummary, type ClientPlantInventoryItem, type ClientRaidRewardItem, type ClientRaidSpiritPreview, type ClientSceneAction, type ClientSceneContentResponse } from '@trinitywar/shared';
 import type { FieldStatus } from '@prisma/client';
 import {
@@ -10,17 +10,25 @@ import {
   getLandDeedConfig,
   getSeedStageSeconds,
 } from '../lib/game-balance.js';
+import { getFactionFarmCollectWindowSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
+import {
+  addSeconds,
+  getCultivationSeconds,
+  getFieldReadyAt,
+  getLegacyGrowingReadyAt,
+  getMatureStartedAt,
+} from '../lib/field-timing.js';
 import type { SceneContentReadModel } from './client-read.repository.js';
 
-type ExtensionKey = 'protectionTech' | 'farmYieldTech' | 'ripeWindowTech' | 'factionOfferingTech';
+type ExtensionKey = 'protectionTech' | 'farmYieldTech' | 'collectWindowTech' | 'factionOfferingTech';
 
 const FIELD_STATUS_COPY: Record<FieldStatus, { title: string; badge: string; tone: ClientFarmField['tone'] }> = {
-  LOCKED: { title: '未解锁', badge: '待解锁', tone: 'locked' },
-  EMPTY: { title: '空地', badge: '可播种', tone: 'empty' },
-  SEEDED: { title: '播种期', badge: '播种', tone: 'seeded' },
-  GROWING: { title: '成长期', badge: '成长', tone: 'growing' },
-  MATURE: { title: '成熟期', badge: '成熟', tone: 'mature' },
-  WITHERED: { title: '枯萎期', badge: '枯萎', tone: 'withered' },
+  LOCKED: { title: '\u672a\u89e3\u9501', badge: '\u5f85\u89e3\u9501', tone: 'locked' },
+  EMPTY: { title: '\u7a7a\u5730', badge: '\u53ef\u64ad\u79cd', tone: 'empty' },
+  SEEDED: { title: '\u57f9\u80b2\u4e2d', badge: '\u57f9\u80b2', tone: 'seeded' },
+  GROWING: { title: '\u57f9\u80b2\u4e2d', badge: '\u57f9\u80b2', tone: 'growing' },
+  MATURE: { title: '\u6210\u719f\u671f', badge: '\u6210\u719f', tone: 'mature' },
+  WITHERED: { title: '\u67af\u840e\u671f', badge: '\u67af\u840e', tone: 'withered' },
 };
 
 @Injectable()
@@ -38,15 +46,15 @@ export class SceneContentAssembler {
       farm: {
         hero: this.buildFarmHero(readModel),
         advantage: this.buildFactionAdvantage(readModel, 'farm'),
-        fields: readModel.fieldSlots.map((field) => this.buildFarmField(field, now)),
+        fields: readModel.fieldSlots.map((field) => this.buildFarmField(field, readModel, now)),
         plants: this.buildPlants(readModel),
         landDeeds: this.buildLandDeeds(readModel),
         guide: {
-          title: '农场经营',
-          description: '田地状态已从数据库读取，后续将通过地契任务逐步开启更多田地。',
+          title: '\u519c\u573a\u7ecf\u8425',
+          description: '\u7530\u5730\u72b6\u6001\u5df2\u4ece\u6570\u636e\u5e93\u8bfb\u53d6\uff0c\u53ef\u901a\u8fc7\u57f9\u80b2\u548c\u6536\u53d6\u9010\u6b65\u6269\u5927\u7ecf\u8425\u3002',
           actions: [
-            { label: '打开法术阁', target: 'building', tone: 'secondary' },
-            { label: '返回首页', target: 'home', tone: 'ghost' },
+            { label: '\u6253\u5f00\u5efa\u7b51', target: 'building', tone: 'secondary' },
+            { label: '\u8fd4\u56de\u9996\u9875', target: 'home', tone: 'ghost' },
           ],
         },
       },
@@ -56,9 +64,9 @@ export class SceneContentAssembler {
         targets: visibleRaidTargets,
         detail: {
           advice: visibleRaidTargets.length > 0
-            ? '目标来自 raid_target_pool，发起战斗会先创建订单并等待异步结算。'
-            : '当前没有可用目标池记录，执行 seed 后会生成开发联调目标。',
-          actions: [{ label: '刷新目标', target: 'raid', tone: 'secondary' }],
+            ? '\u76ee\u6807\u6765\u81ea raid_target_pool\uff0c\u53ef\u6d88\u8017\u6218\u529b\u53d1\u8d77\u5f02\u6b65\u6218\u6597\u3002'
+            : '\u5f53\u524d\u6ca1\u6709\u53ef\u7528\u76ee\u6807\u8bb0\u5f55\uff0c\u6267\u884c seed \u540e\u4f1a\u751f\u6210\u53ef\u63a0\u593a\u76ee\u6807\u3002',
+          actions: [{ label: '\u5237\u65b0\u76ee\u6807', target: 'raid', tone: 'secondary' }],
         },
         messageTemplates: readModel.raidMessageTemplates,
       },
@@ -66,7 +74,7 @@ export class SceneContentAssembler {
         defense: this.buildReportEntries(readModel, 'DEFENSE'),
         attack: this.buildReportEntries(readModel, 'ATTACK'),
         actions: [
-          { label: '等待战报接入', target: 'report', tone: 'ghost' },
+          { label: '\u7b49\u5f85\u6218\u62a5\u751f\u6210', target: 'report', tone: 'ghost' },
         ],
       },
       faction: this.buildFaction(readModel),
@@ -78,10 +86,10 @@ export class SceneContentAssembler {
     const targetCount = this.buildRaidTargets(readModel).length;
 
     return {
-      eyebrow: '可探索目标',
-      title: targetCount > 0 ? `可出征目标 ${targetCount} 个` : '暂无可出征目标',
-      description: `当前可用战力 ${formatNumber(availableCount)}，第 16 步只创建订单并进入异步结算链路。`,
-      action: { label: targetCount > 0 ? '查看目标' : '等待目标', target: 'raid', tone: targetCount > 0 ? 'primary' : 'ghost' },
+      eyebrow: '\u4fa6\u5bdf\u76ee\u6807',
+      title: targetCount > 0 ? `\u53ef\u51fa\u6218\u76ee\u6807 ${targetCount} \u4e2a` : '\u6682\u65e0\u53ef\u51fa\u6218\u76ee\u6807',
+      description: `\u5f53\u524d\u53ef\u7528\u6218\u529b ${formatNumber(availableCount)}\uff0c\u524d 16 \u4e2a\u76ee\u6807\u4f1a\u5c55\u793a\u5728\u5f02\u6b65\u6218\u6597\u5217\u8868\u3002`,
+      action: { label: targetCount > 0 ? '\u67e5\u770b\u76ee\u6807' : '\u7b49\u5f85\u76ee\u6807', target: 'raid', tone: targetCount > 0 ? 'primary' : 'ghost' },
     };
   }
 
@@ -103,7 +111,7 @@ export class SceneContentAssembler {
       };
 
       const targetName = snapshot.name ?? targetPool.targetPlayer.nickname;
-      const factionName = snapshot.faction ?? targetPool.targetPlayer.faction?.name ?? '未知阵营';
+      const factionName = snapshot.faction ?? targetPool.targetPlayer.faction?.name ?? '\u672a\u77e5\u9635\u8425';
       const combatPower = snapshot.combatPower ?? targetPool.targetPlayer.army?.totalCount ?? 0;
       const raidableGold = snapshot.raidableGold ?? 0;
       const mainSlot = targetPool.targetPlayer.spiritSlots[0] ?? null;
@@ -124,12 +132,12 @@ export class SceneContentAssembler {
         mainPetPreview,
         combatPower: formatNumber(combatPower),
         summary: mainPetPreview
-          ? `${factionName} · ${mainPetPreview.label}`
+          ? `${factionName} | ${mainPetPreview.label}`
           : `${factionName} Lv.${snapshot.level ?? targetPool.targetPlayer.castleLevelCache}`,
-        loot: `${formatNumber(Math.max(Math.floor(raidableGold * 0.35), 0))}~${formatNumber(raidableGold)} 金币`,
-        risk: snapshot.risk ?? '异步结算',
-        detail: snapshot.detail ?? `目标池有效至 ${targetPool.expiresAt.toISOString()}`,
-        action: { label: '发起战斗', target: 'raid', tone: 'primary' },
+        loot: `${formatNumber(Math.max(Math.floor(raidableGold * 0.35), 0))}~${formatNumber(raidableGold)} \u91d1\u5e01`,
+        risk: snapshot.risk ?? '\u5f02\u6b65\u6218\u6597',
+        detail: snapshot.detail ?? `\u76ee\u6807\u6709\u6548\u671f\u81f3 ${targetPool.expiresAt.toISOString()}`,
+        action: { label: '\u53d1\u8d77\u6218\u6597', target: 'raid', tone: 'primary' },
       };
     });
   }
@@ -150,13 +158,13 @@ export class SceneContentAssembler {
           : settlement?.attackerLoss;
 
         const actions: ClientSceneAction[] = [
-          ...(report.raidOrder.settlement?.battleReplayJson ? [{ label: '战斗回放', target: 'report', tone: 'secondary', context: report.raidOrderId } satisfies ClientSceneAction] : []),
+          ...(report.raidOrder.settlement?.battleReplayJson ? [{ label: '\u6218\u6597\u56de\u653e', target: 'report', tone: 'secondary', context: report.raidOrderId } satisfies ClientSceneAction] : []),
           ...(report.revengeAvailable
             ? [
-              { label: '复仇', target: 'report', tone: 'primary', context: report.opponentPlayerId } satisfies ClientSceneAction,
-              { label: '查看详情', target: 'report', tone: 'ghost', context: report.opponentPlayerId } satisfies ClientSceneAction,
+              { label: '\u590d\u4ec7', target: 'report', tone: 'primary', context: report.opponentPlayerId } satisfies ClientSceneAction,
+              { label: '\u67e5\u770b\u5bf9\u624b', target: 'report', tone: 'ghost', context: report.opponentPlayerId } satisfies ClientSceneAction,
             ]
-            : [{ label: '查看详情', target: 'report', tone: 'ghost', context: report.opponentPlayerId } satisfies ClientSceneAction]),
+            : [{ label: '\u67e5\u770b\u5bf9\u624b', target: 'report', tone: 'ghost', context: report.opponentPlayerId } satisfies ClientSceneAction]),
         ];
 
         return {
@@ -200,7 +208,7 @@ export class SceneContentAssembler {
     const levels: Record<ExtensionKey, number> = {
       protectionTech: buildings?.protectionTechLevel ?? 0,
       farmYieldTech: buildings?.farmYieldTechLevel ?? 0,
-      ripeWindowTech: buildings?.ripeWindowTechLevel ?? 0,
+      collectWindowTech: buildings?.collectWindowTechLevel ?? 0,
       factionOfferingTech: buildings?.pendingClaimTechLevel ?? 0,
     };
 
@@ -218,16 +226,16 @@ export class SceneContentAssembler {
         id: trackId,
         title,
         levelText: nextConfig ? `Lv.${currentLevel} -> Lv.${currentLevel + 1}` : `Lv.${currentLevel}`,
-        description: track?.description ?? '扩展能力等待配置。',
+        description: track?.description ?? '\u6269\u5c55\u80fd\u529b\u7b49\u5f85\u914d\u7f6e\u3002',
         effectText: nextConfig
-          ? `当前 ${formatNumber(getCurrentExtensionEffect(trackId, currentLevel))}${effectUnit}，修习后 ${formatNumber(nextConfig.effectValue)}${effectUnit}。`
-          : '已达到当前配置上限。',
+          ? `\u5f53\u524d ${formatNumber(getCurrentExtensionEffect(trackId, currentLevel))}${effectUnit}\uff0c\u4fee\u4e60\u540e ${formatNumber(nextConfig.effectValue)}${effectUnit}`
+          : '\u5df2\u8fbe\u5230\u5f53\u524d\u7248\u672c\u4e0a\u9650\u3002',
         costText: nextConfig
           ? formatSpellCostText(nextConfig)
-          : '已满级',
+          : '\u5df2\u6ee1\u7ea7',
         locked,
         action: {
-          label: locked ? '查看' : '修习法术',
+          label: locked ? '\u67e5\u770b' : '\u4fee\u4e60\u9886\u5730',
           target: 'building',
           tone: locked ? 'ghost' : 'secondary',
         },
@@ -264,16 +272,20 @@ export class SceneContentAssembler {
     const empty = unlocked.filter((field) => field.status === 'EMPTY').length;
 
     return {
-      eyebrow: '田地经营',
-      title: `成熟 ${mature} 块 · 培育中 ${growing} 块 · 空地 ${empty} 块`,
-      description: `当前 ${unlocked.length}/${readModel.fieldSlots.length} 块田地已解锁，后续田地通过地契任务开启。`,
-      action: { label: empty > 0 ? '开始培育' : '查看田地', target: 'farm', tone: empty > 0 ? 'primary' : 'secondary' },
+      eyebrow: '\u7530\u5730\u7ecf\u8425',
+      title: `\u6210\u719f ${mature} \u5757 | \u57f9\u80b2\u4e2d ${growing} \u5757 | \u7a7a\u5730 ${empty} \u5757`,
+      description: `\u5f53\u524d ${unlocked.length}/${readModel.fieldSlots.length} \u5757\u7530\u5730\u5df2\u89e3\u9501\uff0c\u6210\u719f\u540e\u53ef\u76f4\u63a5\u6536\u53d6\u3002`,
+      action: { label: empty > 0 ? '\u5f00\u59cb\u57f9\u80b2' : '\u67e5\u770b\u7530\u5730', target: 'farm', tone: empty > 0 ? 'primary' : 'secondary' },
     };
   }
 
-  private buildFarmField(field: SceneContentReadModel['fieldSlots'][number], now: Date): ClientFarmField {
+  private buildFarmField(
+    field: SceneContentReadModel['fieldSlots'][number],
+    readModel: SceneContentReadModel,
+    now: Date,
+  ): ClientFarmField {
     const copy = FIELD_STATUS_COPY[field.status];
-    const timing = getFieldTiming(field, now);
+    const timing = getFieldTiming(field, readModel, now);
     const expectedEssenceYield = field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition);
     const stolenEssenceYield = Math.min(field.stolenEssenceYield, expectedEssenceYield);
     const harvestableEssenceYield = Math.max(expectedEssenceYield - stolenEssenceYield, 0);
@@ -281,7 +293,7 @@ export class SceneContentAssembler {
     return {
       id: field.id,
       fieldVersion: field.statusVersion,
-      code: `田地 ${String(field.slotIndex).padStart(2, '0')}`,
+      code: `\u7530\u5730 ${String(field.slotIndex).padStart(2, '0')}`,
       title: copy.title,
       badge: copy.badge,
       cropName: field.seedDefinition?.label,
@@ -292,7 +304,7 @@ export class SceneContentAssembler {
       expectedEssenceYield,
       stolenEssenceYield,
       harvestableEssenceYield,
-      essenceLabel: field.seedDefinition ? `${field.seedDefinition.label}精华` : null,
+      essenceLabel: field.seedDefinition ? `${field.seedDefinition.label}\u7cbe\u534e` : null,
       description: buildFieldDescription(field),
       actions: buildFieldActions(field.status),
     };
@@ -320,7 +332,7 @@ export class SceneContentAssembler {
         plantType: inventory.seedDefinition.seedId,
         essenceType: inventory.seedDefinition.seedId,
         plantName: inventory.seedDefinition.label,
-        essenceLabel: `${inventory.seedDefinition.label}精华`,
+        essenceLabel: `${inventory.seedDefinition.label}\u7cbe\u534e`,
         rarity: mapSeedRarity(inventory.seedDefinition.rarity),
         unlocked,
         discovered,
@@ -344,7 +356,7 @@ export class SceneContentAssembler {
       return {
         deedKey: normalizeLandDeedKey(progress.deedKey),
         title: config?.title ?? progress.deedKey,
-        description: config?.description ?? '完成地契任务后开启新田地。',
+        description: config?.description ?? '\u5b8c\u6210\u5730\u5951\u4efb\u52a1\u540e\u89e3\u9501\u7530\u5730\u3002',
         status: normalizeLandDeedStatus(progress.status),
         targetFieldSlotIndex: config?.targetFieldSlotIndex ?? 0,
         requirements: progressJson.requirements,
@@ -368,38 +380,38 @@ export class SceneContentAssembler {
       : readModel.factionStipendClaimCount <= 0
         ? buildFirstFactionStipendPreview(stipendRewards)
         : stipendRewards;
-    const stipendRewardText = visibleStipendRewards.map((reward) => `${reward.label} x${formatNumber(reward.quantity)}`).join('、') || '暂无俸禄';
+    const stipendRewardText = visibleStipendRewards.map((reward) => `${reward.label} x${formatNumber(reward.quantity)}`).join('\u3001') || '\u9635\u8425\u4ff8\u7984';
 
     return {
       hero: {
-        eyebrow: currentFaction?.name ?? '未加入阵营',
-        title: currentFaction ? `${currentFaction.name} · 个人贡献 ${formatNumber(contribution)}` : '暂未加入阵营',
+        eyebrow: currentFaction?.name ?? '\u672a\u52a0\u5165\u9635\u8425',
+        title: currentFaction ? `${currentFaction.name} | \u4e2a\u4eba\u8d21\u732e ${formatNumber(contribution)}` : '\u5c1a\u672a\u52a0\u5165\u9635\u8425',
         description: currentFaction
-          ? `阵营金库 ${formatNumber(currentFaction.treasuryGold)}，阵营总贡献 ${formatNumber(currentFaction.contributionScore)}。`
-          : '当前账号没有阵营关系，后续命令阶段再接入转换阵营。',
-        advantage: currentFaction ? `今日俸禄档位：${stipendTier?.label ?? '基础俸禄'}` : '暂无阵营俸禄',
-        breakdown: `预计每日俸禄：${stipendRewardText}`,
-        action: { label: '查看阵营', target: 'faction', tone: currentFaction ? 'secondary' : 'ghost' },
+          ? `\u9635\u8425\u8d44\u91d1 ${formatNumber(currentFaction.treasuryGold)}\uff0c\u9635\u8425\u603b\u8d21\u732e ${formatNumber(currentFaction.contributionScore)}`
+          : '\u5f53\u524d\u8d26\u53f7\u6ca1\u6709\u9635\u8425\u5173\u7cfb\uff0c\u540e\u7eed\u9636\u6bb5\u518d\u5f00\u653e\u8f6c\u6295\u9635\u8425\u3002',
+        advantage: currentFaction ? `\u9635\u8425\u4ff8\u7984\u6863\u4f4d\uff1a${stipendTier?.label ?? '\u9635\u8425\u4ff8\u7984'}` : '\u6682\u65e0\u9635\u8425\u4ff8\u7984',
+        breakdown: `\u9884\u8ba1\u6bcf\u65e5\u4ff8\u7984\uff1a${stipendRewardText}`,
+        action: { label: '\u67e5\u770b\u9635\u8425', target: 'faction', tone: currentFaction ? 'secondary' : 'ghost' },
       },
       contribution: {
-        title: '个人阵营贡献',
+        title: '\u4e2a\u4eba\u9635\u8425\u8d21\u732e',
         value: formatNumber(contribution),
-        description: `贡献用于提升每日俸禄档位，俸禄以植物精华、灵宠精魄和分档兽魂为主。当前档位：${stipendTier?.label ?? '基础俸禄'}。`,
+        description: `\u8d21\u732e\u51b3\u5b9a\u6bcf\u65e5\u4ff8\u7984\u6863\u4f4d\uff0c\u4ff8\u7984\u4ee5\u690d\u7269\u7cbe\u534e\u3001\u7075\u5ba0\u8d44\u6e90\u548c\u9b42\u7c7b\u6750\u6599\u4e3a\u4e3b\u3002\u5f53\u524d\u6863\u4f4d\uff1a${stipendTier?.label ?? '\u9635\u8425\u4ff8\u7984'}\u3002`,
       },
       comparison: readModel.factions.map((faction) => ({
         faction: faction.name,
-        advantage: `总贡献 ${formatNumber(faction.contributionScore)}`,
+        advantage: `\u603b\u8d21\u732e ${formatNumber(faction.contributionScore)}`,
         gold: formatNumber(faction.treasuryGold),
         power: formatNumber(faction.contributionScore),
         isCurrent: faction.id === currentFaction?.id,
       })),
       donate: {
-        title: '精华上缴',
-        description: '贡献主要来自今日阵营任务和上缴指定精华，金币不再直接兑换贡献。',
+        title: '\u9635\u8425\u4e0a\u7f34',
+        description: '\u9635\u8425\u9700\u8981\u901a\u8fc7\u65e5\u5e38\u4efb\u52a1\u548c\u8d44\u6e90\u4e0a\u7f34\u79ef\u7d2f\u8d21\u732e\uff0c\u4e5f\u53ef\u4ee5\u76f4\u63a5\u5151\u6362\u4e00\u4efd\u8d21\u732e\u3002',
         goldStep: donateGoldStep,
         contributionRule: contributionBonusPercent > 0
-          ? `同心诀当前 +${formatNumber(contributionBonusPercent)}%，后续可用于精华任务加成。`
-          : '首页每日 3 个阵营任务是首发贡献主入口。',
+          ? `\u540c\u989d\u7cbe\u534e\u5f53\u524d +${formatNumber(contributionBonusPercent)}% \u8d21\u732e\uff0c\u5df2\u8ba1\u5165\u7cbe\u534e\u4e0a\u7f34\u52a0\u6210\u3002`
+          : '\u9996\u9875\u6bcf\u5929 3 \u4e2a\u9635\u8425\u4efb\u52a1\u4f1a\u5237\u65b0\uff0c\u5b8c\u6210\u540e\u63d0\u5347\u8d21\u732e\u3002',
       },
       tasks: buildFactionTasks(readModel),
       contributionLogs: readModel.contributionLogs.map((log) => ({
@@ -411,22 +423,22 @@ export class SceneContentAssembler {
       })),
       stipend: currentFaction
         ? {
-          title: '每日阵营俸禄',
-          description: '每日可按当前贡献档位领取一次，主要发放植物精华、灵宠精魄和分档兽魂。',
+          title: '\u6bcf\u65e5\u9635\u8425\u4ff8\u7984',
+          description: '\u6bcf\u65e5\u53ef\u6309\u5f53\u524d\u8d21\u732e\u6863\u4f4d\u9886\u53d6\u4e00\u6b21\uff0c\u4e3b\u8981\u5305\u542b\u690d\u7269\u7cbe\u534e\u3001\u7075\u5ba0\u8d44\u6e90\u548c\u9b42\u7c7b\u6750\u6599\u3002',
           status: stipendState?.claimedAt ? 'claimed' : 'available',
           dateKey: stipendState?.dateKey ?? getLocalDateKeyForAssembler(),
           contribution: stipendState?.contributionSnapshot ?? contribution,
           tierKey: stipendState?.tierKey ?? stipendTier?.tierKey ?? 'contribution-0',
-          tierLabel: stipendTier?.label ?? '基础俸禄',
+          tierLabel: stipendTier?.label ?? '\u9635\u8425\u4ff8\u7984',
           rewards: visibleStipendRewards,
           claimedAt: stipendState?.claimedAt?.toISOString() ?? null,
-          action: stipendState?.claimedAt ? null : { label: '领取俸禄', target: 'faction', tone: 'primary' },
+          action: stipendState?.claimedAt ? null : { label: '\u9886\u53d6\u4ff8\u7984', target: 'faction', tone: 'primary' },
         }
         : undefined,
       rankings: readModel.factions.map((faction, index) => ({
         label: `${index + 1}. ${faction.name}`,
-        value: `${formatNumber(faction.contributionScore)} 贡献`,
-        note: `${formatNumber(faction.treasuryGold)} 金库`,
+        value: `${formatNumber(faction.contributionScore)} \u8d21\u732e`,
+        note: `${formatNumber(faction.treasuryGold)} \u91d1\u5e01`,
       })),
     };
   }
@@ -445,21 +457,21 @@ export class SceneContentAssembler {
     if (factionCode === 'human' && scene === 'farm') {
       return {
         ...config,
-        summary: `人界优势：丰熟收益 +${formatNumber(config.modifiers.farmMatureYieldBonusPercent)}%，丰熟窗口 +${formatNumber(config.modifiers.farmRipeWindowBonusPercent)}%`,
+        summary: '\u4eba\u754c\u4f18\u52bf\uff1a\u519c\u573a\u7ecf\u8425\u66f4\u7a33\uff0c\u6210\u719f\u540e\u53ef\u76f4\u63a5\u6536\u53d6\u6536\u76ca\u3002',
       };
     }
 
     if (factionCode === 'immortal' && scene === 'spirit') {
       return {
         ...config,
-        summary: `仙界优势：挂机经验 +${formatNumber(config.modifiers.spiritPassiveExpBonusPercent)}%，投喂时长 +${formatNumber(config.modifiers.spiritFeedDurationBonusPercent)}%`,
+        summary: `\u4ed9\u754c\u4f18\u52bf\uff1a\u7075\u5ba0\u6302\u673a +${formatNumber(config.modifiers.spiritPassiveExpBonusPercent)}%\uff0c\u6295\u5582\u65f6\u957f +${formatNumber(config.modifiers.spiritFeedDurationBonusPercent)}%`,
       };
     }
 
     if (factionCode === 'demon' && scene === 'raid') {
       return {
         ...config,
-        summary: `魔界优势：战斗攻击 +${formatNumber(config.modifiers.battleAttackBonusPercent)}%，战后回血 ${formatNumber(config.modifiers.battlePostRecoveryLostHpPercent)}%`,
+        summary: `\u9b54\u754c\u4f18\u52bf\uff1a\u6218\u6597\u4f24\u5bb3 +${formatNumber(config.modifiers.battleAttackBonusPercent)}%\uff0c\u6218\u540e\u56de\u8840 ${formatNumber(config.modifiers.battlePostRecoveryLostHpPercent)}%`,
       };
     }
 
@@ -501,8 +513,8 @@ function toPublicFactionStipendRewards(rewards: ClientFactionStipendReward[]): C
 function buildFirstFactionStipendPreview(rewards: ClientFactionStipendReward[]): ClientFactionStipendReward[] {
   return [
     ...rewards.filter((reward) => reward.kind !== 'essence' && reward.kind !== 'seed'),
-    { kind: 'essence', essenceType: 'qinglingmai', label: '青灵麦精华', quantity: 3 },
-    { kind: 'essence', essenceType: 'xunyamai', label: '风云稻精华', quantity: 3 },
+    { kind: 'essence', essenceType: 'qinglingmai', label: '\u9752\u7075\u9ea6\u7cbe\u534e', quantity: 3 },
+    { kind: 'essence', essenceType: 'xunyamai', label: '\u98ce\u4e91\u7a3b\u7cbe\u534e', quantity: 3 },
   ];
 }
 
@@ -510,7 +522,7 @@ function buildFactionTasks(readModel: SceneContentReadModel): ClientHomeFactionT
   const essenceInventory = new Map(
     readModel.seedInventory.map((item) => [item.seedDefinition.seedId, {
       quantity: item.quantity,
-      label: `${item.seedDefinition.label}精华`,
+      label: `${item.seedDefinition.label}\u7cbe\u534e`,
     }]),
   );
 
@@ -527,22 +539,22 @@ function buildFactionTasks(readModel: SceneContentReadModel): ClientHomeFactionT
       type,
       title: buildConfiguredFactionTaskTitle(type, requiredEssence?.label ?? task.requiredEssenceType, taskConfig?.title),
       description: taskConfig?.description ?? (type === 'conflict-raid'
-        ? `完成冲突对抗，奖励 ${formatNumber(task.rewardContribution)} 贡献。`
-        : `上缴指定精华，奖励 ${formatNumber(task.rewardContribution)} 贡献。`),
+        ? `\u5b8c\u6210\u51b2\u7a81\u6218\u53ef\u83b7\u5f97 ${formatNumber(task.rewardContribution)} \u8d21\u732e\u3002`
+        : `\u4e0a\u7f34\u6307\u5b9a\u7cbe\u534e\u53ef\u83b7\u5f97 ${formatNumber(task.rewardContribution)} \u8d21\u732e\u3002`),
       progressCurrent,
       progressTarget: task.requiredAmount,
-      progressText: status === 'claimed' ? '已完成' : `${progressCurrent}/${task.requiredAmount}`,
+      progressText: status === 'claimed' ? '\u5df2\u9886\u53d6' : `${progressCurrent}/${task.requiredAmount}`,
       rewardContribution: task.rewardContribution,
       requiredEssenceType: task.requiredEssenceType,
-      requiredEssenceLabel: requiredEssence?.label ?? (task.requiredEssenceType ? `${task.requiredEssenceType}精华` : null),
+      requiredEssenceLabel: requiredEssence?.label ?? (task.requiredEssenceType ? `${task.requiredEssenceType}\u7cbe\u534e` : null),
       currentEssenceQuantity: requiredEssence?.quantity ?? 0,
       status,
       action: {
         label: status === 'claimed'
-          ? '已完成'
+          ? '\u5df2\u9886\u53d6'
           : type === 'conflict-raid'
-            ? '去战斗'
-            : (requiredEssence?.quantity ?? 0) >= Math.max(remaining, 1) ? '上缴' : '去种植',
+            ? '\u53bb\u6218\u6597'
+            : (requiredEssence?.quantity ?? 0) >= Math.max(remaining, 1) ? '\u4e0a\u7f34' : '\u53bb\u79cd\u690d',
         target: type === 'conflict-raid' ? 'raid' : (requiredEssence?.quantity ?? 0) >= Math.max(remaining, 1) ? 'faction' : 'farm',
         tone: status === 'claimed' ? 'ghost' : 'primary',
         context: task.id,
@@ -581,10 +593,10 @@ function buildConfiguredFactionTaskTitle(
   configuredTitle?: string | null,
 ): string {
   if (configuredTitle) {
-    return type === 'conflict-raid' ? configuredTitle : `${configuredTitle}：${essenceLabel ?? '精华'}`;
+    return type === 'conflict-raid' ? configuredTitle : `${configuredTitle}\uff1a${essenceLabel ?? '\u7cbe\u534e'}`;
   }
 
-  return type === 'conflict-raid' ? '完成 1 次战斗胜利' : `上缴${essenceLabel ?? '精华'}`;
+  return type === 'conflict-raid' ? '\u53d6\u5f97 1 \u6b21\u6218\u6597\u80dc\u5229' : `\u4e0a\u7f34${essenceLabel ?? '\u7cbe\u534e'}`;
 }
 
 function findFactionTaskConfig(
@@ -604,18 +616,18 @@ function findFactionTaskConfig(
 
 function getContributionSourceLabel(sourceType: string): string {
   if (sourceType === 'faction-task-submit') {
-    return '精华上缴';
+    return '\u7cbe\u534e\u4e0a\u7f34';
   }
 
   if (sourceType === 'raid-success') {
-    return '战斗胜利';
+    return '\u6218\u6597\u80dc\u5229';
   }
 
   if (sourceType === 'field-steal') {
-    return '偷取精华';
+    return '\u91c7\u6458\u6536\u76ca';
   }
 
-  return '贡献记录';
+  return '\u8d21\u732e\u8bb0\u5f55';
 }
 
 function getLocalDateKeyForAssembler(): string {
@@ -627,16 +639,20 @@ function getLocalDateKeyForAssembler(): string {
   }).format(new Date());
 }
 
-function getFieldTiming(field: SceneContentReadModel['fieldSlots'][number], now: Date): { totalSeconds: number; remainingSeconds: number } {
+function getFieldTiming(
+  field: SceneContentReadModel['fieldSlots'][number],
+  readModel: SceneContentReadModel,
+  now: Date,
+): { totalSeconds: number; remainingSeconds: number } {
   if (!field.seedDefinition || field.status === 'EMPTY' || field.status === 'LOCKED') {
     return { totalSeconds: 1, remainingSeconds: 0 };
   }
 
   if (field.status === 'SEEDED') {
     return {
-      totalSeconds: getSeedStageSeconds(field.seedDefinition.seedId, 'seeded'),
+      totalSeconds: getCultivationSeconds(field.seedDefinition.seedId),
       remainingSeconds: getRemainingSeconds(
-        field.matureAt ?? addSeconds(field.seedAt, getSeedStageSeconds(field.seedDefinition.seedId, 'seeded')),
+        field.readyAt ?? getFieldReadyAt(field, field.seedDefinition.seedId, now),
         now,
       ),
     };
@@ -646,17 +662,19 @@ function getFieldTiming(field: SceneContentReadModel['fieldSlots'][number], now:
     return {
       totalSeconds: getSeedStageSeconds(field.seedDefinition.seedId, 'growing'),
       remainingSeconds: getRemainingSeconds(
-        field.fullMatureAt ?? addSeconds(field.matureAt, getSeedStageSeconds(field.seedDefinition.seedId, 'growing')),
+        field.readyAt ?? getLegacyGrowingReadyAt(field, field.seedDefinition.seedId, now),
         now,
       ),
     };
   }
 
   if (field.status === 'MATURE') {
+    const matureWindowSeconds = getMatureWindowSeconds(field, readModel);
+
     return {
-      totalSeconds: Math.max(field.seedDefinition.ripeWindowSeconds, 1),
+      totalSeconds: matureWindowSeconds,
       remainingSeconds: getRemainingSeconds(
-        field.overripeAt ?? addSeconds(field.fullMatureAt, field.seedDefinition.ripeWindowSeconds),
+        field.overripeAt ?? addSeconds(field.readyAt ?? getMatureStartedAt(field, now), matureWindowSeconds),
         now,
       ),
     };
@@ -673,48 +691,52 @@ function getRemainingSeconds(target: Date | null, now: Date): number {
   return Math.max(Math.ceil((target.getTime() - now.getTime()) / 1000), 0);
 }
 
-function addSeconds(source: Date | null, seconds: number): Date | null {
-  if (!source) {
-    return null;
-  }
-
-  return new Date(source.getTime() + Math.max(Math.floor(seconds), 0) * 1000);
-}
-
 function buildFieldDescription(field: SceneContentReadModel['fieldSlots'][number]): string {
   if (!field.isUnlocked) {
-    return '完成对应地契任务后自动解锁。';
+    return '\u5b8c\u6210\u5bf9\u5e94\u5730\u5951\u4efb\u52a1\u540e\u89e3\u9501\u8fd9\u5757\u7530\u5730\u3002';
   }
 
   if (field.status === 'EMPTY') {
-    return '空地可在后续播种命令接入后开始培育。';
+    return '\u7a7a\u5730\u53ef\u64ad\u79cd\uff0c\u70b9\u51fb\u5f00\u59cb\u57f9\u80b2\u3002';
   }
 
   if (field.status === 'MATURE') {
-    return `理论产出 ${formatNumber(field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition))} 个精华，已被偷 ${formatNumber(field.stolenEssenceYield)} 个。`;
+    return `\u6210\u719f\u53ef\u6536\uff0c\u9884\u8ba1\u4ea7\u51fa ${formatNumber(field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition))} \u7cbe\u534e\uff0c\u5df2\u88ab\u597d\u53cb\u91c7\u6458 ${formatNumber(field.stolenEssenceYield)} \u7cbe\u534e\u3002`;
   }
 
   if (field.status === 'WITHERED') {
-    return `已枯萎，仍可收取 ${formatNumber(Math.max((field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition)) - field.stolenEssenceYield, 0))} 个精华。`;
+    return `\u5df2\u7ecf\u67af\u840e\uff0c\u4ecd\u53ef\u6536\u53d6 ${formatNumber(Math.max((field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition)) - field.stolenEssenceYield, 0))} \u7cbe\u534e\u3002`;
   }
 
-  return `${field.seedDefinition?.label ?? '灵植'} 培育中，预计产出 ${formatNumber(field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition))} 个精华。`;
+  return `${field.seedDefinition?.label ?? '\u4f5c\u7269'} \u57f9\u80b2\u4e2d\uff0c\u9884\u8ba1\u4ea7\u51fa ${formatNumber(field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition))} \u7cbe\u534e\u3002`;
 }
 
 function buildFieldActions(status: FieldStatus): ClientFarmField['actions'] {
   if (status === 'EMPTY') {
-    return [{ label: '开始培育', target: 'farm', tone: 'primary' }];
+    return [{ label: '\u5f00\u59cb\u57f9\u80b2', target: 'farm', tone: 'primary' }];
   }
 
   if (status === 'MATURE' || status === 'WITHERED') {
-    return [{ label: '收取', target: 'farm', tone: 'primary' }];
-  }
-
-  if (status === 'GROWING') {
-    return [{ label: '提前收取', target: 'farm', tone: 'secondary' }];
+    return [{ label: '\u6536\u53d6', target: 'farm', tone: 'primary' }];
   }
 
   return [];
+}
+
+function getMatureWindowSeconds(
+  field: SceneContentReadModel['fieldSlots'][number],
+  readModel: SceneContentReadModel,
+): number {
+  const techBonusSeconds = (getCastleExtensionLevelConfig(
+    'collectWindowTech',
+    readModel.buildings?.collectWindowTechLevel ?? 0,
+  )?.effectValue ?? 0) * 60;
+
+  return getFactionFarmCollectWindowSeconds(
+    field.seedDefinition?.collectWindowSeconds ?? 30 * 60,
+    techBonusSeconds,
+    (readModel.player.factionCode ?? null) as FactionAdvantageCode,
+  );
 }
 
 function normalizeLandDeedProgressJson(value: unknown): {
@@ -748,7 +770,7 @@ function normalizeRequirementProgressList(value: unknown): NonNullable<ClientSce
 
     return {
       key: typeof record.key === 'string' ? record.key : 'unknown',
-      label: typeof record.label === 'string' ? record.label : '进度',
+      label: typeof record.label === 'string' ? record.label : '\u4efb\u52a1',
       current,
       target,
       completed: typeof record.completed === 'boolean' ? record.completed : current >= target,
@@ -793,13 +815,13 @@ function getExtensionEffectUnit(trackId: ExtensionKey): string {
     return '%';
   }
 
-  return '分钟';
+  return '\u5206\u949f';
 }
 
 function formatSpellCostText(config: { costResource?: string; costAmount?: number; upgradeCost?: number }): string {
-  const resource = config.costResource === 'tianjiTalisman' ? '天机符' : '金币';
+  const resource = config.costResource === 'tianjiTalisman' ? '\u5929\u673a\u7b26' : '\u91d1\u5e01';
   const amount = Math.max(Math.floor(config.costAmount ?? config.upgradeCost ?? 0), 0);
-  return `消耗 ${formatNumber(amount)} ${resource}`;
+  return `\u6d88\u8017 ${formatNumber(amount)} ${resource}`;
 }
 
 function formatNumber(value: number): string {
@@ -828,7 +850,7 @@ function buildRaidSpiritPreview(
   if (!hasSeen) {
     return {
       spiritId: null,
-      label: '？？',
+      label: '\u672a\u77e5',
       level: Math.max(slot.level, 1),
       rarity: null,
       avatarGlyph: 'unknown',
@@ -919,7 +941,7 @@ function normalizeRaidRewardItems(value: unknown): ClientRaidRewardItem[] {
       kind: 'essence',
       seedId: typeof item.seedId === 'string' ? item.seedId : typeof item.essenceType === 'string' ? item.essenceType : '',
       essenceType: typeof item.essenceType === 'string' ? item.essenceType : typeof item.seedId === 'string' ? item.seedId : undefined,
-      label: typeof item.label === 'string' ? item.label : '精华',
+      label: typeof item.label === 'string' ? item.label : '\u5956\u52b1',
       quantity: Math.max(Math.floor(item.quantity as number), 0),
     }))
     .filter((item) => item.seedId.length > 0 && item.quantity > 0);
@@ -938,5 +960,5 @@ function getContributionGainFromRewardItems(value: unknown): number {
 
 function getSpiritGlyph(label: string): string {
   const firstCharacter = Array.from(label.trim())[0];
-  return firstCharacter ?? '灵';
+  return firstCharacter ?? '?';
 }

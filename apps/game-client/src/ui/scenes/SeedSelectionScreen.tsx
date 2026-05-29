@@ -109,7 +109,7 @@ export function SeedSelectionScreen(props: SeedSelectionScreenProps): JSX.Elemen
                   <strong>收获价值</strong>
                   <span>
                     {selectedSeed.stageGold
-                      ? `成长 ${formatNumber(selectedSeed.stageGold.growing)} / 丰熟 ${formatNumber(selectedSeed.stageGold.mature)} / 枯萎 ${formatNumber(selectedSeed.stageGold.withered)}`
+                      ? `培育中 ${formatNumber(selectedSeed.stageGold.growing)} / 成熟 ${formatNumber(selectedSeed.stageGold.mature)} / 枯萎 ${formatNumber(selectedSeed.stageGold.withered)}`
                       : '待配置'}
                   </span>
                 </div>

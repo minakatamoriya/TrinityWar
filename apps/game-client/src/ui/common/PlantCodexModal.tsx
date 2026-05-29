@@ -121,7 +121,7 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
                 </div>
                 <div className="seed-codex-stat-row">
                   <strong>收益</strong>
-                  <span>成长 {formatNumber(selectedPlant.stageGold.growing)} / 丰熟 {formatNumber(selectedPlant.stageGold.mature)} / 枯萎 {formatNumber(selectedPlant.stageGold.withered)}</span>
+                  <span>培育中 {formatNumber(selectedPlant.stageGold.growing)} / 成熟 {formatNumber(selectedPlant.stageGold.mature)} / 枯萎 {formatNumber(selectedPlant.stageGold.withered)}</span>
                 </div>
               </div>
               {!selectedPlant.unlocked && selectedResearch ? (

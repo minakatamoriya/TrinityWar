@@ -17,7 +17,7 @@ export interface DevAccountSeedData {
     watchtowerLevel: number;
     protectionTechLevel: number;
     farmYieldTechLevel: number;
-    ripeWindowTechLevel: number;
+    collectWindowTechLevel: number;
     pendingClaimTechLevel: number;
   };
   army: {
@@ -70,7 +70,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
       watchtowerLevel: 1,
       protectionTechLevel: 0,
       farmYieldTechLevel: 0,
-      ripeWindowTechLevel: 0,
+      collectWindowTechLevel: 0,
       pendingClaimTechLevel: 0,
     },
     army: { totalCount: 10, availableCount: 10, frozenCount: 0, woundedCount: 0, capacity: 10 },
@@ -100,7 +100,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
       watchtowerLevel: 3,
       protectionTechLevel: 1,
       farmYieldTechLevel: 1,
-      ripeWindowTechLevel: 1,
+      collectWindowTechLevel: 1,
       pendingClaimTechLevel: 1,
     },
     army: { totalCount: 30, availableCount: 26, frozenCount: 0, woundedCount: 4, capacity: 30 },
@@ -160,7 +160,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
       watchtowerLevel: 4,
       protectionTechLevel: 2,
       farmYieldTechLevel: 2,
-      ripeWindowTechLevel: 2,
+      collectWindowTechLevel: 2,
       pendingClaimTechLevel: 2,
     },
     army: { totalCount: 55, availableCount: 48, frozenCount: 0, woundedCount: 7, capacity: 70 },
@@ -214,7 +214,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
       watchtowerLevel: 2,
       protectionTechLevel: 1,
       farmYieldTechLevel: 2,
-      ripeWindowTechLevel: 1,
+      collectWindowTechLevel: 1,
       pendingClaimTechLevel: 1,
     },
     army: { totalCount: 42, availableCount: 18, frozenCount: 10, woundedCount: 14, capacity: 50 },

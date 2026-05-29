@@ -88,7 +88,7 @@ export class RaidRepository {
                 currentClaimableGold: true,
                 seedAt: true,
                 matureAt: true,
-                fullMatureAt: true,
+                readyAt: true,
                 overripeAt: true,
                 seedDefinition: {
                   select: {
@@ -97,7 +97,7 @@ export class RaidRepository {
                     seedSeconds: true,
                     growSeconds: true,
                     matureSeconds: true,
-                    ripeWindowSeconds: true,
+                    collectWindowSeconds: true,
                     baseYieldGold: true,
                   },
                 },

@@ -133,7 +133,7 @@ export const mockHomeSummary: HomeSummaryResponse = {
     armyVersion: 1,
   },
   staminaStatus: '免费战斗 2/3',
-  fieldStatus: '丰熟田地 1 块，成熟中 1 块',
+  fieldStatus: '成熟田地 1 块，成熟中 1 块',
   reportStatus: '探索动态 2，免费复仇 1',
   protectedUntil: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
   resources: [
@@ -163,7 +163,7 @@ export const mockHomeSummary: HomeSummaryResponse = {
   todayContribution: 0,
   primaryActions: [
     { key: 'building', title: '法术阁', description: '修习法术强化经营' },
-    { key: 'farm', title: '农场', description: '收丰熟田地' },
+    { key: 'farm', title: '农场', description: '收成熟田地' },
     { key: 'raid', title: '灵宠', description: '培育灵宠并查看当前守备' },
     { key: 'report', title: '探索', description: '查看目标、战报与通缉' },
     { key: 'faction', title: '阵营', description: '上缴并领取俸禄' },
@@ -188,16 +188,16 @@ export const mockSceneContent: ClientSceneContentResponse = {
         id: 'farmYieldTech',
         title: '祈雨术',
         levelText: 'Lv.0 -> Lv.1',
-        description: '引灵雨滋养田垄，提升作物成长与丰熟阶段的金币收益。',
+        description: '引灵雨滋养田垄，提升作物培育与成熟阶段的金币收益。',
         effectText: '当前 0%，修习后 2%。',
         costText: '消耗 400 金币',
         action: { label: '修习法术', target: 'building', tone: 'secondary' },
       },
       {
-        id: 'ripeWindowTech',
+        id: 'collectWindowTech',
         title: '观星术',
         levelText: 'Lv.0 -> Lv.1',
-        description: '观天象定农时，延长作物进入丰熟后的可收窗口。',
+        description: '观天象定农时，延长作物成熟后的可收窗口。',
         effectText: '当前 0 分钟，修习后 5 分钟。',
         costText: '消耗 360 金币',
         action: { label: '修习法术', target: 'building', tone: 'secondary' },
@@ -221,16 +221,16 @@ export const mockSceneContent: ClientSceneContentResponse = {
   farm: {
     hero: {
       eyebrow: '田地经营',
-      title: '丰熟 1 块 · 成熟中 2 块',
-      description: '农场以田地为主，点击空地即可继续播种，进入丰熟后直接收取。',
+      title: '成熟 1 块 · 成熟中 2 块',
+      description: '农场以田地为主，点击空地即可继续播种，成熟后直接收取。',
       action: { label: '开始培育', target: 'farm', tone: 'primary' },
     },
     fields: [
       {
         id: 'field-1',
         code: '田地 01',
-        title: '丰熟期',
-        badge: '丰熟',
+        title: '成熟期',
+        badge: '成熟',
         cropName: '青灵麦',
         tone: 'mature',
         progressRemainingSeconds: 0,
@@ -238,7 +238,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         yieldGold: 1260,
         description: '点击收取，触发爆金币并结算本轮成熟收益。',
         actions: [
-          { label: '成熟收取', target: 'farm', tone: 'primary' },
+          { label: '收取', target: 'farm', tone: 'primary' },
         ],
       },
       {
@@ -264,9 +264,9 @@ export const mockSceneContent: ClientSceneContentResponse = {
         progressRemainingSeconds: 4690,
         progressTotalSeconds: 7200,
         yieldGold: 660,
-        description: '可抢收，点击后直接结算一轮提前收取结果。',
+        description: '可抢收，点击后直接结算一轮收取结果。',
         actions: [
-          { label: '提前收取', target: 'farm', tone: 'secondary' },
+          { label: '收取', target: 'farm', tone: 'secondary' },
         ],
       },
       {
@@ -546,9 +546,9 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     fieldPreviewTone: 'mature',
     fieldStatus: '成熟田 2 块，成长期 1 块',
     fields: [
-      createRaidDetailField({ id: 'target-1-field-1', code: '田地 01', title: '丰熟期', badge: '丰熟', tone: 'mature', description: '预计可收 420 金币' }),
-      createRaidDetailField({ id: 'target-1-field-2', code: '田地 02', title: '丰熟期', badge: '丰熟', tone: 'mature', description: '预计可收 460 金币' }),
-      createRaidDetailField({ id: 'target-1-field-3', code: '田地 03', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 1860, progressTotalSeconds: 3600, description: '距离丰熟约半小时' }),
+      createRaidDetailField({ id: 'target-1-field-1', code: '田地 01', title: '成熟期', badge: '成熟', tone: 'mature', description: '预计可收 420 金币' }),
+      createRaidDetailField({ id: 'target-1-field-2', code: '田地 02', title: '成熟期', badge: '成熟', tone: 'mature', description: '预计可收 460 金币' }),
+      createRaidDetailField({ id: 'target-1-field-3', code: '田地 03', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 1860, progressTotalSeconds: 3600, description: '距离可收约半小时' }),
     ],
     raidableGold: '520 金币',
     exposedFruit: '2 块成熟田 · 预计 880 金币',
@@ -576,7 +576,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     fieldPreviewTone: 'seeded',
     fieldStatus: '成熟田 1 块，播种田 2 块',
     fields: [
-      createRaidDetailField({ id: 'target-2-field-1', code: '田地 01', title: '丰熟期', badge: '丰熟', tone: 'mature', description: '预计可收 420 金币' }),
+      createRaidDetailField({ id: 'target-2-field-1', code: '田地 01', title: '成熟期', badge: '成熟', tone: 'mature', description: '预计可收 420 金币' }),
       createRaidDetailField({ id: 'target-2-field-2', code: '田地 02', title: '播种期', badge: '播种', tone: 'seeded', progressRemainingSeconds: 2280, progressTotalSeconds: 3600, description: '刚播下青灵麦，尚未进入成长' }),
       createRaidDetailField({ id: 'target-2-field-3', code: '田地 03', title: '播种期', badge: '播种', tone: 'seeded', progressRemainingSeconds: 3120, progressTotalSeconds: 3600, description: '新一轮播种刚开始' }),
     ],
@@ -606,7 +606,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     fieldPreviewTone: 'growing',
     fieldStatus: '成长期 1 块，空闲田 1 块',
     fields: [
-      createRaidDetailField({ id: 'target-3-field-1', code: '田地 01', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 1440, progressTotalSeconds: 3600, description: '成长尾段，快要进入丰熟' }),
+      createRaidDetailField({ id: 'target-3-field-1', code: '田地 01', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 1440, progressTotalSeconds: 3600, description: '成长尾段，快要可收' }),
       createRaidDetailField({ id: 'target-3-field-2', code: '田地 02', title: '空闲期', badge: '空闲', tone: 'empty', description: '当前未播种，暂无外露收益' }),
     ],
     raidableGold: '180 金币',
@@ -635,7 +635,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     fieldPreviewTone: 'mature',
     fieldStatus: '成熟田 1 块，成长期 2 块',
     fields: [
-      createRaidDetailField({ id: 'target-4-field-1', code: '田地 01', title: '丰熟期', badge: '丰熟', tone: 'mature', description: '预计可收 510 金币' }),
+      createRaidDetailField({ id: 'target-4-field-1', code: '田地 01', title: '成熟期', badge: '成熟', tone: 'mature', description: '预计可收 510 金币' }),
       createRaidDetailField({ id: 'target-4-field-2', code: '田地 02', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 2640, progressTotalSeconds: 7200, description: '收益尚未完全外露' }),
       createRaidDetailField({ id: 'target-4-field-3', code: '田地 03', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 4980, progressTotalSeconds: 7200, description: '还在中段成长' }),
     ],
@@ -665,7 +665,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     fieldPreviewTone: 'mature',
     fieldStatus: '成熟田 1 块，空闲田 2 块',
     fields: [
-      createRaidDetailField({ id: 'target-5-field-1', code: '田地 01', title: '丰熟期', badge: '丰熟', tone: 'mature', description: '预计可收 190 金币' }),
+      createRaidDetailField({ id: 'target-5-field-1', code: '田地 01', title: '成熟期', badge: '成熟', tone: 'mature', description: '预计可收 190 金币' }),
       createRaidDetailField({ id: 'target-5-field-2', code: '田地 02', title: '空闲期', badge: '空闲', tone: 'empty', description: '暂未播种' }),
       createRaidDetailField({ id: 'target-5-field-3', code: '田地 03', title: '空闲期', badge: '空闲', tone: 'empty', description: '暂未播种' }),
     ],

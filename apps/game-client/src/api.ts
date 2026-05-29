@@ -1,4 +1,4 @@
-﻿import {
+import {
   API_PREFIX,
   CLIENT_API_PREFIX,
   type ClientClaimNotificationResponse,
@@ -60,6 +60,9 @@
   type ClientSocialAssistResponse,
   type ClientSocialFeedResponse,
   type ClientSocialFriendRequest,
+  type ClientSocialFriendFieldVisitResponse,
+  type ClientSocialHarvestFieldPreviewResponse,
+  type ClientSocialHarvestFieldRequest,
   type ClientSocialRelationListResponse,
   type ClientSocialRelationMutationResponse,
   type ClientSocialSummaryResponse,
@@ -176,7 +179,7 @@ const INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS: Record<string, string> = {
   'field-2': 'qinglingmai',
   'field-3': 'qinglingmai',
 };
-const MOCK_RIPE_WINDOW_SECONDS = 30 * 60;
+const MOCK_collect_window_SECONDS = 30 * 60;
 let mockFactionContribution = INITIAL_MOCK_FACTION_CONTRIBUTION;
 let mockFactionTreasuryGold = INITIAL_MOCK_FACTION_TREASURY_GOLD;
 let mockFactionArmyPower = INITIAL_MOCK_FACTION_ARMY_POWER;
@@ -223,7 +226,7 @@ const mockSeedStageGold: Record<string, { seeded: number; growing: number; matur
 };
 
 const mockSeedStageSeconds: Record<string, { seeded: number; growing: number }> = {
-  qilingya: { seeded: 5, growing: 5 },
+  qilingya: { seeded: 10, growing: 0 },
   qinglingmai: { seeded: 7200, growing: 3600 },
   xunyamai: { seeded: 900, growing: 900 },
   ninglucao: { seeded: 5400, growing: 1800 },
@@ -244,6 +247,10 @@ function getMockSeedStageSeconds(seedId: string, stage: 'seeded' | 'growing'): n
   return mockSeedStageSeconds[seedId]?.[stage] ?? (stage === 'seeded' ? 7200 : 3600);
 }
 
+function getMockCultivationSeconds(seedId: string): number {
+  return getMockSeedStageSeconds(seedId, 'seeded') + getMockSeedStageSeconds(seedId, 'growing');
+}
+
 function buildInitialMockFieldTimingStates(): Record<string, MockFieldTimingState> {
   const nowMs = Date.now();
   return mockSceneContent.farm.fields.reduce<Record<string, MockFieldTimingState>>((table, field) => {
@@ -254,7 +261,7 @@ function buildInitialMockFieldTimingStates(): Record<string, MockFieldTimingStat
     }
 
     const totalSeconds = field.tone === 'mature'
-      ? MOCK_RIPE_WINDOW_SECONDS
+      ? MOCK_collect_window_SECONDS
       : getMockSeedStageSeconds(seedId, field.tone);
     const fallbackRemainingSeconds = field.tone === 'mature'
       ? Math.min(totalSeconds, 20 * 60)
@@ -360,11 +367,12 @@ function createRaidDetailField(field: Partial<ClientFarmField> & Pick<ClientFarm
 
 function buildFallbackRaidFields(detail: ClientRaidTargetDetailResponse): ClientFarmField[] {
   const fieldTones: Array<{ label: string; tone: ClientFarmField['tone']; badge: string }> = [
-    { label: '成熟田', tone: 'mature', badge: '丰熟' },
-    { label: '成长期', tone: 'growing', badge: '成长' },
-    { label: '播种田', tone: 'seeded', badge: '播种' },
+    { label: '成熟田', tone: 'mature', badge: '成熟' },
+    { label: '培育中', tone: 'seeded', badge: '培育' },
+    { label: '成长田', tone: 'growing', badge: '培育' },
+    { label: '播种田', tone: 'seeded', badge: '培育' },
     { label: '空闲田', tone: 'empty', badge: '空闲' },
-    { label: '枯萎田', tone: 'withered', badge: '过熟' },
+    { label: '枯萎田', tone: 'withered', badge: '枯萎' },
   ];
   const fields: ClientFarmField[] = [];
 
@@ -762,38 +770,38 @@ function setMockFieldPresentation(field: ClientFarmField, tone: ClientFarmField[
   field.cropName = seedId ? (seedLabelMap[seedId] ?? seedId) : undefined;
 
   if (tone === 'seeded' && seedId) {
-    field.title = '播种期';
-    field.badge = '播种';
+    field.title = '培育中';
+    field.badge = '培育';
     field.tone = 'seeded';
-    field.progressTotalSeconds = getMockSeedStageSeconds(seedId, 'seeded');
+    field.progressTotalSeconds = getMockCultivationSeconds(seedId);
     field.progressRemainingSeconds = remainingSeconds;
     field.yieldGold = getMockSeedStageGold(seedId, 'seeded');
-    field.description = '播种刚完成，等待进入成长后再决定是否抢收。';
+    field.description = '播种刚完成，成熟后即可收取完整收益。';
     field.actions = [];
     return;
   }
 
   if (tone === 'growing' && seedId) {
-    field.title = '成熟期';
-    field.badge = '成长';
+    field.title = '培育中';
+    field.badge = '培育';
     field.tone = 'growing';
     field.progressTotalSeconds = getMockSeedStageSeconds(seedId, 'growing');
     field.progressRemainingSeconds = remainingSeconds;
     field.yieldGold = getMockSeedStageGold(seedId, 'growing');
-    field.description = '可抢收，点击后直接结算一轮提前收取结果。';
-    field.actions = [{ label: '提前收取', target: 'farm', tone: 'secondary' }];
+    field.description = '作物仍在培育中，成熟后即可收取完整收益。';
+    field.actions = [];
     return;
   }
 
   if (tone === 'mature' && seedId) {
-    field.title = '丰熟期';
-    field.badge = '丰熟';
+    field.title = '成熟期';
+    field.badge = '成熟';
     field.tone = 'mature';
-    field.progressTotalSeconds = MOCK_RIPE_WINDOW_SECONDS;
+    field.progressTotalSeconds = MOCK_collect_window_SECONDS;
     field.progressRemainingSeconds = remainingSeconds;
     field.yieldGold = getMockSeedStageGold(seedId, 'mature');
     field.description = '点击收取，触发爆金币并结算本轮成熟收益。';
-    field.actions = [{ label: '成熟收取', target: 'farm', tone: 'primary' }];
+    field.actions = [{ label: '收取', target: 'farm', tone: 'primary' }];
     return;
   }
 
@@ -834,7 +842,7 @@ function syncMockFieldLifecycle(): void {
     }
 
     if (field.tone === 'seeded') {
-      const totalSeconds = getMockSeedStageSeconds(seedId, 'seeded');
+      const totalSeconds = getMockCultivationSeconds(seedId);
       const startedAtMs = getMockFieldStageStartedAtMs(field.id, totalSeconds, Math.min(field.progressRemainingSeconds, totalSeconds));
       const elapsedSeconds = Math.max(Math.floor((nowMs - startedAtMs) / 1000), 0);
 
@@ -846,7 +854,7 @@ function syncMockFieldLifecycle(): void {
 
       const nextStartedAtMs = startedAtMs + totalSeconds * 1000;
       setMockFieldTiming(field.id, nextStartedAtMs);
-      setMockFieldPresentation(field, 'growing', seedId, getMockSeedStageSeconds(seedId, 'growing'));
+      setMockFieldPresentation(field, 'mature', seedId, MOCK_collect_window_SECONDS);
     }
 
     if (field.tone === 'growing') {
@@ -862,16 +870,16 @@ function syncMockFieldLifecycle(): void {
 
       const nextStartedAtMs = startedAtMs + totalSeconds * 1000;
       setMockFieldTiming(field.id, nextStartedAtMs);
-      setMockFieldPresentation(field, 'mature', seedId, MOCK_RIPE_WINDOW_SECONDS);
+      setMockFieldPresentation(field, 'mature', seedId, MOCK_collect_window_SECONDS);
     }
 
     if (field.tone === 'mature') {
-      const startedAtMs = getMockFieldStageStartedAtMs(field.id, MOCK_RIPE_WINDOW_SECONDS, Math.min(field.progressRemainingSeconds || 20 * 60, MOCK_RIPE_WINDOW_SECONDS));
+      const startedAtMs = getMockFieldStageStartedAtMs(field.id, MOCK_collect_window_SECONDS, Math.min(field.progressRemainingSeconds || 20 * 60, MOCK_collect_window_SECONDS));
       const elapsedSeconds = Math.max(Math.floor((nowMs - startedAtMs) / 1000), 0);
 
-      if (elapsedSeconds < MOCK_RIPE_WINDOW_SECONDS) {
+      if (elapsedSeconds < MOCK_collect_window_SECONDS) {
         setMockFieldTiming(field.id, startedAtMs);
-        setMockFieldPresentation(field, 'mature', seedId, MOCK_RIPE_WINDOW_SECONDS - elapsedSeconds);
+        setMockFieldPresentation(field, 'mature', seedId, MOCK_collect_window_SECONDS - elapsedSeconds);
         return;
       }
 
@@ -885,11 +893,11 @@ function updateMockFieldStatus(): void {
   const matureCount = mockSceneSnapshot.farm.fields.filter((field) => field.tone === 'mature' || field.tone === 'withered').length;
   const growingCount = mockSceneSnapshot.farm.fields.filter((field) => field.tone === 'seeded' || field.tone === 'growing').length;
 
-  mockHomeSnapshot.fieldStatus = `丰熟田地 ${matureCount} 块，成熟中 ${growingCount} 块`;
-  mockSceneSnapshot.farm.hero.title = `丰熟 ${matureCount} 块 · 成熟中 ${growingCount} 块`;
+  mockHomeSnapshot.fieldStatus = `成熟田地 ${matureCount} 块，培育中 ${growingCount} 块`;
+  mockSceneSnapshot.farm.hero.title = `成熟 ${matureCount} 块 · 培育中 ${growingCount} 块`;
   mockSceneSnapshot.farm.hero.description = mockSceneSnapshot.farm.fields.some((field) => field.tone === 'empty')
-    ? '农场以田地为主，点击空地即可继续播种，进入丰熟后直接收取。'
-    : '农场地块已排满，可直接收取丰熟地块或解锁新田位。';
+    ? '农场以田地为主，点击空地即可继续播种，成熟后直接收取。'
+    : '农场地块已排满，可直接收取成熟地块或解锁新田位。';
   mockSceneSnapshot.farm.hero.action = mockSceneSnapshot.farm.fields.some((field) => field.tone === 'empty')
     ? { label: '开始培育', target: 'farm', tone: 'primary' }
     : { label: '解锁田地', target: 'farm', tone: 'secondary' };
@@ -1195,7 +1203,7 @@ function applyMockStartCultivation(input: ClientStartCultivationRequest): Client
   }
 
   setMockFieldTiming(input.fieldId, Date.now());
-  setMockFieldPresentation(field, 'seeded', plantType, getMockSeedStageSeconds(plantType, 'seeded'));
+  setMockFieldPresentation(field, 'seeded', plantType, getMockCultivationSeconds(plantType));
   mockFieldSeedAssignments[input.fieldId] = plantType;
   updateMockDailyTask('daily-start-cultivation');
 
@@ -1789,6 +1797,29 @@ export async function waterSocialField(input: ClientSocialWaterFieldRequest): Pr
   });
 }
 
+export async function visitSocialFriendFields(targetPlayerId: string): Promise<ClientSocialFriendFieldVisitResponse> {
+  return fetchJson<ClientSocialFriendFieldVisitResponse>(`${CLIENT_API_PREFIX}/social/friends/${encodeURIComponent(targetPlayerId)}/fields`);
+}
+
+export async function previewSocialHarvestField(targetPlayerId: string): Promise<ClientSocialHarvestFieldPreviewResponse> {
+  return fetchJson<ClientSocialHarvestFieldPreviewResponse>(`${CLIENT_API_PREFIX}/social/friends/${encodeURIComponent(targetPlayerId)}/harvest-preview`);
+}
+
+export async function harvestSocialField(input: ClientSocialHarvestFieldRequest): Promise<ClientSocialAssistResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('social-harvest-field');
+  return fetchJson<ClientSocialAssistResponse>(`${CLIENT_API_PREFIX}/social/assist/harvest-field`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      ...input,
+      requestIdempotencyKey: idempotencyKey,
+    }),
+  });
+}
+
 export async function createShareAssistCampaign(input: ClientCreateShareAssistCampaignRequest): Promise<ClientCreateShareAssistCampaignResponse> {
   const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('share-assist-campaign');
   return fetchJson<ClientCreateShareAssistCampaignResponse>(`${CLIENT_API_PREFIX}/share-assist/campaigns`, {
@@ -2026,10 +2057,56 @@ function readStoredDevLoginSession(): DevLoginSession | null {
       return null;
     }
 
-    return parsed;
+    const repaired = repairDevLoginSession(parsed);
+    if (repaired !== parsed) {
+      window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(repaired));
+    }
+
+    return repaired;
   } catch {
     return null;
   }
+}
+
+function repairDevLoginSession(session: DevLoginSession): DevLoginSession {
+  const expectedNickname = getExpectedDevNickname(session.mode, session.player.nickname);
+
+  if (!expectedNickname || !isMojibakeText(session.player.nickname)) {
+    return session;
+  }
+
+  return {
+    ...session,
+    player: {
+      ...session.player,
+      nickname: expectedNickname,
+    },
+  };
+}
+
+function getExpectedDevNickname(mode: DevLoginMode, currentNickname: string): string | null {
+  if (mode === 'new-user') {
+    const suffix = currentNickname.match(/_(\d+)$/)?.[1];
+    return suffix ? `新用户_${suffix}` : null;
+  }
+
+  if (mode === 'existing-user') {
+    return '主循环测试号';
+  }
+
+  if (mode === 'test-user-1') {
+    return '测试用户1';
+  }
+
+  if (mode === 'test-user-2') {
+    return '测试用户2';
+  }
+
+  return null;
+}
+
+function isMojibakeText(value: string): boolean {
+  return /[\uFFFD]|Ã|Â|æ|ç|è|é|å|ä|Ð|Ñ|Ó|Ê|µ/.test(value);
 }
 
 function writeStoredDevLoginSession(session: DevLoginSession): void {

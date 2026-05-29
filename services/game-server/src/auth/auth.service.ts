@@ -75,7 +75,7 @@ const DEV_VERIFICATION_ACCOUNTS: DevVerificationAccount[] = [
       watchtowerLevel: 5,
       protectionTechLevel: 5,
       farmYieldTechLevel: 2,
-      ripeWindowTechLevel: 2,
+      collectWindowTechLevel: 2,
       pendingClaimTechLevel: 2,
       army: { totalCount: 60, availableCount: 60, frozenCount: 0, woundedCount: 0, capacity: 70 },
       seedInventory: {
@@ -115,7 +115,7 @@ const DEV_VERIFICATION_ACCOUNTS: DevVerificationAccount[] = [
       watchtowerLevel: 5,
       protectionTechLevel: 5,
       farmYieldTechLevel: 2,
-      ripeWindowTechLevel: 2,
+      collectWindowTechLevel: 2,
       pendingClaimTechLevel: 2,
       army: { totalCount: 60, availableCount: 60, frozenCount: 0, woundedCount: 0, capacity: 70 },
       seedInventory: {
@@ -162,7 +162,7 @@ export class AuthService {
 
     const providerUserId = normalizeProviderUserId(input.providerUserId);
     const verificationAccount = getDevVerificationAccount(providerUserId);
-    const nickname = verificationAccount?.nickname ?? input.nickname?.trim() ?? providerUserId;
+    const nickname = verificationAccount?.nickname ?? normalizeDevNickname(input.nickname?.trim(), providerUserId);
     const factionCode = verificationAccount?.factionCode ?? input.factionCode?.trim() ?? 'human';
 
     const result = await this.prisma.transaction(async (client) => {
@@ -197,11 +197,15 @@ export class AuthService {
         include: { player: true },
       });
 
+      const shouldRepairNickname = existingIdentity
+        ? isMojibakeText(existingIdentity.player.nickname) && !isMojibakeText(nickname)
+        : false;
       const player = existingIdentity
         ? await client.player.update({
           where: { id: existingIdentity.playerId },
           data: {
             lastLoginAt: new Date(),
+            ...(shouldRepairNickname ? { nickname } : {}),
           },
         })
         : await client.player.create({
@@ -743,6 +747,19 @@ function normalizeProviderUserId(providerUserId: string | undefined): string {
   return normalized;
 }
 
+function normalizeDevNickname(nickname: string | undefined, providerUserId: string): string {
+  if (!nickname || isMojibakeText(nickname)) {
+    const suffix = providerUserId.match(/^dev-ui-(\d+)$/)?.[1];
+    return suffix ? `新用户_${suffix}` : providerUserId;
+  }
+
+  return nickname;
+}
+
+function isMojibakeText(value: string): boolean {
+  return /[\uFFFD]|Ã|Â|æ|ç|è|é|å|ä|Ð|Ñ|Ó|Ê|µ/.test(value);
+}
+
 async function getCurrentPlayerSummary(
   client: Prisma.TransactionClient,
   playerId: string,
@@ -797,7 +814,7 @@ async function ensureSeedDefinitionExists(
       seedSeconds: seed.seedSeconds,
       growSeconds: seed.growSeconds,
       matureSeconds: seed.matureSeconds,
-      ripeWindowSeconds: seed.ripeWindowSeconds,
+      collectWindowSeconds: seed.collectWindowSeconds,
       baseYieldGold: seed.baseYieldGold,
       harvestSeedReturn: seed.harvestSeedReturn,
       strategyNote: seed.strategyNote,

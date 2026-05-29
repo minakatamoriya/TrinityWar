@@ -136,7 +136,7 @@ export function PlayerDetailTables(props: { overview: AdminPlayerOverviewRespons
             />
             <InfoSection
               title="法术状态"
-              rows={recordRows(props.overview.spell, ['playerId', 'protectionTechLevel', 'farmYieldTechLevel', 'ripeWindowTechLevel', 'pendingClaimTechLevel', 'spellStateVersion'])}
+              rows={recordRows(props.overview.spell, ['playerId', 'protectionTechLevel', 'farmYieldTechLevel', 'collectWindowTechLevel', 'pendingClaimTechLevel', 'spellStateVersion'])}
             />
           </div>
         </div>
@@ -324,4 +324,3 @@ export function PlayerRaidContent(props: {
     </div>
   );
 }
-

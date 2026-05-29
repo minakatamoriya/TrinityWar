@@ -1463,6 +1463,23 @@ button {
   font-size: 12px;
 }
 
+.friend-invite-confirm-card {
+  display: grid;
+  gap: 12px;
+  width: min(460px, calc(100vw - 28px));
+}
+
+.friend-invite-confirm-card h3 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.friend-invite-confirm-actions {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
 @media (min-width: 520px) {
   .auth-shell {
     padding: 24px;
@@ -6210,6 +6227,88 @@ button.spirit-element-chip {
   display: flex;
   flex-shrink: 0;
   gap: 6px;
+}
+
+.social-harvest-card {
+  max-width: 460px;
+}
+
+.social-field-visit-backdrop {
+  z-index: 1250;
+}
+
+.social-field-visit-card {
+  width: min(720px, calc(100vw - 28px));
+  max-width: 720px;
+  max-height: min(760px, calc(100dvh - 32px));
+  overflow-y: auto;
+}
+
+.social-field-visit-grid {
+  margin: 14px 0 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.social-field-plot {
+  cursor: default;
+}
+
+.social-field-plot.actionable {
+  cursor: pointer;
+}
+
+.social-field-plot.actionable:hover {
+  transform: translateY(-1px);
+  border-color: rgba(243, 181, 111, 0.45);
+}
+
+.social-harvest-field-list {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 16px;
+}
+
+.social-harvest-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.social-harvest-field:hover:not(:disabled) {
+  border-color: rgba(243, 181, 111, 0.58);
+  background: rgba(243, 181, 111, 0.12);
+}
+
+.social-harvest-field:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.social-harvest-field span,
+.social-harvest-field strong,
+.social-harvest-field small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.social-harvest-field strong {
+  justify-self: end;
+  color: #f7d69a;
+  font-size: 13px;
+}
+
+.social-harvest-field small {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .social-relation-card h4 {

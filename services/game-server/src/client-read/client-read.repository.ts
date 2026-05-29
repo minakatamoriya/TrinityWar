@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { ArmyTrainingStatus, DailyFactionTaskType, FieldStatus, Prisma, PrismaClient, TaskStatus } from '@prisma/client';
+import { getFieldReadyAt } from '../lib/field-timing.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { AdminTaskConfigRecord } from '../task-config/task-config.service.js';
 
@@ -104,7 +105,7 @@ export interface SceneContentReadModel {
     watchtowerLevel: number;
     protectionTechLevel: number;
     farmYieldTechLevel: number;
-    ripeWindowTechLevel: number;
+    collectWindowTechLevel: number;
     pendingClaimTechLevel: number;
   } | null;
   army: {
@@ -137,7 +138,7 @@ export interface SceneContentReadModel {
     currentClaimableGold: number;
     seedAt: Date | null;
     matureAt: Date | null;
-    fullMatureAt: Date | null;
+    readyAt: Date | null;
     overripeAt: Date | null;
     seedDefinition: {
       seedId: string;
@@ -145,7 +146,7 @@ export interface SceneContentReadModel {
       seedSeconds: number;
       growSeconds: number;
       matureSeconds: number;
-      ripeWindowSeconds: number;
+      collectWindowSeconds: number;
       baseYieldGold: number;
       rarity: string;
     } | null;
@@ -453,7 +454,7 @@ export class ClientReadRepository {
             watchtowerLevel: true,
             protectionTechLevel: true,
             farmYieldTechLevel: true,
-            ripeWindowTechLevel: true,
+            collectWindowTechLevel: true,
             pendingClaimTechLevel: true,
           },
         },
@@ -497,7 +498,7 @@ export class ClientReadRepository {
             lastStolenAt: true,
             seedAt: true,
             matureAt: true,
-            fullMatureAt: true,
+            readyAt: true,
             overripeAt: true,
             seedDefinition: {
               select: {
@@ -506,7 +507,7 @@ export class ClientReadRepository {
                 seedSeconds: true,
                 growSeconds: true,
                 matureSeconds: true,
-                ripeWindowSeconds: true,
+                collectWindowSeconds: true,
                 baseYieldGold: true,
                 rarity: true,
               },
@@ -718,7 +719,10 @@ export class ClientReadRepository {
       buildings: player.buildings,
       army: player.army,
       trainingQueues: player.trainingQueues,
-      fieldSlots: player.fieldSlots,
+      fieldSlots: player.fieldSlots.map((field) => ({
+        ...field,
+        readyAt: field.seedDefinition ? getFieldReadyAt(field, field.seedDefinition.seedId, new Date()) : null,
+      })),
       seedInventory: player.seedInventory,
       dailyFactionTasks: player.dailyFactionTasks,
       taskConfigs: [],

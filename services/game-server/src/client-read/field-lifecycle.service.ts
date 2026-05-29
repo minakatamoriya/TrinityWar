@@ -1,7 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import type { FieldStatus, Prisma } from '@prisma/client';
-import { getCastleExtensionLevelConfig, getSeedStageGold, getSeedStageSeconds } from '../lib/game-balance.js';
-import { getFactionFarmMatureYieldMultiplier, getFactionFarmRipeWindowSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
+import { getCastleExtensionLevelConfig, getSeedStageGold } from '../lib/game-balance.js';
+import {
+  getFactionFarmMatureYieldMultiplier,
+  getFactionFarmCollectWindowSeconds,
+  type FactionAdvantageCode,
+} from '../lib/faction-advantage-formulas.js';
+import {
+  addSeconds,
+  getFieldReadyAt,
+  getLegacyGrowingReadyAt,
+  getMatureStartedAt,
+} from '../lib/field-timing.js';
 
 interface FieldLifecycleSlot {
   id: string;
@@ -9,13 +19,13 @@ interface FieldLifecycleSlot {
   status: FieldStatus;
   seedAt: Date | null;
   matureAt: Date | null;
-  fullMatureAt: Date | null;
+  readyAt: Date | null;
   overripeAt: Date | null;
   lastCalculatedAt: Date | null;
   currentClaimableGold: number;
   seedDefinition: {
     seedId: string;
-    ripeWindowSeconds: number;
+    collectWindowSeconds: number;
   } | null;
 }
 
@@ -25,15 +35,15 @@ export class FieldLifecycleService {
     const player = await client.player.findUnique({
       where: { id: playerId },
       select: {
-        buildings: {
-          select: {
-            farmYieldTechLevel: true,
-            ripeWindowTechLevel: true,
-          },
-        },
         faction: {
           select: {
             code: true,
+          },
+        },
+        buildings: {
+          select: {
+            farmYieldTechLevel: true,
+            collectWindowTechLevel: true,
           },
         },
         fieldSlots: {
@@ -43,14 +53,14 @@ export class FieldLifecycleService {
             status: true,
             seedAt: true,
             matureAt: true,
-            fullMatureAt: true,
+            readyAt: true,
             overripeAt: true,
             lastCalculatedAt: true,
             currentClaimableGold: true,
             seedDefinition: {
               select: {
                 seedId: true,
-                ripeWindowSeconds: true,
+                collectWindowSeconds: true,
               },
             },
           },
@@ -62,16 +72,16 @@ export class FieldLifecycleService {
       return;
     }
 
-    const farmYieldMultiplier = getFarmYieldMultiplier(player.buildings?.farmYieldTechLevel ?? 0);
-    const ripeWindowBonusSeconds = getRipeWindowBonusSeconds(player.buildings?.ripeWindowTechLevel ?? 0);
     const factionCode = (player.faction?.code ?? null) as FactionAdvantageCode;
+    const farmYieldMultiplier = getFarmYieldMultiplier(player.buildings?.farmYieldTechLevel ?? 0);
+    const matureWindowBonusSeconds = getMatureWindowBonusSeconds(player.buildings?.collectWindowTechLevel ?? 0);
     const farmMatureYieldMultiplier = getFactionFarmMatureYieldMultiplier(factionCode);
 
     for (const field of player.fieldSlots) {
       const update = buildFieldLifecycleUpdate(
         field,
         farmYieldMultiplier,
-        ripeWindowBonusSeconds,
+        matureWindowBonusSeconds,
         factionCode,
         farmMatureYieldMultiplier,
         now,
@@ -92,7 +102,7 @@ export class FieldLifecycleService {
 function buildFieldLifecycleUpdate(
   field: FieldLifecycleSlot,
   farmYieldMultiplier: number,
-  ripeWindowBonusSeconds: number,
+  matureWindowBonusSeconds: number,
   factionCode: FactionAdvantageCode,
   farmMatureYieldMultiplier: number,
   now: Date,
@@ -104,7 +114,7 @@ function buildFieldLifecycleUpdate(
   const next = settleField(
     field,
     farmYieldMultiplier,
-    ripeWindowBonusSeconds,
+    matureWindowBonusSeconds,
     factionCode,
     farmMatureYieldMultiplier,
     now,
@@ -113,7 +123,7 @@ function buildFieldLifecycleUpdate(
     || next.currentClaimableGold !== field.currentClaimableGold
     || !sameDate(next.seedAt, field.seedAt)
     || !sameDate(next.matureAt, field.matureAt)
-    || !sameDate(next.fullMatureAt, field.fullMatureAt)
+    || !sameDate(next.readyAt, field.readyAt)
     || !sameDate(next.overripeAt, field.overripeAt);
 
   if (!changed) {
@@ -125,7 +135,7 @@ function buildFieldLifecycleUpdate(
     currentClaimableGold: next.currentClaimableGold,
     seedAt: next.seedAt,
     matureAt: next.matureAt,
-    fullMatureAt: next.fullMatureAt,
+    readyAt: next.readyAt,
     overripeAt: next.overripeAt,
     lastCalculatedAt: now,
     statusVersion: { increment: 1 },
@@ -135,7 +145,7 @@ function buildFieldLifecycleUpdate(
 function settleField(
   field: FieldLifecycleSlot,
   farmYieldMultiplier: number,
-  ripeWindowBonusSeconds: number,
+  matureWindowBonusSeconds: number,
   factionCode: FactionAdvantageCode,
   farmMatureYieldMultiplier: number,
   now: Date,
@@ -148,7 +158,7 @@ function settleField(
       currentClaimableGold: field.currentClaimableGold,
       seedAt: field.seedAt,
       matureAt: field.matureAt,
-      fullMatureAt: field.fullMatureAt,
+      readyAt: field.readyAt,
       overripeAt: field.overripeAt,
     };
   }
@@ -156,50 +166,48 @@ function settleField(
   let status = field.status;
   const seedAt = field.seedAt ?? field.lastCalculatedAt ?? now;
   let matureAt = field.matureAt;
-  let fullMatureAt = field.fullMatureAt;
+  let readyAt = field.readyAt;
   let overripeAt = field.overripeAt;
   let stageStartedAt = getStageStartedAt(field, now);
   const nowMs = now.getTime();
 
   while (true) {
     if (status === 'SEEDED') {
-      const seededSeconds = getSeedStageSeconds(seedId, 'seeded');
+      const targetReadyAt = getFieldReadyAt(field, seedId, now);
 
-      if (nowMs < stageStartedAt.getTime() + seededSeconds * 1000) {
+      if (nowMs < targetReadyAt.getTime()) {
         break;
       }
 
-      stageStartedAt = addSeconds(stageStartedAt, seededSeconds);
+      stageStartedAt = targetReadyAt;
       matureAt = stageStartedAt;
-      status = 'GROWING';
+      readyAt = stageStartedAt;
+      status = 'MATURE';
       continue;
     }
 
     if (status === 'GROWING') {
-      const growingSeconds = getSeedStageSeconds(seedId, 'growing');
+      const targetReadyAt = getLegacyGrowingReadyAt(field, seedId, now);
 
-      if (nowMs < stageStartedAt.getTime() + growingSeconds * 1000) {
+      if (nowMs < targetReadyAt.getTime()) {
         break;
       }
 
-      stageStartedAt = addSeconds(stageStartedAt, growingSeconds);
-      fullMatureAt = stageStartedAt;
+      stageStartedAt = targetReadyAt;
+      matureAt = stageStartedAt;
+      readyAt = stageStartedAt;
       status = 'MATURE';
       continue;
     }
 
     if (status === 'MATURE') {
-      const ripeWindowSeconds = getFactionFarmRipeWindowSeconds(
-        field.seedDefinition?.ripeWindowSeconds ?? 0,
-        ripeWindowBonusSeconds,
-        factionCode,
-      );
+      const witherWindowSeconds = getWitherWindowSeconds(field, matureWindowBonusSeconds, factionCode);
 
-      if (nowMs < stageStartedAt.getTime() + ripeWindowSeconds * 1000) {
+      if (nowMs < stageStartedAt.getTime() + witherWindowSeconds * 1000) {
         break;
       }
 
-      stageStartedAt = addSeconds(stageStartedAt, ripeWindowSeconds);
+      stageStartedAt = addSeconds(stageStartedAt, witherWindowSeconds);
       overripeAt = stageStartedAt;
       status = 'WITHERED';
       break;
@@ -217,7 +225,7 @@ function settleField(
     ),
     seedAt,
     matureAt,
-    fullMatureAt,
+    readyAt,
     overripeAt,
   };
 }
@@ -232,20 +240,10 @@ function getStageStartedAt(field: FieldLifecycleSlot, now: Date): Date {
   }
 
   if (field.status === 'MATURE') {
-    return field.fullMatureAt ?? field.matureAt ?? field.seedAt ?? field.lastCalculatedAt ?? now;
+    return getMatureStartedAt(field, now);
   }
 
-  return field.overripeAt ?? field.fullMatureAt ?? field.matureAt ?? field.seedAt ?? field.lastCalculatedAt ?? now;
-}
-
-function getFarmYieldMultiplier(farmYieldTechLevel: number): number {
-  const config = getCastleExtensionLevelConfig('farmYieldTech', farmYieldTechLevel);
-  return 1 + (config?.effectValue ?? 0) / 100;
-}
-
-function getRipeWindowBonusSeconds(ripeWindowTechLevel: number): number {
-  const config = getCastleExtensionLevelConfig('ripeWindowTech', ripeWindowTechLevel);
-  return (config?.effectValue ?? 0) * 60;
+  return field.overripeAt ?? getMatureStartedAt(field, now);
 }
 
 function toBalanceStatus(status: FieldStatus): 'seeded' | 'growing' | 'mature' | 'withered' {
@@ -264,8 +262,36 @@ function toBalanceStatus(status: FieldStatus): 'seeded' | 'growing' | 'mature' |
   return 'seeded';
 }
 
-function addSeconds(source: Date, seconds: number): Date {
-  return new Date(source.getTime() + Math.max(Math.floor(seconds), 0) * 1000);
+function getWitherWindowSeconds(
+  field: FieldLifecycleSlot,
+  matureWindowBonusSeconds: number,
+  factionCode: FactionAdvantageCode,
+): number {
+  return getFactionFarmCollectWindowSeconds(
+    field.seedDefinition?.collectWindowSeconds ?? 30 * 60,
+    matureWindowBonusSeconds,
+    factionCode,
+  );
+}
+
+function getFarmYieldMultiplier(level: number): number {
+  const config = getCastleExtensionLevelConfig('farmYieldTech', level);
+
+  if (!config) {
+    return 1;
+  }
+
+  return 1 + Math.max(config.effectValue, 0) / 100;
+}
+
+function getMatureWindowBonusSeconds(level: number): number {
+  const config = getCastleExtensionLevelConfig('collectWindowTech', level);
+
+  if (!config) {
+    return 0;
+  }
+
+  return Math.max(config.effectValue, 0) * 60;
 }
 
 function sameDate(left: Date | null, right: Date | null): boolean {

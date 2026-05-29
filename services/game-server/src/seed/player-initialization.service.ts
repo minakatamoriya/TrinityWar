@@ -17,7 +17,7 @@ export interface PlayerInitializationInput {
   watchtowerLevel?: number;
   protectionTechLevel?: number;
   farmYieldTechLevel?: number;
-  ripeWindowTechLevel?: number;
+  collectWindowTechLevel?: number;
   pendingClaimTechLevel?: number;
   army?: {
     totalCount: number;
@@ -122,7 +122,7 @@ export class PlayerInitializationService {
         watchtowerLevel: input.watchtowerLevel ?? 1,
         protectionTechLevel: input.protectionTechLevel ?? 0,
         farmYieldTechLevel: input.farmYieldTechLevel ?? 0,
-        ripeWindowTechLevel: input.ripeWindowTechLevel ?? 0,
+        collectWindowTechLevel: input.collectWindowTechLevel ?? 0,
         pendingClaimTechLevel: input.pendingClaimTechLevel ?? 0,
         buildingVersion: 1,
       },
@@ -135,7 +135,7 @@ export class PlayerInitializationService {
           watchtowerLevel: input.watchtowerLevel ?? 1,
           protectionTechLevel: input.protectionTechLevel ?? 0,
           farmYieldTechLevel: input.farmYieldTechLevel ?? 0,
-          ripeWindowTechLevel: input.ripeWindowTechLevel ?? 0,
+          collectWindowTechLevel: input.collectWindowTechLevel ?? 0,
           pendingClaimTechLevel: input.pendingClaimTechLevel ?? 0,
           buildingVersion: { increment: 1 },
         }
@@ -223,7 +223,7 @@ export class PlayerInitializationService {
           raidedGoldTotal: 0,
           seedAt: seedDefinitionId ? stageStartedAt : null,
           matureAt: seedDefinitionId && field.status !== 'SEEDED' ? stageStartedAt : null,
-          fullMatureAt: seedDefinitionId && (field.status === 'MATURE' || field.status === 'WITHERED') ? stageStartedAt : null,
+          readyAt: seedDefinitionId && (field.status === 'MATURE' || field.status === 'WITHERED') ? stageStartedAt : null,
           overripeAt: field.status === 'WITHERED' ? stageStartedAt : null,
           lastCalculatedAt: seedDefinitionId ? now : null,
           statusVersion: 1,
@@ -240,7 +240,7 @@ export class PlayerInitializationService {
             raidedGoldTotal: 0,
             seedAt: seedDefinitionId ? stageStartedAt : null,
             matureAt: seedDefinitionId && field.status !== 'SEEDED' ? stageStartedAt : null,
-            fullMatureAt: seedDefinitionId && (field.status === 'MATURE' || field.status === 'WITHERED') ? stageStartedAt : null,
+            readyAt: seedDefinitionId && (field.status === 'MATURE' || field.status === 'WITHERED') ? stageStartedAt : null,
             overripeAt: field.status === 'WITHERED' ? stageStartedAt : null,
             lastCalculatedAt: seedDefinitionId ? now : null,
             statusVersion: { increment: 1 },

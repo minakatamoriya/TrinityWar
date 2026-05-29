@@ -11,6 +11,7 @@ import type {
   ClientFactionDonateRequest,
   ClientHomeFactionTaskSummary,
   ClientBuildingUpgradeId,
+  ClientSocialFriendFieldVisitResponse,
   ClientRaidTarget,
   ClientRaidTargetDetailResponse,
   ClientSceneAction,
@@ -30,7 +31,7 @@ import type {
   ClientUpgradeBuildingRequest,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { acceptSocialFriendRequest, ApiError, breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, deleteNotification, deleteSocialFriend, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadNotifications, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSocialFeed, loadSocialRelations, loadSocialSummary, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, rejectSocialFriendRequest, requestSocialFriend, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, submitFactionTask, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding, waterSocialField } from './api';
+import { acceptSocialFriendRequest, ApiError, breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, deleteNotification, deleteSocialFriend, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, harvestSocialField, loadClientViewModel, loadFarmBoard, loadNotifications, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSocialFeed, loadSocialRelations, loadSocialSummary, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, rejectSocialFriendRequest, requestSocialFriend, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, submitFactionTask, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding, visitSocialFriendFields, waterSocialField } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
@@ -167,6 +168,13 @@ interface PendingFriendInviteState {
   notificationId?: string | null;
 }
 
+interface ReturningFriendInvitePromptState {
+  campaignId: string;
+  inviterName: string;
+  inviterFactionName: string;
+  helperPlayerId: string;
+}
+
 interface GlobalFeatureModalState {
   title: string;
   eyebrow?: string;
@@ -224,21 +232,21 @@ interface LocalFarmFieldPresentation {
 }
 
 const seedCatalog: SeedCatalogItem[] = [
-  { id: 'qilingya', name: '启灵芽', rarity: 'common', sortOrder: 1, description: '新手教程种，20 秒完成第一轮收获。', lore: '只在开荒时授予的一枚灵芽，破土极快，用来帮新人从零点亮第一笔资金。', stageGold: { growing: 20, mature: 50, withered: 50 }, stageSeconds: { seeded: 10, growing: 10 }, unlockedByDefault: true },
+  { id: 'qilingya', name: '启灵芽', rarity: 'common', sortOrder: 1, description: '新手教程种，10 秒完成第一轮收获。', lore: '只在开荒时授予的一枚灵芽，破土极快，用来帮新人从零点亮第一笔资金。', stageGold: { growing: 20, mature: 50, withered: 50 }, stageSeconds: { seeded: 10, growing: 0 }, unlockedByDefault: true },
   { id: 'qinglingmai', name: '青灵麦', rarity: 'common', sortOrder: 10, description: '普通、标准稳收基准种，完成教程后进入日常经营。', lore: '田野间最常见的灵粮，穗头泛淡青光泽，脱壳后熬粥清香回甘。凡人食之强身，修士食之略养经脉。春种秋收，从不妖异。', stageGold: { growing: 100, mature: 200, withered: 100 }, stageSeconds: { seeded: 7200, growing: 3600 }, unlockedByDefault: false },
   { id: 'xunyamai', name: '风云稻', rarity: 'common', sortOrder: 20, description: '普通、半小时快收种，适合切碎片时间。', lore: '稻芒起势极快，晨起沾露便能成势，半个时辰内就能完成一轮收益。', stageGold: { growing: 100, mature: 200, withered: 100 }, stageSeconds: { seeded: 900, growing: 900 }, unlockedByDefault: false },
-  { id: 'ninglucao', name: '凝露草', rarity: 'common', sortOrder: 30, description: '普通、短线抢收种，适合高频上线卡成熟。', lore: '叶尖常凝夜露，晨时如泪珠滚落，有清心明目之效。低阶弟子多用其露水研磨朱砂画符，成功率能稍许提升。', stageGold: { growing: 100, mature: 140, withered: 40 }, stageSeconds: { seeded: 5400, growing: 1800 }, unlockedByDefault: false },
-  { id: 'suixinhua', name: '碎心花', rarity: 'common', sortOrder: 40, description: '普通、高折损高回报种，丰熟收益波动很强。', lore: '花瓣薄如蝉翼，嫣红带紫纹，看似艳丽。但有微毒，采摘时指尖会传来一阵短暂的钻心刺痛，故名。可入麻醉类丹药。', stageGold: { growing: 120, mature: 300, withered: 50 }, stageSeconds: { seeded: 7200, growing: 3600 }, unlockedByDefault: false },
+  { id: 'ninglucao', name: '凝露草', rarity: 'common', sortOrder: 30, description: '普通、短线快收种，适合高频上线卡成熟。', lore: '叶尖常凝夜露，晨时如泪珠滚落，有清心明目之效。低阶弟子多用其露水研磨朱砂画符，成功率能稍许提升。', stageGold: { growing: 100, mature: 140, withered: 40 }, stageSeconds: { seeded: 5400, growing: 1800 }, unlockedByDefault: false },
+  { id: 'suixinhua', name: '碎心花', rarity: 'common', sortOrder: 40, description: '普通、高折损高回报种，成熟收益高但枯萎折损明显。', lore: '花瓣薄如蝉翼，嫣红带紫纹，看似艳丽。但有微毒，采摘时指尖会传来一阵短暂的钻心刺痛，故名。可入麻醉类丹药。', stageGold: { growing: 120, mature: 300, withered: 50 }, stageSeconds: { seeded: 7200, growing: 3600 }, unlockedByDefault: false },
   { id: 'baiyulian', name: '白玉莲', rarity: 'common', sortOrder: 50, description: '普通、低频保值种，错过窗口也不容易血亏。', lore: '纯白无瑕，瓣如凝脂，生于清澈浅塘。花心微黄，清香远溢。凡人供于佛前，修士取其花瓣泡茶，可净体内杂气。', stageGold: { growing: 160, mature: 220, withered: 180 }, stageSeconds: { seeded: 10800, growing: 5400 }, unlockedByDefault: false },
   { id: 'yingyuezhu', name: '影月竹', rarity: 'common', sortOrder: 60, description: '普通、稳健中速种，适合平衡型经营。', lore: '竹身乌青，夜来月光下会在地上投出淡淡银影，竹节修长如剑。常种于书斋窗外，能助人凝神夜读，抵御睡魔。', stageGold: { growing: 150, mature: 230, withered: 140 }, stageSeconds: { seeded: 9000, growing: 3600 }, unlockedByDefault: false },
-  { id: 'qianjiteng', name: '牵机藤', rarity: 'common', sortOrder: 70, description: '普通、丰熟爆发种，适合做等还是收的选择题。', lore: '藤蔓天生细密纹路，如牵机阵法。缠绕古木或篱笆，可束缚小妖、守护庭院，是低阶阵法师最喜搭配的活体材料。', stageGold: { growing: 170, mature: 360, withered: 120 }, stageSeconds: { seeded: 9000, growing: 3600 }, unlockedByDefault: false },
+  { id: 'qianjiteng', name: '牵机藤', rarity: 'common', sortOrder: 70, description: '普通、高成熟收益种，适合稳定等到成熟后收取。', lore: '藤蔓天生细密纹路，如牵机阵法。缠绕古木或篱笆，可束缚小妖、守护庭院，是低阶阵法师最喜搭配的活体材料。', stageGold: { growing: 170, mature: 360, withered: 120 }, stageSeconds: { seeded: 9000, growing: 3600 }, unlockedByDefault: false },
   { id: 'huichuncao', name: '回春草', rarity: 'rare', sortOrder: 110, description: '稀有、回种保值种，上线不稳时更稳。', lore: '通体碧玉，全草如翡翠，五十年才成熟一株。煮水内服可愈沉疴暗伤，对外伤亦有奇效。一株值百金，药农视若性命。', stageGold: { growing: 320, mature: 480, withered: 380 }, stageSeconds: { seeded: 10800, growing: 3600 }, unlockedByDefault: false },
-  { id: 'xueyuehua', name: '雪月花', rarity: 'rare', sortOrder: 120, description: '稀有、高丰熟倍率种，卡点收益很高。', lore: '只在高寒雪山顶的月圆之夜盛开，花瓣冰白带银纹，花蕊一点淡蓝。盛开时方圆十丈飘雪，花谢后雪融。可炼“寒魄丹”，助冰系功法。', stageGold: { growing: 300, mature: 760, withered: 180 }, stageSeconds: { seeded: 9000, growing: 3600 }, unlockedByDefault: false },
+  { id: 'xueyuehua', name: '雪月花', rarity: 'rare', sortOrder: 120, description: '稀有、高成熟收益种，适合准时收取。', lore: '只在高寒雪山顶的月圆之夜盛开，花瓣冰白带银纹，花蕊一点淡蓝。盛开时方圆十丈飘雪，花谢后雪融。可炼“寒魄丹”，助冰系功法。', stageGold: { growing: 300, mature: 760, withered: 180 }, stageSeconds: { seeded: 9000, growing: 3600 }, unlockedByDefault: false },
   { id: 'jingdaosong', name: '劲道松', rarity: 'rare', sortOrder: 130, description: '稀有、长周期高保值种，适合重仓慢收。', lore: '矮松，树皮龟裂如铁，松针短而刚硬。长在罡风口的悬崖上，木质极密、韧性惊人。折断一松枝制成剑胚，便是不错的筑基法器。', stageGold: { growing: 450, mature: 620, withered: 520 }, stageSeconds: { seeded: 14400, growing: 3600 }, unlockedByDefault: false },
   { id: 'hundunguo', name: '混沌果', rarity: 'rare', sortOrder: 140, description: '稀有、后期抽水种，中后段高价值诱盗目标。', lore: '拳头大的圆果，灰蒙蒙无纹，剖开内里一片浑浊。罕见地生长在灵脉与地脉交错的混乱处。炼化后可让修士短暂进入“混沌”状态，免疫五行术法一炷香。', stageGold: { growing: 420, mature: 880, withered: 260 }, stageSeconds: { seeded: 14400, growing: 5400 }, unlockedByDefault: false },
   { id: 'zhanqingsi', name: '斩情丝', rarity: 'legendary', sortOrder: 210, description: '传说、高风险斩杀种，高收益也高失败代价。', lore: '茎如金丝，赤红纤细，一旦被它缠住手指，便会暂时斩断某人对另一人的爱慕或怨恨。传说上古有大能以此草炼制“绝情丹”，后被各派联手销毁，仅余深山数株。', stageGold: { growing: 520, mature: 1200, withered: 200 }, stageSeconds: { seeded: 10800, growing: 3600 }, unlockedByDefault: false },
   { id: 'wangchuanying', name: '忘川影', rarity: 'legendary', sortOrder: 220, description: '传说、长周期隐性暴利种，后段重投入慢兑现。', lore: '水边黑色丝状藻类，夜来投影如人影晃动。用它泡水喝下，会看到一段不属于自己的前世片段，往往是最痛苦的那一瞬。邪修常用其拷问死者的秘密。', stageGold: { growing: 760, mature: 1200, withered: 960 }, stageSeconds: { seeded: 18000, growing: 3600 }, unlockedByDefault: false },
-  { id: 'zhaoyouming', name: '照幽冥', rarity: 'legendary', sortOrder: 230, description: '传说、极限丰熟回种种，终局上限最高之一。', lore: '通体漆黑的矮草，夜里发出微弱青光，能照亮脚下三尺的地气与亡魂足迹。相传若手握此草走进刚死之人的屋子，可看见死者徘徊不去的淡影，并与之做最后交谈。', stageGold: { growing: 700, mature: 1600, withered: 680 }, stageSeconds: { seeded: 14400, growing: 3600 }, unlockedByDefault: false },
+  { id: 'zhaoyouming', name: '照幽冥', rarity: 'legendary', sortOrder: 230, description: '传说、极限成熟收益种，终局上限最高之一。', lore: '通体漆黑的矮草，夜里发出微弱青光，能照亮脚下三尺的地气与亡魂足迹。相传若手握此草走进刚死之人的屋子，可看见死者徘徊不去的淡影，并与之做最后交谈。', stageGold: { growing: 700, mature: 1600, withered: 680 }, stageSeconds: { seeded: 14400, growing: 3600 }, unlockedByDefault: false },
 ];
 
 const FARM_COLLECT_PRESENTATION_MS = 1250;
@@ -270,7 +278,6 @@ function buildLocalPlantResearchState(plantType: string, unlocked: boolean, esse
 function buildLiveFarmFieldPresentation(
   field: ClientViewModel['scenes']['farm']['fields'][number],
   elapsedSeconds: number,
-  seed?: SeedCatalogItem,
 ): LocalFarmFieldPresentation | null {
   if (field.tone !== 'seeded' && field.tone !== 'growing' && field.tone !== 'mature') {
     return null;
@@ -305,13 +312,6 @@ function buildLiveFarmFieldPresentation(
     remainingElapsedSeconds -= stageRemainingSeconds;
     stageIndexOffset = 1;
 
-    if (stageTone === 'seeded') {
-      stageTone = 'growing';
-      stageDurationSeconds = Math.max(seed?.stageSeconds.growing ?? field.progressTotalSeconds, 1);
-      stageRemainingSeconds = stageDurationSeconds;
-      continue;
-    }
-
     stageTone = 'mature';
     stageDurationSeconds = 1;
     stageRemainingSeconds = 0;
@@ -333,11 +333,11 @@ function buildLiveFarmFieldPresentation(
 
   if (stageTone === 'growing') {
     return {
-      title: '成熟期',
-      badge: '成长',
+      title: '培育中',
+      badge: '培育',
       tone: 'growing',
-      description: '可提前收取，或继续等待进入丰熟后再结算更高收益。',
-      actions: [{ label: '提前收取', target: 'farm', tone: 'secondary' }],
+      description: '作物仍在培育中，成熟后即可收取完整收益。',
+      actions: [],
       progressRemainingSeconds: stageRemainingSeconds,
       progressTotalSeconds: stageDurationSeconds,
       fieldVersionOffset: 1,
@@ -345,11 +345,11 @@ function buildLiveFarmFieldPresentation(
   }
 
   return {
-    title: '丰熟期',
-    badge: '丰熟',
+    title: '成熟期',
+    badge: '成熟',
     tone: 'mature',
-    description: '已进入丰熟窗口，现在可以直接成熟收取。',
-    actions: [{ label: '成熟收取', target: 'farm', tone: 'primary' }],
+    description: '已经成熟，可以直接收取完整收益。',
+    actions: [{ label: '收取', target: 'farm', tone: 'primary' }],
     progressRemainingSeconds: 0,
     progressTotalSeconds: 1,
     fieldVersionOffset: 1,
@@ -763,11 +763,13 @@ function App(): JSX.Element {
   const [socialFriends, setSocialFriends] = useState<ClientSocialRelationItem[]>([]);
   const [socialFollowing, setSocialFollowing] = useState<ClientSocialRelationItem[]>([]);
   const [socialEnemies, setSocialEnemies] = useState<ClientSocialRelationItem[]>([]);
+  const [socialFieldVisit, setSocialFieldVisit] = useState<ClientSocialFriendFieldVisitResponse | null>(null);
   const [socialLoading, setSocialLoading] = useState(false);
   const [socialError, setSocialError] = useState<string | null>(null);
   const [shareAssistDemo, setShareAssistDemo] = useState<ShareAssistDemoState | null>(null);
   const [pendingShareInvite, setPendingShareInvite] = useState<PendingShareInviteState | null>(null);
   const [pendingFriendInvite, setPendingFriendInvite] = useState<PendingFriendInviteState | null>(null);
+  const [returningFriendInvitePrompt, setReturningFriendInvitePrompt] = useState<ReturningFriendInvitePromptState | null>(null);
   const [friendInviteDemoLinks, setFriendInviteDemoLinks] = useState<{ newUser: string; returningUser: string } | null>(null);
   const [friendInviteNewUserUrlInput, setFriendInviteNewUserUrlInput] = useState('');
   const [friendInviteReturningUserUrlInput, setFriendInviteReturningUserUrlInput] = useState('');
@@ -852,14 +854,13 @@ function App(): JSX.Element {
           && loginSession.player.factionCode
           && loginSession.player.factionCode === friendInvite.inviterFactionCode,
         );
+        setPendingFriendInvite(null);
         if (friendInvite && shouldShowFriendBranch) {
           setPendingFriendInvite({
             ...friendInvite,
             boundFriend: true,
             notificationId: result.notificationId,
           });
-        } else {
-          setPendingFriendInvite(null);
         }
         showToast(result.summary, 'success');
         const unread = await loadUnreadNotificationCount();
@@ -1105,6 +1106,7 @@ function App(): JSX.Element {
     setSocialFriends([]);
     setSocialFollowing([]);
     setSocialEnemies([]);
+    setSocialFieldVisit(null);
     setSocialError(null);
     setSocialLoading(false);
   };
@@ -1134,7 +1136,7 @@ function App(): JSX.Element {
     }
   };
 
-  const handleSocialAssistBack = async (targetPlayerId: string): Promise<void> => {
+  const handleSocialAssistBack = async (targetPlayerId: string, fieldSlotId?: string): Promise<void> => {
     if (socialLoading) {
       return;
     }
@@ -1143,12 +1145,69 @@ function App(): JSX.Element {
     setSocialError(null);
 
     try {
-      const result = await waterSocialField({ targetPlayerId });
+      const result = await waterSocialField({ targetPlayerId, fieldSlotId });
       setSocialSummary((current) => current ? { ...current, counts: result.counts } : current);
+      const visit = await visitSocialFriendFields(targetPlayerId);
+      setSocialFieldVisit(visit);
       showToast(result.summary, 'success');
       void loadSocialBundle();
     } catch (error) {
       showToast(error instanceof Error && error.message ? error.message : '当前无法完成助力，请稍后重试。', 'error');
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
+  const handleOpenSocialFieldVisit = async (targetPlayerId: string): Promise<void> => {
+    if (socialLoading) {
+      return;
+    }
+
+    setSocialLoading(true);
+    setSocialError(null);
+
+    try {
+      const visit = await visitSocialFriendFields(targetPlayerId);
+      setSocialFieldVisit(visit);
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法查看好友灵田，请稍后重试。', 'error');
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
+  const handleConfirmSocialHarvest = async (fieldSlotId?: string): Promise<void> => {
+    const targetPlayerId = socialFieldVisit?.friend.playerId;
+    if (!targetPlayerId || socialLoading) {
+      return;
+    }
+
+    setSocialLoading(true);
+    setSocialError(null);
+
+    try {
+      const result = await harvestSocialField({
+        targetPlayerId,
+        fieldSlotId,
+      });
+      setSocialSummary((current) => current ? { ...current, counts: result.counts } : current);
+      const visit = await visitSocialFriendFields(targetPlayerId);
+      setSocialFieldVisit(visit);
+      if (result.rewards && result.rewards.length > 0) {
+        setSeedRewardModal({
+          title: '采摘到一缕灵田余韵',
+          summary: '不会影响好友收成。确认后奖励已经入账。',
+          items: result.rewards.map((reward) => ({
+            itemId: reward.kind,
+            label: reward.label,
+            quantity: reward.quantity,
+          })),
+        });
+      }
+      showToast(result.summary, 'success');
+      void loadSocialBundle();
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法采摘好友灵田，请稍后重试。', 'error');
     } finally {
       setSocialLoading(false);
     }
@@ -1414,24 +1473,31 @@ function App(): JSX.Element {
     try {
       const publicCampaign = await loadPublicShareAssistCampaign(campaignId);
       const owner = publicCampaign.campaign.owner;
-      const inviterFactionName = owner.factionName ?? FRIEND_INVITE_DEMO_INVITER.factionName;
-      const inviterFactionCode = factionCodeByName[inviterFactionName] ?? FRIEND_INVITE_DEMO_INVITER.factionCode;
 
       if (audience === 'new-user') {
-        setPendingFriendInvite({
+        setShareAssistDemo({
+          audience,
+          kind: 'friend_invite',
+          status: publicCampaign.campaign.status === 'expired' ? 'expired' : publicCampaign.campaign.status === 'full' ? 'full' : 'pending',
           campaignId,
-          inviterName: owner.nickname,
-          inviterFactionCode,
-          inviterFactionName,
+          campaign: publicCampaign,
+          error: null,
         });
-        setPendingNewUserFaction(inviterFactionCode);
-        setAuthScreen('faction-select');
-        showToast(`${owner.nickname}邀请你加入${inviterFactionName}，同阵营可成为好友并领取奖励。`, 'info');
         return;
       }
 
-      showToast(`${owner.nickname}邀请你回归并成为好友。老友重逢不发拉新奖励，但可以继续并肩。`, 'info');
-      await handleDevLogin('test-user-1');
+      const helperSession = await devLogin('test-user-1');
+      const data = await loadClientBundle();
+      setSeasonSignInRecord(readSeasonSignInRecord(helperSession.player.id));
+      setTutorialStage(getInitialTutorialStage(helperSession));
+      setLoginSession(helperSession);
+      applyClientBundle(data);
+      setReturningFriendInvitePrompt({
+        campaignId,
+        inviterName: owner.nickname,
+        inviterFactionName: owner.factionName ?? '未知阵营',
+        helperPlayerId: helperSession.player.id,
+      });
     } catch (error) {
       const message = error instanceof Error && error.message ? error.message : '当前无法读取好友邀请，请稍后重试。';
       setLoginError(message);
@@ -1491,6 +1557,38 @@ function App(): JSX.Element {
     void openFriendInviteCampaign(campaignId, audience);
   };
 
+  const handleConfirmReturningFriendInvite = async (): Promise<void> => {
+    if (!returningFriendInvitePrompt || pendingActionKey === 'friend-invite:returning-confirm') {
+      return;
+    }
+
+    setPendingActionKey('friend-invite:returning-confirm');
+
+    try {
+      const result = await confirmPublicShareAssist(returningFriendInvitePrompt.campaignId, {
+        audience: 'returning-user',
+        helperPlayerId: returningFriendInvitePrompt.helperPlayerId,
+      });
+      const data = await loadClientBundle();
+      applyClientBundle(data);
+      setReturningFriendInvitePrompt(null);
+      await Promise.all([
+        loadSocialBundle(),
+        refreshNotificationUnreadCount(),
+      ]);
+      showToast(result.summary, 'success');
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法确认好友邀请，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleRejectReturningFriendInvite = (): void => {
+    setReturningFriendInvitePrompt(null);
+    showToast('已拒绝好友邀请，未建立好友关系。', 'info');
+  };
+
   const handleConfirmShareAssistDemo = async (): Promise<void> => {
     if (!shareAssistDemo || pendingActionKey === 'share-assist:confirm') {
       return;
@@ -1516,11 +1614,24 @@ function App(): JSX.Element {
       });
 
       if (shareAssistDemo.audience === 'new-user' && result.invitePending && helperOpenidHash && helperDeviceHash) {
-        setPendingShareInvite({
-          campaignId: shareAssistDemo.campaignId,
-          helperOpenidHash,
-          helperDeviceHash,
-        });
+        if (shareAssistDemo.kind === 'friend_invite') {
+          const owner = result.campaign.owner;
+          const inviterFactionName = owner.factionName ?? FRIEND_INVITE_DEMO_INVITER.factionName;
+          const inviterFactionCode = factionCodeByName[inviterFactionName] ?? FRIEND_INVITE_DEMO_INVITER.factionCode;
+          setPendingFriendInvite({
+            campaignId: shareAssistDemo.campaignId,
+            inviterName: owner.nickname,
+            inviterFactionCode,
+            inviterFactionName,
+          });
+          setPendingNewUserFaction(inviterFactionCode);
+        } else {
+          setPendingShareInvite({
+            campaignId: shareAssistDemo.campaignId,
+            helperOpenidHash,
+            helperDeviceHash,
+          });
+        }
       }
 
       setShareAssistDemo((current) => current ? {
@@ -1534,7 +1645,7 @@ function App(): JSX.Element {
         error: null,
       } : current);
     } catch (error) {
-      const message = error instanceof Error && error.message ? error.message : '当前无法完成浇水助力，请稍后重试。';
+      const message = error instanceof Error && error.message ? error.message : '当前无法完成微信助力，请稍后重试。';
       setShareAssistDemo((current) => current ? { ...current, error: message } : current);
     } finally {
       setPendingActionKey(null);
@@ -1566,6 +1677,7 @@ function App(): JSX.Element {
     setShareAssistDemo(null);
     setPendingShareInvite(null);
     setPendingFriendInvite(null);
+    setReturningFriendInvitePrompt(null);
     setFriendInviteDemoLinks(null);
     setFriendInviteNewUserUrlInput('');
     setFriendInviteReturningUserUrlInput('');
@@ -2207,7 +2319,7 @@ function App(): JSX.Element {
   const farmFields = scenes.farm.fields.map((field) => {
     const assignedSeedId = fieldSeedAssignments[field.id];
     const assignedSeed = assignedSeedId ? seedCatalogMap.get(assignedSeedId) : undefined;
-    const localPresentation = buildLiveFarmFieldPresentation(field, farmTick, assignedSeed);
+    const localPresentation = buildLiveFarmFieldPresentation(field, farmTick);
 
     if (!assignedSeed || (field.tone !== 'seeded' && field.tone !== 'growing' && field.tone !== 'mature' && field.tone !== 'withered')) {
       return localPresentation ? {
@@ -2941,7 +3053,11 @@ function App(): JSX.Element {
       return;
     }
 
-    if (action.label === '开始培育') {
+    const field = farmFields.find((item) => item.id === fieldId) as (typeof farmFields[number] & { fieldVersionOffset?: number }) | undefined;
+    const isStartCultivationAction = action.label === '开始培育' || (action.target === 'farm' && field?.tone === 'empty');
+    const isCollectAction = action.label.includes('收取') || (action.target === 'farm' && (field?.tone === 'mature' || field?.tone === 'withered'));
+
+    if (isStartCultivationAction) {
       setSelectedSeedId(getPreferredSeedId());
       if (tutorialStage === 'farm') {
         void handleStartCultivation(fieldId, context, TUTORIAL_STARTER_SEED_ID);
@@ -2964,9 +3080,8 @@ function App(): JSX.Element {
       return;
     }
 
-    if (action.label.includes('收取')) {
-      const collectMode: ClientCollectFieldRequest['collectMode'] = action.label.includes('提前') ? 'early' : 'ripe';
-      const field = farmFields.find((item) => item.id === fieldId) as (typeof farmFields[number] & { fieldVersionOffset?: number }) | undefined;
+    if (isCollectAction) {
+      const collectMode: ClientCollectFieldRequest['collectMode'] = 'ripe';
 
       setPendingActionKey(actionKey);
 
@@ -3713,6 +3828,7 @@ function App(): JSX.Element {
                 following={socialFollowing}
                 friendInviteUrl={friendInviteDemoLinks?.newUser ?? null}
                 friends={socialFriends}
+                fieldVisit={socialFieldVisit}
                 playerFactionName={home.factionName}
                 onAssistBack={(targetPlayerId) => {
                   void handleSocialAssistBack(targetPlayerId);
@@ -3735,8 +3851,15 @@ function App(): JSX.Element {
                 onCopyFriendInviteUrl={(url) => {
                   void copyFriendInviteUrl(url);
                 }}
+                onCloseFieldVisit={() => setSocialFieldVisit(null)}
+                onConfirmHarvest={(fieldSlotId) => {
+                  void handleConfirmSocialHarvest(fieldSlotId);
+                }}
                 onRequestFriend={(targetPlayerId) => {
                   void handleSocialFriendRequest(targetPlayerId);
+                }}
+                onOpenFieldVisit={(targetPlayerId) => {
+                  void handleOpenSocialFieldVisit(targetPlayerId);
                 }}
                 relationFilter={socialRelationFilter}
                 summary={socialSummary}
@@ -3863,6 +3986,43 @@ function App(): JSX.Element {
               onClose={handleCloseFarmBoardEditor}
               saving={farmBoardEditor.saving}
             />
+          ) : null}
+          {returningFriendInvitePrompt ? (
+            <div className="modal-backdrop global-feature-backdrop friend-invite-confirm-backdrop" role="presentation">
+              <section
+                aria-labelledby="returning-friend-invite-title"
+                aria-modal="true"
+                className="modal-card transfer-card friend-invite-confirm-card"
+                role="dialog"
+              >
+                <p className="eyebrow">好友邀请</p>
+                <h3 id="returning-friend-invite-title">确认成为好友</h3>
+                <p className="panel-text">
+                  {returningFriendInvitePrompt.inviterName}（{returningFriendInvitePrompt.inviterFactionName}）邀请你成为好友。
+                  确认后双方都会出现在好友列表，并各自收到可领取的邀请奖励。
+                </p>
+                <div className="transfer-foot-row friend-invite-confirm-actions">
+                  <button
+                    className="secondary-button"
+                    disabled={pendingActionKey === 'friend-invite:returning-confirm'}
+                    onClick={handleRejectReturningFriendInvite}
+                    type="button"
+                  >
+                    拒绝
+                  </button>
+                  <button
+                    className="primary-button"
+                    disabled={pendingActionKey === 'friend-invite:returning-confirm'}
+                    onClick={() => {
+                      void handleConfirmReturningFriendInvite();
+                    }}
+                    type="button"
+                  >
+                    {pendingActionKey === 'friend-invite:returning-confirm' ? '确认中...' : '确认成为好友'}
+                  </button>
+                </div>
+              </section>
+            </div>
           ) : null}
           {globalUnlockModal ? (
             <GlobalUnlockModal

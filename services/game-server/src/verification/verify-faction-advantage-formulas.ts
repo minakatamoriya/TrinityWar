@@ -4,7 +4,7 @@ import {
   applyFactionSpiritPassiveExpBonus,
   getFactionBattleAttackMultiplier,
   getFactionFarmMatureYieldMultiplier,
-  getFactionFarmRipeWindowSeconds,
+  getFactionFarmCollectWindowSeconds,
   getFactionSpiritFeedDurationSeconds,
 } from '../lib/faction-advantage-formulas.js';
 
@@ -13,9 +13,9 @@ function main(): void {
   assert.equal(Math.round(200 * getFactionFarmMatureYieldMultiplier('human')), 210);
   assert.equal(getFactionFarmMatureYieldMultiplier('immortal'), 1);
 
-  assert.equal(getFactionFarmRipeWindowSeconds(1800, 600, 'human'), 2760);
-  assert.equal(getFactionFarmRipeWindowSeconds(900, 600, 'human'), 1680);
-  assert.equal(getFactionFarmRipeWindowSeconds(1800, 600, 'immortal'), 2400);
+  assert.equal(getFactionFarmCollectWindowSeconds(1800, 600, 'human'), 2760);
+  assert.equal(getFactionFarmCollectWindowSeconds(900, 600, 'human'), 1680);
+  assert.equal(getFactionFarmCollectWindowSeconds(1800, 600, 'immortal'), 2400);
 
   assert.equal(applyFactionSpiritPassiveExpBonus(5000, 'immortal'), 5500);
   assert.equal(applyFactionSpiritPassiveExpBonus(500, 'immortal'), 550);

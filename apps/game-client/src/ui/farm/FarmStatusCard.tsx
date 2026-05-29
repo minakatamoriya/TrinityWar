@@ -36,8 +36,8 @@ const farmStageImageMap: Record<ClientFarmField['tone'], string> = {
 const raidFieldBadgeMap: Record<ClientFarmField['tone'], string> = {
   seeded: '播种',
   growing: '成长',
-  mature: '丰熟',
-  withered: '过熟',
+  mature: '成熟',
+  withered: '枯萎',
   empty: '空闲',
   locked: '待解锁',
 };
@@ -57,15 +57,15 @@ function getFarmProgressLabel(view: FarmStatusViewModel, remainingSeconds: numbe
   }
 
   if (view.tone === 'growing') {
-    return `距离丰熟 ${formatDuration(remainingSeconds)}`;
+    return `距离成熟 ${formatDuration(remainingSeconds)}`;
   }
 
   if (view.tone === 'mature') {
-    return '当前处于丰熟阶段';
+    return '成熟可收';
   }
 
   if (view.tone === 'withered') {
-    return '已过熟，收益衰减中';
+    return '已枯萎，收益衰减中';
   }
 
   if (view.tone === 'locked') {
@@ -95,7 +95,7 @@ export function buildFarmFieldStatusView(field: ClientFarmField): FarmStatusView
         .replace('这块田地会随主城里程碑自动开启。', '随主城里程碑自动解锁')
       : undefined,
     centerActionLabel: field.tone === 'empty' ? primaryAction?.label : undefined,
-    harvestable: Boolean(primaryAction?.label?.includes('收取')),
+    harvestable: field.tone === 'mature' || field.tone === 'withered' || Boolean(primaryAction?.label?.includes('收取')),
   };
 }
 
