@@ -114,6 +114,7 @@ type ResolvableStipendReward = ClientFactionStipendReward & {
 const TUTORIAL_STARTER_SEED_ID = 'qilingya';
 const TUTORIAL_STARTER_SEED_FALLBACK_ID = 'qinglingmai';
 const TUTORIAL_STARTER_SEED_QUANTITY = 1;
+const FIRST_FACTION_STIPEND_UNLOCK_SEED_IDS = ['qinglingmai', 'xunyamai'] as const;
 
 @Injectable()
 export class ClientCommandService {
@@ -817,14 +818,14 @@ export class ClientCommandService {
       await client.playerFieldSlot.update({
         where: { id: field.id },
         data: {
-          status: 'SEEDED',
+          status: 'GROWING',
           seedDefinition: { connect: { id: seedDefinition.id } },
           expectedEssenceYield: getExpectedEssenceYield(seedDefinition.rarity),
           stolenEssenceYield: 0,
           harvestedEssenceYield: 0,
           lastStolenAt: null,
           investedGold: 0,
-          currentClaimableGold: getCultivationStageGold(seedDefinition.seedId, 'seeded', field.player?.faction?.code ?? null),
+          currentClaimableGold: getCultivationStageGold(seedDefinition.seedId, 'growing', field.player?.faction?.code ?? null),
           seedAt: now,
           ...buildFieldReadyAtUpdate(readyAt),
           overripeAt: null,
@@ -1529,6 +1530,44 @@ export class ClientCommandService {
             inventoryVersion: { increment: 1 },
           },
         });
+      }
+
+      if (priorClaimCount <= 0) {
+        for (const seedId of FIRST_FACTION_STIPEND_UNLOCK_SEED_IDS) {
+          const seedDefinition = await client.seedDefinition.findUnique({
+            where: { seedId },
+            select: { id: true },
+          });
+
+          if (!seedDefinition) {
+            continue;
+          }
+
+          await client.playerSeedInventory.upsert({
+            where: {
+              playerId_seedDefinitionId: {
+                playerId: input.playerId,
+                seedDefinitionId: seedDefinition.id,
+              },
+            },
+            create: {
+              playerId: input.playerId,
+              seedDefinitionId: seedDefinition.id,
+              quantity: 0,
+              unlockedAt: now,
+            },
+            update: {
+              unlockedAt: now,
+              inventoryVersion: { increment: 1 },
+            },
+          });
+
+          await discoverPlant(client, {
+            playerId: input.playerId,
+            seedDefinitionId: seedDefinition.id,
+            discoveredAt: now,
+          });
+        }
       }
 
       for (const reward of spiritShardRewards) {
@@ -2264,7 +2303,7 @@ function hashClaimFactionStipendRequest(request: ClaimFactionStipendRequestDto):
 
 function getCultivationStageGold(
   seedId: string,
-  stage: 'seeded' | 'growing' | 'mature' | 'withered',
+  stage: 'growing' | 'mature' | 'withered',
   factionCode: string | null,
 ): number {
   const base = getSeedStageGold(seedId, stage);
@@ -2687,7 +2726,6 @@ async function ensureSeedDefinitionExists(
       label: seed.label,
       rarity: seed.rarity,
       sortOrder: seed.sortOrder,
-      seedSeconds: seed.seedSeconds,
       growSeconds: seed.growSeconds,
       matureSeconds: seed.matureSeconds,
       collectWindowSeconds: seed.collectWindowSeconds,
@@ -3028,4 +3066,3 @@ function buildBuildingUpdateData(target: BuildingUpgradeTarget): Prisma.PlayerBu
 
   return data;
 }
-

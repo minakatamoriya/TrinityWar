@@ -238,7 +238,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
         slotIndex: 2,
         isUnlocked: true,
         unlockCastleLevel: 5,
-        status: 'SEEDED',
+        status: 'GROWING',
         seedId: 'qinglingmai',
         currentClaimableGold: 40,
         stageOffsetSeconds: 20 * 60,

@@ -57,6 +57,7 @@ const DAILY_FREE_RECOVERY_LIMIT = 3;
 const DAILY_TALISMAN_RECOVERY_LIMIT = 3;
 const MAX_QUICK_RECOVERY_PER_DAY = DAILY_FREE_RECOVERY_LIMIT + DAILY_TALISMAN_RECOVERY_LIMIT;
 const SPIRIT_MAX_LEVEL = 50;
+const STARTER_SPIRIT_IDS = ['canglang', 'linglu', 'qingyuan'];
 const traitChoices: Array<{ code: ClientSpiritTraitCode; label: string }> = [
   { code: 'claw', label: '利爪' },
   { code: 'thick_skin', label: '厚皮' },
@@ -559,7 +560,14 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const selectedSlot = selectedSlotIndex === null ? null : slots.find((slot) => slot.slotIndex === selectedSlotIndex) ?? null;
   const selectedSlotEntry = selectedSlot?.spiritId ? codexById.get(selectedSlot.spiritId) ?? null : null;
   const selectedCodexEntry = selectedCodexSpiritId ? codexById.get(selectedCodexSpiritId) ?? null : null;
-  const availableComposePets = spirit.readyToCompose.filter((entry) => !entry.ownedCurrent);
+  const hasOwnedStarterEver = spirit.codex.some((entry) => STARTER_SPIRIT_IDS.includes(entry.spiritId) && entry.ownedEver);
+  const starterComposePets = !mainSlot && !hasOwnedStarterEver
+    ? spirit.codex.filter((entry) => STARTER_SPIRIT_IDS.includes(entry.spiritId) && entry.hasSeen && !entry.ownedCurrent)
+    : [];
+  const composePetById = new Map(
+    [...spirit.readyToCompose.filter((entry) => !entry.ownedCurrent), ...starterComposePets].map((entry) => [entry.spiritId, entry]),
+  );
+  const availableComposePets = Array.from(composePetById.values());
   const selectedComposeEntry = availableComposePets.find((entry) => entry.spiritId === selectedComposeSpiritId) ?? availableComposePets[0] ?? null;
   const occupiedCount = slots.filter((slot) => slot.spiritId).length;
   const isStableFull = occupiedCount >= slots.length;

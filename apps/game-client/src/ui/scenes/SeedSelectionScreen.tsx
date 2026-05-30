@@ -11,10 +11,7 @@ interface SeedOption {
     mature: number;
     withered: number;
   };
-  stageSeconds?: {
-    seeded: number;
-    growing: number;
-  };
+  growthSeconds?: number;
   unlocked: boolean;
   quantity: number;
 }
@@ -103,7 +100,7 @@ export function SeedSelectionScreen(props: SeedSelectionScreenProps): JSX.Elemen
               <div className="seed-codex-stats">
                 <div className="seed-codex-stat-row">
                   <strong>成长时间</strong>
-                  <span>{selectedSeed.stageSeconds ? formatDuration(selectedSeed.stageSeconds.seeded + selectedSeed.stageSeconds.growing) : '待配置'}</span>
+                  <span>{selectedSeed.growthSeconds !== undefined ? formatDuration(selectedSeed.growthSeconds) : '待配置'}</span>
                 </div>
                 <div className="seed-codex-stat-row">
                   <strong>收获价值</strong>

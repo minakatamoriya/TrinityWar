@@ -143,7 +143,6 @@ export interface SceneContentReadModel {
     seedDefinition: {
       seedId: string;
       label: string;
-      seedSeconds: number;
       growSeconds: number;
       matureSeconds: number;
       collectWindowSeconds: number;
@@ -159,7 +158,6 @@ export interface SceneContentReadModel {
       label: string;
       rarity: string;
       sortOrder: number;
-      seedSeconds: number;
       growSeconds: number;
       matureSeconds: number;
       baseYieldGold: number;
@@ -504,7 +502,6 @@ export class ClientReadRepository {
               select: {
                 seedId: true,
                 label: true,
-                seedSeconds: true,
                 growSeconds: true,
                 matureSeconds: true,
                 collectWindowSeconds: true,
@@ -528,7 +525,6 @@ export class ClientReadRepository {
                 label: true,
                 rarity: true,
                 sortOrder: true,
-                seedSeconds: true,
                 growSeconds: true,
                 matureSeconds: true,
                 baseYieldGold: true,

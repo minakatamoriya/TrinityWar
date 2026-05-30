@@ -6,7 +6,7 @@ export interface FieldStateForCollect {
   id: string;
   slotIndex: number;
   isUnlocked: boolean;
-  status: 'LOCKED' | 'EMPTY' | 'SEEDED' | 'GROWING' | 'MATURE' | 'WITHERED';
+  status: 'LOCKED' | 'EMPTY' | 'GROWING' | 'MATURE' | 'WITHERED';
   statusVersion: number;
   currentClaimableGold: number;
   expectedEssenceYield: number;

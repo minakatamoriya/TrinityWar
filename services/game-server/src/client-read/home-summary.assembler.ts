@@ -100,7 +100,7 @@ export class HomeSummaryAssembler {
       return `${readyCount} 块田地可收取`;
     }
 
-    const activeCount = unlockedFields.filter((field) => field.status === 'SEEDED' || field.status === 'GROWING').length;
+    const activeCount = unlockedFields.filter((field) => field.status === 'GROWING').length;
 
     if (activeCount > 0) {
       return `${activeCount} 块田地培育中`;

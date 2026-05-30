@@ -33,7 +33,6 @@ import { getLocalDateKey } from '../lib/date-key.js';
 import {
   buildFieldReadyAtUpdate,
   getFieldReadyAt,
-  getLegacyGrowingReadyAt,
 } from '../lib/field-timing.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -926,7 +925,7 @@ async function findShareWaterableFieldById(
       id: fieldSlotId,
       playerId: targetPlayerId,
       isUnlocked: true,
-      status: { in: ['SEEDED', 'GROWING'] },
+      status: 'GROWING',
       seedDefinitionId: { not: null },
     },
     select: shareWaterableFieldSelect,
@@ -938,7 +937,7 @@ async function findFirstShareWaterableField(client: Prisma.TransactionClient, ta
     where: {
       playerId: targetPlayerId,
       isUnlocked: true,
-      status: { in: ['SEEDED', 'GROWING'] },
+      status: 'GROWING',
       seedDefinitionId: { not: null },
     },
     orderBy: [
@@ -984,19 +983,11 @@ async function applyShareWaterFieldEffect(client: Prisma.TransactionClient, fiel
 }
 
 function getShareWaterableStageStartedAt(field: ShareWaterableField, now: Date): Date {
-  if (field.status === 'SEEDED') {
-    return field.seedAt ?? field.lastCalculatedAt ?? now;
-  }
-
-  return field.matureAt ?? field.seedAt ?? field.lastCalculatedAt ?? now;
+  return field.seedAt ?? field.lastCalculatedAt ?? now;
 }
 
 function getShareWaterableStageEndsAt(field: ShareWaterableField, stageStartedAt: Date): Date {
-  if (field.status === 'SEEDED') {
-    return getFieldReadyAt(field, field.seedDefinition?.seedId ?? '', stageStartedAt);
-  }
-
-  return getLegacyGrowingReadyAt(field, field.seedDefinition?.seedId ?? '', stageStartedAt);
+  return getFieldReadyAt(field, field.seedDefinition?.seedId ?? '', stageStartedAt);
 }
 
 async function createRewardNotification(

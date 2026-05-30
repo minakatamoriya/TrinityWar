@@ -222,7 +222,7 @@ export class PlayerInitializationService {
           harvestedGoldTotal: 0,
           raidedGoldTotal: 0,
           seedAt: seedDefinitionId ? stageStartedAt : null,
-          matureAt: seedDefinitionId && field.status !== 'SEEDED' ? stageStartedAt : null,
+          matureAt: seedDefinitionId && (field.status === 'MATURE' || field.status === 'WITHERED') ? stageStartedAt : null,
           readyAt: seedDefinitionId && (field.status === 'MATURE' || field.status === 'WITHERED') ? stageStartedAt : null,
           overripeAt: field.status === 'WITHERED' ? stageStartedAt : null,
           lastCalculatedAt: seedDefinitionId ? now : null,
@@ -239,7 +239,7 @@ export class PlayerInitializationService {
             harvestedGoldTotal: 0,
             raidedGoldTotal: 0,
             seedAt: seedDefinitionId ? stageStartedAt : null,
-            matureAt: seedDefinitionId && field.status !== 'SEEDED' ? stageStartedAt : null,
+            matureAt: seedDefinitionId && (field.status === 'MATURE' || field.status === 'WITHERED') ? stageStartedAt : null,
             readyAt: seedDefinitionId && (field.status === 'MATURE' || field.status === 'WITHERED') ? stageStartedAt : null,
             overripeAt: field.status === 'WITHERED' ? stageStartedAt : null,
             lastCalculatedAt: seedDefinitionId ? now : null,
@@ -514,7 +514,7 @@ export class PlayerInitializationService {
         && readyStarterSpirits
         && STARTER_SPIRIT_IDS.includes(definition.spiritId as typeof STARTER_SPIRIT_IDS[number]);
       const hasSeen = isStarter || isReadyStarter;
-      const shardCount = isReadyStarter ? definition.shardUnlockRequired : 0;
+      const shardCount = 0;
 
       await client.playerSpiritCodex.upsert({
         where: {
@@ -528,11 +528,11 @@ export class PlayerInitializationService {
           spiritDefinitionId: definition.id,
           hasSeen,
           shardCount,
-          readyToCompose: isReadyStarter,
+          readyToCompose: false,
           ownedCurrent: isStarter,
           ownedEver: isStarter,
           firstSeenAt: hasSeen ? now : null,
-          readyAt: isReadyStarter ? now : null,
+          readyAt: null,
           lastOwnedAt: isStarter ? now : null,
           codexVersion: 1,
         },
@@ -540,11 +540,11 @@ export class PlayerInitializationService {
           ? {
             hasSeen,
             shardCount,
-            readyToCompose: isReadyStarter,
+            readyToCompose: false,
             ownedCurrent: isStarter,
             ownedEver: isStarter,
             firstSeenAt: hasSeen ? now : null,
-            readyAt: isReadyStarter ? now : null,
+            readyAt: null,
             lastOwnedAt: isStarter ? now : null,
             codexVersion: { increment: 1 },
           }
@@ -668,4 +668,3 @@ function getDailyTaskGoldReward(taskId: string): number {
   const goldReward = task?.rewards?.find((reward) => reward.type === 'gold');
   return typeof goldReward?.amount === 'number' ? goldReward.amount : 0;
 }
-

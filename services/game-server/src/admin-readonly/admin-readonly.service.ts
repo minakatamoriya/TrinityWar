@@ -761,7 +761,6 @@ function parseSeedDefinitionPayload(body: unknown, requireAll: boolean): Record<
   copyStringField(payload, record, 'label', requireAll);
   copyEnumField(payload, record, 'rarity', ['common', 'rare', 'legendary'], requireAll);
   copyIntegerField(payload, record, 'sortOrder', requireAll, 0);
-  copyIntegerField(payload, record, 'seedSeconds', requireAll, 1);
   copyIntegerField(payload, record, 'growSeconds', requireAll, 1);
   copyIntegerField(payload, record, 'matureSeconds', requireAll, 1);
   copyIntegerField(payload, record, 'collectWindowSeconds', requireAll, 0);

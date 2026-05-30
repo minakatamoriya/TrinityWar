@@ -1,4 +1,4 @@
-import { getSeedStageSeconds } from './game-balance.js';
+import { getSeedGrowthSeconds } from './game-balance.js';
 
 export interface FieldTimingProjection {
   seedAt: Date | null;
@@ -13,7 +13,7 @@ export interface FieldReadyAtUpdate {
 }
 
 export function getCultivationSeconds(seedId: string): number {
-  return getSeedStageSeconds(seedId, 'seeded') + getSeedStageSeconds(seedId, 'growing');
+  return getSeedGrowthSeconds(seedId);
 }
 
 export function getFieldCultivationStartedAt(field: FieldTimingProjection, now: Date): Date {
@@ -25,11 +25,6 @@ export function getFieldReadyAt(field: FieldTimingProjection, seedId: string, no
   return field.readyAt
     ?? field.matureAt
     ?? addSeconds(startedAt, getCultivationSeconds(seedId));
-}
-
-export function getLegacyGrowingReadyAt(field: FieldTimingProjection, seedId: string, now: Date): Date {
-  const startedAt = field.matureAt ?? getFieldCultivationStartedAt(field, now);
-  return field.readyAt ?? addSeconds(startedAt, getSeedStageSeconds(seedId, 'growing'));
 }
 
 export function getMatureStartedAt(field: FieldTimingProjection, now: Date): Date {

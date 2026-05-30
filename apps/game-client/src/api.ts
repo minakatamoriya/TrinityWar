@@ -207,48 +207,48 @@ const seedLabelMap: Record<string, string> = {
   zhaoyouming: '照幽冥',
 };
 
-const mockSeedStageGold: Record<string, { seeded: number; growing: number; mature: number; withered: number }> = {
-  qilingya: { seeded: 20, growing: 20, mature: 50, withered: 50 },
-  qinglingmai: { seeded: 100, growing: 100, mature: 200, withered: 100 },
-  xunyamai: { seeded: 100, growing: 100, mature: 200, withered: 100 },
-  ninglucao: { seeded: 100, growing: 100, mature: 140, withered: 40 },
-  suixinhua: { seeded: 120, growing: 120, mature: 300, withered: 50 },
-  baiyulian: { seeded: 160, growing: 160, mature: 220, withered: 180 },
-  yingyuezhu: { seeded: 150, growing: 150, mature: 230, withered: 140 },
-  qianjiteng: { seeded: 170, growing: 170, mature: 360, withered: 120 },
-  huichuncao: { seeded: 320, growing: 320, mature: 480, withered: 380 },
-  xueyuehua: { seeded: 300, growing: 300, mature: 760, withered: 180 },
-  jingdaosong: { seeded: 450, growing: 450, mature: 620, withered: 520 },
-  hundunguo: { seeded: 420, growing: 420, mature: 880, withered: 260 },
-  zhanqingsi: { seeded: 520, growing: 520, mature: 1200, withered: 200 },
-  wangchuanying: { seeded: 760, growing: 760, mature: 1200, withered: 960 },
-  zhaoyouming: { seeded: 700, growing: 700, mature: 1600, withered: 680 },
+const mockSeedStageGold: Record<string, { growing: number; mature: number; withered: number }> = {
+  qilingya: { growing: 20, mature: 50, withered: 50 },
+  qinglingmai: { growing: 100, mature: 200, withered: 100 },
+  xunyamai: { growing: 100, mature: 200, withered: 100 },
+  ninglucao: { growing: 100, mature: 140, withered: 40 },
+  suixinhua: { growing: 120, mature: 300, withered: 50 },
+  baiyulian: { growing: 160, mature: 220, withered: 180 },
+  yingyuezhu: { growing: 150, mature: 230, withered: 140 },
+  qianjiteng: { growing: 170, mature: 360, withered: 120 },
+  huichuncao: { growing: 320, mature: 480, withered: 380 },
+  xueyuehua: { growing: 300, mature: 760, withered: 180 },
+  jingdaosong: { growing: 450, mature: 620, withered: 520 },
+  hundunguo: { growing: 420, mature: 880, withered: 260 },
+  zhanqingsi: { growing: 520, mature: 1200, withered: 200 },
+  wangchuanying: { growing: 760, mature: 1200, withered: 960 },
+  zhaoyouming: { growing: 700, mature: 1600, withered: 680 },
 };
 
-const mockSeedStageSeconds: Record<string, { seeded: number; growing: number }> = {
-  qilingya: { seeded: 10, growing: 0 },
-  qinglingmai: { seeded: 7200, growing: 3600 },
-  xunyamai: { seeded: 900, growing: 900 },
-  ninglucao: { seeded: 5400, growing: 1800 },
-  suixinhua: { seeded: 7200, growing: 3600 },
-  baiyulian: { seeded: 10800, growing: 5400 },
-  yingyuezhu: { seeded: 9000, growing: 3600 },
-  qianjiteng: { seeded: 9000, growing: 3600 },
-  huichuncao: { seeded: 10800, growing: 3600 },
-  xueyuehua: { seeded: 9000, growing: 3600 },
-  jingdaosong: { seeded: 14400, growing: 3600 },
-  hundunguo: { seeded: 14400, growing: 5400 },
-  zhanqingsi: { seeded: 10800, growing: 3600 },
-  wangchuanying: { seeded: 18000, growing: 3600 },
-  zhaoyouming: { seeded: 14400, growing: 3600 },
+const mockSeedGrowthSeconds: Record<string, number> = {
+  qilingya: 10,
+  qinglingmai: 10800,
+  xunyamai: 1800,
+  ninglucao: 7200,
+  suixinhua: 10800,
+  baiyulian: 16200,
+  yingyuezhu: 12600,
+  qianjiteng: 12600,
+  huichuncao: 14400,
+  xueyuehua: 12600,
+  jingdaosong: 18000,
+  hundunguo: 19800,
+  zhanqingsi: 14400,
+  wangchuanying: 21600,
+  zhaoyouming: 18000,
 };
 
-function getMockSeedStageSeconds(seedId: string, stage: 'seeded' | 'growing'): number {
-  return mockSeedStageSeconds[seedId]?.[stage] ?? (stage === 'seeded' ? 7200 : 3600);
+function getMockSeedGrowthSeconds(seedId: string): number {
+  return mockSeedGrowthSeconds[seedId] ?? 10800;
 }
 
 function getMockCultivationSeconds(seedId: string): number {
-  return getMockSeedStageSeconds(seedId, 'seeded') + getMockSeedStageSeconds(seedId, 'growing');
+  return getMockSeedGrowthSeconds(seedId);
 }
 
 function buildInitialMockFieldTimingStates(): Record<string, MockFieldTimingState> {
@@ -256,13 +256,13 @@ function buildInitialMockFieldTimingStates(): Record<string, MockFieldTimingStat
   return mockSceneContent.farm.fields.reduce<Record<string, MockFieldTimingState>>((table, field) => {
     const seedId = INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS[field.id];
 
-    if (!seedId || (field.tone !== 'seeded' && field.tone !== 'growing' && field.tone !== 'mature')) {
+    if (!seedId || (field.tone !== 'growing' && field.tone !== 'mature')) {
       return table;
     }
 
     const totalSeconds = field.tone === 'mature'
       ? MOCK_collect_window_SECONDS
-      : getMockSeedStageSeconds(seedId, field.tone);
+      : getMockSeedGrowthSeconds(seedId);
     const fallbackRemainingSeconds = field.tone === 'mature'
       ? Math.min(totalSeconds, 20 * 60)
       : Math.min(field.progressRemainingSeconds, totalSeconds);
@@ -277,7 +277,7 @@ function buildInitialMockFieldTimingStates(): Record<string, MockFieldTimingStat
 
 let mockFieldTimingState: Record<string, MockFieldTimingState> = buildInitialMockFieldTimingStates();
 
-function getMockSeedStageGold(seedId: string, stage: 'seeded' | 'growing' | 'mature' | 'withered'): number {
+function getMockSeedStageGold(seedId: string, stage: 'growing' | 'mature' | 'withered'): number {
   return mockSeedStageGold[seedId]?.[stage] ?? 520;
 }
 
@@ -368,9 +368,8 @@ function createRaidDetailField(field: Partial<ClientFarmField> & Pick<ClientFarm
 function buildFallbackRaidFields(detail: ClientRaidTargetDetailResponse): ClientFarmField[] {
   const fieldTones: Array<{ label: string; tone: ClientFarmField['tone']; badge: string }> = [
     { label: '成熟田', tone: 'mature', badge: '成熟' },
-    { label: '培育中', tone: 'seeded', badge: '培育' },
+    { label: '培育中', tone: 'growing', badge: '培育' },
     { label: '成长田', tone: 'growing', badge: '培育' },
-    { label: '播种田', tone: 'seeded', badge: '培育' },
     { label: '空闲田', tone: 'empty', badge: '空闲' },
     { label: '枯萎田', tone: 'withered', badge: '枯萎' },
   ];
@@ -769,23 +768,11 @@ function clearMockFieldTiming(fieldId: string): void {
 function setMockFieldPresentation(field: ClientFarmField, tone: ClientFarmField['tone'], seedId?: string, remainingSeconds = 0): void {
   field.cropName = seedId ? (seedLabelMap[seedId] ?? seedId) : undefined;
 
-  if (tone === 'seeded' && seedId) {
-    field.title = '培育中';
-    field.badge = '培育';
-    field.tone = 'seeded';
-    field.progressTotalSeconds = getMockCultivationSeconds(seedId);
-    field.progressRemainingSeconds = remainingSeconds;
-    field.yieldGold = getMockSeedStageGold(seedId, 'seeded');
-    field.description = '播种刚完成，成熟后即可收取完整收益。';
-    field.actions = [];
-    return;
-  }
-
   if (tone === 'growing' && seedId) {
     field.title = '培育中';
     field.badge = '培育';
     field.tone = 'growing';
-    field.progressTotalSeconds = getMockSeedStageSeconds(seedId, 'growing');
+    field.progressTotalSeconds = getMockSeedGrowthSeconds(seedId);
     field.progressRemainingSeconds = remainingSeconds;
     field.yieldGold = getMockSeedStageGold(seedId, 'growing');
     field.description = '作物仍在培育中，成熟后即可收取完整收益。';
@@ -841,24 +828,8 @@ function syncMockFieldLifecycle(): void {
       return;
     }
 
-    if (field.tone === 'seeded') {
-      const totalSeconds = getMockCultivationSeconds(seedId);
-      const startedAtMs = getMockFieldStageStartedAtMs(field.id, totalSeconds, Math.min(field.progressRemainingSeconds, totalSeconds));
-      const elapsedSeconds = Math.max(Math.floor((nowMs - startedAtMs) / 1000), 0);
-
-      if (elapsedSeconds < totalSeconds) {
-        setMockFieldTiming(field.id, startedAtMs);
-        setMockFieldPresentation(field, 'seeded', seedId, totalSeconds - elapsedSeconds);
-        return;
-      }
-
-      const nextStartedAtMs = startedAtMs + totalSeconds * 1000;
-      setMockFieldTiming(field.id, nextStartedAtMs);
-      setMockFieldPresentation(field, 'mature', seedId, MOCK_collect_window_SECONDS);
-    }
-
     if (field.tone === 'growing') {
-      const totalSeconds = getMockSeedStageSeconds(seedId, 'growing');
+      const totalSeconds = getMockSeedGrowthSeconds(seedId);
       const startedAtMs = getMockFieldStageStartedAtMs(field.id, totalSeconds, Math.min(field.progressRemainingSeconds, totalSeconds));
       const elapsedSeconds = Math.max(Math.floor((nowMs - startedAtMs) / 1000), 0);
 
@@ -891,7 +862,7 @@ function syncMockFieldLifecycle(): void {
 
 function updateMockFieldStatus(): void {
   const matureCount = mockSceneSnapshot.farm.fields.filter((field) => field.tone === 'mature' || field.tone === 'withered').length;
-  const growingCount = mockSceneSnapshot.farm.fields.filter((field) => field.tone === 'seeded' || field.tone === 'growing').length;
+  const growingCount = mockSceneSnapshot.farm.fields.filter((field) => field.tone === 'growing').length;
 
   mockHomeSnapshot.fieldStatus = `成熟田地 ${matureCount} 块，培育中 ${growingCount} 块`;
   mockSceneSnapshot.farm.hero.title = `成熟 ${matureCount} 块 · 培育中 ${growingCount} 块`;
@@ -1203,7 +1174,7 @@ function applyMockStartCultivation(input: ClientStartCultivationRequest): Client
   }
 
   setMockFieldTiming(input.fieldId, Date.now());
-  setMockFieldPresentation(field, 'seeded', plantType, getMockCultivationSeconds(plantType));
+  setMockFieldPresentation(field, 'growing', plantType, getMockCultivationSeconds(plantType));
   mockFieldSeedAssignments[input.fieldId] = plantType;
   updateMockDailyTask('daily-start-cultivation');
 

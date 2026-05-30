@@ -8,14 +8,12 @@ import {
   getCastleExtensionTrack,
   getFactionStipendTier,
   getLandDeedConfig,
-  getSeedStageSeconds,
 } from '../lib/game-balance.js';
 import { getFactionFarmCollectWindowSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 import {
   addSeconds,
   getCultivationSeconds,
   getFieldReadyAt,
-  getLegacyGrowingReadyAt,
   getMatureStartedAt,
 } from '../lib/field-timing.js';
 import type { SceneContentReadModel } from './client-read.repository.js';
@@ -25,7 +23,6 @@ type ExtensionKey = 'protectionTech' | 'farmYieldTech' | 'collectWindowTech' | '
 const FIELD_STATUS_COPY: Record<FieldStatus, { title: string; badge: string; tone: ClientFarmField['tone'] }> = {
   LOCKED: { title: '\u672a\u89e3\u9501', badge: '\u5f85\u89e3\u9501', tone: 'locked' },
   EMPTY: { title: '\u7a7a\u5730', badge: '\u53ef\u64ad\u79cd', tone: 'empty' },
-  SEEDED: { title: '\u57f9\u80b2\u4e2d', badge: '\u57f9\u80b2', tone: 'seeded' },
   GROWING: { title: '\u57f9\u80b2\u4e2d', badge: '\u57f9\u80b2', tone: 'growing' },
   MATURE: { title: '\u6210\u719f\u671f', badge: '\u6210\u719f', tone: 'mature' },
   WITHERED: { title: '\u67af\u840e\u671f', badge: '\u67af\u840e', tone: 'withered' },
@@ -268,7 +265,7 @@ export class SceneContentAssembler {
   private buildFarmHero(readModel: SceneContentReadModel): ClientSceneContentResponse['farm']['hero'] {
     const unlocked = readModel.fieldSlots.filter((field) => field.isUnlocked);
     const mature = unlocked.filter((field) => field.status === 'MATURE').length;
-    const growing = unlocked.filter((field) => field.status === 'SEEDED' || field.status === 'GROWING').length;
+    const growing = unlocked.filter((field) => field.status === 'GROWING').length;
     const empty = unlocked.filter((field) => field.status === 'EMPTY').length;
 
     return {
@@ -648,21 +645,11 @@ function getFieldTiming(
     return { totalSeconds: 1, remainingSeconds: 0 };
   }
 
-  if (field.status === 'SEEDED') {
+  if (field.status === 'GROWING') {
     return {
       totalSeconds: getCultivationSeconds(field.seedDefinition.seedId),
       remainingSeconds: getRemainingSeconds(
         field.readyAt ?? getFieldReadyAt(field, field.seedDefinition.seedId, now),
-        now,
-      ),
-    };
-  }
-
-  if (field.status === 'GROWING') {
-    return {
-      totalSeconds: getSeedStageSeconds(field.seedDefinition.seedId, 'growing'),
-      remainingSeconds: getRemainingSeconds(
-        field.readyAt ?? getLegacyGrowingReadyAt(field, field.seedDefinition.seedId, now),
         now,
       ),
     };

@@ -27,7 +27,6 @@ import { getLocalDateKey } from '../lib/date-key.js';
 import {
   buildFieldReadyAtUpdate,
   getFieldReadyAt,
-  getLegacyGrowingReadyAt,
 } from '../lib/field-timing.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -1056,7 +1055,7 @@ export class SocialService {
         id: fieldSlotId,
         playerId: targetPlayerId,
         isUnlocked: true,
-        status: { in: ['SEEDED', 'GROWING'] },
+        status: 'GROWING',
         seedDefinitionId: { not: null },
       },
       orderBy: { slotIndex: 'asc' },
@@ -1069,7 +1068,7 @@ export class SocialService {
       where: {
         playerId: targetPlayerId,
         isUnlocked: true,
-        status: { in: ['SEEDED', 'GROWING'] },
+        status: 'GROWING',
         seedDefinitionId: { not: null },
       },
       orderBy: [
@@ -1148,7 +1147,7 @@ export class SocialService {
 
   private mapFriendVisitField(field: FriendFieldVisitSlot, now: Date, harvestedThisCycle: boolean): ClientSocialFriendFieldVisitField {
     const status = field.status as ClientSocialFriendFieldVisitField['status'];
-    const canWater = field.isUnlocked && (field.status === 'SEEDED' || field.status === 'GROWING') && Boolean(field.seedDefinition);
+    const canWater = field.isUnlocked && field.status === 'GROWING' && Boolean(field.seedDefinition);
     const canHarvest = !harvestedThisCycle && field.isUnlocked && field.status === 'MATURE' && Boolean(field.seedDefinition);
     const timing = getFriendFieldTiming(field, now);
     const rewardPreview = canHarvest ? { gold: calculateHarvestRewardGold(field) } : null;
@@ -1368,19 +1367,11 @@ export class SocialService {
 }
 
 function getWaterableStageStartedAt(field: WaterableField, now: Date): Date {
-  if (field.status === 'SEEDED') {
-    return field.seedAt ?? field.lastCalculatedAt ?? now;
-  }
-
-  return field.matureAt ?? field.seedAt ?? field.lastCalculatedAt ?? now;
+  return field.seedAt ?? field.lastCalculatedAt ?? now;
 }
 
 function getWaterableStageEndsAt(field: WaterableField, stageStartedAt: Date): Date {
-  if (field.status === 'SEEDED') {
-    return getFieldReadyAt(field, field.seedDefinition?.seedId ?? '', stageStartedAt);
-  }
-
-  return getLegacyGrowingReadyAt(field, field.seedDefinition?.seedId ?? '', stageStartedAt);
+  return getFieldReadyAt(field, field.seedDefinition?.seedId ?? '', stageStartedAt);
 }
 
 function getHarvestCycleStartedAt(field: HarvestableField): Date {
@@ -1421,9 +1412,6 @@ function mapFriendFieldTone(status: FieldStatus): ClientSocialFriendFieldVisitFi
   if (status === 'EMPTY') {
     return 'empty';
   }
-  if (status === 'SEEDED') {
-    return 'seeded';
-  }
   if (status === 'GROWING') {
     return 'growing';
   }
@@ -1439,9 +1427,6 @@ function getFriendFieldBadge(status: ClientSocialFriendFieldVisitField['status']
   }
   if (status === 'EMPTY') {
     return '空闲';
-  }
-  if (status === 'SEEDED') {
-    return '播种';
   }
   if (status === 'GROWING') {
     return '成长';
@@ -1459,9 +1444,6 @@ function getFriendFieldTitle(status: ClientSocialFriendFieldVisitField['status']
   if (status === 'EMPTY') {
     return '还没有播种';
   }
-  if (status === 'SEEDED') {
-    return '播种中';
-  }
   if (status === 'GROWING') {
     return '成长中';
   }
@@ -1472,14 +1454,9 @@ function getFriendFieldTitle(status: ClientSocialFriendFieldVisitField['status']
 }
 
 function getFriendFieldTiming(field: FriendFieldVisitSlot, now: Date): { remainingSeconds: number; totalSeconds: number } {
-  if (field.status === 'SEEDED') {
+  if (field.status === 'GROWING') {
     const startedAt = field.seedAt ?? field.lastCalculatedAt ?? now;
     const endsAt = getFieldReadyAt(field, field.seedDefinition?.seedId ?? '', now);
-    return buildTiming(startedAt, endsAt, now);
-  }
-  if (field.status === 'GROWING') {
-    const startedAt = field.matureAt ?? field.seedAt ?? field.lastCalculatedAt ?? now;
-    const endsAt = getLegacyGrowingReadyAt(field, field.seedDefinition?.seedId ?? '', now);
     return buildTiming(startedAt, endsAt, now);
   }
   return { remainingSeconds: 0, totalSeconds: 1 };

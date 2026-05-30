@@ -438,9 +438,6 @@ function formatFriendFieldStatus(status: ClientSocialFriendFieldVisitResponse['f
   if (status === 'EMPTY') {
     return '空地';
   }
-  if (status === 'SEEDED') {
-    return '播种中';
-  }
   if (status === 'GROWING') {
     return '成长中';
   }

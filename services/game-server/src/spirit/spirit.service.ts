@@ -1188,7 +1188,7 @@ export class SpiritService {
         return idempotencyRecord.responseSnapshotJson as unknown as ClientSpiritMutationResponse;
       }
 
-      const [targetSlot, codexEntry, existingMainSlot] = await Promise.all([
+      const [targetSlot, codexEntry, existingMainSlot, starterOwnedEverEntry] = await Promise.all([
         client.playerSpiritSlot.findUnique({
           where: {
             playerId_slotIndex: {
@@ -1212,6 +1212,7 @@ export class SpiritService {
           },
           select: {
             id: true,
+            hasSeen: true,
             shardCount: true,
             readyToCompose: true,
             spiritDefinitionId: true,
@@ -1231,6 +1232,16 @@ export class SpiritService {
             playerId,
             isMain: true,
             spiritDefinitionId: { not: null },
+          },
+          select: { id: true },
+        }),
+        client.playerSpiritCodex.findFirst({
+          where: {
+            playerId,
+            ownedEver: true,
+            spiritDefinition: {
+              spiritId: { in: [...STARTER_SPIRIT_IDS] },
+            },
           },
           select: { id: true },
         }),
@@ -1260,10 +1271,11 @@ export class SpiritService {
         });
       }
 
-      const isStarterComposeGift = codexEntry.readyToCompose
-        && codexEntry.shardCount < codexEntry.spiritDefinition.shardUnlockRequired
+      const isStarterComposeGift = !existingMainSlot
+        && !starterOwnedEverEntry
+        && codexEntry.hasSeen
         && STARTER_SPIRIT_IDS.includes(codexEntry.spiritDefinition.spiritId as typeof STARTER_SPIRIT_IDS[number]);
-      if (!codexEntry.readyToCompose && codexEntry.shardCount < codexEntry.spiritDefinition.shardUnlockRequired) {
+      if (!isStarterComposeGift && !codexEntry.readyToCompose && codexEntry.shardCount < codexEntry.spiritDefinition.shardUnlockRequired) {
         throw new BusinessError({
           code: ErrorCode.Conflict,
           message: 'Spirit shards are not ready to compose.',

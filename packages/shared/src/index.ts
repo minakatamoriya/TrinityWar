@@ -1040,7 +1040,7 @@ export interface ClientFarmField {
   title: string;
   badge: string;
   cropName?: string;
-  tone: 'seeded' | 'growing' | 'mature' | 'withered' | 'empty' | 'locked';
+  tone: 'growing' | 'mature' | 'withered' | 'empty' | 'locked';
   progressRemainingSeconds: number;
   progressTotalSeconds: number;
   yieldGold: number;
@@ -1297,7 +1297,7 @@ export interface ClientSocialHarvestFieldPreviewRequest {
   targetPlayerId: string;
 }
 
-export type ClientSocialFriendFieldStatus = 'LOCKED' | 'EMPTY' | 'SEEDED' | 'GROWING' | 'MATURE' | 'WITHERED';
+export type ClientSocialFriendFieldStatus = 'LOCKED' | 'EMPTY' | 'GROWING' | 'MATURE' | 'WITHERED';
 
 export interface ClientSocialFriendFieldVisitField {
   fieldSlotId: string;
@@ -1367,7 +1367,7 @@ export interface ClientSocialAssistResponse {
   };
   field?: {
     fieldSlotId: string;
-    status: 'SEEDED' | 'GROWING' | 'MATURE' | 'WITHERED' | 'EMPTY' | 'LOCKED';
+    status: 'GROWING' | 'MATURE' | 'WITHERED' | 'EMPTY' | 'LOCKED';
     shortenedSeconds: number;
     beforeStageEndsAt: string;
     afterStageEndsAt: string;
@@ -1503,6 +1503,8 @@ export interface ClientUnlockPlantResponse extends ClientStateMutationResponse {
   plant: ClientPlantInventoryItem;
   bootstrap: ClientBootstrapResponse;
 }
+
+export * from './spiritCollisionBattle.js';
 
 export interface ClientArmyTrainingQueue {
   queuedUnits: number;

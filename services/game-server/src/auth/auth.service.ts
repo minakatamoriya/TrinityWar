@@ -811,7 +811,6 @@ async function ensureSeedDefinitionExists(
       label: seed.label,
       rarity: seed.rarity,
       sortOrder: seed.sortOrder,
-      seedSeconds: seed.seedSeconds,
       growSeconds: seed.growSeconds,
       matureSeconds: seed.matureSeconds,
       collectWindowSeconds: seed.collectWindowSeconds,

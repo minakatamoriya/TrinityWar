@@ -103,91 +103,91 @@ const SEED_LEVEL_CONFIG = {
     label: '启灵芽',
     rarity: 'common',
     stageGold: { growing: 20, mature: 50, withered: 50 },
-    stageSeconds: { seeded: 10, growing: 0 },
+    growthSeconds: 10,
   },
   qinglingmai: {
     label: '青灵麦',
     rarity: 'common',
     stageGold: { growing: 100, mature: 200, withered: 100 },
-    stageSeconds: { seeded: 7200, growing: 3600 },
+    growthSeconds: 10800,
   },
   xunyamai: {
     label: '风云稻',
     rarity: 'common',
     stageGold: { growing: 100, mature: 200, withered: 100 },
-    stageSeconds: { seeded: 900, growing: 900 },
+    growthSeconds: 1800,
   },
   ninglucao: {
     label: '凝露草',
     rarity: 'common',
     stageGold: { growing: 100, mature: 140, withered: 40 },
-    stageSeconds: { seeded: 5400, growing: 1800 },
+    growthSeconds: 7200,
   },
   suixinhua: {
     label: '碎心花',
     rarity: 'common',
     stageGold: { growing: 120, mature: 300, withered: 50 },
-    stageSeconds: { seeded: 7200, growing: 3600 },
+    growthSeconds: 10800,
   },
   baiyulian: {
     label: '白玉莲',
     rarity: 'common',
     stageGold: { growing: 160, mature: 220, withered: 180 },
-    stageSeconds: { seeded: 10800, growing: 5400 },
+    growthSeconds: 16200,
   },
   yingyuezhu: {
     label: '影月竹',
     rarity: 'common',
     stageGold: { growing: 150, mature: 230, withered: 140 },
-    stageSeconds: { seeded: 9000, growing: 3600 },
+    growthSeconds: 12600,
   },
   qianjiteng: {
     label: '牵机藤',
     rarity: 'common',
     stageGold: { growing: 170, mature: 360, withered: 120 },
-    stageSeconds: { seeded: 9000, growing: 3600 },
+    growthSeconds: 12600,
   },
   huichuncao: {
     label: '回春草',
     rarity: 'rare',
     stageGold: { growing: 320, mature: 480, withered: 380 },
-    stageSeconds: { seeded: 10800, growing: 3600 },
+    growthSeconds: 14400,
   },
   xueyuehua: {
     label: '雪月花',
     rarity: 'rare',
     stageGold: { growing: 300, mature: 760, withered: 180 },
-    stageSeconds: { seeded: 9000, growing: 3600 },
+    growthSeconds: 12600,
   },
   jingdaosong: {
     label: '劲道松',
     rarity: 'rare',
     stageGold: { growing: 450, mature: 620, withered: 520 },
-    stageSeconds: { seeded: 14400, growing: 3600 },
+    growthSeconds: 18000,
   },
   hundunguo: {
     label: '混沌果',
     rarity: 'rare',
     stageGold: { growing: 420, mature: 880, withered: 260 },
-    stageSeconds: { seeded: 14400, growing: 5400 },
+    growthSeconds: 19800,
   },
   zhanqingsi: {
     label: '斩情丝',
     rarity: 'legendary',
     stageGold: { growing: 520, mature: 1200, withered: 200 },
-    stageSeconds: { seeded: 10800, growing: 3600 },
+    growthSeconds: 14400,
   },
   wangchuanying: {
     label: '忘川影',
     rarity: 'legendary',
     stageGold: { growing: 760, mature: 1200, withered: 960 },
-    stageSeconds: { seeded: 18000, growing: 3600 },
+    growthSeconds: 21600,
   },
   zhaoyouming: {
     label: '照幽冥',
     rarity: 'legendary',
     stageGold: { growing: 700, mature: 1600, withered: 680 },
-    stageSeconds: { seeded: 14400, growing: 3600 },
+    growthSeconds: 18000,
   },
 };
 
@@ -622,10 +622,7 @@ export const GAME_BALANCE = {
   farm: {
     defaultCultivationCost: 0,
     defaultCultivationYield: 520,
-    progressSeconds: {
-      seeded: 3600,
-      growing: 7200,
-    },
+    defaultGrowthSeconds: 10800,
     seeds: SEED_LEVEL_CONFIG,
   },
   army: {
@@ -816,22 +813,14 @@ export function getSeedStageGold(seedId, fieldStatus) {
   return seedConfig.stageGold.growing;
 }
 
-export function getSeedStageSeconds(seedId, fieldStatus) {
+export function getSeedGrowthSeconds(seedId) {
   const seedConfig = getSeedLevelConfig(seedId);
 
   if (!seedConfig) {
-    return fieldStatus === 'seeded' ? GAME_BALANCE.farm.progressSeconds.seeded : GAME_BALANCE.farm.progressSeconds.growing;
+    return GAME_BALANCE.farm.defaultGrowthSeconds;
   }
 
-  if (fieldStatus === 'seeded') {
-    return seedConfig.stageSeconds.seeded;
-  }
-
-  if (fieldStatus === 'growing') {
-    return seedConfig.stageSeconds.growing;
-  }
-
-  return 1;
+  return seedConfig.growthSeconds;
 }
 
 /**

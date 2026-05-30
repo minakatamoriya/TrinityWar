@@ -276,6 +276,8 @@ button {
 }
 
 .auth-panel {
+  position: relative;
+  overflow: hidden;
   width: min(100vw, 430px);
   min-height: 100dvh;
   display: grid;
@@ -1824,10 +1826,6 @@ button {
   gap: 4px;
   border-radius: 20px;
   background: linear-gradient(180deg, rgba(57, 42, 29, 0.84), rgba(30, 22, 18, 0.96));
-}
-
-.farm-plot.seeded {
-  background: linear-gradient(180deg, rgba(110, 78, 40, 0.9), rgba(57, 39, 20, 0.98));
 }
 
 .farm-plot.growing {

@@ -9,7 +9,6 @@ import {
 import {
   addSeconds,
   getFieldReadyAt,
-  getLegacyGrowingReadyAt,
   getMatureStartedAt,
 } from '../lib/field-timing.js';
 
@@ -172,22 +171,8 @@ function settleField(
   const nowMs = now.getTime();
 
   while (true) {
-    if (status === 'SEEDED') {
-      const targetReadyAt = getFieldReadyAt(field, seedId, now);
-
-      if (nowMs < targetReadyAt.getTime()) {
-        break;
-      }
-
-      stageStartedAt = targetReadyAt;
-      matureAt = stageStartedAt;
-      readyAt = stageStartedAt;
-      status = 'MATURE';
-      continue;
-    }
-
     if (status === 'GROWING') {
-      const targetReadyAt = getLegacyGrowingReadyAt(field, seedId, now);
+      const targetReadyAt = getFieldReadyAt(field, seedId, now);
 
       if (nowMs < targetReadyAt.getTime()) {
         break;
@@ -231,12 +216,8 @@ function settleField(
 }
 
 function getStageStartedAt(field: FieldLifecycleSlot, now: Date): Date {
-  if (field.status === 'SEEDED') {
-    return field.seedAt ?? field.lastCalculatedAt ?? now;
-  }
-
   if (field.status === 'GROWING') {
-    return field.matureAt ?? field.seedAt ?? field.lastCalculatedAt ?? now;
+    return field.seedAt ?? field.lastCalculatedAt ?? now;
   }
 
   if (field.status === 'MATURE') {
@@ -246,7 +227,7 @@ function getStageStartedAt(field: FieldLifecycleSlot, now: Date): Date {
   return field.overripeAt ?? getMatureStartedAt(field, now);
 }
 
-function toBalanceStatus(status: FieldStatus): 'seeded' | 'growing' | 'mature' | 'withered' {
+function toBalanceStatus(status: FieldStatus): 'growing' | 'mature' | 'withered' {
   if (status === 'GROWING') {
     return 'growing';
   }
@@ -259,7 +240,7 @@ function toBalanceStatus(status: FieldStatus): 'seeded' | 'growing' | 'mature' |
     return 'withered';
   }
 
-  return 'seeded';
+  return 'growing';
 }
 
 function getWitherWindowSeconds(

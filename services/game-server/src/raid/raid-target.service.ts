@@ -697,7 +697,7 @@ function buildRaidTargetDetailResponse(
     level: targetSnapshot?.level ?? target?.targetPlayer.castleLevelCache ?? 1,
     tutorialTarget: targetSnapshot?.tutorialTarget === true,
     combatPower: String(targetSnapshot?.combatPower ?? 0),
-    fieldPreviewTone: 'seeded',
+    fieldPreviewTone: 'growing',
     fieldStatus: '目标已接入真实目标池',
     fields,
     targetFarmBoardMessage: target?.targetPlayer.farmBoard?.hiddenAt ? '' : target?.targetPlayer.farmBoard?.message ?? '',
@@ -1030,10 +1030,6 @@ function mapFieldStatusBadge(status: string): string {
     return '空闲';
   }
 
-  if (status === 'SEEDED') {
-    return '播种';
-  }
-
   if (status === 'GROWING') {
     return '成长';
   }
@@ -1045,17 +1041,13 @@ function mapFieldStatusBadge(status: string): string {
   return '枯萎';
 }
 
-function mapFieldStatusTone(status: string): 'seeded' | 'growing' | 'mature' | 'withered' | 'empty' | 'locked' {
+function mapFieldStatusTone(status: string): 'growing' | 'mature' | 'withered' | 'empty' | 'locked' {
   if (status === 'LOCKED') {
     return 'locked';
   }
 
   if (status === 'EMPTY') {
     return 'empty';
-  }
-
-  if (status === 'SEEDED') {
-    return 'seeded';
   }
 
   if (status === 'GROWING') {

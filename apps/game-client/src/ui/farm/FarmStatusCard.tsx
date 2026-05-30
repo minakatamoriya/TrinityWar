@@ -25,7 +25,6 @@ interface FarmCollectPresentationState {
 }
 
 const farmStageImageMap: Record<ClientFarmField['tone'], string> = {
-  seeded: '/assets/farm/bozhong.png',
   growing: '/assets/farm/chengzhang.png',
   mature: '/assets/farm/chengshu.png',
   withered: '/assets/farm/kuwei.png',
@@ -34,7 +33,6 @@ const farmStageImageMap: Record<ClientFarmField['tone'], string> = {
 };
 
 const raidFieldBadgeMap: Record<ClientFarmField['tone'], string> = {
-  seeded: '播种',
   growing: '成长',
   mature: '成熟',
   withered: '枯萎',
@@ -52,10 +50,6 @@ function formatDuration(seconds: number): string {
 }
 
 function getFarmProgressLabel(view: FarmStatusViewModel, remainingSeconds: number): string {
-  if (view.tone === 'seeded') {
-    return `距离成熟 ${formatDuration(remainingSeconds)}`;
-  }
-
   if (view.tone === 'growing') {
     return `距离成熟 ${formatDuration(remainingSeconds)}`;
   }
@@ -132,7 +126,7 @@ export function FarmStatusCard(props: FarmStatusCardProps): JSX.Element {
   const { view, minimal = false, collectPresentation = null, compact = false, footer, className, role, tabIndex, onClick, onKeyDown } = props;
   const remainingSeconds = Math.max(view.progressRemainingSeconds, 0);
   const hasProgressTrack = minimal
-    ? (view.tone === 'seeded' || view.tone === 'growing')
+    ? view.tone === 'growing'
     : view.tone !== 'empty' && view.tone !== 'locked';
   const progressPercent = hasProgressTrack && view.progressTotalSeconds > 0
     ? Math.max(Math.min(((view.progressTotalSeconds - remainingSeconds) / view.progressTotalSeconds) * 100, 100), 0)

@@ -94,7 +94,6 @@ export class RaidRepository {
                   select: {
                     seedId: true,
                     label: true,
-                    seedSeconds: true,
                     growSeconds: true,
                     matureSeconds: true,
                     collectWindowSeconds: true,

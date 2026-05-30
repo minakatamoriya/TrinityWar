@@ -20,10 +20,7 @@ export interface PlantCodexItem {
     mature: number;
     withered: number;
   };
-  stageSeconds: {
-    seeded: number;
-    growing: number;
-  };
+  growthSeconds: number;
   unlocked: boolean;
   quantity?: number;
   research?: ClientPlantResearchState;
@@ -111,7 +108,7 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
               <div className="seed-codex-stats">
                 <div className="seed-codex-stat-row">
                   <strong>成熟时间</strong>
-                  <span>{formatDuration(selectedPlant.stageSeconds.seeded + selectedPlant.stageSeconds.growing)}</span>
+                  <span>{formatDuration(selectedPlant.growthSeconds)}</span>
                 </div>
                 <div className="seed-codex-stat-row">
                   <strong>精华库存</strong>
