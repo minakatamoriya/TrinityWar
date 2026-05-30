@@ -34,7 +34,7 @@ const shareAssistCopy: Record<ShareAssistKind, ShareAssistKindCopy> = {
   friend_invite: {
     eyebrow: '微信好友邀请',
     requester: '测试好友',
-    pendingTitle: '好友邀请你加入同一阵营',
+    pendingTitle: '好友发来一条单人邀请',
     actionLabel: '接受好友邀请',
     completedTitle: '邀请已确认',
   },
@@ -49,13 +49,13 @@ const audienceCopy: Record<ShareAssistAudience, {
   'new-user': {
     testLabel: '新用户测试',
     completedSummary: '你的朋友已在三界安营扎寨。一起开辟灵田、培养灵宠吗？马上就能拥有自己的第一块田。',
-    completedHint: '选择阵营时，可以优先考虑和好友同阵营。',
+    completedHint: '这条单人邀请链接已被你接受，其他人将不能再使用。',
     successActionLabel: '开始新手流程',
   },
   'returning-user': {
     testLabel: '老用户测试',
-    completedSummary: '已为好友送出本次助力。登录后可领取助力奖励，并查看好友收到的助力记录。',
-    completedHint: '本入口模拟已注册用户从微信链接回流。',
+    completedSummary: '你已接受好友邀请。确认后双方会出现在好友列表，并收到对应奖励。',
+    completedHint: '这条单人邀请链接被接受后即失效。',
     successActionLabel: '登录并领取奖励',
   },
 };
@@ -80,7 +80,7 @@ export function ShareAssistPage({ audience, kind, status, campaign, error, onCon
         <section className="share-assist-focus">
           <div className="share-assist-avatar" aria-hidden="true">{requester.slice(0, 1)}</div>
           <p className="eyebrow">{copy.eyebrow} · {audienceText.testLabel}</p>
-          <h1>{completed ? copy.completedTitle : blocked ? (status === 'expired' ? '助力已过期' : '助力次数已满') : title}</h1>
+          <h1>{completed ? copy.completedTitle : blocked ? (status === 'expired' ? '助力已过期' : kind === 'friend_invite' ? '邀请已被接受' : '助力次数已满') : title}</h1>
           {completed ? (
             <>
               <p>{audienceText.completedSummary}</p>
@@ -104,7 +104,7 @@ export function ShareAssistPage({ audience, kind, status, campaign, error, onCon
               {actionLabel}
             </button>
           )}
-          {!completed ? <p>助力者登录后可领取相应奖励</p> : null}
+          {!completed ? <p>{kind === 'friend_invite' ? '单人邀请链接仅第一个确认者生效' : '助力者登录后可领取相应奖励'}</p> : null}
         </section>
       </div>
     </main>

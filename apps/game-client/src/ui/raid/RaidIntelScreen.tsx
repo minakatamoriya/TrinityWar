@@ -1,6 +1,7 @@
 import type { ClientRaidDeepIntelResponse, ClientRaidSpiritIntel, ClientRaidSpiritPreview, ClientRaidTargetDetailResponse, ClientSceneAction } from '@trinitywar/shared';
 import { useEffect, useState } from 'react';
 import { ActionButton } from '../ActionButton';
+import { FullScreenToolShell } from '../common/ModalShell';
 import { buildFarmFieldStatusView, FarmStatusCard } from '../farm/FarmStatusCard';
 
 interface RaidIntelScreenProps {
@@ -55,100 +56,99 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
   };
 
   return (
-    <section className="raid-intel-screen" role="dialog" aria-modal="true" aria-label={`${title}情报页`}>
-      <div className="raid-intel-topbar">
-        <h3>{title}</h3>
-        <button className="ghost-button small" onClick={onClose} type="button">关闭</button>
-      </div>
-
+    <FullScreenToolShell
+      ariaLabel={`${title}情报页`}
+      bodyClassName="raid-intel-body"
+      className="raid-intel-screen"
+      onBack={onClose}
+      title={title}
+    >
       <div className="raid-intel-hero">
         <p className="raid-intel-name">{targetName}</p>
       </div>
 
-      <div className="raid-intel-body">
-        {loading ? <p className="panel-text">正在请求对手详情...</p> : null}
-        {error ? <p className="panel-text raid-error-text">{error}</p> : null}
+      {loading ? <p className="panel-text">正在请求对手详情...</p> : null}
+      {error ? <p className="panel-text raid-error-text">{error}</p> : null}
 
-        {detail && !loading ? (
-          <>
-            <div className="raid-detail-topline">
-              <span className="soft-tag">领地 Lv.{detail.level}</span>
-              <span className="soft-tag">{detail.faction}</span>
-              <span className="soft-tag">默认仅见外观与等级</span>
-            </div>
+      {detail && !loading ? (
+        <>
+          <div className="raid-detail-topline">
+            <span className="soft-tag">领地 Lv.{detail.level}</span>
+            <span className="soft-tag">{detail.faction}</span>
+            <span className="soft-tag">默认仅见外观与等级</span>
+          </div>
 
-            {spiritPreview ? (
-              <article className="panel-card raid-spirit-card">
-                <div className="raid-spirit-preview">
-                  <div className="raid-spirit-avatar" aria-hidden="true">
-                    <span>{spiritPreview.avatarGlyph}</span>
-                  </div>
-                  <div className="raid-spirit-info">
-                    <p className="eyebrow">默认情报</p>
-                    <h4>{spiritPreview.label}</h4>
-                    <strong>Lv.{spiritPreview.level}</strong>
-                  </div>
+          {spiritPreview ? (
+            <article className="panel-card raid-spirit-card">
+              <div className="raid-spirit-preview">
+                <div className="raid-spirit-avatar" aria-hidden="true">
+                  <span>{spiritPreview.avatarGlyph}</span>
                 </div>
-                {intelState || directIntel ? (
-                  <div className="raid-spirit-revealed">
-                    <div><span>五行</span><strong>{formatSpiritElement((intelState ?? directIntel)?.element ?? null)}</strong></div>
-                    <div><span>攻击</span><strong>{(intelState ?? directIntel)?.attackRating}</strong></div>
-                    <div><span>状态</span><strong>{(intelState ?? directIntel)?.healthStatus}</strong></div>
-                  </div>
-                ) : allowDeepIntel ? (
-                  <div className="raid-spirit-intel-action">
-                    <button className="secondary-button" disabled={intelLoading} onClick={handleRevealDeepIntel} type="button">
-                      {intelLoading ? '窥视中...' : '深度窥视'}
-                    </button>
-                    {intelError ? <span>{intelError}</span> : <span>{intelQuotaText}</span>}
-                  </div>
-                ) : null}
-              </article>
-            ) : null}
-
-            <div className="raid-intel-summary-card panel-card">
-              <div className="panel-head">
-                <h4>对手田地</h4>
-                <span className="soft-tag">{detail.fieldStatus}</span>
-              </div>
-              <div className="farm-field-grid raid-intel-field-grid">
-                {detail.fields.map((field) => (
-                  <FarmStatusCard className="raid-intel-field-card" key={field.id} view={buildFarmFieldStatusView(field)} />
-                ))}
-              </div>
-            </div>
-
-            <div className="raid-asset-strip raid-intel-assets">
-              <div className="target-meta raid-asset-card raid-visual-card">
-                <span>可争夺收益</span>
-                <div className="raid-gold-preview" aria-hidden="true">
-                  <span className="raid-gold-stack raid-gold-stack-back" />
-                  <span className="raid-gold-stack raid-gold-stack-mid" />
-                  <span className="raid-gold-stack raid-gold-stack-front" />
+                <div className="raid-spirit-info">
+                  <p className="eyebrow">默认情报</p>
+                  <h4>{spiritPreview.label}</h4>
+                  <strong>Lv.{spiritPreview.level}</strong>
                 </div>
-                <strong>{detail.raidableGold}</strong>
-                <em>{detail.exposedFruit}</em>
               </div>
-            </div>
-
-            <div className="raid-detail-status-list raid-intel-status-list">
-              <p><strong>主宠情报：</strong>默认只显示卡面外观与等级，不直接展示五行、状态和攻击评级。</p>
-              <p><strong>保护状态：</strong>{detail.protectionStatus}</p>
-            </div>
-
-            {detail.targetFarmBoardMessage ? (
-              <article className="panel-card raid-farm-board-note">
-                <p className="eyebrow">菜田留言</p>
-                <p>{detail.targetFarmBoardMessage}</p>
-              </article>
-            ) : null}
-
-            <article className="panel-card raid-intel-note">
-              <p className="panel-text">{detail.detail}</p>
+              {intelState || directIntel ? (
+                <div className="raid-spirit-revealed">
+                  <div><span>五行</span><strong>{formatSpiritElement((intelState ?? directIntel)?.element ?? null)}</strong></div>
+                  <div><span>攻击</span><strong>{(intelState ?? directIntel)?.attackRating}</strong></div>
+                  <div><span>状态</span><strong>{(intelState ?? directIntel)?.healthStatus}</strong></div>
+                </div>
+              ) : allowDeepIntel ? (
+                <div className="raid-spirit-intel-action">
+                  <button className="secondary-button" disabled={intelLoading} onClick={handleRevealDeepIntel} type="button">
+                    {intelLoading ? '窥视中...' : '深度窥视'}
+                  </button>
+                  {intelError ? <span>{intelError}</span> : <span>{intelQuotaText}</span>}
+                </div>
+              ) : null}
             </article>
-          </>
-        ) : null}
-      </div>
+          ) : null}
+
+          <div className="raid-intel-summary-card panel-card">
+            <div className="panel-head">
+              <h4>对手田地</h4>
+              <span className="soft-tag">{detail.fieldStatus}</span>
+            </div>
+            <div className="farm-field-grid raid-intel-field-grid">
+              {detail.fields.map((field) => (
+                <FarmStatusCard className="raid-intel-field-card" key={field.id} view={buildFarmFieldStatusView(field)} />
+              ))}
+            </div>
+          </div>
+
+          <div className="raid-asset-strip raid-intel-assets">
+            <div className="target-meta raid-asset-card raid-visual-card">
+              <span>可争夺收益</span>
+              <div className="raid-gold-preview" aria-hidden="true">
+                <span className="raid-gold-stack raid-gold-stack-back" />
+                <span className="raid-gold-stack raid-gold-stack-mid" />
+                <span className="raid-gold-stack raid-gold-stack-front" />
+              </div>
+              <strong>{detail.raidableGold}</strong>
+              <em>{detail.exposedFruit}</em>
+            </div>
+          </div>
+
+          <div className="raid-detail-status-list raid-intel-status-list">
+            <p><strong>主宠情报：</strong>默认只显示卡面外观与等级，不直接展示五行、状态和攻击评级。</p>
+            <p><strong>保护状态：</strong>{detail.protectionStatus}</p>
+          </div>
+
+          {detail.targetFarmBoardMessage ? (
+            <article className="panel-card raid-farm-board-note">
+              <p className="eyebrow">菜田留言</p>
+              <p>{detail.targetFarmBoardMessage}</p>
+            </article>
+          ) : null}
+
+          <article className="panel-card raid-intel-note">
+            <p className="panel-text">{detail.detail}</p>
+          </article>
+        </>
+      ) : null}
 
       {detail && !loading ? (
         <div className="raid-intel-actionbar">
@@ -162,7 +162,7 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
           </div>
         </div>
       ) : null}
-    </section>
+    </FullScreenToolShell>
   );
 }
 

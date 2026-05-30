@@ -1,4 +1,5 @@
 import type { ClientPlantResearchState } from '@trinitywar/shared';
+import { FullScreenToolShell } from './ModalShell';
 
 export type PlantRarity = 'common' | 'rare' | 'legendary';
 
@@ -55,16 +56,13 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
   const canUnlock = Boolean(selectedResearch?.canUnlock && onUnlockPlant);
 
   return (
-    <section className="seed-codex-screen" role="dialog" aria-modal="true" aria-label="灵植图鉴">
-      <div className="seed-codex-topbar">
-        <div className="seed-codex-title-block">
-          <p className="eyebrow">灵植图鉴</p>
-          <p className="seed-codex-tip">点击灵植图标切换详情</p>
-        </div>
-        <button className="ghost-button small" onClick={onClose} type="button">关闭</button>
-      </div>
-
-      <div className="seed-codex-body">
+    <FullScreenToolShell
+      ariaLabel="灵植图鉴"
+      bodyClassName="seed-codex-body"
+      description="点击灵植图标切换详情"
+      onBack={onClose}
+      title="灵植图鉴"
+    >
         {groups.map((group) => (
           <section className="panel-card seed-codex-rarity-row" key={group.rarity}>
             <div className="seed-codex-rarity-head">
@@ -151,7 +149,6 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
             <p className="seed-codex-undiscovered-text">尚未发现</p>
           )}
         </section>
-      </div>
-    </section>
+    </FullScreenToolShell>
   );
 }

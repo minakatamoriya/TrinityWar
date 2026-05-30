@@ -1,3 +1,5 @@
+import { FullScreenToolShell } from '../common/ModalShell';
+
 interface SeedOption {
   id: string;
   name: string;
@@ -54,17 +56,15 @@ export function SeedSelectionScreen(props: SeedSelectionScreenProps): JSX.Elemen
   const selectedSeedReady = Boolean(selectedSeed?.unlocked);
 
   return (
-    <section className="seed-selection-screen" role="dialog" aria-modal="true" aria-label={`${fieldCode} 选择灵植`}>
-      <div className="seed-selection-topbar">
-        <div className="seed-selection-title-block">
-          <p className="eyebrow">开始培育</p>
-          <h3>{fieldCode} 选择灵植</h3>
-          <p className="seed-selection-name">已解锁灵植可直接播种，播种不消耗精华库存。</p>
-        </div>
-        <button className="ghost-button small" onClick={onClose} type="button">关闭</button>
-      </div>
-
-      <div className="seed-selection-body seed-codex-body">
+    <FullScreenToolShell
+      ariaLabel={`${fieldCode} 选择灵植`}
+      bodyClassName="seed-selection-body seed-codex-body"
+      className="seed-selection-screen"
+      description="已解锁灵植可直接播种，播种不消耗精华库存。"
+      eyebrow="开始培育"
+      onBack={onClose}
+      title={`${fieldCode} 选择灵植`}
+    >
         {seedGroups.map((group) => (
           <section className="panel-card seed-codex-rarity-row" key={group.rarity}>
             <div className="seed-codex-rarity-head">
@@ -123,7 +123,6 @@ export function SeedSelectionScreen(props: SeedSelectionScreenProps): JSX.Elemen
             <p className="seed-codex-undiscovered-text">尚未发现</p>
           )}
         </section>
-      </div>
 
       <div className="seed-selection-actionbar">
         <div className="seed-selection-summary">
@@ -134,6 +133,6 @@ export function SeedSelectionScreen(props: SeedSelectionScreenProps): JSX.Elemen
           {confirming ? '培育中...' : '确认培育'}
         </button>
       </div>
-    </section>
+    </FullScreenToolShell>
   );
 }

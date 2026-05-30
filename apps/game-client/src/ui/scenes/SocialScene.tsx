@@ -4,6 +4,8 @@ import type {
   ClientSocialRelationItem,
   ClientSocialSummaryResponse,
 } from '@trinitywar/shared';
+import { createPortal } from 'react-dom';
+import { FullScreenToolShell } from '../common/ModalShell';
 import { FarmStatusCard, type FarmStatusViewModel } from '../farm/FarmStatusCard';
 
 type SocialTabKey = 'feed' | 'friends' | 'relations';
@@ -22,10 +24,12 @@ interface SocialSceneProps {
   following: ClientSocialRelationItem[];
   enemies: ClientSocialRelationItem[];
   fieldVisit: ClientSocialFriendFieldVisitResponse | null;
+  portalTarget: HTMLElement | null;
   onChangeTab: (tab: SocialTabKey) => void;
   onChangeRelationFilter: (filter: SocialRelationFilter) => void;
   onRefresh: () => void;
   onAssistBack: (targetPlayerId: string, fieldSlotId?: string) => void;
+  onAssistAllFields: () => void;
   onOpenFieldVisit: (targetPlayerId: string) => void;
   onConfirmHarvest: (fieldSlotId?: string) => void;
   onCloseFieldVisit: () => void;
@@ -64,9 +68,11 @@ export function SocialScene({
   following,
   enemies,
   fieldVisit,
+  portalTarget,
   onChangeTab,
   onChangeRelationFilter,
   onAssistBack,
+  onAssistAllFields,
   onOpenFieldVisit,
   onConfirmHarvest,
   onCloseFieldVisit,
@@ -188,7 +194,7 @@ export function SocialScene({
               <div className="social-relation-actions">
                 {relation.friendStatus === 'active' ? (
                   <>
-                    <button className="ghost-button" disabled={busy || !relation.sameFaction} onClick={() => onOpenFieldVisit(relation.target.playerId)} type="button">
+                    <button className="ghost-button" disabled={busy} onClick={() => onOpenFieldVisit(relation.target.playerId)} type="button">
                       拜访灵田
                     </button>
                   </>
@@ -216,15 +222,16 @@ export function SocialScene({
           )}
         </section>
       )}
-      {fieldVisit ? (
+      {fieldVisit && portalTarget ? createPortal((
         <FriendFieldVisitModal
           busy={busy}
           onClose={onCloseFieldVisit}
+          onAssistAll={onAssistAllFields}
           onHarvest={onConfirmHarvest}
           onWater={(fieldSlotId) => onAssistBack(fieldVisit.friend.playerId, fieldSlotId)}
           visit={fieldVisit}
         />
-      ) : null}
+      ), portalTarget) : null}
     </div>
   );
 }
@@ -357,6 +364,7 @@ function FriendFieldVisitModal(props: {
   busy: boolean;
   visit: ClientSocialFriendFieldVisitResponse;
   onClose: () => void;
+  onAssistAll: () => void;
   onWater: (fieldSlotId: string) => void;
   onHarvest: (fieldSlotId: string) => void;
 }): JSX.Element {
@@ -375,51 +383,51 @@ function FriendFieldVisitModal(props: {
   };
 
   return (
-    <div className="modal-backdrop social-field-visit-backdrop" onClick={props.onClose} role="presentation">
-      <div
-        aria-labelledby="social-field-visit-title"
-        aria-modal="true"
-        className="modal-card transfer-card social-field-visit-card"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <p className="eyebrow">好友灵田</p>
-        <h3 id="social-field-visit-title">拜访灵田</h3>
-        <p>{props.visit.friend.nickname}</p>
-        <small>{props.visit.ruleText}</small>
-        <div className="card-grid farm-field-grid social-field-visit-grid">
-          {props.visit.fields.map((field) => {
-            const view = buildFriendFieldStatusView(field);
-            const canClick = Boolean(field.nextAction) && !props.busy;
+    <FullScreenToolShell
+      ariaLabel="拜访灵田"
+      bodyClassName="social-field-visit-body"
+      className="social-field-visit-screen"
+      description={props.visit.ruleText}
+      eyebrow={props.visit.friend.nickname}
+      onBack={props.onClose}
+      title="拜访灵田"
+    >
+      <div className="card-grid farm-field-grid social-field-visit-grid">
+        {props.visit.fields.map((field) => {
+          const view = buildFriendFieldStatusView(field);
+          const canClick = Boolean(field.nextAction) && !props.busy;
 
-            return (
-              <FarmStatusCard
-                className={`social-field-plot ${field.nextAction ? 'actionable' : ''}`}
-                compact
-                key={field.fieldSlotId}
-                onClick={() => handleFieldAction(field)}
-                onKeyDown={(event) => {
-                  if (!canClick || (event.key !== 'Enter' && event.key !== ' ')) {
-                    return;
-                  }
-                  event.preventDefault();
-                  handleFieldAction(field);
-                }}
-                role={canClick ? 'button' : undefined}
-                tabIndex={canClick ? 0 : undefined}
-                view={view}
-              />
-            );
-          })}
-        </div>
-        {!hasActionableField ? <p className="muted">好友当前没有可助力的田地。等 TA 播种或作物进入成长阶段后再来。</p> : null}
-        <div className="transfer-foot-row seed-reward-actions">
-          <button className="secondary-button" disabled={props.busy} onClick={props.onClose} type="button">
-            关闭
-          </button>
-        </div>
+          return (
+            <FarmStatusCard
+              className={`social-field-plot ${field.nextAction ? 'actionable' : ''}`}
+              compact
+              key={field.fieldSlotId}
+              onClick={() => handleFieldAction(field)}
+              onKeyDown={(event) => {
+                if (!canClick || (event.key !== 'Enter' && event.key !== ' ')) {
+                  return;
+                }
+                event.preventDefault();
+                handleFieldAction(field);
+              }}
+              role={canClick ? 'button' : undefined}
+              tabIndex={canClick ? 0 : undefined}
+              view={view}
+            />
+          );
+        })}
       </div>
-    </div>
+      {!hasActionableField ? <p className="muted social-field-visit-empty">好友当前没有可助力的田地。等 TA 播种或作物进入成长阶段后再来。</p> : null}
+      <div className="social-field-visit-actionbar">
+        <div>
+          <strong>{hasActionableField ? '一键结算当前可助力田地' : '暂无可助力田地'}</strong>
+          <span>成长中自动浇水，成熟后自动采摘。</span>
+        </div>
+        <button className="primary-button" disabled={props.busy || !hasActionableField} onClick={props.onAssistAll} type="button">
+          {props.busy ? '助力中...' : '一键助力'}
+        </button>
+      </div>
+    </FullScreenToolShell>
   );
 }
 
@@ -456,7 +464,7 @@ function buildFriendFieldStatusView(field: ClientSocialFriendFieldVisitResponse[
     emphasis: field.nextAction === 'harvest' && field.rewardPreview
       ? `点击采摘 +${field.rewardPreview.gold} 金币`
       : field.nextAction === 'water'
-        ? '点击帮好友浇水'
+        ? '点击浇水，双方增加亲密度'
         : undefined,
     centerActionLabel: field.nextAction === 'harvest'
       ? '采摘'
@@ -469,10 +477,10 @@ function buildFriendFieldStatusView(field: ClientSocialFriendFieldVisitResponse[
 
 function getFriendFieldDescription(field: ClientSocialFriendFieldVisitResponse['fields'][number]): string {
   if (field.nextAction === 'harvest') {
-    return '采摘一缕灵田余韵，不影响好友收成。';
+    return '作物已成熟，可采摘一缕灵田余韵，不影响好友收成。';
   }
   if (field.nextAction === 'water') {
-    return '本轮已采摘，再点击可帮好友浇水。';
+    return '作物成长中，可帮好友浇水并增加亲密度。';
   }
   return formatFriendFieldStatus(field.status);
 }

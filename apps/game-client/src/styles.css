@@ -2193,6 +2193,94 @@ button {
     rgba(18, 12, 9, 0.98);
 }
 
+.full-screen-tool {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(180deg, rgba(16, 11, 9, 0.96) 0%, rgba(21, 15, 12, 0.98) 38%, rgba(12, 8, 7, 1) 100%),
+    rgba(18, 12, 9, 0.98);
+}
+
+.full-screen-tool-topbar {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 8px;
+  min-height: 58px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 248, 234, 0.08);
+}
+
+.full-screen-tool-back {
+  justify-self: start;
+  min-width: 58px;
+  min-height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 248, 234, 0.14);
+  background: rgba(255, 248, 234, 0.06);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.full-screen-tool-title {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.full-screen-tool-title .eyebrow,
+.full-screen-tool-title h3,
+.full-screen-tool-title p {
+  margin: 0;
+}
+
+.full-screen-tool-title h3 {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.full-screen-tool-title p:not(.eyebrow) {
+  max-width: 100%;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.full-screen-tool-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(243, 181, 111, 0.32) transparent;
+  scrollbar-gutter: stable;
+}
+
+.full-screen-tool-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.full-screen-tool-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(243, 181, 111, 0.25);
+}
+
+.full-screen-tool-spacer {
+  width: 72px;
+}
+
 .seed-codex-topbar {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -4734,6 +4822,10 @@ button.spirit-element-chip {
   padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(255, 248, 234, 0.08);
   background: rgba(14, 10, 8, 0.94);
+  margin: 4px -16px calc(-16px - env(safe-area-inset-bottom));
+  position: sticky;
+  bottom: calc(-16px - env(safe-area-inset-bottom));
+  z-index: 1;
 }
 
 .seed-selection-summary {
@@ -4773,6 +4865,10 @@ button.spirit-element-chip {
   box-shadow: 0 22px 56px rgba(0, 0, 0, 0.46);
   text-align: center;
   animation: seedRewardPop 260ms ease-out;
+}
+
+.centered-modal-card.seed-reward-card {
+  width: min(360px, calc(100vw - 28px));
 }
 
 .seed-reward-card h3 {
@@ -5007,6 +5103,10 @@ button.spirit-element-chip {
   padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(255, 248, 234, 0.08);
   background: rgba(14, 10, 8, 0.94);
+  margin: 4px -16px calc(-16px - env(safe-area-inset-bottom));
+  position: sticky;
+  bottom: calc(-16px - env(safe-area-inset-bottom));
+  z-index: 1;
 }
 
 .raid-farm-board-note {
@@ -5647,6 +5747,57 @@ button.spirit-element-chip {
   place-items: center;
   padding: 20px;
   background: rgba(10, 7, 5, 0.65);
+  z-index: 1250;
+}
+
+.modal-backdrop-blocking {
+  pointer-events: auto;
+}
+
+.centered-modal-card {
+  width: min(520px, calc(100vw - 28px));
+  max-height: min(760px, calc(100dvh - 32px));
+  display: grid;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+.centered-modal-head {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.centered-modal-head .eyebrow,
+.centered-modal-head h3,
+.centered-modal-message {
+  margin: 0;
+}
+
+.centered-modal-head h3 {
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.centered-modal-message {
+  text-align: center;
+}
+
+.centered-modal-content {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.centered-modal-actions {
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.centered-modal-actions .primary-button,
+.centered-modal-actions .secondary-button {
+  min-width: 128px;
 }
 
 .notification-panel {
@@ -6026,6 +6177,10 @@ button.spirit-element-chip {
   gap: 16px;
 }
 
+.settings-panel .centered-modal-actions {
+  justify-content: flex-end;
+}
+
 .settings-row {
   display: flex;
   align-items: center;
@@ -6233,20 +6388,54 @@ button.spirit-element-chip {
   max-width: 460px;
 }
 
-.social-field-visit-backdrop {
-  z-index: 1250;
+.social-field-visit-screen {
+  z-index: 1260;
 }
 
-.social-field-visit-card {
-  width: min(720px, calc(100vw - 28px));
-  max-width: 720px;
-  max-height: min(760px, calc(100dvh - 32px));
-  overflow-y: auto;
+.social-field-visit-body {
+  align-content: start;
 }
 
 .social-field-visit-grid {
-  margin: 14px 0 16px;
+  margin: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.social-field-visit-empty {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.social-field-visit-actionbar {
+  position: sticky;
+  bottom: calc(-16px - env(safe-area-inset-bottom));
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 4px -16px calc(-16px - env(safe-area-inset-bottom));
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 248, 234, 0.08);
+  background: rgba(14, 10, 8, 0.94);
+}
+
+.social-field-visit-actionbar div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.social-field-visit-actionbar strong {
+  font-size: 15px;
+}
+
+.social-field-visit-actionbar span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .social-field-plot {

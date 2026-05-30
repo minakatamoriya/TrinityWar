@@ -119,7 +119,7 @@ export class ShareAssistService {
 
     return {
       app: APP_NAME,
-      summary: isFriendInvite ? '好友邀请链接已创建。' : '浇水助力链接已创建。',
+      summary: isFriendInvite ? '单人好友邀请链接已创建，被接受后即失效。' : '浇水助力链接已创建。',
       campaign: this.mapCampaign(campaign),
       sharePath: isFriendInvite ? `/share/friend/${campaign.id}` : `/share/water/${campaign.id}`,
     };
@@ -135,7 +135,7 @@ export class ShareAssistService {
       copy: campaign.campaignType === ShareAssistCampaignType.FRIEND_INVITE
         ? {
           title: `${campaign.owner.nickname}邀请你成为好友`,
-          description: `TA 属于${campaign.owner.faction?.name ?? '未知阵营'}。选择相同阵营才能成为好友并领取新友奖励。`,
+          description: '这是一条单人好友邀请链接，仅第一个确认者生效；接受后双方会成为好友并收到对应奖励。',
           actionLabel: '接受好友邀请',
         }
         : {
@@ -199,7 +199,7 @@ export class ShareAssistService {
         throw new BusinessError({ code: ErrorCode.NotFound, message: 'Player not found.', statusCode: 404 });
       }
       const isFriendInvite = relation.campaign?.campaignType === ShareAssistCampaignType.FRIEND_INVITE;
-      const canBindFriend = isFriendInvite && relation.inviter.factionId !== null && relation.inviter.factionId === invitedPlayer.factionId;
+      const canBindFriend = isFriendInvite;
       await client.playerInviteRelation.update({
         where: { id: relation.id },
         data: {
@@ -253,9 +253,7 @@ export class ShareAssistService {
         title: isFriendInvite ? '新友奖励' : '新友助力奖励',
         body: canBindFriend
           ? `你已和 ${relation.inviter.nickname} 成为好友，新友奖励已送达。`
-          : isFriendInvite
-            ? '你已完成新手流程。由于阵营不同，本次未建立好友关系，新友奖励仍已送达。'
-            : '你已完成新手流程，微信助力奖励已送达，请在附件中领取。',
+          : '你已完成新手流程，微信助力奖励已送达，请在附件中领取。',
         attachments: NEW_HELPER_TUTORIAL_REWARD,
       });
 
@@ -263,9 +261,7 @@ export class ShareAssistService {
         await createRewardNotification(client, {
           playerId: relation.inviterPlayerId,
           title: '邀请新友奖励',
-          body: canBindFriend
-            ? `${invitedPlayer.nickname} 已接受邀请并成为你的好友，邀请奖励已送达。`
-            : `${invitedPlayer.nickname} 已接受邀请，但选择了不同阵营，未建立好友关系。`,
+          body: `${invitedPlayer.nickname} 已接受邀请并成为你的好友，邀请奖励已送达。`,
           attachments: OWNER_WATER_ASSIST_REWARD,
         });
       }
@@ -274,10 +270,10 @@ export class ShareAssistService {
         data: {
           playerId,
           actorPlayerId: relation.inviterPlayerId,
-          feedType: canBindFriend ? SocialFeedType.FRIEND_ACCEPTED : SocialFeedType.FRIEND_REJECTED,
+          feedType: canBindFriend ? SocialFeedType.FRIEND_ACCEPTED : SocialFeedType.FRIEND_WATERED_FIELD,
           relatedEntityType: 'share_assist_campaign',
           relatedEntityId: relation.sourceCampaignId,
-          summary: canBindFriend ? `你已和 ${relation.inviter.nickname} 成为好友。` : '你完成了好友邀请，但因阵营不同未建立好友关系。',
+          summary: canBindFriend ? `你已和 ${relation.inviter.nickname} 成为好友。` : '你已完成微信助力。',
           metadataJson: {
             shareAssistCampaignId: relation.sourceCampaignId,
             inviteRelationId: relation.id,
@@ -291,10 +287,10 @@ export class ShareAssistService {
           data: {
             playerId: relation.inviterPlayerId,
             actorPlayerId: playerId,
-            feedType: canBindFriend ? SocialFeedType.FRIEND_ACCEPTED : SocialFeedType.FRIEND_REJECTED,
+            feedType: SocialFeedType.FRIEND_ACCEPTED,
             relatedEntityType: 'share_assist_campaign',
             relatedEntityId: relation.sourceCampaignId,
-            summary: canBindFriend ? `${invitedPlayer.nickname} 已接受邀请并成为你的好友。` : `${invitedPlayer.nickname} 已接受邀请，但因阵营不同未成为好友。`,
+            summary: `${invitedPlayer.nickname} 已接受邀请并成为你的好友。`,
             metadataJson: {
               shareAssistCampaignId: relation.sourceCampaignId,
               inviteRelationId: relation.id,
@@ -1118,12 +1114,12 @@ function buildSummary(
     return campaignType === ShareAssistCampaignType.FRIEND_INVITE ? '这个好友邀请已过期。' : '这个助力链接已过期。';
   }
   if (nextAction === 'full') {
-    return campaignType === ShareAssistCampaignType.FRIEND_INVITE ? '这个好友邀请已经被接受。' : '这个助力链接的次数已满。';
+    return campaignType === ShareAssistCampaignType.FRIEND_INVITE ? '这个单人好友邀请已经被接受。' : '这个助力链接的次数已满。';
   }
   if (campaignType === ShareAssistCampaignType.FRIEND_INVITE) {
     return audience === 'new-user'
-      ? '邀请已确认，完成新手流程后可绑定好友并领取新友奖励。'
-      : '好友邀请已确认，欢迎回归。';
+      ? '邀请已确认，完成新手流程后可绑定好友并领取新友奖励。这条单人链接随后失效。'
+      : '好友邀请已确认，欢迎回归。这条单人链接随后失效。';
   }
   return audience === 'new-user'
     ? '助力成功，完成新手流程后可以领取新友奖励。'

@@ -12,6 +12,7 @@ import type {
   ClientSpiritTraitCode,
 } from '@trinitywar/shared';
 import type { TutorialArmyUiRules } from '../../tutorial/tutorialFlow';
+import { FullScreenToolShell } from '../common/ModalShell';
 
 interface ArmySceneProps {
   advantage?: ClientFactionAdvantagePanel;
@@ -747,14 +748,14 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
       </div>
 
       {selectedSlot && portalTarget ? createPortal((
-        <section className="seed-codex-screen spirit-pet-action-screen" role="dialog" aria-modal="true" aria-label="灵宠操作">
-          <div className="seed-codex-topbar">
-            <div className="seed-codex-title-block">
-              <p className="eyebrow">{selectedSlot.isMain ? '主位' : `副位 ${selectedSlot.slotIndex - 1}`}</p>
-            </div>
-            <button className="ghost-button small" onClick={() => setSelectedSlotIndex(null)} type="button">关闭</button>
-          </div>
-          <div className={`seed-codex-body${selectedSlotEntry ? ' spirit-pet-action-body' : ''}`}>
+        <FullScreenToolShell
+          ariaLabel="灵宠操作"
+          bodyClassName={`seed-codex-body${selectedSlotEntry ? ' spirit-pet-action-body' : ''}`}
+          className="spirit-pet-action-screen"
+          eyebrow={selectedSlot.isMain ? '主位' : `副位 ${selectedSlot.slotIndex - 1}`}
+          onBack={() => setSelectedSlotIndex(null)}
+          title={selectedSlotEntry?.definition.label ?? '灵宠操作'}
+        >
             <section className={`seed-codex-detail-card${selectedSlotEntry ? ' spirit-pet-detail-card' : ''}`}>
               {selectedSlotEntry && uiRules.allowOwnedPetDetail && uiRules.showPetActionTabs ? (
                 <>
@@ -997,20 +998,18 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                 <p className="seed-codex-undiscovered-text">新手引导完成后开放灵宠养成详情。</p>
               )}
             </section>
-          </div>
-        </section>
+        </FullScreenToolShell>
       ), portalTarget) : null}
 
       {codexOpen && selectedCodexEntry && portalTarget ? createPortal((
-        <section className="seed-codex-screen spirit-codex-screen" role="dialog" aria-modal="true" aria-label="灵宠图鉴">
-          <div className="seed-codex-topbar">
-            <div className="seed-codex-title-block">
-              <p className="eyebrow">灵宠图鉴</p>
-              <p className="seed-codex-tip">记录见过、解锁、待合成和曾经拥有过的灵宠</p>
-            </div>
-            <button className="ghost-button small" onClick={() => setCodexOpen(false)} type="button">关闭</button>
-          </div>
-          <div className="seed-codex-body">
+        <FullScreenToolShell
+          ariaLabel="灵宠图鉴"
+          bodyClassName="seed-codex-body"
+          className="spirit-codex-screen"
+          description="记录见过、解锁、待合成和曾经拥有过的灵宠"
+          onBack={() => setCodexOpen(false)}
+          title="灵宠图鉴"
+        >
             {codexGroups.map((group) => (
               <section className="panel-card seed-codex-rarity-row" key={group.key}>
                 <div className="seed-codex-rarity-head">
@@ -1064,8 +1063,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                 <p className="seed-codex-undiscovered-text">尚未展示</p>
               )}
             </section>
-          </div>
-        </section>
+        </FullScreenToolShell>
       ), portalTarget) : null}
     </div>
   );

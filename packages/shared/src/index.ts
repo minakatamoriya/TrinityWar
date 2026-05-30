@@ -1331,7 +1331,7 @@ export interface ClientSocialFriendFieldVisitResponse {
 export interface ClientSocialHarvestableFieldPreview {
   fieldSlotId: string;
   fieldCode: string;
-  status: 'SEEDED' | 'GROWING' | 'MATURE';
+  status: 'MATURE';
   cropName: string;
   cropRarity: string;
   rewardPreview: {

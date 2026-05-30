@@ -25,7 +25,7 @@ async function main(): Promise<void> {
     const invited = await authService.devLogin({
       providerUserId: `verify-invited-${suffix}`,
       nickname: `新用户_${suffix}`,
-      factionCode: 'human',
+      factionCode: 'demon',
     });
 
     const completion = await shareAssistService.completeInviteTutorial(invited.player.id, {

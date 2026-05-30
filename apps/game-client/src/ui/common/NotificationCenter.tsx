@@ -51,12 +51,12 @@ export function NotificationCenter(props: {
   const totalPages = Math.max(1, Math.ceil(total / Math.max(pageSize, 1)));
 
   return (
-    <div className="modal-backdrop" onClick={props.onClose}>
-      <section className="modal-card notification-panel" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-backdrop modal-backdrop-blocking" role="presentation">
+      <section className="modal-card notification-panel" role="dialog" aria-modal="true" aria-labelledby="notification-center-title">
         <div className="panel-head compact notification-panel-head">
           <div>
             <p className="eyebrow">消息中心</p>
-            <h3>系统通知</h3>
+            <h3 id="notification-center-title">系统通知</h3>
           </div>
           <button className="ghost-button" onClick={props.onClose} type="button">关闭</button>
         </div>

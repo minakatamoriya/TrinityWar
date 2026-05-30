@@ -33,6 +33,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 
 const SOCIAL_PAGE_SIZE = 30;
 const HARVEST_INTIMACY_GAIN = 2;
+const WATER_INTIMACY_GAIN = 2;
 const FRIEND_HARVEST_REWARD_GOLD = 10;
 const WATER_REMAINING_RATIO = 0.4;
 const WATER_MIN_EFFECT_SECONDS = 10 * 60;
@@ -451,6 +452,7 @@ export class SocialService {
 
       const dateKey = getLocalDateKey();
       const wateredField = await this.applyWaterFieldAssist(client, {
+        helperPlayerId: playerId,
         targetPlayerId: request.targetPlayerId,
         fieldSlotId: request.fieldSlotId,
         now: new Date(),
@@ -485,14 +487,14 @@ export class SocialService {
         },
       });
 
-      await this.bumpInteraction(client, playerId, request.targetPlayerId);
+      await this.bumpInteraction(client, playerId, request.targetPlayerId, WATER_INTIMACY_GAIN);
       const counts = await this.getCounts(client, playerId);
       return { assist, counts, wateredField };
     });
 
     return {
       app: APP_NAME,
-      summary: `Water assist applied. Shortened by ${formatDuration(result.wateredField.shortenedSeconds)}.`,
+      summary: `已帮好友浇水，成长缩短 ${formatDuration(result.wateredField.shortenedSeconds)}，亲密度 +${WATER_INTIMACY_GAIN}。`,
       assist: {
         id: result.assist.id,
         assistType: 'water_field',
@@ -538,7 +540,7 @@ export class SocialService {
       app: APP_NAME,
       friend: this.mapPlayer(target),
       fields: fields.map((field) => this.mapFriendVisitField(field, new Date(), harvestedFieldIds.has(field.id))),
-      ruleText: '每位好友每轮可采一缕灵田余韵，不影响好友收成；采过后再点同一块田可帮好友浇水。',
+      ruleText: '成长中只能浇水，成熟后才能采摘；两种动作都会增加亲密度，采摘不影响好友收成。',
     };
   }
 
@@ -683,7 +685,7 @@ export class SocialService {
 
     return {
       app: APP_NAME,
-      summary: '采摘到一缕灵田余韵。',
+      summary: `采摘到一缕灵田余韵，亲密度 +${HARVEST_INTIMACY_GAIN}。`,
       assist: {
         id: result.assist.id,
         assistType: 'harvest_field',
@@ -937,7 +939,7 @@ export class SocialService {
     target: PlayerSummaryProjection,
   ): void {
     if (!player.factionId || !target.factionId || player.factionId !== target.factionId) {
-      throw this.invalidRequest(`Players ${playerId} and ${targetPlayerId} are in different factions and cannot become friends or water each other.`);
+      throw this.invalidRequest(`Players ${playerId} and ${targetPlayerId} are in different factions. Manual friend requests only support same-faction players; invite links can still bind real friends.`);
     }
   }
 
@@ -988,25 +990,26 @@ export class SocialService {
 
   private async applyWaterFieldAssist(
     client: DbClient,
-    input: { targetPlayerId: string; fieldSlotId?: string; now: Date },
+    input: { helperPlayerId: string; targetPlayerId: string; fieldSlotId?: string; now: Date },
   ): Promise<WateredFieldResult> {
     const field = input.fieldSlotId
       ? await this.findWaterableFieldById(client, input.targetPlayerId, input.fieldSlotId)
       : await this.findFirstWaterableField(client, input.targetPlayerId);
 
     if (!field) {
-      throw this.invalidRequest('No waterable field is available.');
+      throw this.invalidRequest('好友当前没有可浇水的成长中田地。');
     }
 
     const stageStartedAt = getWaterableStageStartedAt(field, input.now);
     const currentStageEndsAt = getWaterableStageEndsAt(field, stageStartedAt);
 
     if (currentStageEndsAt.getTime() <= input.now.getTime()) {
-      throw this.invalidRequest('Field is ready to settle and cannot be watered.');
+      throw this.invalidRequest('这块田已经可以进入下一阶段，不能继续浇水。');
     }
 
     const repeatedAssist = await client.playerAssistRecord.findFirst({
       where: {
+        helperPlayerId: input.helperPlayerId,
         targetPlayerId: input.targetPlayerId,
         assistType: SocialAssistType.WATER_FIELD,
         targetEntityType: 'field_slot',
@@ -1017,7 +1020,7 @@ export class SocialService {
     });
 
     if (repeatedAssist) {
-      throw this.invalidRequest('This field has already been watered in the current growth cycle.');
+      throw this.invalidRequest('你已经帮这块田浇过水了，等它进入下一轮成长后再来。');
     }
 
     const remainingSeconds = Math.ceil((currentStageEndsAt.getTime() - input.now.getTime()) / 1000);
@@ -1083,7 +1086,7 @@ export class SocialService {
       where: {
         playerId: targetPlayerId,
         isUnlocked: true,
-        status: { in: ['SEEDED', 'GROWING', 'MATURE'] },
+        status: 'MATURE',
         seedDefinitionId: { not: null },
       },
       orderBy: [
@@ -1103,7 +1106,7 @@ export class SocialService {
           id: fieldSlotId,
           playerId: targetPlayerId,
           isUnlocked: true,
-          status: { in: ['SEEDED', 'GROWING', 'MATURE'] },
+          status: 'MATURE',
           seedDefinitionId: { not: null },
         },
         select: harvestableFieldSelect,
@@ -1146,7 +1149,7 @@ export class SocialService {
   private mapFriendVisitField(field: FriendFieldVisitSlot, now: Date, harvestedThisCycle: boolean): ClientSocialFriendFieldVisitField {
     const status = field.status as ClientSocialFriendFieldVisitField['status'];
     const canWater = field.isUnlocked && (field.status === 'SEEDED' || field.status === 'GROWING') && Boolean(field.seedDefinition);
-    const canHarvest = !harvestedThisCycle && field.isUnlocked && (field.status === 'SEEDED' || field.status === 'GROWING' || field.status === 'MATURE') && Boolean(field.seedDefinition);
+    const canHarvest = !harvestedThisCycle && field.isUnlocked && field.status === 'MATURE' && Boolean(field.seedDefinition);
     const timing = getFriendFieldTiming(field, now);
     const rewardPreview = canHarvest ? { gold: calculateHarvestRewardGold(field) } : null;
     const tone = mapFriendFieldTone(field.status);
@@ -1177,7 +1180,7 @@ export class SocialService {
     return {
       fieldSlotId: field.id,
       fieldCode: `田地 ${field.slotIndex}`,
-      status: field.status as 'SEEDED' | 'GROWING' | 'MATURE',
+      status: field.status as 'MATURE',
       cropName: field.seedDefinition?.label ?? '未知灵植',
       cropRarity: field.seedDefinition?.rarity ?? 'common',
       rewardPreview: { gold: rewardGold },
@@ -1391,7 +1394,7 @@ function calculateHarvestRewardGold(field: HarvestableField): number {
 function isFieldHarvestableForVisit(field: FriendFieldVisitSlot): boolean {
   return field.isUnlocked
     && Boolean(field.seedDefinition)
-    && (field.status === 'SEEDED' || field.status === 'GROWING' || field.status === 'MATURE');
+    && field.status === 'MATURE';
 }
 
 function getVisitFieldCycleStartedAt(field: FriendFieldVisitSlot): Date {

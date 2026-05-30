@@ -10,6 +10,7 @@
     "test:faction-advantages": "tsx src/verification/verify-faction-advantage-formulas.ts",
     "verify:test-flow": "tsx src/verification/verify-test-flow.ts",
     "verify:friend-invite": "tsx src/verification/verify-friend-invite-flow.ts",
+    "verify:social-friend": "tsx src/verification/verify-social-friend-flow.ts",
     "build": "node ./scripts/build.mjs",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

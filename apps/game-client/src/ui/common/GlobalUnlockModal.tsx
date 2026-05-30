@@ -1,3 +1,5 @@
+import { CenteredModalShell } from './ModalShell';
+
 export interface GlobalUnlockItem {
   id: string;
   label: string;
@@ -27,28 +29,28 @@ export function GlobalUnlockModal(props: GlobalUnlockModalProps): JSX.Element {
   } = props;
 
   return (
-    <div className="seed-reward-modal global-unlock-modal" role="status" aria-live="polite">
-      <div className="seed-reward-card global-unlock-card">
-        <p className="eyebrow">解锁</p>
-        <h3>{title}</h3>
-        <p>{summary}</p>
-        <div className="seed-reward-list global-unlock-list">
-          {items.map((item) => (
-            <div className="seed-reward-item global-unlock-item" key={item.id}>
-              <div>
-                <strong>{item.label}</strong>
-                {item.description ? <small>{item.description}</small> : null}
-              </div>
-              <span>{kindLabels[item.kind]}</span>
+    <CenteredModalShell
+      className="seed-reward-card global-unlock-card"
+      description={summary}
+      eyebrow="解锁"
+      footer={(
+        <button className="secondary-button" onClick={onConfirm} type="button">
+          确认
+        </button>
+      )}
+      title={title}
+    >
+      <div className="seed-reward-list global-unlock-list">
+        {items.map((item) => (
+          <div className="seed-reward-item global-unlock-item" key={item.id}>
+            <div>
+              <strong>{item.label}</strong>
+              {item.description ? <small>{item.description}</small> : null}
             </div>
-          ))}
-        </div>
-        <div className="transfer-foot-row seed-reward-actions">
-          <button className="secondary-button" onClick={onConfirm} type="button">
-            确认
-          </button>
-        </div>
+            <span>{kindLabels[item.kind]}</span>
+          </div>
+        ))}
       </div>
-    </div>
+    </CenteredModalShell>
   );
 }

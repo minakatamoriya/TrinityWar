@@ -3,6 +3,7 @@ import type {
   ClientSpiritRarity,
   ClientSpiritRole,
 } from '@trinitywar/shared';
+import { FullScreenToolShell } from './ModalShell';
 
 type DisplayRarity = '普通' | '稀有' | '传说';
 
@@ -91,15 +92,14 @@ export function SpiritCodexModal(props: SpiritCodexModalProps): JSX.Element | nu
   }));
 
   return (
-    <section className="seed-codex-screen spirit-codex-screen" role="dialog" aria-modal="true" aria-label="灵宠图鉴">
-      <div className="seed-codex-topbar">
-        <div className="seed-codex-title-block">
-          <p className="eyebrow">灵宠图鉴</p>
-          <p className="seed-codex-tip">记录见过、解锁、待合成和曾经拥有过的灵宠</p>
-        </div>
-        <button className="ghost-button small" onClick={onClose} type="button">关闭</button>
-      </div>
-      <div className="seed-codex-body">
+    <FullScreenToolShell
+      ariaLabel="灵宠图鉴"
+      bodyClassName="seed-codex-body"
+      className="spirit-codex-screen"
+      description="记录见过、解锁、待合成和曾经拥有过的灵宠"
+      onBack={onClose}
+      title="灵宠图鉴"
+    >
         {codexGroups.map((group) => (
           <section className="panel-card seed-codex-rarity-row" key={group.key}>
             <div className="seed-codex-rarity-head">
@@ -153,7 +153,6 @@ export function SpiritCodexModal(props: SpiritCodexModalProps): JSX.Element | nu
             <p className="seed-codex-undiscovered-text">尚未展示</p>
           )}
         </section>
-      </div>
-    </section>
+    </FullScreenToolShell>
   );
 }

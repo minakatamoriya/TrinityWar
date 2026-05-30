@@ -1,3 +1,5 @@
+import { FullScreenToolShell } from './ModalShell';
+
 export interface BackpackResourceItem {
   id: string;
   label: string;
@@ -31,16 +33,14 @@ export function ResourceBackpackModal(props: ResourceBackpackModalProps): JSX.El
   } = props;
 
   return (
-    <section className="seed-codex-screen resource-backpack-screen" role="dialog" aria-modal="true" aria-label="我的资源">
-      <div className="seed-codex-topbar">
-        <div className="seed-codex-title-block">
-          <p className="eyebrow">我的资源</p>
-          <p className="seed-codex-tip">查看当前拥有的灵宠材料、灵宠精魄、田地精华和其他资源</p>
-        </div>
-        <button className="ghost-button small" onClick={onClose} type="button">关闭</button>
-      </div>
-
-      <div className="resource-backpack-body">
+    <FullScreenToolShell
+      ariaLabel="我的资源"
+      bodyClassName="resource-backpack-body"
+      className="resource-backpack-screen"
+      description="查看当前拥有的灵宠材料、灵宠精魄、田地精华和其他资源"
+      onBack={onClose}
+      title="我的资源"
+    >
         {groupOrder.map((group) => {
           const groupItems = items.filter((item) => item.group === group);
           if (groupItems.length <= 0) {
@@ -72,7 +72,6 @@ export function ResourceBackpackModal(props: ResourceBackpackModalProps): JSX.El
             <p className="seed-codex-undiscovered-text">暂无资源</p>
           </section>
         ) : null}
-      </div>
-    </section>
+    </FullScreenToolShell>
   );
 }

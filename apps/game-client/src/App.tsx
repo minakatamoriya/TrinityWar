@@ -46,6 +46,7 @@ import { GlobalFeatureModal } from './ui/common/GlobalFeatureModal';
 import { FarmBoardEditorModal } from './ui/common/FarmBoardEditorModal';
 import { GlobalFeatureModalContent } from './ui/common/GlobalFeatureModalContent';
 import { GlobalUnlockModal, type GlobalUnlockItem } from './ui/common/GlobalUnlockModal';
+import { CenteredModalShell } from './ui/common/ModalShell';
 import { PlantCodexModal } from './ui/common/PlantCodexModal';
 import { ResourceBackpackModal, type BackpackResourceItem } from './ui/common/ResourceBackpackModal';
 import { SpiritCodexModal } from './ui/common/SpiritCodexModal';
@@ -849,13 +850,8 @@ function App(): JSX.Element {
         helperDeviceHash: invite?.helperDeviceHash,
       });
       if (result.rewarded) {
-        const shouldShowFriendBranch = Boolean(
-          friendInvite
-          && loginSession.player.factionCode
-          && loginSession.player.factionCode === friendInvite.inviterFactionCode,
-        );
         setPendingFriendInvite(null);
-        if (friendInvite && shouldShowFriendBranch) {
+        if (friendInvite) {
           setPendingFriendInvite({
             ...friendInvite,
             boundFriend: true,
@@ -1193,21 +1189,85 @@ function App(): JSX.Element {
       setSocialSummary((current) => current ? { ...current, counts: result.counts } : current);
       const visit = await visitSocialFriendFields(targetPlayerId);
       setSocialFieldVisit(visit);
-      if (result.rewards && result.rewards.length > 0) {
-        setSeedRewardModal({
-          title: '采摘到一缕灵田余韵',
-          summary: '不会影响好友收成。确认后奖励已经入账。',
-          items: result.rewards.map((reward) => ({
-            itemId: reward.kind,
-            label: reward.label,
-            quantity: reward.quantity,
-          })),
-        });
-      }
-      showToast(result.summary, 'success');
+      const rewardText = result.rewards && result.rewards.length > 0
+        ? `，${result.rewards.map((reward) => `${reward.label} +${reward.quantity}`).join('、')}`
+        : '';
+      showToast(`${result.summary}${rewardText}`, 'success');
       void loadSocialBundle();
     } catch (error) {
       showToast(error instanceof Error && error.message ? error.message : '当前无法采摘好友灵田，请稍后重试。', 'error');
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
+  const handleAssistAllSocialFields = async (): Promise<void> => {
+    const visit = socialFieldVisit;
+    const targetPlayerId = visit?.friend.playerId;
+    if (!visit || !targetPlayerId || socialLoading) {
+      return;
+    }
+
+    const actionableFields = visit.fields.filter((field) => field.nextAction === 'water' || field.nextAction === 'harvest');
+    if (actionableFields.length === 0) {
+      showToast('好友当前没有可助力的田地。', 'info');
+      return;
+    }
+
+    setSocialLoading(true);
+    setSocialError(null);
+
+    let wateredCount = 0;
+    let harvestedCount = 0;
+    let rewardGold = 0;
+    let latestCounts: ClientSocialSummaryResponse['counts'] | null = null;
+    const failedMessages: string[] = [];
+
+    try {
+      for (const field of actionableFields) {
+        try {
+          if (field.nextAction === 'water') {
+            const result = await waterSocialField({ targetPlayerId, fieldSlotId: field.fieldSlotId });
+            wateredCount += 1;
+            latestCounts = result.counts;
+            continue;
+          }
+
+          if (field.nextAction === 'harvest') {
+            const result = await harvestSocialField({ targetPlayerId, fieldSlotId: field.fieldSlotId });
+            harvestedCount += 1;
+            rewardGold += result.rewards?.reduce((sum, reward) => sum + (reward.kind === 'gold' ? reward.quantity : 0), 0) ?? 0;
+            latestCounts = result.counts;
+          }
+        } catch (error) {
+          failedMessages.push(error instanceof Error && error.message ? error.message : `${field.fieldCode} 助力失败`);
+        }
+      }
+
+      if (latestCounts) {
+        const counts = latestCounts;
+        setSocialSummary((current) => current ? { ...current, counts } : current);
+      }
+      const refreshedVisit = await visitSocialFriendFields(targetPlayerId);
+      setSocialFieldVisit(refreshedVisit);
+
+      const summaryParts = [
+        wateredCount > 0 ? `浇水 ${wateredCount} 块` : null,
+        harvestedCount > 0 ? `采摘 ${harvestedCount} 块` : null,
+        rewardGold > 0 ? `金币 +${rewardGold}` : null,
+      ].filter((part): part is string => Boolean(part));
+
+      if (summaryParts.length > 0) {
+        showToast(`一键助力完成：${summaryParts.join('，')}。`, failedMessages.length > 0 ? 'info' : 'success');
+      } else {
+        showToast(failedMessages[0] ?? '当前没有成功助力的田地。', 'info');
+      }
+
+      if (failedMessages.length > 0 && summaryParts.length > 0) {
+        showToast(`部分田地未完成：${failedMessages[0]}`, 'info');
+      }
+
+      void loadSocialBundle();
     } finally {
       setSocialLoading(false);
     }
@@ -2005,7 +2065,7 @@ function App(): JSX.Element {
                   <div className="auth-invite-faction-notice">
                     <span>邀请你的玩家</span>
                     <strong>{pendingFriendInvite.inviterName} · {pendingFriendInvite.inviterFactionName}</strong>
-                    <p>选择相同阵营才能成为好友并领取新友奖励；选择其他阵营也可以进入游戏，但本次邀请不会建立好友关系。</p>
+                    <p>这是一条单人好友邀请。选择任意阵营都可以成为好友；选择同阵营只是更方便后续阵营协作。</p>
                   </div>
                 ) : (
                   <p className="panel-text">这是用户第一次进入时看到的页面。先确定阵营，再创建新档案进入首页。</p>
@@ -2041,7 +2101,7 @@ function App(): JSX.Element {
                       </div>
                       {pendingFriendInvite ? (
                         <div className={`auth-faction-invite-hint ${matchesInviteFaction ? 'match' : 'mismatch'}`}>
-                          {matchesInviteFaction ? '推荐：与邀请人同阵营，可成为好友并领取奖励' : '可选：但与邀请人不同阵营，不能成为好友'}
+                          {matchesInviteFaction ? '推荐：与邀请人同阵营，后续协作更顺手' : '可选：不同阵营也会成为好友'}
                         </div>
                       ) : null}
                       <p>{faction.leaderSummary}</p>
@@ -2172,41 +2232,6 @@ function App(): JSX.Element {
                           老友回归并肩同行
                         </button>
                       </label>
-                    </div>
-                    <div className="auth-friend-invite-link-panel">
-                      <button className="primary-button" onClick={handleCreateFriendInvite} type="button">
-                        生成测试邀请 URL
-                      </button>
-                      {friendInviteDemoLinks ? (
-                        <div className="auth-friend-invite-links">
-                          <div>
-                            <span>新玩家 URL</span>
-                            <code>{friendInviteDemoLinks.newUser}</code>
-                            <div className="auth-friend-invite-actions">
-                              <button className="ghost-button" onClick={() => { void copyFriendInviteUrl(friendInviteDemoLinks.newUser); }} type="button">复制</button>
-                              <button className="ghost-button" onClick={() => {
-                                const campaignId = readCampaignIdFromFriendInviteUrl(friendInviteDemoLinks.newUser);
-                                if (campaignId) {
-                                  void openFriendInviteCampaign(campaignId, 'new-user');
-                                }
-                              }} type="button">打开模拟链接</button>
-                            </div>
-                          </div>
-                          <div>
-                            <span>老玩家 URL</span>
-                            <code>{friendInviteDemoLinks.returningUser}</code>
-                            <div className="auth-friend-invite-actions">
-                              <button className="ghost-button" onClick={() => { void copyFriendInviteUrl(friendInviteDemoLinks.returningUser); }} type="button">复制</button>
-                              <button className="ghost-button" onClick={() => {
-                                const campaignId = readCampaignIdFromFriendInviteUrl(friendInviteDemoLinks.returningUser);
-                                if (campaignId) {
-                                  void openFriendInviteCampaign(campaignId, 'returning-user');
-                                }
-                              }} type="button">打开模拟链接</button>
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
                     </div>
                   </section>
                 </div>
@@ -3621,33 +3646,35 @@ function App(): JSX.Element {
           />
 
           {settingsOpen ? (
-            <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}>
-              <div className="modal-card transfer-card settings-panel" onClick={(event) => event.stopPropagation()}>
-                <p className="eyebrow">设置</p>
-                <h2>测试登录</h2>
-                <div className="settings-row">
-                  <span>当前账号</span>
-                  <strong>{currentAccountName}</strong>
-                </div>
-                <div className="settings-row">
-                  <span>测试身份</span>
-                  <strong>{devLoginModeLabel}</strong>
-                </div>
-                <div className="settings-row">
-                  <span>登录方式</span>
-                  <strong>开发测试登录</strong>
-                </div>
-                <p className="panel-text">当前阶段退出登录只清理本地 token 并返回测试账号选择页，不调用后端注销接口。</p>
-                <div className="settings-actions">
+            <CenteredModalShell
+              className="settings-panel"
+              description="当前阶段退出登录只清理本地 token 并返回测试账号选择页，不调用后端注销接口。"
+              eyebrow="设置"
+              footer={(
+                <>
                   <button className="ghost-button" onClick={() => setSettingsOpen(false)} type="button">
                     关闭
                   </button>
                   <button className="secondary-button" onClick={handleSwitchDevUser} type="button">
                     退出测试登录
                   </button>
-                </div>
+                </>
+              )}
+              title="测试登录"
+            >
+              <div className="settings-row">
+                <span>当前账号</span>
+                <strong>{currentAccountName}</strong>
               </div>
-            </div>
+              <div className="settings-row">
+                <span>测试身份</span>
+                <strong>{devLoginModeLabel}</strong>
+              </div>
+              <div className="settings-row">
+                <span>登录方式</span>
+                <strong>开发测试登录</strong>
+              </div>
+            </CenteredModalShell>
           ) : null}
 
             <section className="global-resource-bar">
@@ -3830,8 +3857,12 @@ function App(): JSX.Element {
                 friends={socialFriends}
                 fieldVisit={socialFieldVisit}
                 playerFactionName={home.factionName}
-                onAssistBack={(targetPlayerId) => {
-                  void handleSocialAssistBack(targetPlayerId);
+                portalTarget={characterDialogPortalRef.current}
+                onAssistBack={(targetPlayerId, fieldSlotId) => {
+                  void handleSocialAssistBack(targetPlayerId, fieldSlotId);
+                }}
+                onAssistAllFields={() => {
+                  void handleAssistAllSocialFields();
                 }}
                 onAcceptFriendRequest={(relationId) => {
                   void handleAcceptSocialFriendRequest(relationId);
@@ -3988,20 +4019,12 @@ function App(): JSX.Element {
             />
           ) : null}
           {returningFriendInvitePrompt ? (
-            <div className="modal-backdrop global-feature-backdrop friend-invite-confirm-backdrop" role="presentation">
-              <section
-                aria-labelledby="returning-friend-invite-title"
-                aria-modal="true"
-                className="modal-card transfer-card friend-invite-confirm-card"
-                role="dialog"
-              >
-                <p className="eyebrow">好友邀请</p>
-                <h3 id="returning-friend-invite-title">确认成为好友</h3>
-                <p className="panel-text">
-                  {returningFriendInvitePrompt.inviterName}（{returningFriendInvitePrompt.inviterFactionName}）邀请你成为好友。
-                  确认后双方都会出现在好友列表，并各自收到可领取的邀请奖励。
-                </p>
-                <div className="transfer-foot-row friend-invite-confirm-actions">
+            <CenteredModalShell
+              className="friend-invite-confirm-card"
+              description={`${returningFriendInvitePrompt.inviterName}（${returningFriendInvitePrompt.inviterFactionName}）邀请你成为好友。确认后双方都会出现在好友列表，并各自收到可领取的邀请奖励。`}
+              eyebrow="好友邀请"
+              footer={(
+                <>
                   <button
                     className="secondary-button"
                     disabled={pendingActionKey === 'friend-invite:returning-confirm'}
@@ -4020,9 +4043,10 @@ function App(): JSX.Element {
                   >
                     {pendingActionKey === 'friend-invite:returning-confirm' ? '确认中...' : '确认成为好友'}
                   </button>
-                </div>
-              </section>
-            </div>
+                </>
+              )}
+              title="确认成为好友"
+            />
           ) : null}
           {globalUnlockModal ? (
             <GlobalUnlockModal
