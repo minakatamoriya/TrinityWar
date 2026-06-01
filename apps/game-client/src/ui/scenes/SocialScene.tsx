@@ -28,10 +28,9 @@ interface SocialSceneProps {
   onChangeTab: (tab: SocialTabKey) => void;
   onChangeRelationFilter: (filter: SocialRelationFilter) => void;
   onRefresh: () => void;
-  onAssistBack: (targetPlayerId: string, fieldSlotId?: string) => void;
+  onAssistFriend: (targetPlayerId: string) => void;
   onAssistAllFields: () => void;
   onOpenFieldVisit: (targetPlayerId: string) => void;
-  onConfirmHarvest: (fieldSlotId?: string) => void;
   onCloseFieldVisit: () => void;
   onRequestFriend: (targetPlayerId: string) => void;
   onDeleteFriend: (targetPlayerId: string) => void;
@@ -71,10 +70,9 @@ export function SocialScene({
   portalTarget,
   onChangeTab,
   onChangeRelationFilter,
-  onAssistBack,
+  onAssistFriend,
   onAssistAllFields,
   onOpenFieldVisit,
-  onConfirmHarvest,
   onCloseFieldVisit,
   onRequestFriend,
   onDeleteFriend,
@@ -194,6 +192,9 @@ export function SocialScene({
               <div className="social-relation-actions">
                 {relation.friendStatus === 'active' ? (
                   <>
+                    <button className="primary-button" disabled={busy || !relation.assistSummary || relation.assistSummary.availableCount <= 0} onClick={() => onAssistFriend(relation.target.playerId)} type="button">
+                      {relation.assistSummary && relation.assistSummary.availableCount > 0 ? `助力 ${relation.assistSummary.availableCount}` : '暂无助力'}
+                    </button>
                     <button className="ghost-button" disabled={busy} onClick={() => onOpenFieldVisit(relation.target.playerId)} type="button">
                       拜访灵田
                     </button>
@@ -227,8 +228,6 @@ export function SocialScene({
           busy={busy}
           onClose={onCloseFieldVisit}
           onAssistAll={onAssistAllFields}
-          onHarvest={onConfirmHarvest}
-          onWater={(fieldSlotId) => onAssistBack(fieldVisit.friend.playerId, fieldSlotId)}
           visit={fieldVisit}
         />
       ), portalTarget) : null}
@@ -244,6 +243,7 @@ interface RelationRow {
   lastInteractedAt: string | null;
   friendStatus: ClientSocialRelationItem['status'] | null;
   sameFaction: boolean;
+  assistSummary?: ClientSocialRelationItem['assistSummary'];
   target: ClientSocialRelationItem['target'];
 }
 
@@ -266,6 +266,7 @@ function buildRelationRows(input: {
         lastInteractedAt: relation.lastInteractedAt,
         friendStatus: relation.relationType === 'friend' ? relation.status : null,
         sameFaction: Boolean(input.playerFactionName && relation.target.factionName === input.playerFactionName),
+        assistSummary: relation.assistSummary,
         target: relation.target,
       });
       return;
@@ -279,6 +280,9 @@ function buildRelationRows(input: {
     existing.lastInteractedAt = pickRecentInteraction(existing.lastInteractedAt, relation.lastInteractedAt);
     if (relation.relationType === 'friend') {
       existing.friendStatus = relation.status;
+    }
+    if (relation.assistSummary && (!existing.assistSummary || relation.assistSummary.availableCount > existing.assistSummary.availableCount)) {
+      existing.assistSummary = relation.assistSummary;
     }
   };
 
@@ -365,22 +369,8 @@ function FriendFieldVisitModal(props: {
   visit: ClientSocialFriendFieldVisitResponse;
   onClose: () => void;
   onAssistAll: () => void;
-  onWater: (fieldSlotId: string) => void;
-  onHarvest: (fieldSlotId: string) => void;
 }): JSX.Element {
   const hasActionableField = props.visit.fields.some((field) => field.nextAction !== null);
-  const handleFieldAction = (field: ClientSocialFriendFieldVisitResponse['fields'][number]): void => {
-    if (props.busy) {
-      return;
-    }
-    if (field.nextAction === 'harvest') {
-      props.onHarvest(field.fieldSlotId);
-      return;
-    }
-    if (field.nextAction === 'water') {
-      props.onWater(field.fieldSlotId);
-    }
-  };
 
   return (
     <FullScreenToolShell
@@ -395,23 +385,12 @@ function FriendFieldVisitModal(props: {
       <div className="card-grid farm-field-grid social-field-visit-grid">
         {props.visit.fields.map((field) => {
           const view = buildFriendFieldStatusView(field);
-          const canClick = Boolean(field.nextAction) && !props.busy;
 
           return (
             <FarmStatusCard
-              className={`social-field-plot ${field.nextAction ? 'actionable' : ''}`}
+              className="social-field-plot"
               compact
               key={field.fieldSlotId}
-              onClick={() => handleFieldAction(field)}
-              onKeyDown={(event) => {
-                if (!canClick || (event.key !== 'Enter' && event.key !== ' ')) {
-                  return;
-                }
-                event.preventDefault();
-                handleFieldAction(field);
-              }}
-              role={canClick ? 'button' : undefined}
-              tabIndex={canClick ? 0 : undefined}
               view={view}
             />
           );
@@ -459,16 +438,11 @@ function buildFriendFieldStatusView(field: ClientSocialFriendFieldVisitResponse[
     yieldGold: field.yieldGold,
     description: field.unavailableReason ?? getFriendFieldDescription(field),
     emphasis: field.nextAction === 'harvest' && field.rewardPreview
-      ? `点击采摘 +${field.rewardPreview.gold} 金币`
+      ? `一键助力可采摘 +${field.rewardPreview.gold} 金币`
       : field.nextAction === 'water'
-        ? '点击浇水，双方增加亲密度'
+        ? '一键助力会自动浇水并增加亲密度'
         : undefined,
-    centerActionLabel: field.nextAction === 'harvest'
-      ? '采摘'
-      : field.nextAction === 'water'
-        ? '浇水'
-        : undefined,
-    harvestable: field.nextAction !== null,
+    harvestable: false,
   };
 }
 

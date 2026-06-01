@@ -323,7 +323,7 @@ export const FACTION_ADVANTAGE_CONFIG = {
     details: [
       '可收窗口 +20%',
       '成熟收益 +5%',
-      '已解锁种子和灵宠图鉴赛季内保留可见',
+      '已解锁植物和灵宠图鉴赛季内保留可见',
     ],
     modifiers: {
       farmMatureYieldBonusPercent: 5,
@@ -879,7 +879,7 @@ export function estimateDailyPassiveGold({ castleLevel, factionContribution, hou
  * 估算单块田一轮净金币。
  *
  * 当前 demo 里，新一轮培育默认是 520 成本、520 产出，净金币为 0；
- * 这恰好能帮你快速识别：如果不补种子差异或成熟加成，农场主循环本身不会形成稳定净产金。
+ * 这恰好能帮你快速识别：如果不补植物差异或成熟加成，农场主循环本身不会形成稳定净产金。
  */
 export function estimateFieldCycleNetGold({ cost, yieldGold }) {
   return Math.max(yieldGold, 0) - Math.max(cost, 0);

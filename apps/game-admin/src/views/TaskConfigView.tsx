@@ -5,12 +5,11 @@ import { TableSection } from '../components/TableSection';
 import { taskConfigFields } from '../domain/config';
 import type { AdminRecord } from '../types';
 
-export type TaskConfigGroup = 'starter' | 'daily' | 'daily-faction';
+export type TaskConfigGroup = 'starter' | 'contribution';
 
 const groupOptions: Array<{ key: TaskConfigGroup; label: string }> = [
   { key: 'starter', label: '新手任务' },
-  { key: 'daily', label: '普通每日任务' },
-  { key: 'daily-faction', label: '每日阵营任务' },
+  { key: 'contribution', label: '贡献值设定' },
 ];
 const editableTaskConfigFields = taskConfigFields.filter((field) => field.key !== 'taskGroup');
 
@@ -43,13 +42,13 @@ export function TaskConfigView(props: {
           <div className="panel-head">
             <div>
               <p className="eyebrow">Task Config</p>
-              <h3>任务配置</h3>
+              <h3>任务与贡献配置</h3>
             </div>
             <div className="action-group">
               <button disabled={isBusy} type="button" onClick={props.onRefresh}>刷新列表</button>
             </div>
           </div>
-          <div className="tab-list admin-section-tabs" role="tablist" aria-label="任务配置分类">
+          <div className="tab-list admin-section-tabs" role="tablist" aria-label="任务与贡献配置分类">
             {groupOptions.map((option) => (
               <button
                 className={`tab-button${props.group === option.key ? ' active' : ''}`}
@@ -65,13 +64,13 @@ export function TaskConfigView(props: {
         </section>
 
         <TableSection
-          title="任务列表"
+          title={props.group === 'starter' ? '新手任务' : '贡献值规则'}
           columns={[
             { label: '分类', key: 'taskGroupLabel' },
-            { label: '任务 ID', key: 'taskId' },
-            { label: '标题', key: 'title' },
-            { label: '目标类型', key: 'objectiveType' },
-            { label: '目标数量', key: 'targetCount' },
+            { label: props.group === 'starter' ? '任务 ID' : '规则 ID', key: 'taskId' },
+            { label: props.group === 'starter' ? '标题' : '规则名称', key: 'title' },
+            { label: props.group === 'starter' ? '目标类型' : '行为类型', key: 'objectiveType' },
+            { label: props.group === 'starter' ? '目标数量' : '触发数量', key: 'targetCount' },
             { label: '金币', key: 'rewardGold' },
             { label: '贡献', key: 'rewardContribution' },
             { label: '状态', key: 'enabledLabel' },
@@ -88,7 +87,7 @@ export function TaskConfigView(props: {
 
       {props.isEditorOpen ? (
         <Modal
-          title="编辑任务配置"
+          title={props.group === 'starter' ? '编辑新手任务' : '编辑贡献值设定'}
           subtitle={props.editingId || 'task config'}
           onClose={props.onCancelEdit}
         >

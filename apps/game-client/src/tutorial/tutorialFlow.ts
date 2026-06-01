@@ -3,7 +3,7 @@ import type { DevLoginSession } from '../api';
 import type { CharacterDialogSceneId } from '../dialog/dialogLibrary';
 
 export type TutorialStage = 'home' | 'farm' | 'spirit' | 'raid' | 'faction' | 'completed';
-export type TutorialRaidHubTab = 'targets' | 'reports' | 'warrants';
+export type TutorialRaidHubTab = 'targets' | 'reports';
 export type TutorialFactionTab = 'overview' | 'donate' | 'rank';
 
 export interface TutorialTask {
@@ -110,7 +110,7 @@ const sceneTutorialUnlockStage: Record<ClientSceneKey, TutorialStage> = {
 const tutorialTasks: Partial<Record<TutorialStage, TutorialTask>> = {
   home: {
     title: '领取启灵芽 x1',
-    description: '先收下引导者给你的启灵芽。拿到种子后，再去第一块田播下它。',
+    description: '先收下引导者给你的启灵芽。获得可种植资格后，再去第一块田培育它。',
     actionLabel: '领取启灵芽',
     targetScene: 'home',
   },

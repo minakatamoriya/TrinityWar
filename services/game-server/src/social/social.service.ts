@@ -29,6 +29,7 @@ import {
   getFieldReadyAt,
 } from '../lib/field-timing.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { grantFactionContribution } from '../faction/contribution.service.js';
 
 const SOCIAL_PAGE_SIZE = 30;
 const HARVEST_INTIMACY_GAIN = 2;
@@ -38,6 +39,10 @@ const WATER_REMAINING_RATIO = 0.4;
 const WATER_MIN_EFFECT_SECONDS = 10 * 60;
 const WATER_MAX_EFFECT_SECONDS = 60 * 60;
 const TEAM_CHALLENGE_EXPIRES_MS = 2 * 60 * 60 * 1000;
+const SOCIAL_CONTRIBUTION_REWARDS = {
+  waterField: 1,
+  harvestField: 2,
+} as const;
 
 type DbClient = Prisma.TransactionClient | PrismaClient;
 
@@ -208,9 +213,19 @@ export class SocialService {
       }),
     ]);
 
+    const assistSummaryByPlayerId = relationType === SocialRelationType.FRIEND
+      ? await this.getAssistSummaries(
+        this.prisma.db,
+        playerId,
+        relations
+          .filter((relation) => relation.status === SocialRelationStatus.ACTIVE)
+          .map((relation) => relation.targetPlayerId),
+      )
+      : new Map<string, ClientSocialRelationItem['assistSummary']>();
+
     return {
       app: APP_NAME,
-      items: relations.map((relation) => this.mapRelation(relation)),
+      items: relations.map((relation) => this.mapRelation(relation, assistSummaryByPlayerId.get(relation.targetPlayerId))),
       pagination: { page: safePage, pageSize: SOCIAL_PAGE_SIZE, total },
     };
   }
@@ -487,6 +502,17 @@ export class SocialService {
       });
 
       await this.bumpInteraction(client, playerId, request.targetPlayerId, WATER_INTIMACY_GAIN);
+      await grantFactionContribution(client, {
+        playerId,
+        contribution: SOCIAL_CONTRIBUTION_REWARDS.waterField,
+        sourceType: 'social-water-field',
+        sourceId: assist.id,
+        metadata: {
+          targetPlayerId: request.targetPlayerId,
+          fieldSlotId: wateredField.fieldSlotId,
+          shortenedSeconds: wateredField.shortenedSeconds,
+        },
+      });
       const counts = await this.getCounts(client, playerId);
       return { assist, counts, wateredField };
     });
@@ -539,7 +565,7 @@ export class SocialService {
       app: APP_NAME,
       friend: this.mapPlayer(target),
       fields: fields.map((field) => this.mapFriendVisitField(field, new Date(), harvestedFieldIds.has(field.id))),
-      ruleText: '成长中只能浇水，成熟后才能采摘；两种动作都会增加亲密度，采摘不影响好友收成。',
+      ruleText: '一键助力会自动处理当前可助力田地：成长中浇水，成熟后采摘；枯萎田暂时不能助力，采摘不影响好友收成。',
     };
   }
 
@@ -678,6 +704,17 @@ export class SocialService {
       ]);
 
       await this.bumpInteraction(client, playerId, request.targetPlayerId, HARVEST_INTIMACY_GAIN);
+      await grantFactionContribution(client, {
+        playerId,
+        contribution: SOCIAL_CONTRIBUTION_REWARDS.harvestField,
+        sourceType: 'social-harvest-field',
+        sourceId: assist.id,
+        metadata: {
+          targetPlayerId: request.targetPlayerId,
+          fieldSlotId: harvestResult.fieldSlotId,
+          rewardGold: harvestResult.rewardGold,
+        },
+      });
       const counts = await this.getCounts(client, playerId);
       return { assist, counts, harvestResult };
     });
@@ -1280,7 +1317,7 @@ export class SocialService {
     };
   }
 
-  private mapRelation(relation: RelationWithTarget): ClientSocialRelationItem {
+  private mapRelation(relation: RelationWithTarget, assistSummary?: ClientSocialRelationItem['assistSummary']): ClientSocialRelationItem {
     return {
       id: relation.id,
       relationType: this.mapRelationType(relation.relationType),
@@ -1290,7 +1327,98 @@ export class SocialService {
       lastInteractedAt: relation.lastInteractedAt?.toISOString() ?? null,
       createdAt: relation.createdAt.toISOString(),
       target: this.mapPlayer(relation.targetPlayer),
+      assistSummary,
     };
+  }
+
+  private async getAssistSummaries(
+    client: DbClient,
+    helperPlayerId: string,
+    targetPlayerIds: string[],
+  ): Promise<Map<string, ClientSocialRelationItem['assistSummary']>> {
+    const uniqueTargetPlayerIds = Array.from(new Set(targetPlayerIds));
+    if (uniqueTargetPlayerIds.length === 0) {
+      return new Map();
+    }
+
+    const fields = await client.playerFieldSlot.findMany({
+      where: {
+        playerId: { in: uniqueTargetPlayerIds },
+        isUnlocked: true,
+        status: { in: ['GROWING', 'MATURE'] },
+        seedDefinitionId: { not: null },
+      },
+      select: {
+        id: true,
+        playerId: true,
+        status: true,
+        seedAt: true,
+        lastCalculatedAt: true,
+      },
+    });
+    const matureFields = fields.filter((field) => field.status === 'MATURE');
+    const growingFields = fields.filter((field) => field.status === 'GROWING');
+    const [wateredRecords, harvestedRecords] = await Promise.all([
+      growingFields.length > 0
+        ? client.playerAssistRecord.findMany({
+          where: {
+            helperPlayerId,
+            assistType: SocialAssistType.WATER_FIELD,
+            targetEntityType: 'field_slot',
+            OR: growingFields.map((field) => ({
+              targetPlayerId: field.playerId,
+              targetEntityId: field.id,
+              createdAt: { gte: field.seedAt ?? field.lastCalculatedAt ?? new Date(0) },
+            })),
+          },
+          select: {
+            targetEntityId: true,
+          },
+        })
+        : [],
+      matureFields.length > 0
+        ? client.playerAssistRecord.findMany({
+        where: {
+          helperPlayerId,
+          assistType: SocialAssistType.HARVEST_FIELD,
+          targetEntityType: 'field_slot',
+          OR: matureFields.map((field) => ({
+            targetPlayerId: field.playerId,
+            targetEntityId: field.id,
+            createdAt: { gte: field.seedAt ?? field.lastCalculatedAt ?? new Date(0) },
+          })),
+        },
+        select: {
+          targetEntityId: true,
+        },
+      })
+        : [],
+    ]);
+    const wateredFieldIds = new Set(wateredRecords.map((record) => record.targetEntityId).filter((id): id is string => typeof id === 'string'));
+    const harvestedFieldIds = new Set(harvestedRecords.map((record) => record.targetEntityId).filter((id): id is string => typeof id === 'string'));
+    const summaryByPlayerId = new Map<string, ClientSocialRelationItem['assistSummary']>();
+
+    for (const targetPlayerId of uniqueTargetPlayerIds) {
+      summaryByPlayerId.set(targetPlayerId, { waterableCount: 0, harvestableCount: 0, availableCount: 0 });
+    }
+
+    for (const field of fields) {
+      const summary = summaryByPlayerId.get(field.playerId);
+      if (!summary) {
+        continue;
+      }
+      if (field.status === 'GROWING' && !wateredFieldIds.has(field.id)) {
+        summary.waterableCount += 1;
+        summary.availableCount += 1;
+        continue;
+      }
+      if (field.status === 'MATURE' && !harvestedFieldIds.has(field.id)) {
+        summary.harvestableCount += 1;
+        summary.availableCount += 1;
+      }
+    }
+
+    return summaryByPlayerId;
   }
 
   private mapFeed(feed: FeedWithActor): ClientSocialFeedItem {
@@ -1400,7 +1528,7 @@ function getFriendFieldUnavailableReason(field: FriendFieldVisitSlot): string | 
     return '好友还没有播种';
   }
   if (field.status === 'WITHERED') {
-    return '这块田地已经枯萎，暂时不能助力';
+    return '这块田地已经枯萎，不能采摘；等好友重新播种后再来助力';
   }
   return null;
 }

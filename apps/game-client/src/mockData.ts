@@ -165,7 +165,7 @@ export const mockHomeSummary: HomeSummaryResponse = {
     { key: 'building', title: '法术阁', description: '修习法术强化经营' },
     { key: 'farm', title: '农场', description: '收成熟田地' },
     { key: 'raid', title: '灵宠', description: '培育灵宠并查看当前守备' },
-    { key: 'report', title: '探索', description: '查看目标、战报与通缉' },
+    { key: 'report', title: '探索', description: '查看目标与战报' },
     { key: 'faction', title: '阵营', description: '上缴并领取俸禄' },
   ],
 };
@@ -445,7 +445,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         tag: '小胜 · 险取一筹',
         tone: 'success',
         createdAt: new Date(Date.now() - 58 * 60 * 1000).toISOString(),
-        summary: '08:40 你以小胜拿到 436 金币、1 颗种子和 6 颗兽魂，主战灵宠扣血 18%。',
+        summary: '08:40 你以小胜拿到 436 金币、1 份植物精华和 6 颗兽魂，主战灵宠扣血 18%。',
         actions: [{ label: '查看详情', target: 'report', tone: 'ghost' }],
       },
       {
@@ -453,7 +453,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         tag: '大胜 · 势如破竹',
         tone: 'success',
         createdAt: new Date(Date.now() - 132 * 60 * 1000).toISOString(),
-        summary: '07:06 你以大胜拿到 512 金币、2 颗种子和 8 颗兽魂，主战灵宠仅扣血 11%。',
+        summary: '07:06 你以大胜拿到 512 金币、2 份植物精华和 8 颗兽魂，主战灵宠仅扣血 11%。',
         actions: [{ label: '查看详情', target: 'report', tone: 'ghost' }],
       },
       {
@@ -471,7 +471,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
     hero: {
       eyebrow: '阵营面板',
       title: '人界阵营',
-      description: '上缴金币积累个人贡献，每日按贡献档位领取材料俸禄。',
+      description: '完成阵营任务积累个人贡献，每日按贡献档位领取材料俸禄。',
       advantage: '今日俸禄档位：入门俸禄',
       breakdown: '预计每日俸禄：青灵麦精华 x3、普通兽魂 x2、金币 x20',
       action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
@@ -482,9 +482,9 @@ export const mockSceneContent: ClientSceneContentResponse = {
       description: '贡献用于提升每日俸禄档位，俸禄以植物精华、灵宠精魄和分档兽魂为主。',
     },
     comparison: [
-      { faction: '人界', advantage: '总贡献 1,260', gold: '82,400', power: '1,260', isCurrent: true },
-      { faction: '仙界', advantage: '被挑战损失减少 10%，更适合稳守。', gold: '79,600', power: '1,180' },
-      { faction: '魔界', advantage: '战斗收益增加 10%，但战损更高。', gold: '85,300', power: '1,340' },
+      { faction: '人界', advantage: '总贡献 1,260', totalContribution: '1,260', power: '1,260', isCurrent: true },
+      { faction: '仙界', advantage: '总贡献 1,180', totalContribution: '1,180', power: '1,180' },
+      { faction: '魔界', advantage: '总贡献 1,340', totalContribution: '1,340', power: '1,340' },
     ],
     donate: {
       title: '精华上缴',
@@ -554,7 +554,7 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     exposedFruit: '2 块成熟田 · 预计 880 金币',
     raidRule: '按当前金币的一部分结算，本次预计命中 520 金币',
     defenseStatus: '防守偏弱，守田灵宠少于常见同级目标',
-    protectionStatus: '当前无保护，可直接发起战斗或通缉',
+    protectionStatus: '当前无保护，可直接发起战斗',
     targetFarmBoardMessage: '成熟田可看，手快者得。',
     mainPetPreview: mockRaidSpiritPreviews['target-1'],
     remainingFreeIntel: 3,
@@ -562,8 +562,6 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     detail: '对手昵称烬牙，刚结束一轮农场收取，外露收益仍然较高。魔界加成偏向进攻，适合快速出手。',
     actions: [
       { label: '发起战斗', target: 'raid', tone: 'primary' },
-      { label: '发布通缉', target: 'raid', tone: 'secondary' },
-      { label: '邀请摇人', target: 'raid', tone: 'ghost' },
     ],
   },
   'target-2': {
@@ -592,8 +590,6 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     detail: '对手昵称云栖，收益中等但仙界自带减损，适合先做一轮稳妥试探。',
     actions: [
       { label: '发起战斗', target: 'raid', tone: 'primary' },
-      { label: '发布通缉', target: 'raid', tone: 'secondary' },
-      { label: '邀请摇人', target: 'raid', tone: 'ghost' },
     ],
   },
   'target-3': {
@@ -621,8 +617,6 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     detail: '对手昵称临风，收益较低，更适合作为保守出手对象。',
     actions: [
       { label: '发起战斗', target: 'raid', tone: 'primary' },
-      { label: '发布通缉', target: 'raid', tone: 'secondary' },
-      { label: '邀请摇人', target: 'raid', tone: 'ghost' },
     ],
   },
   'target-4': {
@@ -651,8 +645,6 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     detail: '对手昵称玄潮，领地阶段高一档，收益不错，但正面强碰战损会更高。',
     actions: [
       { label: '发起战斗', target: 'raid', tone: 'primary' },
-      { label: '发布通缉', target: 'raid', tone: 'secondary' },
-      { label: '邀请摇人', target: 'raid', tone: 'ghost' },
     ],
   },
   'target-5': {
@@ -681,8 +673,6 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     detail: '对手昵称青槐，适合低风险起手，重点看田地收益是否值得你消耗免费次数。',
     actions: [
       { label: '发起战斗', target: 'raid', tone: 'primary' },
-      { label: '发布通缉', target: 'raid', tone: 'secondary' },
-      { label: '邀请摇人', target: 'raid', tone: 'ghost' },
     ],
   },
 };

@@ -17,6 +17,7 @@
     "build": "npm run build:shared && npm run build --workspace @trinitywar/game-client && npm run build --workspace @trinitywar/game-admin && npm run build --workspace @trinitywar/game-server",
     "build:client": "npm run build:shared && npm run build --workspace @trinitywar/game-client",
     "build:server": "npm run build:shared && npm run build --workspace @trinitywar/game-server",
+    "check:mojibake": "node scripts/check-mojibake.mjs",
     "postinstall": "npm run build:shared"
   },
   "devDependencies": {

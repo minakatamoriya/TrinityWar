@@ -4,11 +4,12 @@ import { AuthModule } from '../auth/auth.module.js';
 import { ClientReadModule } from '../client-read/client-read.module.js';
 import { IdempotencyModule } from '../idempotency/idempotency.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { TaskConfigModule } from '../task-config/task-config.module.js';
 import { SpiritController } from './spirit.controller.js';
 import { SpiritService } from './spirit.service.js';
 
 @Module({
-  imports: [AuthModule, PrismaModule, AuditModule, IdempotencyModule, ClientReadModule],
+  imports: [AuthModule, PrismaModule, AuditModule, IdempotencyModule, ClientReadModule, TaskConfigModule],
   controllers: [SpiritController],
   providers: [SpiritService],
   exports: [SpiritService],

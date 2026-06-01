@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+﻿import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { PlayerSpiritStatus, Prisma, PrismaClient, SpiritElement, SpiritRarity, SpiritRole } from '@prisma/client';
 import { APP_NAME, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientRecoverSpiritRequest, type ClientRollSpiritTraitsRequest, type ClientSetMainSpiritRequest, type ClientSpiritCodexEntry, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritStatus, type ClientSpiritSlot, type ClientSpiritDefinition, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
@@ -8,10 +8,12 @@ import { ClientReadService } from '../client-read/client-read.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
+import { grantFactionContribution } from '../faction/contribution.service.js';
 import { DAILY_TASK_CONFIG, getFactionAdvantageConfig } from '../lib/game-balance.js';
 import { applyFactionSpiritPassiveExpBonus, getFactionSpiritFeedDurationSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { STARTER_SPIRIT_IDS } from '../seed/seed-data/spirits.js';
+import { TaskConfigService } from '../task-config/task-config.service.js';
 
 const SPIRIT_SOUL_GOLD_PRICE = 100;
 const SPIRIT_MAX_LEVEL = 50;
@@ -25,14 +27,13 @@ const SPIRIT_FEED_ONCE_SECONDS = 2 * 60 * 60;
 const SPIRIT_SATIATED_EXP_BONUS_BPS = 5000;
 const SPIRIT_AD_DAILY_LIMIT = 3;
 const SPIRIT_AD_TALISMAN_REWARD = 5;
-
 const SPIRIT_SHOP_ITEMS: ClientSpiritShopItem[] = [
-  { itemId: 'spirit-root-100', label: '灵根 x100', description: '日常补粮', priceTianjiTalisman: 10, limitLabel: '不限购', remainingPurchases: null, rewards: [{ kind: 'spirit-root', label: '灵根', quantity: 100 }] },
+  { itemId: 'spirit-root-100', label: '灵根 x100', description: '日常补给', priceTianjiTalisman: 10, limitLabel: '不限购', remainingPurchases: null, rewards: [{ kind: 'spirit-root', label: '灵根', quantity: 100 }] },
   { itemId: 'spirit-marrow-5', label: '灵髓 x5', description: '洗练基础材料', priceTianjiTalisman: 20, limitLabel: '每日 5 次', remainingPurchases: 5, rewards: [{ kind: 'spirit-marrow', label: '灵髓', quantity: 5 }] },
   { itemId: 'spirit-jade-1', label: '灵玉 x1', description: '高级洗练材料', priceTianjiTalisman: 80, limitLabel: '每周 1 次', remainingPurchases: 1, rewards: [{ kind: 'spirit-jade', label: '灵玉', quantity: 1 }] },
   { itemId: 'ordinary-soul-10', label: '普通兽魂 x10', description: '低段突破', priceTianjiTalisman: 5, limitLabel: '每日 3 次', remainingPurchases: 3, rewards: [{ kind: 'ordinary-soul', label: '普通兽魂', quantity: 10 }] },
   { itemId: 'rare-soul-1', label: '稀有兽魂 x1', description: '中段突破', priceTianjiTalisman: 30, limitLabel: '每日 2 次', remainingPurchases: 2, rewards: [{ kind: 'rare-soul', label: '稀有兽魂', quantity: 1 }] },
-  { itemId: 'legendary-soul-1', label: '传说兽魂 x1', description: '高层突破', priceTianjiTalisman: 150, limitLabel: '每周 1 次', remainingPurchases: 1, rewards: [{ kind: 'legendary-soul', label: '传说兽魂', quantity: 1 }] },
+  { itemId: 'legendary-soul-1', label: '传说兽魂 x1', description: '高段突破', priceTianjiTalisman: 150, limitLabel: '每周 1 次', remainingPurchases: 1, rewards: [{ kind: 'legendary-soul', label: '传说兽魂', quantity: 1 }] },
 ];
 
 const SPIRIT_BREAKTHROUGH_COSTS: Record<number, { quality: 'ordinary' | 'rare' | 'legendary'; count: number }> = {
@@ -89,6 +90,7 @@ export class SpiritService {
     @Inject(IdempotencyService) private readonly idempotencyService: IdempotencyService,
     @Inject(AuditService) private readonly auditService: AuditService,
     @Inject(DailyTaskLifecycleService) private readonly dailyTaskLifecycleService: DailyTaskLifecycleService,
+    @Inject(TaskConfigService) private readonly taskConfigService: TaskConfigService,
   ) {}
 
   async getSpiritStateResponse(playerId: string): Promise<ClientSpiritStateResponse> {
@@ -322,7 +324,7 @@ export class SpiritService {
         },
       });
 
-      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition.label} 已升至 Lv.${nextLevel}。`);
+      const response = await this.buildSpiritMutationResponse(client, playerId, slot.spiritDefinition.label + ' 已升至 Lv.' + nextLevel + '。');
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
     });
@@ -435,7 +437,7 @@ export class SpiritService {
       });
       await this.recordDailyTaskProgress(client, playerId, 'feed-spirit');
 
-      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 已安排 2 小时自动加速。`);
+      const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 已安排 2 小时自动加速。');
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
     });
@@ -553,7 +555,7 @@ export class SpiritService {
       });
 
       await this.ensureNaturalTraitSlots(client, slot.id, expectedStage);
-      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 已突破。`);
+      const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 已突破。');
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
     });
@@ -737,8 +739,20 @@ export class SpiritService {
           requestIdempotencyKey: idempotencyKey ?? null,
         },
       });
+      const contributionConfig = await this.taskConfigService.getDailyFactionTaskConfig('spirit-roll-traits', client);
+      if (contributionConfig?.isEnabled && contributionConfig.rewardContribution > 0) {
+        await grantFactionContribution(client, {
+          playerId,
+          contribution: contributionConfig.rewardContribution,
+          sourceType: 'spirit-roll-traits',
+          sourceId: slot.id,
+          metadata: {
+            mode: request.mode,
+          },
+        });
+      }
 
-      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 词条已洗练。`);
+      const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 词条已洗练。');
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
     });
@@ -941,7 +955,7 @@ export class SpiritService {
         });
       }
 
-      const response = await this.buildSpiritMutationResponse(client, playerId, `${targetSlot.spiritDefinition?.label ?? '灵宠'} 已设为主位。`);
+      const response = await this.buildSpiritMutationResponse(client, playerId, (targetSlot.spiritDefinition?.label ?? '灵宠') + ' 已设为主位。');
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', targetSlot.id);
       return response;
     });
@@ -1057,9 +1071,22 @@ export class SpiritService {
           slotVersion: { increment: 1 },
         },
       });
+      const contributionConfig = await this.taskConfigService.getDailyFactionTaskConfig('spirit-recover', client);
+      if (contributionConfig?.isEnabled && contributionConfig.rewardContribution > 0) {
+        await grantFactionContribution(client, {
+          playerId,
+          contribution: contributionConfig.rewardContribution,
+          sourceType: 'spirit-recover',
+          sourceId: slot.id,
+          metadata: {
+            talismanCost,
+            recoveryUsed: nextRecoveryUsed,
+          },
+        });
+      }
 
-      const costText = talismanCost > 0 ? `，消耗天机符 x${talismanCost}` : '，本次使用免费恢复';
-      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition?.label ?? '灵宠'} 已恢复至满血${costText}。`);
+      const costText = talismanCost > 0 ? '，消耗天机符 x' + talismanCost : '，本次使用免费恢复';
+      const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 已恢复至满血' + costText + '。');
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
     });
@@ -1162,7 +1189,7 @@ export class SpiritService {
         },
       });
 
-      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition.label} 已解散，返还 ${refundSoul} 点兽魂。`);
+      const response = await this.buildSpiritMutationResponse(client, playerId, `${slot.spiritDefinition.label} 已解散。`);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
     });
@@ -1319,7 +1346,7 @@ export class SpiritService {
         },
       });
 
-      const response = await this.buildSpiritMutationResponse(client, playerId, `${codexEntry.spiritDefinition.label} 已合成入栏。`);
+      const response = await this.buildSpiritMutationResponse(client, playerId, codexEntry.spiritDefinition.label + ' 已合成入栏。');
       if (isStarterComposeGift) {
         await client.playerSpiritCodex.updateMany({
           where: {
@@ -1834,7 +1861,7 @@ function buildShopItemsForState(shopPurchases: Array<{ itemId: string; periodKey
 
 function getSoulQualityLabel(quality: 'ordinary' | 'rare' | 'legendary'): string {
   if (quality === 'legendary') {
-    return '传说兽魂';
+    return '浼犺鍏介瓊';
   }
   if (quality === 'rare') {
     return '稀有兽魂';

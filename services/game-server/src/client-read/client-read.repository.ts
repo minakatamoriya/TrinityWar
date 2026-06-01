@@ -86,7 +86,6 @@ export interface SceneContentReadModel {
     faction: {
       id: string;
       name: string;
-      treasuryGold: number;
       contributionScore: number;
     } | null;
     factionMembers: Array<{
@@ -191,7 +190,6 @@ export interface SceneContentReadModel {
   factions: Array<{
     id: string;
     name: string;
-    treasuryGold: number;
     contributionScore: number;
   }>;
   raidTargetPools: Array<{
@@ -427,7 +425,6 @@ export class ClientReadRepository {
             id: true,
             code: true,
             name: true,
-            treasuryGold: true,
             contributionScore: true,
           },
         },
@@ -587,15 +584,18 @@ export class ClientReadRepository {
       return null;
     }
 
-    const [factions, factionStipendClaimCount] = await Promise.all([
+    const [factions, factionContributionTotals, factionStipendClaimCount] = await Promise.all([
       client.faction.findMany({
-        orderBy: [{ contributionScore: 'desc' }, { treasuryGold: 'desc' }, { name: 'asc' }],
+        orderBy: [{ contributionScore: 'desc' }, { name: 'asc' }],
         select: {
           id: true,
           name: true,
-          treasuryGold: true,
           contributionScore: true,
         },
+      }),
+      client.factionMember.groupBy({
+        by: ['factionId'],
+        _sum: { contributionScore: true },
       }),
       client.playerFactionStipendState.count({
         where: {
@@ -604,6 +604,18 @@ export class ClientReadRepository {
         },
       }),
     ]);
+    const contributionTotalByFactionId = new Map(
+      factionContributionTotals.map((total) => [total.factionId, total._sum.contributionScore ?? 0]),
+    );
+    const factionsWithMemberContributionTotals = factions
+      .map((faction) => ({
+        ...faction,
+        contributionScore: contributionTotalByFactionId.get(faction.id) ?? 0,
+      }))
+      .sort((left, right) => {
+        const contributionDelta = right.contributionScore - left.contributionScore;
+        return contributionDelta !== 0 ? contributionDelta : left.name.localeCompare(right.name, 'zh-Hans-CN');
+      });
 
     const raidTargetPools = await client.raidTargetPool.findMany({
       where: {
@@ -726,7 +738,7 @@ export class ClientReadRepository {
       landDeedProgress: player.landDeedProgress,
       factionStipendStates: player.factionStipendStates,
       factionStipendClaimCount,
-      factions,
+      factions: factionsWithMemberContributionTotals,
       raidTargetPools,
       raidMessageTemplates,
       battleReports,

@@ -4,13 +4,24 @@ import http from 'node:http';
 import https from 'node:https';
 import { PrismaClient } from '@prisma/client';
 import { NestFactory } from '@nestjs/core';
-import { APP_NAME, CLIENT_API_PREFIX, type ClientRaidActionResponse, type ClientSceneContentResponse } from '@trinitywar/shared';
+import {
+  ADMIN_API_PREFIX,
+  APP_NAME,
+  CLIENT_API_PREFIX,
+  type ClientCollectFieldResponse,
+  type ClientRaidActionResponse,
+  type ClientSceneContentResponse,
+  type ClientSpiritMutationResponse,
+  type ClientStateMutationResponse,
+  type HomeSummaryResponse,
+} from '@trinitywar/shared';
 import { AppModule } from '../modules/app/app.module.js';
 import { RaidSettlementService } from '../raid/raid-settlement.service.js';
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:3000';
 const SPIRIT_SOUL_GOLD_PRICE = 100;
 const SPIRIT_LEVEL_10_UPGRADE_COST = 15;
+const SMOKE_SEED_ID = 'ninglucao';
 
 interface DevLoginResult {
   accessToken: string;
@@ -33,8 +44,8 @@ const prisma = new PrismaClient();
 async function main(): Promise<void> {
   await assertServerHealthy();
 
-  const user1 = await devLogin('dev-verifier-1', '测试用户1', 'human');
-  const user2 = await devLogin('dev-verifier-2', '测试用户2', 'demon');
+  const user1 = await devLogin('dev-verifier-1', 'smoke-user-1', 'human');
+  const user2 = await devLogin('dev-verifier-2', 'smoke-user-2', 'demon');
   assertEqual(user1.player.castleLevel, 10, 'test user 1 castle level');
   assertEqual(user2.player.castleLevel, 10, 'test user 2 castle level');
 
@@ -45,9 +56,13 @@ async function main(): Promise<void> {
   assertEqual(baseline.user1Target?.targetPlayerId, user2.player.id, 'test user 1 sees test user 2');
   assertEqual(baseline.user2Target?.targetPlayerId, user1.player.id, 'test user 2 sees test user 1');
 
-  await assertBootstrapAndScenes(user1, user2);
+  await assertBootstrapHomeAndScenes(user1, user2);
+  await verifyAdminTaskConfigRead();
+  await verifyFieldCultivationAndCollect(user1);
   await verifyBuildingUpgrade(user1);
   await verifySpiritPurchaseAndUpgrade(user1);
+  await verifySpiritRecovery(user1);
+  await verifySpiritBreakthrough(user1);
   await verifyFarmBoard(user1);
   await verifyDeepIntel(user1, baseline.user1Target?.id ?? '');
   await verifyRaidAndMessage(user1, user2);
@@ -69,9 +84,12 @@ async function devLogin(providerUserId: string, nickname: string, factionCode: s
   });
 }
 
-async function assertBootstrapAndScenes(user1: DevLoginResult, user2: DevLoginResult): Promise<void> {
-  const [bootstrap1, scene1, scene2] = await Promise.all([
+async function assertBootstrapHomeAndScenes(user1: DevLoginResult, user2: DevLoginResult): Promise<void> {
+  const [bootstrap1, home1, scene1, scene2] = await Promise.all([
     fetchJson<{ backpack: { globalItemInventory: { tianjiTalisman: number } } }>(`${CLIENT_API_PREFIX}/bootstrap`, {
+      headers: authHeaders(user1),
+    }),
+    fetchJson<HomeSummaryResponse>(`${CLIENT_API_PREFIX}/home-summary`, {
       headers: authHeaders(user1),
     }),
     fetchJson<ClientSceneContentResponse>(`${CLIENT_API_PREFIX}/scene-content`, {
@@ -83,8 +101,121 @@ async function assertBootstrapAndScenes(user1: DevLoginResult, user2: DevLoginRe
   ]);
 
   assertAtLeast(bootstrap1.backpack.globalItemInventory.tianjiTalisman, 3, 'test user 1 baseline tianji talisman');
+  assertEqual(home1.app, APP_NAME, 'home summary app');
   assert(scene1.raid.targets.some((target) => target.name === user2.player.nickname), 'test user 1 scene should list test user 2');
   assert(scene2.raid.targets.some((target) => target.name === user1.player.nickname), 'test user 2 scene should list test user 1');
+}
+
+async function verifyAdminTaskConfigRead(): Promise<void> {
+  const tasks = await fetchJson<{ items: unknown[]; pagination: { total: number } }>(`${ADMIN_API_PREFIX}/config/tasks`, {
+    headers: adminHeaders(),
+  });
+  assert(tasks.items.length > 0, 'admin task config should return items');
+  assertAtLeast(tasks.pagination.total, tasks.items.length, 'admin task config total');
+}
+
+async function verifyFieldCultivationAndCollect(user: DevLoginResult): Promise<void> {
+  const field = await prisma.playerFieldSlot.findFirst({
+    where: {
+      playerId: user.player.id,
+      isUnlocked: true,
+      status: 'GROWING',
+      seedDefinition: { seedId: SMOKE_SEED_ID },
+    },
+    orderBy: { slotIndex: 'asc' },
+    select: { id: true },
+  });
+  assert(field, `test user should have a growing ${SMOKE_SEED_ID} field`);
+
+  await prisma.playerFieldSlot.update({
+    where: { id: field.id },
+    data: {
+      status: 'EMPTY',
+      seedDefinition: { disconnect: true },
+      currentClaimableGold: 0,
+      investedGold: 0,
+      seedAt: null,
+      matureAt: null,
+      readyAt: null,
+      overripeAt: null,
+      lastCalculatedAt: new Date(),
+      statusVersion: { increment: 1 },
+    },
+  });
+
+  const startKey = `verify-start-cultivation-${Date.now()}`;
+  await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/start-cultivation`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(user),
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': startKey,
+    },
+    body: JSON.stringify({
+      fieldId: field.id,
+      plantType: SMOKE_SEED_ID,
+    }),
+  });
+
+  const planted = await prisma.playerFieldSlot.findUniqueOrThrow({
+    where: { id: field.id },
+    select: {
+      status: true,
+      statusVersion: true,
+      seedDefinition: { select: { seedId: true, baseYieldGold: true } },
+    },
+  });
+  assertEqual(planted.status, 'GROWING', 'field should be growing after start cultivation');
+  assertEqual(planted.seedDefinition?.seedId, SMOKE_SEED_ID, 'field seed after start cultivation');
+
+  const now = new Date();
+  await prisma.playerFieldSlot.update({
+    where: { id: field.id },
+    data: {
+      status: 'MATURE',
+      currentClaimableGold: Math.max(planted.seedDefinition?.baseYieldGold ?? 120, 1),
+      matureAt: new Date(now.getTime() - 60_000),
+      readyAt: new Date(now.getTime() - 60_000),
+      overripeAt: new Date(now.getTime() + 3_600_000),
+      lastCalculatedAt: now,
+      statusVersion: { increment: 1 },
+    },
+  });
+
+  const wallet = await prisma.playerWallet.findUniqueOrThrow({
+      where: { playerId: user.player.id },
+      select: { balanceVersion: true },
+  });
+  const collectKey = `verify-collect-field-${Date.now()}`;
+  const collectResponse = await fetchJson<ClientCollectFieldResponse>(`${CLIENT_API_PREFIX}/actions/collect-field`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(user),
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': collectKey,
+    },
+    body: JSON.stringify({
+      fieldId: field.id,
+      collectMode: 'ripe',
+      walletVersion: wallet.balanceVersion,
+      requestIdempotencyKey: collectKey,
+    }),
+  });
+  assertAtLeast(collectResponse.result.collectedGold, 1, 'collect field gold');
+
+  const [afterCollect, harvestLog] = await Promise.all([
+    prisma.playerFieldSlot.findUniqueOrThrow({
+      where: { id: field.id },
+      select: { status: true, seedDefinitionId: true },
+    }),
+    prisma.fieldHarvestLog.findFirst({
+      where: { playerId: user.player.id, fieldSlotId: field.id, collectMode: 'ripe' },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
+  assertEqual(afterCollect.status, 'EMPTY', 'field should be empty after collect');
+  assertEqual(afterCollect.seedDefinitionId, null, 'field seed should clear after collect');
+  assert(harvestLog, 'field harvest log should exist');
 }
 
 async function verifyBuildingUpgrade(user: DevLoginResult): Promise<void> {
@@ -196,11 +327,100 @@ async function verifySpiritPurchaseAndUpgrade(user: DevLoginResult): Promise<voi
   assertEqual(afterUpgrade.resource.spiritSoul, afterPurchase.resource.spiritSoul - SPIRIT_LEVEL_10_UPGRADE_COST, 'spirit upgrade should spend level 10 cost');
 }
 
+async function verifySpiritRecovery(user: DevLoginResult): Promise<void> {
+  const before = await prisma.playerSpiritSlot.findUniqueOrThrow({
+    where: { playerId_slotIndex: { playerId: user.player.id, slotIndex: 1 } },
+    select: { maxHp: true },
+  });
+  await prisma.playerSpiritSlot.update({
+    where: { playerId_slotIndex: { playerId: user.player.id, slotIndex: 1 } },
+    data: {
+      currentHp: Math.max(before.maxHp - 1, 1),
+      status: 'WOUNDED',
+      slotVersion: { increment: 1 },
+    },
+  });
+  const [slot, resource] = await Promise.all([
+    prisma.playerSpiritSlot.findUniqueOrThrow({
+      where: { playerId_slotIndex: { playerId: user.player.id, slotIndex: 1 } },
+      select: { slotVersion: true, maxHp: true },
+    }),
+    prisma.playerSpiritResource.findUniqueOrThrow({
+      where: { playerId: user.player.id },
+      select: { resourceVersion: true },
+    }),
+  ]);
+  const recoverKey = `verify-spirit-recover-${Date.now()}`;
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/recover`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(user),
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': recoverKey,
+    },
+    body: JSON.stringify({
+      slotIndex: 1,
+      slotVersion: slot.slotVersion,
+      resourceVersion: resource.resourceVersion,
+      requestIdempotencyKey: recoverKey,
+    }),
+  });
+  assertEqual(response.spirit.mainSlot?.currentHp, slot.maxHp, 'main spirit hp after recover');
+  assertEqual(response.spirit.mainSlot?.status, 'active', 'main spirit status after recover');
+}
+
+async function verifySpiritBreakthrough(user: DevLoginResult): Promise<void> {
+  await prisma.playerSpiritSlot.update({
+    where: { playerId_slotIndex: { playerId: user.player.id, slotIndex: 1 } },
+    data: {
+      level: 9,
+      exp: 0,
+      breakthroughStage: 0,
+      lastExpSettledAt: new Date(),
+      slotVersion: { increment: 1 },
+    },
+  });
+  const [slot, resource] = await Promise.all([
+    prisma.playerSpiritSlot.findUniqueOrThrow({
+      where: { playerId_slotIndex: { playerId: user.player.id, slotIndex: 1 } },
+      select: { slotVersion: true },
+    }),
+    prisma.playerSpiritResource.findUniqueOrThrow({
+      where: { playerId: user.player.id },
+      select: { resourceVersion: true, ordinarySoul: true },
+    }),
+  ]);
+  assertAtLeast(resource.ordinarySoul, 5, 'ordinary soul before breakthrough');
+
+  const breakthroughKey = `verify-spirit-breakthrough-${Date.now()}`;
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/breakthrough`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(user),
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': breakthroughKey,
+    },
+    body: JSON.stringify({
+      slotIndex: 1,
+      targetStage: 1,
+      slotVersion: slot.slotVersion,
+      resourceVersion: resource.resourceVersion,
+      requestIdempotencyKey: breakthroughKey,
+    }),
+  });
+  assertEqual(response.spirit.mainSlot?.level, 10, 'main spirit level after breakthrough');
+  assertEqual(response.spirit.mainSlot?.breakthroughStage, 1, 'main spirit breakthrough stage');
+  const breakthroughLog = await prisma.spiritBreakthroughLog.findFirst({
+    where: { playerId: user.player.id, requestIdempotencyKey: breakthroughKey },
+  });
+  assert(breakthroughLog, 'spirit breakthrough log should exist');
+}
+
 async function verifyFarmBoard(user: DevLoginResult): Promise<void> {
   const before = await fetchJson<{ farmBoardVersion: number }>(`${CLIENT_API_PREFIX}/profile/farm-board`, {
     headers: authHeaders(user),
   });
-  const message = `验证留言${Date.now().toString().slice(-6)}`;
+  const message = `verify-board-${Date.now().toString().slice(-6)}`;
 
   await fetchJson(`${CLIENT_API_PREFIX}/profile/farm-board`, {
     method: 'POST',
@@ -303,7 +523,7 @@ async function verifyRaidAndMessage(user1: DevLoginResult, user2: DevLoginResult
 
   const settlement = await prisma.raidSettlement.findUniqueOrThrow({
     where: { raidOrderId: orderId },
-    select: { lootGold: true, reportSummary: true, battleReplayJson: true },
+    select: { lootGold: true, battleReplayJson: true },
   });
   const savedReplay = settlement.battleReplayJson as { orderId?: string; steps?: unknown[] } | null;
   assert(savedReplay, 'raid settlement should persist battle replay json');
@@ -470,6 +690,11 @@ function authHeaders(session: DevLoginResult): Record<string, string> {
   return {
     Authorization: `Bearer ${session.accessToken}`,
   };
+}
+
+function adminHeaders(): Record<string, string> {
+  const debugKey = process.env.ADMIN_DEBUG_KEY?.trim();
+  return debugKey ? { 'x-admin-debug-key': debugKey } : {};
 }
 
 function mustNumber(value: number | undefined | null, label: string): number {

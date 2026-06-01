@@ -13,6 +13,7 @@ import { APP_NAME, DOCS_ROUTE } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { GAME_DESIGN_CONFIG } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SeasonService } from '../season/season.service.js';
 import { TaskConfigService, type TaskConfigGroup } from '../task-config/task-config.service.js';
 
 interface PagingQuery {
@@ -26,6 +27,7 @@ interface PagingQuery {
 export class AdminReadonlyService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(SeasonService) private readonly seasonService: SeasonService,
     @Inject(TaskConfigService) private readonly taskConfigService: TaskConfigService,
   ) {}
 
@@ -47,7 +49,251 @@ export class AdminReadonlyService {
         'task-config',
         'castle-level-config',
         'share-assist-readonly',
+        'season-readonly',
       ],
+    };
+  }
+
+  async getCurrentSeasonAdmin(): Promise<Record<string, unknown>> {
+    const computed = this.seasonService.getCurrentSeason();
+    const persisted = await this.prisma.db.gameSeason.findUnique({
+      where: { seasonNumber: computed.seasonNumber },
+    });
+    const [playerStateCount, pendingResetCount] = await Promise.all([
+      this.prisma.db.playerSeasonState.count({
+        where: { currentSeasonNumber: computed.seasonNumber },
+      }),
+      this.prisma.db.playerSeasonState.count({
+        where: { lastResetSeasonNumber: { lt: computed.seasonNumber } },
+      }),
+    ]);
+
+    return normalizeDates({
+      seasonNumber: computed.seasonNumber,
+      currentWeek: computed.currentWeek,
+      totalWeeks: computed.totalWeeks,
+      startsAt: computed.startsAt,
+      endsAt: computed.endsAt,
+      persisted: Boolean(persisted),
+      persistedStartsAt: persisted?.startsAt ?? null,
+      persistedEndsAt: persisted?.endsAt ?? null,
+      playerStateCount,
+      pendingResetCount,
+    });
+  }
+
+  async listSeasons(query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const computed = this.seasonService.getCurrentSeason();
+    const [items, total] = await Promise.all([
+      this.prisma.db.gameSeason.findMany({
+        orderBy: { seasonNumber: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.db.gameSeason.count(),
+    ]);
+
+    return {
+      items: items.map((item) => normalizeDates({
+        seasonNumber: item.seasonNumber,
+        startsAt: item.startsAt,
+        endsAt: item.endsAt,
+        isCurrent: item.seasonNumber === computed.seasonNumber,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })),
+      pagination: { page, pageSize, total },
+    };
+  }
+
+  async getPlayerSeasonState(playerId: string): Promise<Record<string, unknown>> {
+    const normalizedPlayerId = playerId.trim();
+    if (!normalizedPlayerId) {
+      throwBadRequest('playerId is required.');
+    }
+
+    const player = await this.prisma.db.player.findUnique({
+      where: { id: normalizedPlayerId },
+      select: {
+        id: true,
+        nickname: true,
+        faction: { select: { code: true, name: true } },
+        factionMembers: {
+          select: {
+            contributionScore: true,
+            faction: { select: { code: true, name: true } },
+          },
+          take: 5,
+        },
+        seasonStates: true,
+      },
+    });
+
+    if (!player) {
+      throw new BusinessError({
+        code: ErrorCode.NotFound,
+        message: 'Player not found.',
+        statusCode: 404,
+      });
+    }
+
+    const computed = this.seasonService.getCurrentSeason();
+    const state = player.seasonStates[0] ?? null;
+    const contribution = player.factionMembers[0]?.contributionScore ?? 0;
+
+    return normalizeDates({
+      playerId: player.id,
+      nickname: player.nickname,
+      factionCode: player.faction?.code ?? player.factionMembers[0]?.faction.code ?? null,
+      factionName: player.faction?.name ?? player.factionMembers[0]?.faction.name ?? null,
+      currentSeasonNumber: computed.seasonNumber,
+      currentWeek: computed.currentWeek,
+      totalWeeks: computed.totalWeeks,
+      seasonStartsAt: computed.startsAt,
+      seasonEndsAt: computed.endsAt,
+      trackedCurrentSeasonNumber: state?.currentSeasonNumber ?? null,
+      lastResetSeasonNumber: state?.lastResetSeasonNumber ?? null,
+      needsReset: (state?.lastResetSeasonNumber ?? computed.seasonNumber) < computed.seasonNumber,
+      contributionScore: contribution,
+      stateCreatedAt: state?.createdAt ?? null,
+      stateUpdatedAt: state?.updatedAt ?? null,
+    });
+  }
+
+  async listPlayerSeasonSnapshots(
+    seasonNumber: number,
+    query: Record<string, string | undefined>,
+  ): Promise<AdminListResponse<Record<string, unknown>>> {
+    const normalizedSeasonNumber = normalizeSeasonNumber(seasonNumber);
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const where: Prisma.PlayerSeasonSnapshotWhereInput = { seasonNumber: normalizedSeasonNumber };
+    if (query.playerId?.trim()) {
+      where.playerId = query.playerId.trim();
+    }
+    if (query.factionId?.trim()) {
+      where.factionId = query.factionId.trim();
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.db.playerSeasonSnapshot.findMany({
+        where,
+        orderBy: [{ contributionScore: 'desc' }, { playerId: 'asc' }],
+        skip,
+        take,
+        include: {
+          player: { select: { nickname: true } },
+          faction: { select: { code: true, name: true } },
+        },
+      }),
+      this.prisma.db.playerSeasonSnapshot.count({ where }),
+    ]);
+
+    return {
+      items: items.map((item) => normalizeDates({
+        id: item.id,
+        playerId: item.playerId,
+        nickname: item.player.nickname,
+        seasonNumber: item.seasonNumber,
+        factionId: item.factionId,
+        factionCode: item.faction?.code ?? null,
+        factionName: item.faction?.name ?? null,
+        contributionScore: item.contributionScore,
+        signInDays: item.signInDays,
+        loginDays: item.loginDays,
+        harvestCount: item.harvestCount,
+        raidCount: item.raidCount,
+        finalRank: item.finalRank,
+        rewardTier: item.rewardTier,
+        snapshotJson: item.snapshotJson,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })),
+      pagination: { page, pageSize, total },
+    };
+  }
+
+  async listFactionSeasonSnapshots(
+    seasonNumber: number,
+    query: Record<string, string | undefined>,
+  ): Promise<AdminListResponse<Record<string, unknown>>> {
+    const normalizedSeasonNumber = normalizeSeasonNumber(seasonNumber);
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const [items, total] = await Promise.all([
+      this.prisma.db.factionSeasonSnapshot.findMany({
+        where: { seasonNumber: normalizedSeasonNumber },
+        orderBy: [{ contributionScore: 'desc' }, { factionId: 'asc' }],
+        skip,
+        take,
+        include: {
+          faction: { select: { code: true, name: true } },
+        },
+      }),
+      this.prisma.db.factionSeasonSnapshot.count({ where: { seasonNumber: normalizedSeasonNumber } }),
+    ]);
+
+    return {
+      items: items.map((item) => normalizeDates({
+        id: item.id,
+        factionId: item.factionId,
+        factionCode: item.faction.code,
+        factionName: item.faction.name,
+        seasonNumber: item.seasonNumber,
+        contributionScore: item.contributionScore,
+        memberCount: item.memberCount,
+        finalRank: item.finalRank,
+        snapshotJson: item.snapshotJson,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })),
+      pagination: { page, pageSize, total },
+    };
+  }
+
+  async listPlayerSeasonHistory(
+    playerId: string,
+    query: Record<string, string | undefined>,
+  ): Promise<AdminListResponse<Record<string, unknown>>> {
+    const normalizedPlayerId = playerId.trim();
+    if (!normalizedPlayerId) {
+      throwBadRequest('playerId is required.');
+    }
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const where: Prisma.PlayerSeasonSnapshotWhereInput = { playerId: normalizedPlayerId };
+
+    const [items, total] = await Promise.all([
+      this.prisma.db.playerSeasonSnapshot.findMany({
+        where,
+        orderBy: { seasonNumber: 'desc' },
+        skip,
+        take,
+        include: {
+          faction: { select: { code: true, name: true } },
+        },
+      }),
+      this.prisma.db.playerSeasonSnapshot.count({ where }),
+    ]);
+
+    return {
+      items: items.map((item) => normalizeDates({
+        id: item.id,
+        playerId: item.playerId,
+        seasonNumber: item.seasonNumber,
+        factionId: item.factionId,
+        factionCode: item.faction?.code ?? null,
+        factionName: item.faction?.name ?? null,
+        contributionScore: item.contributionScore,
+        signInDays: item.signInDays,
+        loginDays: item.loginDays,
+        harvestCount: item.harvestCount,
+        raidCount: item.raidCount,
+        finalRank: item.finalRank,
+        rewardTier: item.rewardTier,
+        snapshotJson: item.snapshotJson,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })),
+      pagination: { page, pageSize, total },
     };
   }
 
@@ -208,7 +454,7 @@ export class AdminReadonlyService {
   async updateTaskConfig(taskGroup: string, taskId: string, body: unknown): Promise<Record<string, unknown>> {
     const group = normalizeTaskGroup(taskGroup);
     if (!group) {
-      throwBadRequest('taskGroup must be starter, daily, or daily-faction.');
+      throwBadRequest('taskGroup must be starter, contribution, daily, or daily-faction.');
     }
 
     const payload = parseTaskConfigPayload(body);
@@ -1007,11 +1253,18 @@ function normalizeTaskGroup(value: string | undefined): TaskConfigGroup | null {
     return null;
   }
 
-  if (value === 'starter' || value === 'daily' || value === 'daily-faction') {
+  if (value === 'starter' || value === 'daily' || value === 'daily-faction' || value === 'contribution') {
     return value;
   }
 
-  throwBadRequest('taskGroup must be starter, daily, or daily-faction.');
+  throwBadRequest('taskGroup must be starter, contribution, daily, or daily-faction.');
+}
+
+function normalizeSeasonNumber(value: number): number {
+  if (!Number.isInteger(value) || value < 1) {
+    throwBadRequest('seasonNumber must be a positive integer.');
+  }
+  return value;
 }
 
 function buildDateRange(query: PagingQuery): { createdAt?: { gte?: Date; lte?: Date } } {

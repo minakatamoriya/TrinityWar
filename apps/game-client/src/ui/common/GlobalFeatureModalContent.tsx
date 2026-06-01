@@ -179,9 +179,9 @@ function TianjiShopPanel(props: TianjiShopPanelProps): JSX.Element {
         onClick={onClaimAdReward}
         type="button"
       >
-        看广告 +{spirit.shop.adReward.tianjiTalisman} 天机符
+        {pendingActionKey === 'spirit:ad-reward' ? '领取中...' : `看广告 +${spirit.shop.adReward.tianjiTalisman} 天机符`}
       </button>
-      <p className="panel-text">今日广告 {spirit.shop.adReward.usedToday}/{spirit.shop.adReward.dailyLimit}，完成后会先弹出统一领奖框，确认后才入账天机符。</p>
+      <p className="panel-text">今日广告 {spirit.shop.adReward.usedToday}/{spirit.shop.adReward.dailyLimit}，观看完成后立即入账天机符。</p>
       <div className="task-list tianji-shop-list">
         {spirit.shop.items.map((item) => (
           <div className="task-row tianji-shop-row" key={item.itemId}>

@@ -30,6 +30,7 @@ import { ShareAssistView } from './views/ShareAssistView';
 import { SpiritConfigView } from './views/SpiritConfigView';
 import { SystemView } from './views/SystemView';
 import { TaskConfigView, type TaskConfigGroup } from './views/TaskConfigView';
+import { SeasonView } from './views/SeasonView';
 import { TableSection } from './components/TableSection';
 import type { AdminRecord, ModuleKey, PlayerModal } from './types';
 import './styles.css';
@@ -61,6 +62,12 @@ function App(): JSX.Element {
   const [shareAssistCampaigns, setShareAssistCampaigns] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [shareAssistRecords, setShareAssistRecords] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [shareInviteRelations, setShareInviteRelations] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [currentSeason, setCurrentSeason] = useState<AdminRecord | null>(null);
+  const [seasons, setSeasons] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [seasonPlayerSnapshots, setSeasonPlayerSnapshots] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [seasonFactionSnapshots, setSeasonFactionSnapshots] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [seasonPlayerHistory, setSeasonPlayerHistory] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [seasonPlayerHistoryId, setSeasonPlayerHistoryId] = useState('');
   const [seedDefinitions, setSeedDefinitions] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [seedForm, setSeedForm] = useState<Record<string, string>>(() => createEmptyConfigForm(seedConfigFields));
   const [editingSeedId, setEditingSeedId] = useState('');
@@ -70,10 +77,10 @@ function App(): JSX.Element {
   const [editingSpiritId, setEditingSpiritId] = useState('');
   const [isSpiritEditorOpen, setIsSpiritEditorOpen] = useState(false);
   const [taskDefinitions, setTaskDefinitions] = useState<AdminListResponse<AdminRecord> | null>(null);
-  const [taskGroup, setTaskGroup] = useState<TaskConfigGroup>('daily');
+  const [taskGroup, setTaskGroup] = useState<TaskConfigGroup>('contribution');
   const [taskForm, setTaskForm] = useState<Record<string, string>>(() => createEmptyConfigForm(taskConfigFields));
   const [editingTaskId, setEditingTaskId] = useState('');
-  const [editingTaskGroup, setEditingTaskGroup] = useState<TaskConfigGroup>('daily');
+  const [editingTaskGroup, setEditingTaskGroup] = useState<TaskConfigGroup>('contribution');
   const [isTaskEditorOpen, setIsTaskEditorOpen] = useState(false);
   const [castleLevels, setCastleLevels] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [lightweightRuleTab, setLightweightRuleTab] = useState<'land-deed' | 'faction-stipend'>('land-deed');
@@ -103,6 +110,9 @@ function App(): JSX.Element {
     }
     if (activeModule === 'shareAssist' && (!shareAssistCampaigns || !shareAssistRecords || !shareInviteRelations)) {
       void loadShareAssistDashboard();
+    }
+    if (activeModule === 'season' && (!currentSeason || !seasons)) {
+      void loadSeasonDashboard();
     }
     if (activeModule === 'spiritConfig' && !spiritDefinitions) {
       void loadSpiritDefinitions();
@@ -486,7 +496,7 @@ function App(): JSX.Element {
   };
 
   const editTaskDefinition = (row: AdminRecord): void => {
-    const group = row.taskGroup === 'starter' || row.taskGroup === 'daily-faction' ? row.taskGroup : 'daily';
+    const group = row.taskGroup === 'starter' ? 'starter' : 'contribution';
     setEditingTaskGroup(group);
     setEditingTaskId(String(row.taskId));
     setTaskForm(createConfigFormFromRecord(taskConfigFields, row));
@@ -560,6 +570,74 @@ function App(): JSX.Element {
       setError(caught instanceof Error ? caught.message : '助力记录请求失败');
     } finally {
       setBusy('');
+    }
+  };
+
+  const loadSeasons = async (page = seasons?.pagination.page ?? 1): Promise<void> => {
+    const result = await run('season-list', () => adminFetch<AdminListResponse<AdminRecord>>(`/seasons?page=${page}&pageSize=10`));
+    if (result) {
+      setSeasons(result);
+    }
+  };
+
+  const loadSeasonPlayerSnapshots = async (seasonNumber: number, page = seasonPlayerSnapshots?.pagination.page ?? 1): Promise<void> => {
+    if (!seasonNumber) {
+      setSeasonPlayerSnapshots(null);
+      return;
+    }
+    const result = await run('season-player-snapshots', () => adminFetch<AdminListResponse<AdminRecord>>(`/seasons/${seasonNumber}/player-snapshots?page=${page}&pageSize=10`));
+    if (result) {
+      setSeasonPlayerSnapshots(result);
+    }
+  };
+
+  const loadSeasonFactionSnapshots = async (seasonNumber: number, page = seasonFactionSnapshots?.pagination.page ?? 1): Promise<void> => {
+    if (!seasonNumber) {
+      setSeasonFactionSnapshots(null);
+      return;
+    }
+    const result = await run('season-faction-snapshots', () => adminFetch<AdminListResponse<AdminRecord>>(`/seasons/${seasonNumber}/faction-snapshots?page=${page}&pageSize=10`));
+    if (result) {
+      setSeasonFactionSnapshots(result);
+    }
+  };
+
+  const loadSeasonDashboard = async (): Promise<void> => {
+    setBusy('season');
+    setError(null);
+    try {
+      const [nextCurrentSeason, nextSeasons] = await Promise.all([
+        adminFetch<AdminRecord>('/seasons/current'),
+        adminFetch<AdminListResponse<AdminRecord>>('/seasons?page=1&pageSize=10'),
+      ]);
+      setCurrentSeason(nextCurrentSeason);
+      setSeasons(nextSeasons);
+      const seasonNumber = Number(nextCurrentSeason.seasonNumber ?? 0);
+      if (seasonNumber > 0) {
+        const [playerSnapshots, factionSnapshots] = await Promise.all([
+          adminFetch<AdminListResponse<AdminRecord>>(`/seasons/${seasonNumber}/player-snapshots?page=1&pageSize=10`),
+          adminFetch<AdminListResponse<AdminRecord>>(`/seasons/${seasonNumber}/faction-snapshots?page=1&pageSize=10`),
+        ]);
+        setSeasonPlayerSnapshots(playerSnapshots);
+        setSeasonFactionSnapshots(factionSnapshots);
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '赛季后台请求失败');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const loadSeasonPlayerHistory = async (playerId = seasonPlayerHistoryId, page = 1): Promise<void> => {
+    const normalizedPlayerId = playerId.trim();
+    if (!normalizedPlayerId) {
+      setError('请输入玩家 ID。');
+      return;
+    }
+    const result = await run('season-player-history', () => adminFetch<AdminListResponse<AdminRecord>>(`/players/${encodeURIComponent(normalizedPlayerId)}/season-history?page=${page}&pageSize=10`));
+    if (result) {
+      setSeasonPlayerHistory(result);
+      setSeasonPlayerHistoryId(normalizedPlayerId);
     }
   };
 
@@ -690,6 +768,25 @@ function App(): JSX.Element {
               onInvitePageChange={(page) => void loadShareInviteRelations(page)}
               onRecordPageChange={(page) => void loadShareAssistRecords(page)}
               onRefresh={() => void loadShareAssistDashboard()}
+            />
+          ) : null}
+
+          {activeModule === 'season' ? (
+            <SeasonView
+              busy={busy}
+              currentSeason={currentSeason}
+              factionSnapshots={seasonFactionSnapshots}
+              playerHistory={seasonPlayerHistory}
+              playerHistoryId={seasonPlayerHistoryId}
+              playerSnapshots={seasonPlayerSnapshots}
+              seasons={seasons}
+              onFactionSnapshotPageChange={(page) => void loadSeasonFactionSnapshots(Number(currentSeason?.seasonNumber ?? 0), page)}
+              onLoadPlayerHistory={() => void loadSeasonPlayerHistory()}
+              onPlayerHistoryIdChange={setSeasonPlayerHistoryId}
+              onPlayerHistoryPageChange={(page) => void loadSeasonPlayerHistory(seasonPlayerHistoryId, page)}
+              onPlayerSnapshotPageChange={(page) => void loadSeasonPlayerSnapshots(Number(currentSeason?.seasonNumber ?? 0), page)}
+              onRefresh={() => void loadSeasonDashboard()}
+              onSeasonPageChange={(page) => void loadSeasons(page)}
             />
           ) : null}
 

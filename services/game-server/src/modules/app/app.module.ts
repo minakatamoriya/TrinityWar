@@ -15,6 +15,7 @@ import { RaidModule } from '../../raid/raid.module.js';
 import { ShareAssistModule } from '../../share-assist/share-assist.module.js';
 import { SocialModule } from '../../social/social.module.js';
 import { SpiritModule } from '../../spirit/spirit.module.js';
+import { SeasonModule } from '../../season/season.module.js';
 import { SystemModule } from '../system/system.module.js';
 
 @Module({
@@ -34,6 +35,7 @@ import { SystemModule } from '../system/system.module.js';
     SocialModule,
     ShareAssistModule,
     SpiritModule,
+    SeasonModule,
     AdminReadonlyModule,
     SystemModule,
   ],

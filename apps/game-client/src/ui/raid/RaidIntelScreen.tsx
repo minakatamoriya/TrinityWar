@@ -154,7 +154,7 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
         <div className="raid-intel-actionbar">
           <div className="raid-action-row">
             {visibleActions.map((action) => (
-              <ActionButton action={action} disabled={action.label === '发布通缉'} key={`${detail.targetId}-${action.label}`} onClick={onAction} />
+              <ActionButton action={action} key={`${detail.targetId}-${action.label}`} onClick={onAction} />
             ))}
             {allowFollow ? (
               <button className="action-button ghost" onClick={onToggleFollow} type="button">{followed ? '取消关注' : '关注'}</button>

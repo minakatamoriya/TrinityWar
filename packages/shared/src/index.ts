@@ -341,6 +341,44 @@ export interface ClientSeasonStatus {
   totalWeeks: number;
 }
 
+export interface ClientSeasonSignInDay {
+  day: number;
+  reward: number;
+  claimed: boolean;
+  current: boolean;
+  future: boolean;
+  missed: boolean;
+}
+
+export interface ClientSeasonSignInMilestone {
+  dayCount: number;
+  title: string;
+  reached: boolean;
+  remainingDays: number;
+}
+
+export interface ClientSeasonSignInState {
+  seasonNumber: number;
+  currentDay: number;
+  claimedDays: number[];
+  totalTianjiReward: number;
+  todayReward: number;
+  claimedToday: boolean;
+  days: ClientSeasonSignInDay[];
+  milestones: ClientSeasonSignInMilestone[];
+}
+
+export interface ClientSeasonSignInResponse extends ClientSeasonSignInState {}
+
+export interface ClientClaimSeasonSignInResponse {
+  app: string;
+  summary: string;
+  rewardTianjiTalisman: number;
+  tianjiTalisman: number;
+  resourceVersion: number;
+  signIn: ClientSeasonSignInState;
+}
+
 export interface AdminOverviewResponse {
   app: string;
   docs: string;
@@ -1160,7 +1198,11 @@ export interface ClientFactionContributionSummary {
 export interface ClientFactionComparisonEntry {
   faction: string;
   advantage: string;
-  gold: string;
+  totalContribution?: string;
+  /**
+   * @deprecated Faction treasury is no longer a visible rule. Use totalContribution.
+   */
+  gold?: string;
   power: string;
   isCurrent?: boolean;
 }
@@ -1229,6 +1271,11 @@ export interface ClientSocialRelationItem {
   lastInteractedAt: string | null;
   createdAt: string;
   target: ClientSocialPlayerSummary;
+  assistSummary?: {
+    waterableCount: number;
+    harvestableCount: number;
+    availableCount: number;
+  };
 }
 
 export interface ClientSocialFeedItem {

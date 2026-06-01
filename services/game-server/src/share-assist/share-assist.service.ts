@@ -40,6 +40,10 @@ const WATER_CAMPAIGN_EXPIRES_MS = 24 * 60 * 60 * 1000;
 const FRIEND_INVITE_CAMPAIGN_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_WATER_MAX_ASSIST_COUNT = 3;
 const MAX_WATER_MAX_ASSIST_COUNT = 5;
+const DAILY_WATER_CAMPAIGN_CREATE_LIMIT = 5;
+const DAILY_FRIEND_INVITE_CAMPAIGN_CREATE_LIMIT = 3;
+const DAILY_PUBLIC_ASSIST_CONFIRM_LIMIT = 10;
+const DAILY_OWNER_WATER_ASSIST_RECEIVE_LIMIT = 10;
 const WATER_REMAINING_RATIO = 0.4;
 const WATER_MIN_EFFECT_SECONDS = 10 * 60;
 const WATER_MAX_EFFECT_SECONDS = 60 * 60;
@@ -93,6 +97,7 @@ export class ShareAssistService {
     }
 
     const isFriendInvite = request.campaignType === 'friend_invite';
+    await this.assertCampaignCreateWithinDailyLimit(playerId, isFriendInvite);
     const maxAssistCount = isFriendInvite ? 1 : clampAssistCount(request.maxAssistCount ?? DEFAULT_WATER_MAX_ASSIST_COUNT);
     const campaign = await this.prisma.db.shareAssistCampaign.create({
       data: {
@@ -413,6 +418,7 @@ export class ShareAssistService {
       }
 
       if (campaign.campaignType === ShareAssistCampaignType.FRIEND_INVITE) {
+        await this.assertPublicAssistConfirmWithinDailyLimit(client, campaign, request);
         const record = await client.shareAssistRecord.create({
           data: {
             campaignId: campaign.id,
@@ -470,6 +476,7 @@ export class ShareAssistService {
         };
       }
 
+      await this.assertPublicAssistConfirmWithinDailyLimit(client, campaign, request);
       const deliveredEffect = await this.deliverWaterAssist(client, {
         campaign,
         helperPlayerId: audience === 'returning-user' ? request.helperPlayerId ?? null : null,
@@ -584,6 +591,79 @@ export class ShareAssistService {
 
   private invalidRequest(message: string): BusinessError {
     return new BusinessError({ code: ErrorCode.BadRequest, message, statusCode: 400 });
+  }
+
+  private async assertCampaignCreateWithinDailyLimit(playerId: string, isFriendInvite: boolean): Promise<void> {
+    const dateRange = getCurrentLocalDayRange();
+    const campaignType = isFriendInvite ? ShareAssistCampaignType.FRIEND_INVITE : ShareAssistCampaignType.WATER;
+    const limit = isFriendInvite ? DAILY_FRIEND_INVITE_CAMPAIGN_CREATE_LIMIT : DAILY_WATER_CAMPAIGN_CREATE_LIMIT;
+    const createdToday = await this.prisma.db.shareAssistCampaign.count({
+      where: {
+        ownerPlayerId: playerId,
+        campaignType,
+        createdAt: {
+          gte: dateRange.start,
+          lt: dateRange.end,
+        },
+      },
+    });
+
+    if (createdToday >= limit) {
+      throw this.invalidRequest(isFriendInvite
+        ? 'Daily friend invite share limit reached.'
+        : 'Daily water assist share limit reached.');
+    }
+  }
+
+  private async assertPublicAssistConfirmWithinDailyLimit(
+    client: Prisma.TransactionClient,
+    campaign: CampaignWithOwner,
+    request: PublicShareAssistConfirmRequest,
+  ): Promise<void> {
+    if (
+      campaign.campaignType === ShareAssistCampaignType.WATER
+      && request.audience === 'returning-user'
+      && request.helperPlayerId === campaign.ownerPlayerId
+    ) {
+      throw this.invalidRequest('Cannot assist your own water share.');
+    }
+
+    const dateRange = getCurrentLocalDayRange();
+    const helperFilters = buildShareAssistHelperFilters(request);
+    if (helperFilters.length > 0) {
+      const confirmedToday = await client.shareAssistRecord.count({
+        where: {
+          OR: helperFilters,
+          createdAt: {
+            gte: dateRange.start,
+            lt: dateRange.end,
+          },
+        },
+      });
+
+      if (confirmedToday >= DAILY_PUBLIC_ASSIST_CONFIRM_LIMIT) {
+        throw this.invalidRequest('Daily public assist limit reached.');
+      }
+    }
+
+    if (campaign.campaignType === ShareAssistCampaignType.WATER) {
+      const ownerReceivedToday = await client.shareAssistRecord.count({
+        where: {
+          campaign: {
+            ownerPlayerId: campaign.ownerPlayerId,
+            campaignType: ShareAssistCampaignType.WATER,
+          },
+          createdAt: {
+            gte: dateRange.start,
+            lt: dateRange.end,
+          },
+        },
+      });
+
+      if (ownerReceivedToday >= DAILY_OWNER_WATER_ASSIST_RECEIVE_LIMIT) {
+        throw this.invalidRequest('Daily received water assist limit reached.');
+      }
+    }
   }
 
   private async completeReturningFriendInvite(
@@ -892,16 +972,7 @@ async function findExistingRecord(
   campaignId: string,
   request: PublicShareAssistConfirmRequest,
 ): Promise<Awaited<ReturnType<typeof client.shareAssistRecord.findFirst>>> {
-  const filters: Prisma.ShareAssistRecordWhereInput[] = [];
-  if (request.helperPlayerId) {
-    filters.push({ helperPlayerId: request.helperPlayerId });
-  }
-  if (request.helperOpenidHash) {
-    filters.push({ helperOpenidHash: request.helperOpenidHash });
-  }
-  if (request.helperDeviceHash) {
-    filters.push({ helperDeviceHash: request.helperDeviceHash });
-  }
+  const filters = buildShareAssistHelperFilters(request);
 
   if (filters.length <= 0) {
     return null;
@@ -913,6 +984,27 @@ async function findExistingRecord(
       OR: filters,
     },
   });
+}
+
+function buildShareAssistHelperFilters(request: PublicShareAssistConfirmRequest): Prisma.ShareAssistRecordWhereInput[] {
+  const filters: Prisma.ShareAssistRecordWhereInput[] = [];
+  if (request.helperPlayerId) {
+    filters.push({ helperPlayerId: request.helperPlayerId });
+  }
+  if (request.helperOpenidHash) {
+    filters.push({ helperOpenidHash: request.helperOpenidHash });
+  }
+  if (request.helperDeviceHash) {
+    filters.push({ helperDeviceHash: request.helperDeviceHash });
+  }
+  return filters;
+}
+
+function getCurrentLocalDayRange(now = new Date()): { start: Date; end: Date } {
+  const dateKey = getLocalDateKey(now);
+  const start = new Date(`${dateKey}T00:00:00+08:00`);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { start, end };
 }
 
 async function findShareWaterableFieldById(

@@ -10,7 +10,6 @@ import type {
   ClientRaidDeepIntelResponse,
   ClientRaidBattleReplay,
   ClientFactionDonateRequest,
-  ClientHomeFactionTaskSummary,
   ClientBuildingUpgradeId,
   ClientSocialFriendFieldVisitResponse,
   ClientRaidTarget,
@@ -26,13 +25,14 @@ import type {
   ClientSpiritRollMode,
   ClientSpiritTraitCode,
   ClientSpiritState,
+  ClientSeasonSignInState,
   PublicShareAssistCampaignResponse,
   HomeSummaryResponse,
   ClientTerritoryUpgradeId,
   ClientUpgradeBuildingRequest,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { acceptSocialFriendRequest, ApiError, breakthroughSpirit, buySpiritShopItem, claimDailyTaskReward, claimFactionStipend, claimNotification, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, deleteNotification, deleteSocialFriend, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, harvestSocialField, loadClientViewModel, loadFarmBoard, loadNotifications, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSocialFeed, loadSocialRelations, loadSocialSummary, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, rejectSocialFriendRequest, requestSocialFriend, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, submitFactionTask, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding, visitSocialFriendFields, waterSocialField } from './api';
+import { acceptSocialFriendRequest, ApiError, breakthroughSpirit, buySpiritShopItem, claimFactionStipend, claimNotification, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, deleteNotification, deleteSocialFriend, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, harvestSocialField, loadClientViewModel, loadFarmBoard, loadNotifications, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonSignIn, loadSocialFeed, loadSocialRelations, loadSocialSummary, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, rejectSocialFriendRequest, requestSocialFriend, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding, visitSocialFriendFields, waterSocialField } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
@@ -50,6 +50,7 @@ import { GlobalUnlockModal, type GlobalUnlockItem } from './ui/common/GlobalUnlo
 import { CenteredModalShell } from './ui/common/ModalShell';
 import { PlantCodexModal } from './ui/common/PlantCodexModal';
 import { ResourceBackpackModal, type BackpackResourceItem } from './ui/common/ResourceBackpackModal';
+import { RewardBubbleStack, type RewardBubbleItem } from './ui/common/RewardBubbleStack';
 import { SpiritCodexModal } from './ui/common/SpiritCodexModal';
 import { SeedRewardModal, type SeedRewardModalItem } from './ui/common/SeedRewardModal';
 import { ShareAssistPage, type ShareAssistAudience, type ShareAssistKind, type ShareAssistStatus } from './ui/share/ShareAssistPage';
@@ -70,7 +71,7 @@ import {
   type TutorialStage,
 } from './tutorial/tutorialFlow';
 
-type RaidHubTabKey = 'targets' | 'reports' | 'warrants';
+type RaidHubTabKey = 'targets' | 'reports';
 type FactionTabKey = 'overview' | 'donate' | 'rank';
 
 interface ToastState {
@@ -112,7 +113,7 @@ type TopResourcePanel = 'spirit-codex' | 'resources';
 interface SeedRewardModalState {
   title: string;
   summary: string;
-  confirmAction?: 'claim-faction-stipend' | 'claim-spirit-ad-reward' | 'claim-starter-seeds' | 'tutorial-farm-collect' | 'claim-notification';
+  confirmAction?: 'claim-faction-stipend' | 'claim-starter-seeds' | 'claim-notification';
   notificationId?: string;
   afterConfirmActions?: TutorialFlowAction[];
   items: SeedRewardModalItem[];
@@ -188,27 +189,6 @@ interface FactionContributionTier {
   threshold: string;
   label: string;
   rewards: string[];
-}
-
-interface SeasonSignInRecord {
-  claimedDays: number[];
-  totalTianjiReward: number;
-}
-
-interface SeasonSignInDay {
-  day: number;
-  reward: number;
-  claimed: boolean;
-  current: boolean;
-  future: boolean;
-  missed: boolean;
-}
-
-interface SeasonSignInMilestone {
-  dayCount: number;
-  title: string;
-  reached: boolean;
-  remainingDays: number;
 }
 
 interface FactionChoiceCard {
@@ -439,13 +419,6 @@ const factionCodeByName: Record<string, DevFactionChoice> = {
   魔界: 'demon',
 };
 
-const SEASON_SIGN_IN_STORAGE_KEY_PREFIX = 'trinitywar.seasonSignIn';
-const SEASON_SIGN_IN_MILESTONES: Array<Pick<SeasonSignInMilestone, 'dayCount' | 'title'>> = [
-  { dayCount: 7, title: '七日宝箱' },
-  { dayCount: 14, title: '十四日宝箱' },
-  { dayCount: 21, title: '二十一日宝箱' },
-];
-
 function normalizeScene(scene: string): ClientSceneKey {
   if (scene === 'field') {
     return 'farm';
@@ -523,89 +496,6 @@ function getMillisecondsUntilNextChinaMidnight(): number {
   return Math.max(nextMidnightUtc - now, 1000);
 }
 
-function getSeasonSignInDay(currentWeek: number, totalWeeks: number): number {
-  const safeTotalWeeks = Math.max(Math.floor(totalWeeks), 1);
-  const safeCurrentWeek = Math.min(Math.max(Math.floor(currentWeek), 1), safeTotalWeeks);
-  const chinaNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  const weekday = chinaNow.getUTCDay();
-  const mondayBasedDay = weekday === 0 ? 7 : weekday;
-
-  return Math.min((safeCurrentWeek - 1) * 7 + mondayBasedDay, safeTotalWeeks * 7);
-}
-
-function getSeasonSignInReward(day: number): number {
-  if (day >= 22) {
-    return 4;
-  }
-
-  if (day >= 15) {
-    return 3;
-  }
-
-  if (day >= 8) {
-    return 2;
-  }
-
-  return 1;
-}
-
-function buildSeasonSignInDays(record: SeasonSignInRecord, currentDay: number): SeasonSignInDay[] {
-  const claimed = new Set(record.claimedDays);
-
-  return Array.from({ length: 28 }, (_, index) => {
-    const day = index + 1;
-    const isClaimed = claimed.has(day);
-    const future = day > currentDay;
-    const missed = day < currentDay && !isClaimed;
-
-    return {
-      day,
-      reward: getSeasonSignInReward(day),
-      claimed: isClaimed,
-      current: day === currentDay,
-      future,
-      missed,
-    };
-  });
-}
-
-function buildSeasonSignInMilestones(claimedDayCount: number): SeasonSignInMilestone[] {
-  return SEASON_SIGN_IN_MILESTONES.map((milestone) => ({
-    ...milestone,
-    reached: claimedDayCount >= milestone.dayCount,
-    remainingDays: Math.max(milestone.dayCount - claimedDayCount, 0),
-  }));
-}
-
-function getSeasonSignInStorageKey(playerId?: string): string {
-  return `${SEASON_SIGN_IN_STORAGE_KEY_PREFIX}:${playerId ?? 'anonymous'}`;
-}
-
-function readSeasonSignInRecord(playerId?: string): SeasonSignInRecord {
-  if (typeof window === 'undefined') {
-    return { claimedDays: [], totalTianjiReward: 0 };
-  }
-
-  try {
-    const raw = window.localStorage.getItem(getSeasonSignInStorageKey(playerId));
-    const parsed = raw ? JSON.parse(raw) as Partial<SeasonSignInRecord> : null;
-    const claimedDays = Array.isArray(parsed?.claimedDays)
-      ? Array.from(new Set(parsed.claimedDays.map((day) => Math.floor(Number(day))).filter((day) => day >= 1 && day <= 28))).sort((left, right) => left - right)
-      : [];
-
-    return {
-      claimedDays,
-      totalTianjiReward: Math.max(Math.floor(Number(parsed?.totalTianjiReward ?? 0)), 0),
-    };
-  } catch {
-    return { claimedDays: [], totalTianjiReward: 0 };
-  }
-}
-
-function writeSeasonSignInRecord(playerId: string | undefined, record: SeasonSignInRecord): void {
-  window.localStorage.setItem(getSeasonSignInStorageKey(playerId), JSON.stringify(record));
-}
-
 function buildSeasonProgress(status: ClientViewModel['bootstrap']['season']): {
   label: string;
   detail: string;
@@ -670,6 +560,16 @@ function formatNumber(value: number): string {
 
 function isDisplayableFarmReward(reward: { kind?: string; seedId?: string }): boolean {
   return !(reward.kind === 'essence' && reward.seedId === TUTORIAL_STARTER_SEED_ID);
+}
+
+function getRewardBubbleTone(reward: { kind?: string }): RewardBubbleItem['tone'] {
+  if (reward.kind === 'essence' || reward.kind === 'seed') {
+    return 'essence';
+  }
+  if (reward.kind?.startsWith('spirit-') || reward.kind?.includes('soul')) {
+    return 'spirit';
+  }
+  return 'item';
 }
 
 function formatProtectionCountdown(totalSeconds: number): string {
@@ -773,6 +673,7 @@ function App(): JSX.Element {
   const [friendInviteNewUserUrlInput, setFriendInviteNewUserUrlInput] = useState('');
   const [friendInviteReturningUserUrlInput, setFriendInviteReturningUserUrlInput] = useState('');
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [rewardBubbles, setRewardBubbles] = useState<RewardBubbleItem[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationList, setNotificationList] = useState<ClientNotificationListResponse | null>(null);
@@ -809,12 +710,13 @@ function App(): JSX.Element {
   const [raidTargetDetailsById, setRaidTargetDetailsById] = useState<Record<string, ClientRaidTargetDetailResponse>>({});
   const [globalFeatureModal, setGlobalFeatureModal] = useState<GlobalFeatureModalState | null>(null);
   const [globalUnlockModal, setGlobalUnlockModal] = useState<GlobalUnlockModalState | null>(null);
-  const [seasonSignInRecord, setSeasonSignInRecord] = useState<SeasonSignInRecord>(() => readSeasonSignInRecord(getStoredDevLoginSession()?.player.id));
+  const [seasonSignInState, setSeasonSignInState] = useState<ClientSeasonSignInState | null>(null);
   const characterDialog = useCharacterDialog();
   const { playDialogScene } = characterDialog;
   const characterDialogPortalRef = useRef<HTMLDivElement | null>(null);
   const welcomeDialogSessionIdRef = useRef<string | null>(null);
   const farmEnterDialogRef = useRef<{ sceneId: string; at: number } | null>(null);
+  const socialAssistBusyRef = useRef(false);
 
   const showToast = (message: string, tone: ToastState['tone'] = 'info'): void => {
     setToast({
@@ -822,6 +724,20 @@ function App(): JSX.Element {
       message,
       tone,
     });
+  };
+
+  const showRewardBubbles = (items: Array<Omit<RewardBubbleItem, 'id'>>): void => {
+    const visibleItems = items.filter((item) => item.quantity > 0);
+    if (visibleItems.length === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    const nextBubbles = visibleItems.map((item, index) => ({
+      ...item,
+      id: now + index,
+    }));
+    setRewardBubbles((current) => [...current, ...nextBubbles].slice(-5));
   };
 
   const handleOpenBattleDemo = (): void => {
@@ -1083,19 +999,13 @@ function App(): JSX.Element {
     syncSeedBackpackState(data.bootstrap.backpack);
   };
 
-  const applyClientBundle = (data: { viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState }): void => {
-    const signInPlayerId = loginSession?.player.id ?? getStoredDevLoginSession()?.player.id;
-    const signInBonus = readSeasonSignInRecord(signInPlayerId).totalTianjiReward;
-    const spiritWithSignInBonus = {
-      ...data.spirit,
-      tianjiTalisman: data.spirit.tianjiTalisman + signInBonus,
-    };
-
+  const applyClientBundle = (data: { viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState; seasonSignIn: ClientSeasonSignInState }): void => {
     applyClientViewModel(data.viewModel);
-    setSpiritState(spiritWithSignInBonus);
+    setSeasonSignInState(data.seasonSignIn);
+    setSpiritState(data.spirit);
     setGlobalItemInventory((current) => ({
       ...current,
-      tianjiTalisman: spiritWithSignInBonus.tianjiTalisman,
+      tianjiTalisman: data.spirit.tianjiTalisman,
     }));
     setFarmBoard(data.farmBoard);
   };
@@ -1174,28 +1084,6 @@ function App(): JSX.Element {
     }
   };
 
-  const handleSocialAssistBack = async (targetPlayerId: string, fieldSlotId?: string): Promise<void> => {
-    if (socialLoading) {
-      return;
-    }
-
-    setSocialLoading(true);
-    setSocialError(null);
-
-    try {
-      const result = await waterSocialField({ targetPlayerId, fieldSlotId });
-      setSocialSummary((current) => current ? { ...current, counts: result.counts } : current);
-      const visit = await visitSocialFriendFields(targetPlayerId);
-      setSocialFieldVisit(visit);
-      showToast(result.summary, 'success');
-      void loadSocialBundle();
-    } catch (error) {
-      showToast(error instanceof Error && error.message ? error.message : '当前无法完成助力，请稍后重试。', 'error');
-    } finally {
-      setSocialLoading(false);
-    }
-  };
-
   const handleOpenSocialFieldVisit = async (targetPlayerId: string): Promise<void> => {
     if (socialLoading) {
       return;
@@ -1214,39 +1102,10 @@ function App(): JSX.Element {
     }
   };
 
-  const handleConfirmSocialHarvest = async (fieldSlotId?: string): Promise<void> => {
-    const targetPlayerId = socialFieldVisit?.friend.playerId;
-    if (!targetPlayerId || socialLoading) {
-      return;
-    }
-
-    setSocialLoading(true);
-    setSocialError(null);
-
-    try {
-      const result = await harvestSocialField({
-        targetPlayerId,
-        fieldSlotId,
-      });
-      setSocialSummary((current) => current ? { ...current, counts: result.counts } : current);
-      const visit = await visitSocialFriendFields(targetPlayerId);
-      setSocialFieldVisit(visit);
-      const rewardText = result.rewards && result.rewards.length > 0
-        ? `，${result.rewards.map((reward) => `${reward.label} +${reward.quantity}`).join('、')}`
-        : '';
-      showToast(`${result.summary}${rewardText}`, 'success');
-      void loadSocialBundle();
-    } catch (error) {
-      showToast(error instanceof Error && error.message ? error.message : '当前无法采摘好友灵田，请稍后重试。', 'error');
-    } finally {
-      setSocialLoading(false);
-    }
-  };
-
   const handleAssistAllSocialFields = async (): Promise<void> => {
     const visit = socialFieldVisit;
     const targetPlayerId = visit?.friend.playerId;
-    if (!visit || !targetPlayerId || socialLoading) {
+    if (!visit || !targetPlayerId || socialLoading || socialAssistBusyRef.current) {
       return;
     }
 
@@ -1256,6 +1115,7 @@ function App(): JSX.Element {
       return;
     }
 
+    socialAssistBusyRef.current = true;
     setSocialLoading(true);
     setSocialError(null);
 
@@ -1311,6 +1171,7 @@ function App(): JSX.Element {
 
       void loadSocialBundle();
     } finally {
+      socialAssistBusyRef.current = false;
       setSocialLoading(false);
     }
   };
@@ -1494,18 +1355,92 @@ function App(): JSX.Element {
     }
   };
 
-  const loadClientBundle = async (): Promise<{ viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState }> => {
-    const [nextViewModel, nextSpirit, nextFarmBoard] = await Promise.all([
+  const loadClientBundle = async (): Promise<{ viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState; seasonSignIn: ClientSeasonSignInState }> => {
+    const [nextViewModel, nextSpirit, nextFarmBoard, nextSeasonSignIn] = await Promise.all([
       loadClientViewModel(),
       loadSpiritState(),
       loadFarmBoard(),
+      loadSeasonSignIn(),
     ]);
 
     return {
       viewModel: nextViewModel,
       spirit: nextSpirit,
       farmBoard: nextFarmBoard,
+      seasonSignIn: nextSeasonSignIn,
     };
+  };
+
+  const handleAssistSocialFriend = async (targetPlayerId: string): Promise<void> => {
+    if (socialLoading || socialAssistBusyRef.current) {
+      return;
+    }
+
+    socialAssistBusyRef.current = true;
+    setSocialLoading(true);
+    setSocialError(null);
+
+    try {
+      const visit = await visitSocialFriendFields(targetPlayerId);
+      const actionableFields = visit.fields.filter((field) => field.nextAction === 'water' || field.nextAction === 'harvest');
+      if (actionableFields.length === 0) {
+        showToast('好友当前没有可助力的田地。', 'info');
+        void loadSocialBundle();
+        return;
+      }
+
+      let wateredCount = 0;
+      let harvestedCount = 0;
+      let rewardGold = 0;
+      let latestCounts: ClientSocialSummaryResponse['counts'] | null = null;
+      const failedMessages: string[] = [];
+
+      for (const field of actionableFields) {
+        try {
+          if (field.nextAction === 'water') {
+            const result = await waterSocialField({ targetPlayerId, fieldSlotId: field.fieldSlotId });
+            wateredCount += 1;
+            latestCounts = result.counts;
+            continue;
+          }
+
+          const result = await harvestSocialField({ targetPlayerId, fieldSlotId: field.fieldSlotId });
+          harvestedCount += 1;
+          rewardGold += result.rewards?.reduce((sum, reward) => sum + (reward.kind === 'gold' ? reward.quantity : 0), 0) ?? 0;
+          latestCounts = result.counts;
+        } catch (error) {
+          failedMessages.push(error instanceof Error && error.message ? error.message : `${field.fieldCode} 助力失败`);
+        }
+      }
+
+      if (latestCounts) {
+        const counts = latestCounts;
+        setSocialSummary((current) => current ? { ...current, counts } : current);
+      }
+
+      const summaryParts = [
+        wateredCount > 0 ? `浇水 ${wateredCount} 块` : null,
+        harvestedCount > 0 ? `采摘 ${harvestedCount} 块` : null,
+        rewardGold > 0 ? `金币 +${rewardGold}` : null,
+      ].filter((part): part is string => Boolean(part));
+
+      if (summaryParts.length > 0) {
+        showToast(`一键助力完成：${summaryParts.join('，')}。`, failedMessages.length > 0 ? 'info' : 'success');
+      } else {
+        showToast(failedMessages[0] ?? '当前没有成功助力的田地。', 'info');
+      }
+
+      if (failedMessages.length > 0 && summaryParts.length > 0) {
+        showToast(`部分田地未完成：${failedMessages[0]}`, 'info');
+      }
+
+      void loadSocialBundle();
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法完成一键助力，请稍后重试。', 'error');
+    } finally {
+      socialAssistBusyRef.current = false;
+      setSocialLoading(false);
+    }
   };
 
   const handleDevLogin = async (mode: DevLoginMode, options?: { factionCode?: DevFactionChoice }): Promise<void> => {
@@ -1515,7 +1450,6 @@ function App(): JSX.Element {
     try {
       const session = await devLogin(mode, options);
       const data = await loadClientBundle();
-      setSeasonSignInRecord(readSeasonSignInRecord(session.player.id));
       setTutorialStage(getInitialTutorialStage(session));
       setLoginSession(session);
       applyClientBundle(data);
@@ -1590,7 +1524,6 @@ function App(): JSX.Element {
 
       const helperSession = await devLogin('test-user-1');
       const data = await loadClientBundle();
-      setSeasonSignInRecord(readSeasonSignInRecord(helperSession.player.id));
       setTutorialStage(getInitialTutorialStage(helperSession));
       setLoginSession(helperSession);
       applyClientBundle(data);
@@ -1759,7 +1692,7 @@ function App(): JSX.Element {
     clearDevLoginSession();
     setLoginSession(null);
     setTutorialStage('completed');
-    setSeasonSignInRecord(readSeasonSignInRecord());
+    setSeasonSignInState(null);
     setViewModel(null);
     setSpiritState(null);
     setFarmBoard(null);
@@ -1977,6 +1910,21 @@ function App(): JSX.Element {
       window.clearTimeout(timer);
     };
   }, [toast]);
+
+  useEffect(() => {
+    if (rewardBubbles.length === 0) {
+      return;
+    }
+
+    const oldestBubbleId = rewardBubbles[0]?.id;
+    const timer = window.setTimeout(() => {
+      setRewardBubbles((current) => current.filter((bubble) => bubble.id !== oldestBubbleId));
+    }, 2200);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [rewardBubbles]);
 
   useEffect(() => {
     if (!farmCollectPresentation) {
@@ -2341,15 +2289,16 @@ function App(): JSX.Element {
   const vaultResource = findResourceByTone('vault', home.resources);
   const devLoginModeLabel = getDevLoginModeLabel(loginSession?.mode);
   const currentAccountName = loginSession?.player.nickname ?? home.playerName;
-  const dailyTasks = tutorialUiRules.showHomeDailyTasks ? (home.dailyTasks ?? []) : [];
   const tutorialTask = buildTutorialTask(tutorialStage);
   const vaultProgress = vaultResource ? parseCapacityResourceValue(vaultResource.value) : { current: 0, capacity: 0, ratio: 0 };
   const seasonProgress = buildSeasonProgress(bootstrap.season);
-  const seasonSignInDay = getSeasonSignInDay(bootstrap.season.currentWeek, bootstrap.season.totalWeeks);
-  const seasonSignInDays = buildSeasonSignInDays(seasonSignInRecord, seasonSignInDay);
-  const seasonSignInClaimedToday = seasonSignInRecord.claimedDays.includes(seasonSignInDay);
-  const seasonSignInTodayReward = getSeasonSignInReward(seasonSignInDay);
-  const seasonSignInMilestones = buildSeasonSignInMilestones(seasonSignInRecord.claimedDays.length);
+  const seasonSignInDays = seasonSignInState?.days ?? [];
+  const seasonSignInClaimedToday = seasonSignInState?.claimedToday ?? true;
+  const seasonSignInTodayReward = seasonSignInState?.todayReward ?? 0;
+  const seasonSignInMilestones = seasonSignInState?.milestones ?? [];
+  const seasonSignInRecord = {
+    claimedDays: seasonSignInState?.claimedDays ?? [],
+  };
   const tianjiTalismanCount = spiritState?.tianjiTalisman ?? globalItemInventory.tianjiTalisman ?? 0;
   const visibleSeedCatalog = playableSeedCatalog;
   const seedCatalogMap = new Map(seedCatalog.map((seed) => [seed.id, seed]));
@@ -2423,8 +2372,6 @@ function App(): JSX.Element {
     };
   });
   const raidTargetsById = new Map(scenes.raid.targets.map((target) => [target.id, target]));
-  const visibleHomeFactionTasks = tutorialUiRules.showHomeFactionTasks ? home.factionTasks ?? [] : [];
-  const visibleSceneFactionTasks = tutorialUiRules.faction.showTodayTasks ? scenes.faction.tasks ?? [] : [];
 
   const handleSetMainSpiritAction = async (slotIndex: number, slotVersion: number): Promise<void> => {
     if (pendingActionKey === `spirit:set-main:${slotIndex}`) {
@@ -2551,31 +2498,6 @@ function App(): JSX.Element {
     }
   };
 
-  const handleSubmitFactionTask = async (task: ClientHomeFactionTaskSummary): Promise<void> => {
-    const actionKey = `faction:task:${task.id}`;
-    if (pendingActionKey === actionKey || task.status === 'claimed') {
-      return;
-    }
-
-    setPendingActionKey(actionKey);
-    try {
-      const result = await submitFactionTask({
-        taskId: task.id,
-      });
-      applyMutationResult(result);
-      if (task.requiredEssenceType) {
-        setSeedInventory((current) => ({
-          ...current,
-          [task.requiredEssenceType as string]: Math.max((current[task.requiredEssenceType as string] ?? 0) - Math.max(task.progressTarget - task.progressCurrent, 0), 0),
-        }));
-      }
-    } catch (error) {
-      const message = error instanceof Error && error.message ? error.message : '当前无法上缴精华，请稍后重试。';
-      showToast(message, 'error');
-    } finally {
-      setPendingActionKey(null);
-    }
-  };
 
   const handleUnlockPlant = async (plantId: string): Promise<void> => {
     const actionKey = `plant-unlock:${plantId}`;
@@ -2714,50 +2636,39 @@ function App(): JSX.Element {
     }
   };
 
-  const handleClaimSeasonSignIn = (): void => {
-    if (!loginSession || seasonSignInClaimedToday) {
+  const handleClaimSeasonSignIn = async (): Promise<void> => {
+    const actionKey = 'season:sign-in';
+    if (!loginSession || seasonSignInClaimedToday || pendingActionKey === actionKey) {
       return;
     }
 
-    const reward = seasonSignInTodayReward;
-    const nextRecord: SeasonSignInRecord = {
-      claimedDays: Array.from(new Set([...seasonSignInRecord.claimedDays, seasonSignInDay])).sort((left, right) => left - right),
-      totalTianjiReward: seasonSignInRecord.totalTianjiReward + reward,
-    };
-
-    writeSeasonSignInRecord(loginSession.player.id, nextRecord);
-    setSeasonSignInRecord(nextRecord);
-    setGlobalItemInventory((current) => ({
-      ...current,
-      tianjiTalisman: (current.tianjiTalisman ?? 0) + reward,
-    }));
-    setSpiritState((current) => current ? {
-      ...current,
-      tianjiTalisman: current.tianjiTalisman + reward,
-    } : current);
-    showToast(`签到成功，获得天机符 x${reward}。`, 'success');
+    setPendingActionKey(actionKey);
+    try {
+      const result = await claimSeasonSignIn();
+      setSeasonSignInState(result.signIn);
+      setGlobalItemInventory((current) => ({
+        ...current,
+        tianjiTalisman: result.tianjiTalisman,
+      }));
+      setSpiritState((current) => current ? {
+        ...current,
+        tianjiTalisman: result.tianjiTalisman,
+        resourceVersion: result.resourceVersion,
+      } : current);
+      showToast(result.summary, 'success');
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法完成赛季签到，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
   };
 
   const handleClaimSpiritAdRewardAction = async (): Promise<void> => {
-    if (!spiritState) {
-      return;
-    }
-
-    setSeedRewardModal({
-      title: '领取广告奖励',
-      summary: `观看完成后，确认领取天机符 x${spiritState.shop?.adReward.tianjiTalisman ?? 0}。点击确认后才会正式入账。`,
-      confirmAction: 'claim-spirit-ad-reward',
-      items: [{
-        itemId: 'tianji-talisman',
-        label: '天机符',
-        quantity: spiritState.shop?.adReward.tianjiTalisman ?? 0,
-      }],
-    });
-  };
-
-  const handleConfirmSpiritAdRewardClaim = async (): Promise<void> => {
     const actionKey = 'spirit:ad-reward';
-    if (!spiritState || !seedRewardModal || seedRewardModal.confirmAction !== 'claim-spirit-ad-reward' || pendingActionKey === actionKey) {
+    const usedToday = spiritState?.shop?.adReward.usedToday ?? 0;
+    const dailyLimit = spiritState?.shop?.adReward.dailyLimit ?? 0;
+
+    if (!spiritState || pendingActionKey === actionKey || usedToday >= dailyLimit) {
       return;
     }
 
@@ -2768,10 +2679,9 @@ function App(): JSX.Element {
         resourceVersion: spiritState.resourceVersion,
       });
       applySpiritMutationResult(result);
-      setSeedRewardModal(null);
       showToast(result.summary, 'success');
-    } catch {
-      showToast('当前无法领取广告奖励，可能今日次数已用完。', 'error');
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法领取广告奖励，可能今日次数已用完。', 'error');
     } finally {
       setPendingActionKey(null);
     }
@@ -2841,28 +2751,6 @@ function App(): JSX.Element {
       }
     } catch {
       showToast('当前无法领取阵营俸禄，请稍后重试。', 'error');
-    } finally {
-      setPendingActionKey(null);
-    }
-  };
-
-  const handleClaimDailyTask = async (taskId: string): Promise<void> => {
-    const actionKey = `home:daily-task:${taskId}`;
-    if (pendingActionKey === actionKey) {
-      return;
-    }
-
-    setPendingActionKey(actionKey);
-
-    try {
-      const result = await claimDailyTaskReward({
-        taskId,
-        walletVersion: home.stateVersions.walletVersion,
-      });
-
-      applyMutationResult(result);
-    } catch {
-      showToast('当前无法领取任务奖励，请稍后重试。', 'error');
     } finally {
       setPendingActionKey(null);
     }
@@ -3074,7 +2962,7 @@ function App(): JSX.Element {
     if (tutorialStage === 'home') {
       setSeedRewardModal({
         title: '领取启灵芽',
-        summary: '引导者交付启灵芽 x1。确认后会直接收入种子背包，并开放第一块田的播种。',
+        summary: '引导者交付启灵芽 x1。确认后会开放第一块田的可种植资格。',
         confirmAction: 'claim-starter-seeds',
         items: [
           {
@@ -3221,32 +3109,26 @@ function App(): JSX.Element {
             } : current);
           }
         }
-        const rewardModalPayload: SeedRewardModalState = {
-          title: '收取所得',
-          summary: `获得 ${formatNumber(result.result.collectedGold)} 金币。`,
-          confirmAction: tutorialStage === 'farm' ? 'tutorial-farm-collect' : undefined,
-          afterConfirmActions: tutorialStage === 'farm' ? getTutorialFlowActions('farmRewardConfirmed') : undefined,
-          items: [
-            {
-              seedId: 'field-gold',
-              label: '金币',
-              quantity: result.result.collectedGold,
-            },
-            ...displayableRewards.map((reward) => ({
-              seedId: reward.seedId,
-              quantity: reward.quantity,
-              label: reward.label,
-            })),
-          ],
-        };
         setFarmCollectPresentation({
           fieldId,
           tier: displayableRewards.length > 0 ? 'critical' : 'harvest',
           showSeeds: displayableRewards.length > 0,
         });
-        window.setTimeout(() => {
-          setSeedRewardModal(rewardModalPayload);
-        }, FARM_COLLECT_PRESENTATION_MS);
+        showRewardBubbles([
+          {
+            label: '金币',
+            quantity: result.result.collectedGold,
+            tone: 'gold',
+          },
+          ...displayableRewards.map((reward) => ({
+            label: reward.label,
+            quantity: reward.quantity,
+            tone: getRewardBubbleTone(reward),
+          })),
+        ]);
+        if (tutorialStage === 'farm') {
+          runTutorialFlowActions(getTutorialFlowActions('farmRewardConfirmed'));
+        }
         setFieldSeedAssignments((current) => {
           const nextAssignments = { ...current };
           delete nextAssignments[fieldId];
@@ -3577,15 +3459,6 @@ function App(): JSX.Element {
         </div>
 
         <div className="summary-card">
-          <p className="card-label">今日主目标</p>
-          <ul className="mini-list">
-            {dailyTasks.map((item) => (
-              <li key={item.id}>{item.title}</li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="summary-card">
           <p className="card-label">关键提醒</p>
           <div className="rail-note rail-note-stack">
             <div className="rail-note-row">
@@ -3773,17 +3646,11 @@ function App(): JSX.Element {
           <section className={`screen-body scene-${activeScene}`}>
             {activeScene === 'home' ? (
               <HomeScene
-                claimingTaskId={pendingActionKey?.startsWith('home:daily-task:') ? pendingActionKey.replace('home:daily-task:', '') : null}
-                dailyTasks={dailyTasks}
-                factionTasks={visibleHomeFactionTasks}
-                todayContribution={home.todayContribution ?? 0}
+                home={home}
+                scenes={scenes}
+                socialSummary={socialSummary}
+                spirit={spiritState}
                 tutorialTask={tutorialTask}
-                onClaimTask={(taskId) => {
-                  void handleClaimDailyTask(taskId);
-                }}
-                onSubmitFactionTask={(task) => {
-                  void handleSubmitFactionTask(task);
-                }}
                 onNavigate={navigateToScene}
                 onTutorialAction={handleTutorialTaskAction}
               />
@@ -3896,12 +3763,8 @@ function App(): JSX.Element {
                 onDonate={(goldAmount) => {
                   void handleFactionDonate(goldAmount);
                 }}
-                onSubmitFactionTask={(task) => {
-                  void handleSubmitFactionTask(task);
-                }}
                 onTransferFaction={handleTransferFaction}
                 comparison={scenes.faction.comparison}
-                tasks={visibleSceneFactionTasks}
                 contributionLogs={scenes.faction.contributionLogs ?? []}
                 rankings={scenes.faction.rankings}
                 uiRules={tutorialUiRules.faction}
@@ -3921,8 +3784,8 @@ function App(): JSX.Element {
                 fieldVisit={socialFieldVisit}
                 playerFactionName={home.factionName}
                 portalTarget={characterDialogPortalRef.current}
-                onAssistBack={(targetPlayerId, fieldSlotId) => {
-                  void handleSocialAssistBack(targetPlayerId, fieldSlotId);
+                onAssistFriend={(targetPlayerId) => {
+                  void handleAssistSocialFriend(targetPlayerId);
                 }}
                 onAssistAllFields={() => {
                   void handleAssistAllSocialFields();
@@ -3946,9 +3809,6 @@ function App(): JSX.Element {
                   void copyFriendInviteUrl(url);
                 }}
                 onCloseFieldVisit={() => setSocialFieldVisit(null)}
-                onConfirmHarvest={(fieldSlotId) => {
-                  void handleConfirmSocialHarvest(fieldSlotId);
-                }}
                 onRequestFriend={(targetPlayerId) => {
                   void handleSocialFriendRequest(targetPlayerId);
                 }}
@@ -4030,13 +3890,13 @@ function App(): JSX.Element {
                 seasonResetRules={globalFeatureModal.seasonResetRules ? {
                   title: '赛季结束时，重置战力与经营进度，保留长期图鉴与认知资产。',
                   retained: [
-                    '已解锁的种子图鉴仍然可见',
+                    '已解锁的植物图鉴仍然可见',
                     '已解锁的灵宠图鉴仍然可见',
                     '灵宠碎片不清零',
-                    '已见过的种子与灵宠信息继续保留',
+                    '已见过的植物与灵宠信息继续保留',
                   ],
                   reset: [
-                    '种子库存清零',
+                    '植物精华库存清零',
                     '灵宠等级清零，需要重新培养',
                     '金币清零',
                     '法术等级清零',
@@ -4058,7 +3918,9 @@ function App(): JSX.Element {
                   milestones: seasonSignInMilestones,
                   days: seasonSignInDays,
                   claimedToday: seasonSignInClaimedToday,
-                  onClaim: handleClaimSeasonSignIn,
+                  onClaim: () => {
+                    void handleClaimSeasonSignIn();
+                  },
                 } : undefined}
                 tianjiShop={globalFeatureModal.tianjiShop && spiritState?.shop ? {
                   spirit: { ...spiritState, shop: spiritState.shop },
@@ -4207,13 +4069,8 @@ function App(): JSX.Element {
               }}
               items={seedRewardModal.items}
               onConfirm={() => {
-                const confirmAction = seedRewardModal.confirmAction;
                 if (seedRewardModal.confirmAction === 'claim-faction-stipend') {
                   void handleConfirmFactionStipendClaim();
-                  return;
-                }
-                if (seedRewardModal.confirmAction === 'claim-spirit-ad-reward') {
-                  void handleConfirmSpiritAdRewardClaim();
                   return;
                 }
                 if (seedRewardModal.confirmAction === 'claim-starter-seeds') {
@@ -4227,12 +4084,6 @@ function App(): JSX.Element {
 
                 const afterConfirmActions = seedRewardModal.afterConfirmActions ?? [];
                 setSeedRewardModal(null);
-                if (confirmAction === 'tutorial-farm-collect' && tutorialStage === 'farm') {
-                  runTutorialFlowActions(afterConfirmActions.length > 0
-                    ? afterConfirmActions
-                    : getTutorialFlowActions('farmRewardConfirmed'));
-                  return;
-                }
                 if (afterConfirmActions.length > 0) {
                   runTutorialFlowActions(afterConfirmActions);
                 }
@@ -4255,6 +4106,7 @@ function App(): JSX.Element {
               replay={raidBattleReplay}
             />
           ) : null}
+          <RewardBubbleStack bubbles={rewardBubbles} formatNumber={formatNumber} />
           {toast ? (
             <div className={`top-toast top-toast-${toast.tone}`}>
               <span>{toast.message}</span>

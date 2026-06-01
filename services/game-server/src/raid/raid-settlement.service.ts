@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { LandDeedService } from '../land-deed/land-deed.service.js';
+import { grantFactionContribution } from '../faction/contribution.service.js';
 import { applyFactionBattlePostRecovery } from '../lib/faction-advantage-formulas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { buildRaidBattleReplay } from './raid-battle-replay.js';
@@ -12,6 +13,7 @@ import { RaidSettlementRuleService, type SpiritBattleSnapshot } from './raid-set
 const ESSENCE_LOOT_RATIO = 0.08;
 const ESSENCE_LOOT_MAX_PER_TYPE = 8;
 const ESSENCE_LOOT_PROTECTED_QUANTITY = 10;
+const RAID_WIN_CONTRIBUTION = 5;
 
 @Injectable()
 export class RaidSettlementService {
@@ -214,6 +216,17 @@ export class RaidSettlementService {
       });
 
       if (settlementResult.result === 'WIN') {
+        await grantFactionContribution(client, {
+          playerId: raidOrder.attackerPlayerId,
+          contribution: RAID_WIN_CONTRIBUTION,
+          sourceType: 'raid-win',
+          sourceId: raidOrder.id,
+          metadata: {
+            defenderPlayerId: raidOrder.defenderPlayerId,
+            lootGold: settlementResult.lootGold,
+            essenceLoot,
+          },
+        });
         await this.landDeedService.reconcilePlayerLandDeeds(client, raidOrder.attackerPlayerId, now);
       }
 

@@ -1,6 +1,7 @@
 import { Body, Controller, Headers, Inject, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type {
+  ClientClaimSeasonSignInResponse,
   ClientClaimStarterSeedRequest,
   ClientClaimStarterSeedResponse,
   ClientClaimDailyTaskRequest,
@@ -76,11 +77,27 @@ export class ClientCommandController {
     });
   }
 
+  @Post('claim-season-sign-in')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Claim current season sign-in reward.' })
+  async claimSeasonSignIn(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+  ): Promise<ClientClaimSeasonSignInResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.claimSeasonSignIn({
+      playerId: currentPlayer.playerId,
+    });
+  }
+
   @Post('claim-starter-seeds')
   @UseGuards(AuthPlaceholderGuard)
   @ApiBearerAuth()
   @ApiBody({ type: ClaimStarterSeedRequestDto })
-  @ApiOkResponse({ description: 'Claim tutorial starter seeds.' })
+  @ApiOkResponse({ description: 'Claim tutorial starter plant access.' })
   async claimStarterSeeds(
     @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
     @Body() body: ClientClaimStarterSeedRequest,
@@ -282,6 +299,7 @@ export class ClientCommandController {
 
 defineRouteParamTypes(ClientCommandController.prototype, 'claimPending', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimDailyTask', [Object, Object, Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'claimSeasonSignIn', [Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimStarterSeeds', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'collectField', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'startCultivation', [Object, Object, Object]);

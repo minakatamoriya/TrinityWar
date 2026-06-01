@@ -1,10 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { APP_NAME, type ClientBootstrapResponse, type ClientPlantResearchState, type ClientSceneContentResponse, type HomeSummaryResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientBootstrapResponse, type ClientPlantResearchState, type ClientSceneContentResponse, type ClientSeasonSignInResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { LandDeedService } from '../land-deed/land-deed.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SeasonService } from '../season/season.service.js';
 import { ArmyTrainingLifecycleService } from './army-training-lifecycle.service.js';
 import { ClientReadRepository } from './client-read.repository.js';
 import { DailyTaskLifecycleService } from './daily-task-lifecycle.service.js';
@@ -26,6 +27,7 @@ export class ClientReadService {
     @Inject(DailyFactionTaskLifecycleService) private readonly dailyFactionTaskLifecycleService: DailyFactionTaskLifecycleService,
     @Inject(PassiveIncomeLifecycleService) private readonly passiveIncomeLifecycleService: PassiveIncomeLifecycleService,
     @Inject(LandDeedService) private readonly landDeedService: LandDeedService,
+    @Inject(SeasonService) private readonly seasonService: SeasonService,
     @Inject(HomeSummaryAssembler) private readonly homeSummaryAssembler: HomeSummaryAssembler,
     @Inject(SceneContentAssembler) private readonly sceneContentAssembler: SceneContentAssembler,
     @Inject(TaskConfigService) private readonly taskConfigService: TaskConfigService,
@@ -49,6 +51,9 @@ export class ClientReadService {
         statusCode: 404,
       });
     }
+
+    const season = await this.seasonService.ensurePlayerSeason(db, playerId);
+    await this.seasonService.recordPlayerActivity(db, playerId, season);
 
     const seedDefinitions = await db.seedDefinition.findMany({
       orderBy: [{ sortOrder: 'asc' }, { seedId: 'asc' }],
@@ -137,9 +142,9 @@ export class ClientReadService {
       version: '0.1.0',
       serverTime: new Date().toISOString(),
       season: {
-        seasonNumber: 1,
-        currentWeek: 1,
-        totalWeeks: 4,
+        seasonNumber: season.seasonNumber,
+        currentWeek: season.currentWeek,
+        totalWeeks: season.totalWeeks,
       },
       backpack: {
         seedInventory,
@@ -185,6 +190,14 @@ export class ClientReadService {
 
     readModel.taskConfigs = await this.listTaskConfigsForClientRead(client);
     return this.homeSummaryAssembler.assemble(readModel);
+  }
+
+  async getSeasonSignIn(
+    playerId: string,
+    client?: Prisma.TransactionClient | PrismaClient,
+  ): Promise<ClientSeasonSignInResponse> {
+    const db = client ?? this.prisma.db;
+    return this.seasonService.getSeasonSignInState(db, playerId);
   }
 
   async getSceneContent(

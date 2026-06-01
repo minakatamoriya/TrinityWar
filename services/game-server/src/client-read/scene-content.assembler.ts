@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { APP_NAME, type ClientFactionStipendReward, type ClientFarmField, type ClientHomeFactionTaskSummary, type ClientPlantInventoryItem, type ClientRaidRewardItem, type ClientRaidSpiritPreview, type ClientSceneAction, type ClientSceneContentResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientFactionStipendReward, type ClientFarmField, type ClientPlantInventoryItem, type ClientRaidRewardItem, type ClientRaidSpiritPreview, type ClientSceneAction, type ClientSceneContentResponse } from '@trinitywar/shared';
 import type { FieldStatus } from '@prisma/client';
 import {
   GAME_BALANCE,
@@ -367,6 +367,7 @@ export class SceneContentAssembler {
   private buildFaction(readModel: SceneContentReadModel): ClientSceneContentResponse['faction'] {
     const currentFaction = readModel.player.faction;
     const contribution = readModel.player.factionMembers[0]?.contributionScore ?? 0;
+    const currentFactionTotalContribution = readModel.factions.find((faction) => faction.id === currentFaction?.id)?.contributionScore ?? currentFaction?.contributionScore ?? 0;
     const stipendTier = getFactionStipendTier(contribution);
     const stipendState = readModel.factionStipendStates[0] ?? null;
     const donateGoldStep = GAME_BALANCE.faction.donateGoldStep;
@@ -384,7 +385,7 @@ export class SceneContentAssembler {
         eyebrow: currentFaction?.name ?? '\u672a\u52a0\u5165\u9635\u8425',
         title: currentFaction ? `${currentFaction.name} | \u4e2a\u4eba\u8d21\u732e ${formatNumber(contribution)}` : '\u5c1a\u672a\u52a0\u5165\u9635\u8425',
         description: currentFaction
-          ? `\u9635\u8425\u8d44\u91d1 ${formatNumber(currentFaction.treasuryGold)}\uff0c\u9635\u8425\u603b\u8d21\u732e ${formatNumber(currentFaction.contributionScore)}`
+          ? `\u9635\u8425\u603b\u8d21\u732e ${formatNumber(currentFactionTotalContribution)}`
           : '\u5f53\u524d\u8d26\u53f7\u6ca1\u6709\u9635\u8425\u5173\u7cfb\uff0c\u540e\u7eed\u9636\u6bb5\u518d\u5f00\u653e\u8f6c\u6295\u9635\u8425\u3002',
         advantage: currentFaction ? `\u9635\u8425\u4ff8\u7984\u6863\u4f4d\uff1a${stipendTier?.label ?? '\u9635\u8425\u4ff8\u7984'}` : '\u6682\u65e0\u9635\u8425\u4ff8\u7984',
         breakdown: `\u9884\u8ba1\u6bcf\u65e5\u4ff8\u7984\uff1a${stipendRewardText}`,
@@ -398,7 +399,7 @@ export class SceneContentAssembler {
       comparison: readModel.factions.map((faction) => ({
         faction: faction.name,
         advantage: `\u603b\u8d21\u732e ${formatNumber(faction.contributionScore)}`,
-        gold: formatNumber(faction.treasuryGold),
+        totalContribution: formatNumber(faction.contributionScore),
         power: formatNumber(faction.contributionScore),
         isCurrent: faction.id === currentFaction?.id,
       })),
@@ -410,7 +411,7 @@ export class SceneContentAssembler {
           ? `\u540c\u989d\u7cbe\u534e\u5f53\u524d +${formatNumber(contributionBonusPercent)}% \u8d21\u732e\uff0c\u5df2\u8ba1\u5165\u7cbe\u534e\u4e0a\u7f34\u52a0\u6210\u3002`
           : '\u9996\u9875\u6bcf\u5929 3 \u4e2a\u9635\u8425\u4efb\u52a1\u4f1a\u5237\u65b0\uff0c\u5b8c\u6210\u540e\u63d0\u5347\u8d21\u732e\u3002',
       },
-      tasks: buildFactionTasks(readModel),
+      tasks: [],
       contributionLogs: readModel.contributionLogs.map((log) => ({
         id: log.id,
         sourceType: log.sourceType,
@@ -435,7 +436,6 @@ export class SceneContentAssembler {
       rankings: readModel.factions.map((faction, index) => ({
         label: `${index + 1}. ${faction.name}`,
         value: `${formatNumber(faction.contributionScore)} \u8d21\u732e`,
-        note: `${formatNumber(faction.treasuryGold)} \u91d1\u5e01`,
       })),
     };
   }
@@ -515,105 +515,33 @@ function buildFirstFactionStipendPreview(rewards: ClientFactionStipendReward[]):
   ];
 }
 
-function buildFactionTasks(readModel: SceneContentReadModel): ClientHomeFactionTaskSummary[] {
-  const essenceInventory = new Map(
-    readModel.seedInventory.map((item) => [item.seedDefinition.seedId, {
-      quantity: item.quantity,
-      label: `${item.seedDefinition.label}\u7cbe\u534e`,
-    }]),
-  );
-
-  return readModel.dailyFactionTasks.filter((task) => findFactionTaskConfig(readModel, task)?.isEnabled ?? true).map((task) => {
-    const type = mapFactionTaskType(task.taskType);
-    const requiredEssence = task.requiredEssenceType ? essenceInventory.get(task.requiredEssenceType) : null;
-    const progressCurrent = Math.min(task.progressAmount, task.requiredAmount);
-    const remaining = Math.max(task.requiredAmount - progressCurrent, 0);
-    const status = mapTaskStatusForFaction(task.status);
-    const taskConfig = findFactionTaskConfig(readModel, task);
-
-    return {
-      id: task.id,
-      type,
-      title: buildConfiguredFactionTaskTitle(type, requiredEssence?.label ?? task.requiredEssenceType, taskConfig?.title),
-      description: taskConfig?.description ?? (type === 'conflict-raid'
-        ? `\u5b8c\u6210\u51b2\u7a81\u6218\u53ef\u83b7\u5f97 ${formatNumber(task.rewardContribution)} \u8d21\u732e\u3002`
-        : `\u4e0a\u7f34\u6307\u5b9a\u7cbe\u534e\u53ef\u83b7\u5f97 ${formatNumber(task.rewardContribution)} \u8d21\u732e\u3002`),
-      progressCurrent,
-      progressTarget: task.requiredAmount,
-      progressText: status === 'claimed' ? '\u5df2\u9886\u53d6' : `${progressCurrent}/${task.requiredAmount}`,
-      rewardContribution: task.rewardContribution,
-      requiredEssenceType: task.requiredEssenceType,
-      requiredEssenceLabel: requiredEssence?.label ?? (task.requiredEssenceType ? `${task.requiredEssenceType}\u7cbe\u534e` : null),
-      currentEssenceQuantity: requiredEssence?.quantity ?? 0,
-      status,
-      action: {
-        label: status === 'claimed'
-          ? '\u5df2\u9886\u53d6'
-          : type === 'conflict-raid'
-            ? '\u53bb\u6218\u6597'
-            : (requiredEssence?.quantity ?? 0) >= Math.max(remaining, 1) ? '\u4e0a\u7f34' : '\u53bb\u79cd\u690d',
-        target: type === 'conflict-raid' ? 'raid' : (requiredEssence?.quantity ?? 0) >= Math.max(remaining, 1) ? 'faction' : 'farm',
-        tone: status === 'claimed' ? 'ghost' : 'primary',
-        context: task.id,
-      },
-    };
-  });
-}
-
-function mapFactionTaskType(taskType: SceneContentReadModel['dailyFactionTasks'][number]['taskType']): ClientHomeFactionTaskSummary['type'] {
-  if (taskType === 'ESSENCE_SUBMIT_FOCUS') {
-    return 'essence-submit-focus';
-  }
-
-  if (taskType === 'CONFLICT_RAID') {
-    return 'conflict-raid';
-  }
-
-  return 'essence-submit-basic';
-}
-
-function mapTaskStatusForFaction(status: SceneContentReadModel['dailyFactionTasks'][number]['status']): ClientHomeFactionTaskSummary['status'] {
-  if (status === 'CLAIMED') {
-    return 'claimed';
-  }
-
-  if (status === 'COMPLETED') {
-    return 'completed';
-  }
-
-  return 'in-progress';
-}
-
-function buildConfiguredFactionTaskTitle(
-  type: ClientHomeFactionTaskSummary['type'],
-  essenceLabel?: string | null,
-  configuredTitle?: string | null,
-): string {
-  if (configuredTitle) {
-    return type === 'conflict-raid' ? configuredTitle : `${configuredTitle}\uff1a${essenceLabel ?? '\u7cbe\u534e'}`;
-  }
-
-  return type === 'conflict-raid' ? '\u53d6\u5f97 1 \u6b21\u6218\u6597\u80dc\u5229' : `\u4e0a\u7f34${essenceLabel ?? '\u7cbe\u534e'}`;
-}
-
-function findFactionTaskConfig(
-  readModel: SceneContentReadModel,
-  task: SceneContentReadModel['dailyFactionTasks'][number],
-): SceneContentReadModel['taskConfigs'][number] | null {
-  const taskId = task.taskType === 'CONFLICT_RAID'
-    ? 'conflict-raid'
-    : task.taskType === 'ESSENCE_SUBMIT_BASIC'
-      ? 'essence-submit-basic'
-      : task.rewardContribution >= 35 || task.requiredAmount <= 10
-        ? 'essence-submit-focus-rare'
-        : 'essence-submit-focus-common';
-
-  return readModel.taskConfigs.find((config) => config.taskGroup === 'daily-faction' && config.taskId === taskId) ?? null;
-}
-
 function getContributionSourceLabel(sourceType: string): string {
-  if (sourceType === 'faction-task-submit') {
+  if (sourceType === 'faction-task-submit' || sourceType === 'essence-submit') {
     return '\u7cbe\u534e\u4e0a\u7f34';
+  }
+
+  if (sourceType === 'field-collect') {
+    return '收取田地';
+  }
+
+  if (sourceType === 'spirit-recover') {
+    return '灵宠恢复';
+  }
+
+  if (sourceType === 'spirit-roll-traits') {
+    return '灵宠洗点';
+  }
+
+  if (sourceType === 'social-water-field') {
+    return '好友浇水';
+  }
+
+  if (sourceType === 'social-harvest-field') {
+    return '好友摘取';
+  }
+
+  if (sourceType === 'raid-win') {
+    return '对战胜利';
   }
 
   if (sourceType === 'raid-success') {

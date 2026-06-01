@@ -1,11 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { DailyFactionTaskType, Prisma, PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { DAILY_TASK_CONFIG, getDailyTaskDefinition } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 type PrismaClientLike = Prisma.TransactionClient | PrismaClient;
 
-export type TaskConfigGroup = 'starter' | 'daily' | 'daily-faction';
+export type TaskConfigGroup = 'starter' | 'daily' | 'daily-faction' | 'contribution';
 
 export interface ResolvedDailyTaskConfig {
   taskId: string;
@@ -21,7 +21,7 @@ export interface ResolvedDailyFactionTaskConfig {
   taskId: string;
   title: string;
   description: string | null;
-  taskType: DailyFactionTaskType;
+  taskType: string;
   targetCount: number;
   rewardContribution: number;
   isEnabled: boolean;
@@ -96,6 +96,40 @@ const DAILY_FACTION_DEFAULTS: ResolvedDailyFactionTaskConfig[] = [
   },
 ];
 
+const CONTRIBUTION_RULE_DEFAULTS: ResolvedDailyFactionTaskConfig[] = [
+  {
+    taskId: 'collect-field',
+    title: '收取灵植',
+    description: '每次收取成熟灵植获得个人阵营贡献。',
+    taskType: 'FARM_HARVEST',
+    targetCount: 1,
+    rewardContribution: 2,
+    isEnabled: true,
+  },
+  {
+    taskId: 'spirit-recover',
+    title: '灵宠恢复',
+    description: '使用灵宠恢复获得个人阵营贡献。',
+    taskType: 'SPIRIT_RECOVER',
+    targetCount: 1,
+    rewardContribution: 2,
+    isEnabled: true,
+  },
+  {
+    taskId: 'spirit-roll-traits',
+    title: '灵宠洗练',
+    description: '洗练灵宠词条获得个人阵营贡献。',
+    taskType: 'SPIRIT_ROLL_TRAITS',
+    targetCount: 1,
+    rewardContribution: 3,
+    isEnabled: true,
+  },
+  ...DAILY_FACTION_DEFAULTS.map((task) => ({
+    ...task,
+    title: task.title.replace('每日阵营任务', '阵营贡献'),
+  })),
+];
+
 @Injectable()
 export class TaskConfigService {
   private overrideTableAvailable: boolean | null = null;
@@ -106,8 +140,11 @@ export class TaskConfigService {
     group?: TaskConfigGroup | null,
     client: PrismaClientLike = this.prisma.db,
   ): Promise<AdminTaskConfigRecord[]> {
-    const groups: TaskConfigGroup[] = group ? [group] : ['starter', 'daily', 'daily-faction'];
-    const overrides = await this.findOverrides(client, groups);
+    const groups: TaskConfigGroup[] = group ? [group] : ['starter', 'contribution'];
+    const overrideGroups: TaskConfigGroup[] = groups.includes('contribution')
+      ? Array.from(new Set([...groups, 'daily-faction']))
+      : groups;
+    const overrides = await this.findOverrides(client, overrideGroups);
     return groups.flatMap((taskGroup) => this.buildAdminRecordsForGroup(taskGroup, overrides));
   }
 
@@ -176,12 +213,15 @@ export class TaskConfigService {
     taskId: string,
     client: PrismaClientLike = this.prisma.db,
   ): Promise<ResolvedDailyFactionTaskConfig | null> {
-    const base = DAILY_FACTION_DEFAULTS.find((task) => task.taskId === taskId) ?? null;
+    const base = CONTRIBUTION_RULE_DEFAULTS.find((task) => task.taskId === taskId)
+      ?? DAILY_FACTION_DEFAULTS.find((task) => task.taskId === taskId)
+      ?? null;
     if (!base) {
       return null;
     }
 
-    const override = await this.findOverride(client, 'daily-faction', taskId);
+    const override = await this.findOverride(client, 'contribution', taskId)
+      ?? await this.findOverride(client, 'daily-faction', taskId);
     return applyDailyFactionOverride(base, override);
   }
 
@@ -238,9 +278,12 @@ export class TaskConfigService {
     group: TaskConfigGroup,
     overrides: Map<string, TaskConfigOverrideLike>,
   ): AdminTaskConfigRecord[] {
-    if (group === 'daily-faction') {
-      return DAILY_FACTION_DEFAULTS.map((task) => {
-        const override = overrides.get(`${group}:${task.taskId}`) ?? null;
+    if (group === 'daily-faction' || group === 'contribution') {
+      const sourceTasks = group === 'contribution' ? CONTRIBUTION_RULE_DEFAULTS : DAILY_FACTION_DEFAULTS;
+      return sourceTasks.map((task) => {
+        const override = overrides.get(`${group}:${task.taskId}`)
+          ?? overrides.get(`daily-faction:${task.taskId}`)
+          ?? null;
         return dailyFactionToAdminRecord(applyDailyFactionOverride(task, override), group, override);
       });
     }
@@ -394,7 +437,7 @@ function isCatchupTask(taskId: string): boolean {
 }
 
 function normalizeGroup(group: TaskConfigGroup): TaskConfigGroup {
-  if (group === 'starter' || group === 'daily' || group === 'daily-faction') {
+  if (group === 'starter' || group === 'daily' || group === 'daily-faction' || group === 'contribution') {
     return group;
   }
 

@@ -1,4 +1,4 @@
-import {
+﻿import {
   API_PREFIX,
   CLIENT_API_PREFIX,
   type ClientClaimNotificationResponse,
@@ -29,6 +29,7 @@ import {
   type ClientFactionTaskSubmitResponse,
   type ClientClaimPendingRequest,
   type ClientClaimPendingResponse,
+  type ClientClaimSeasonSignInResponse,
   type ClientCollectFieldRequest,
   type ClientCollectFieldResponse,
   type ClientDailyTaskSummary,
@@ -43,6 +44,7 @@ import {
   type ClientRecruitArmyRequest,
   type ClientResetDemoStateResponse,
   type ClientSceneContentResponse,
+  type ClientSeasonSignInResponse,
   type ClientStartCultivationRequest,
   type ClientStateMutationResponse,
   type ClientUnlockPlantRequest,
@@ -172,7 +174,6 @@ let mockHomeSnapshot: HomeSummaryResponse = cloneHomeSummary(mockHomeSummary);
 let mockSceneSnapshot: ClientSceneContentResponse = cloneSceneContent(mockSceneContent);
 let devLoginSession: DevLoginSession | null = readStoredDevLoginSession();
 const INITIAL_MOCK_FACTION_CONTRIBUTION = 40;
-const INITIAL_MOCK_FACTION_TREASURY_GOLD = 82400;
 const INITIAL_MOCK_FACTION_ARMY_POWER = 1260;
 const INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS: Record<string, string> = {
   'field-1': 'qilingya',
@@ -181,7 +182,6 @@ const INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS: Record<string, string> = {
 };
 const MOCK_collect_window_SECONDS = 30 * 60;
 let mockFactionContribution = INITIAL_MOCK_FACTION_CONTRIBUTION;
-let mockFactionTreasuryGold = INITIAL_MOCK_FACTION_TREASURY_GOLD;
 let mockFactionArmyPower = INITIAL_MOCK_FACTION_ARMY_POWER;
 let mockFieldSeedAssignments: Record<string, string> = { ...INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS };
 
@@ -614,6 +614,42 @@ export async function loadFarmBoard(): Promise<ClientFarmBoardState> {
   return fetchJson<ClientFarmBoardState>(`${CLIENT_API_PREFIX}/profile/farm-board`);
 }
 
+export async function loadSeasonSignIn(): Promise<ClientSeasonSignInResponse> {
+  if (forceMockReads) {
+    return buildMockSeasonSignIn();
+  }
+
+  try {
+    return await fetchJson<ClientSeasonSignInResponse>(`${CLIENT_API_PREFIX}/season/sign-in`);
+  } catch (error) {
+    if (allowMockReadFallback) {
+      return buildMockSeasonSignIn();
+    }
+
+    throw error;
+  }
+}
+
+export async function claimSeasonSignIn(): Promise<ClientClaimSeasonSignInResponse> {
+  if (forceMockCommands) {
+    const signIn = buildMockSeasonSignIn([buildMockSeasonSignIn().currentDay]);
+    const rewardTianjiTalisman = signIn.todayReward;
+    mockBootstrapSnapshot.backpack.globalItemInventory.tianjiTalisman = (mockBootstrapSnapshot.backpack.globalItemInventory.tianjiTalisman ?? 0) + rewardTianjiTalisman;
+    return {
+      app: mockBootstrapSnapshot.app,
+      summary: `签到成功，获得天机符 x${rewardTianjiTalisman}。`,
+      rewardTianjiTalisman,
+      tianjiTalisman: mockBootstrapSnapshot.backpack.globalItemInventory.tianjiTalisman,
+      resourceVersion: 1,
+      signIn,
+    };
+  }
+
+  return fetchJson<ClientClaimSeasonSignInResponse>(`${CLIENT_API_PREFIX}/actions/claim-season-sign-in`, {
+    method: 'POST',
+  });
+}
+
 export async function updateFarmBoard(input: ClientFarmBoardUpdateRequest): Promise<ClientFarmBoardUpdateResponse> {
   if (forceMockCommands) {
     return {
@@ -973,9 +1009,9 @@ function syncMockFactionScene(): void {
     description: '贡献用于提升每日俸禄档位，俸禄以植物精华、灵宠精魄和分档兽魂为主。',
   };
   mockSceneSnapshot.faction.comparison = [
-    { faction: '人界', advantage: `总贡献 ${formatNumber(mockFactionArmyPower)}`, gold: formatNumber(mockFactionTreasuryGold), power: formatNumber(mockFactionArmyPower), isCurrent: true },
-    { faction: '仙界', advantage: '总贡献 1,180', gold: '79,600', power: '1,180' },
-    { faction: '魔界', advantage: '总贡献 1,340', gold: '85,300', power: '1,340' },
+    { faction: '人界', advantage: `总贡献 ${formatNumber(mockFactionArmyPower)}`, totalContribution: formatNumber(mockFactionArmyPower), power: formatNumber(mockFactionArmyPower), isCurrent: true },
+    { faction: '仙界', advantage: '总贡献 1,180', totalContribution: '1,180', power: '1,180' },
+    { faction: '魔界', advantage: '总贡献 1,340', totalContribution: '1,340', power: '1,340' },
   ];
   mockSceneSnapshot.faction.donate = {
     title: '捐献金币',
@@ -1379,7 +1415,6 @@ function applyMockFactionDonate(input: ClientFactionDonateRequest): ClientStateM
   const contributionGain = actualGoldAmount / goldStep;
   applyVaultGoldDelta(-actualGoldAmount);
   mockFactionContribution += contributionGain;
-  mockFactionTreasuryGold += actualGoldAmount;
 
   return buildMockMutation(`已向阵营捐出 ${formatNumber(actualGoldAmount)} 金币，贡献值 +${formatNumber(contributionGain)}。`);
 }
@@ -1551,7 +1586,6 @@ export async function resetDemoExperimentState(): Promise<ClientResetDemoStateRe
     mockHomeSnapshot = cloneHomeSummary(mockHomeSummary);
     mockSceneSnapshot = cloneSceneContent(mockSceneContent);
     mockFactionContribution = INITIAL_MOCK_FACTION_CONTRIBUTION;
-    mockFactionTreasuryGold = INITIAL_MOCK_FACTION_TREASURY_GOLD;
     mockFactionArmyPower = INITIAL_MOCK_FACTION_ARMY_POWER;
     mockFieldSeedAssignments = { ...INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS };
     mockFieldTimingState = buildInitialMockFieldTimingStates();
@@ -1663,6 +1697,63 @@ export async function raidClientTarget(input: ClientRaidActionRequest): Promise<
   mockHomeSnapshot = cloneHomeSummary(response.home);
   mockSceneSnapshot = cloneSceneContent(response.scenes);
   return response;
+}
+
+function getMockSeasonSignInReward(day: number): number {
+  if (day >= 22) {
+    return 4;
+  }
+  if (day >= 15) {
+    return 3;
+  }
+  if (day >= 8) {
+    return 2;
+  }
+  return 1;
+}
+
+function getMockSeasonDay(): number {
+  const safeCurrentWeek = Math.min(Math.max(Math.floor(mockBootstrapSnapshot.season.currentWeek), 1), 4);
+  const chinaNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const weekday = chinaNow.getUTCDay();
+  const mondayBasedDay = weekday === 0 ? 7 : weekday;
+
+  return Math.min((safeCurrentWeek - 1) * 7 + mondayBasedDay, 28);
+}
+
+function buildMockSeasonSignIn(claimedDays: number[] = []): ClientSeasonSignInResponse {
+  const currentDay = getMockSeasonDay();
+  const claimedDaySet = new Set(claimedDays.filter((day) => day >= 1 && day <= 28));
+
+  return {
+    seasonNumber: mockBootstrapSnapshot.season.seasonNumber,
+    currentDay,
+    claimedDays: Array.from(claimedDaySet).sort((left, right) => left - right),
+    totalTianjiReward: Array.from(claimedDaySet).reduce((sum, day) => sum + getMockSeasonSignInReward(day), 0),
+    todayReward: getMockSeasonSignInReward(currentDay),
+    claimedToday: claimedDaySet.has(currentDay),
+    days: Array.from({ length: 28 }, (_, index) => {
+      const day = index + 1;
+      const claimed = claimedDaySet.has(day);
+      return {
+        day,
+        reward: getMockSeasonSignInReward(day),
+        claimed,
+        current: day === currentDay,
+        future: day > currentDay,
+        missed: day < currentDay && !claimed,
+      };
+    }),
+    milestones: [
+      { dayCount: 7, title: '七日宝箱' },
+      { dayCount: 14, title: '十四日宝箱' },
+      { dayCount: 21, title: '二十一日宝箱' },
+    ].map((milestone) => ({
+      ...milestone,
+      reached: claimedDaySet.size >= milestone.dayCount,
+      remainingDays: Math.max(milestone.dayCount - claimedDaySet.size, 0),
+    })),
+  };
 }
 
 export async function buySpiritSoul(input: ClientBuySpiritSoulRequest): Promise<ClientSpiritMutationResponse> {

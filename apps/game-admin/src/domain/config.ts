@@ -31,13 +31,13 @@ export const spiritConfigFields: ConfigField[] = [
 ];
 
 export const taskConfigFields: ConfigField[] = [
-  { key: 'taskGroup', label: '任务分类 / taskGroup', inputType: 'select', options: ['starter', 'daily', 'daily-faction'] },
-  { key: 'taskId', label: '任务 ID / taskId' },
-  { key: 'title', label: '标题 / title' },
+  { key: 'taskGroup', label: '配置分类 / taskGroup', inputType: 'select', options: ['starter', 'contribution'] },
+  { key: 'taskId', label: '配置 ID / taskId' },
+  { key: 'title', label: '名称 / title' },
   { key: 'description', label: '描述 / description', inputType: 'textarea', nullable: true },
-  { key: 'targetCount', label: '目标数量 / targetCount', inputType: 'number' },
+  { key: 'targetCount', label: '目标或触发数量 / targetCount', inputType: 'number' },
   { key: 'rewardGold', label: '奖励金币 / rewardGold', inputType: 'number' },
-  { key: 'rewardContribution', label: '奖励贡献 / rewardContribution', inputType: 'number' },
+  { key: 'rewardContribution', label: '贡献值 / rewardContribution', inputType: 'number' },
   { key: 'isEnabled', label: '是否启用 / isEnabled', inputType: 'select', options: ['true', 'false'] },
 ];
 

@@ -268,10 +268,128 @@ model Player {
   shareAssistRecords      ShareAssistRecord[]         @relation("ShareAssistRecordHelper")
   inviteRelationsSent     PlayerInviteRelation[]      @relation("InviteRelationInviter")
   inviteRelationsReceived PlayerInviteRelation[]      @relation("InviteRelationInvited")
+  seasonStates            PlayerSeasonState[]
+  seasonSnapshots         PlayerSeasonSnapshot[]
+  seasonSignIns           PlayerSeasonSignIn[]
+  seasonActivities        PlayerSeasonActivity[]
 
   @@index([factionId])
   @@index([lastLoginAt])
   @@map("player")
+}
+
+model GameSeason {
+  seasonNumber Int      @id @map("season_number")
+  startsAt     DateTime @map("starts_at")
+  endsAt       DateTime @map("ends_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  playerSnapshots  PlayerSeasonSnapshot[]
+  factionSnapshots FactionSeasonSnapshot[]
+  playerSignIns    PlayerSeasonSignIn[]
+  playerActivities PlayerSeasonActivity[]
+
+  @@index([startsAt, endsAt])
+  @@map("game_season")
+}
+
+model PlayerSeasonState {
+  playerId             String   @map("player_id")
+  currentSeasonNumber  Int      @map("current_season_number")
+  lastResetSeasonNumber Int     @default(1) @map("last_reset_season_number")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@id([playerId])
+  @@index([currentSeasonNumber])
+  @@index([lastResetSeasonNumber])
+  @@map("player_season_state")
+}
+
+model PlayerSeasonSnapshot {
+  id                String   @id @default(cuid())
+  playerId          String   @map("player_id")
+  seasonNumber      Int      @map("season_number")
+  factionId         String?  @map("faction_id")
+  contributionScore Int      @default(0) @map("contribution_score")
+  signInDays        Int      @default(0) @map("sign_in_days")
+  loginDays         Int      @default(0) @map("login_days")
+  harvestCount      Int      @default(0) @map("harvest_count")
+  raidCount         Int      @default(0) @map("raid_count")
+  finalRank         Int?     @map("final_rank")
+  rewardTier        String?  @map("reward_tier")
+  snapshotJson      Json     @map("snapshot_json")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  player Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  faction Faction?   @relation(fields: [factionId], references: [id], onDelete: SetNull)
+  season GameSeason  @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+
+  @@unique([playerId, seasonNumber])
+  @@index([seasonNumber, contributionScore])
+  @@index([factionId, seasonNumber])
+  @@map("player_season_snapshot")
+}
+
+model PlayerSeasonSignIn {
+  id                  String   @id @default(cuid())
+  playerId            String   @map("player_id")
+  seasonNumber        Int      @map("season_number")
+  dayIndex            Int      @map("day_index")
+  rewardTianjiTalisman Int     @map("reward_tianji_talisman")
+  claimedAt           DateTime @default(now()) @map("claimed_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  player Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  season GameSeason  @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+
+  @@unique([playerId, seasonNumber, dayIndex])
+  @@index([playerId, seasonNumber])
+  @@index([seasonNumber, dayIndex])
+  @@map("player_season_sign_in")
+}
+
+model PlayerSeasonActivity {
+  id           String   @id @default(cuid())
+  playerId     String   @map("player_id")
+  seasonNumber Int      @map("season_number")
+  dateKey      String   @map("date_key")
+  firstSeenAt  DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt   DateTime @default(now()) @map("last_seen_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  player Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  season GameSeason  @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+
+  @@unique([playerId, seasonNumber, dateKey])
+  @@index([playerId, seasonNumber])
+  @@index([seasonNumber, dateKey])
+  @@map("player_season_activity")
+}
+
+model FactionSeasonSnapshot {
+  id                String   @id @default(cuid())
+  factionId         String   @map("faction_id")
+  seasonNumber      Int      @map("season_number")
+  contributionScore Int      @default(0) @map("contribution_score")
+  memberCount       Int      @default(0) @map("member_count")
+  finalRank         Int?     @map("final_rank")
+  snapshotJson      Json     @map("snapshot_json")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  faction Faction    @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  season GameSeason  @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+
+  @@unique([factionId, seasonNumber])
+  @@index([seasonNumber, contributionScore])
+  @@map("faction_season_snapshot")
 }
 
 model PlayerAuthIdentity {
@@ -305,6 +423,8 @@ model Faction {
   members                 FactionMember[]
   factionContributionLogs FactionContributionLog[]
   dailyFactionTasks       DailyFactionTask[]
+  playerSeasonSnapshots   PlayerSeasonSnapshot[]
+  factionSeasonSnapshots  FactionSeasonSnapshot[]
 
   @@unique([code])
   @@unique([name])

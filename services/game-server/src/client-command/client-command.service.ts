@@ -1,7 +1,8 @@
-import { createHash } from 'node:crypto';
+﻿import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   APP_NAME,
+  type ClientClaimSeasonSignInResponse,
   type ClientClaimStarterSeedResponse,
   type ClientClaimDailyTaskResponse,
   type ClientClaimFactionStipendResponse,
@@ -17,17 +18,19 @@ import {
 } from '@trinitywar/shared';
 import type { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service.js';
-import { DailyFactionTaskLifecycleService } from '../client-read/daily-faction-task-lifecycle.service.js';
 import { DailyTaskLifecycleService } from '../client-read/daily-task-lifecycle.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { LandDeedService } from '../land-deed/land-deed.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
+import { grantFactionContribution } from '../faction/contribution.service.js';
 import { DAILY_TASK_CONFIG, GAME_BALANCE, getFactionAdvantageConfig, getFactionStipendTier, getSeedStageGold } from '../lib/game-balance.js';
 import { buildFieldReadyAtUpdate, getCultivationSeconds } from '../lib/field-timing.js';
 import { getVaultCapacityGain } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PlayerInitializationService } from '../seed/player-initialization.service.js';
+import { SeasonService } from '../season/season.service.js';
+import { TaskConfigService } from '../task-config/task-config.service.js';
 import { SEED_DEFINITION_SEEDS } from '../seed/seed-data/seeds.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
 import { ArmyTrainingLifecycleService } from '../client-read/army-training-lifecycle.service.js';
@@ -115,7 +118,6 @@ const TUTORIAL_STARTER_SEED_ID = 'qilingya';
 const TUTORIAL_STARTER_SEED_FALLBACK_ID = 'qinglingmai';
 const TUTORIAL_STARTER_SEED_QUANTITY = 1;
 const FIRST_FACTION_STIPEND_UNLOCK_SEED_IDS = ['qinglingmai', 'xunyamai'] as const;
-
 @Injectable()
 export class ClientCommandService {
   constructor(
@@ -128,10 +130,23 @@ export class ClientCommandService {
     @Inject(FieldLifecycleService) private readonly fieldLifecycleService: FieldLifecycleService,
     @Inject(ClientReadService) private readonly clientReadService: ClientReadService,
     @Inject(DailyTaskLifecycleService) private readonly dailyTaskLifecycleService: DailyTaskLifecycleService,
-    @Inject(DailyFactionTaskLifecycleService) private readonly dailyFactionTaskLifecycleService: DailyFactionTaskLifecycleService,
     @Inject(PlayerInitializationService) private readonly playerInitializationService: PlayerInitializationService,
     @Inject(LandDeedService) private readonly landDeedService: LandDeedService,
+    @Inject(SeasonService) private readonly seasonService: SeasonService,
+    @Inject(TaskConfigService) private readonly taskConfigService: TaskConfigService,
   ) {}
+
+  async claimSeasonSignIn(input: { playerId: string }): Promise<ClientClaimSeasonSignInResponse> {
+    return this.prisma.transaction<ClientClaimSeasonSignInResponse>(async (client) => {
+      const result = await this.seasonService.claimSeasonSignIn(client, input.playerId);
+
+      return {
+        app: APP_NAME,
+        summary: `签到成功，获得天机符 x${result.rewardTianjiTalisman}。`,
+        ...result,
+      };
+    });
+  }
 
   async claimPending(input: ClaimPendingCommandInput): Promise<ClientClaimPendingResponse> {
     validateClaimPendingRequest(input.request);
@@ -422,7 +437,7 @@ export class ClientCommandService {
       if (spiritResource.dailyStarterSeedClaimDateKey === dateKey) {
         throw new BusinessError({
           code: ErrorCode.TaskAlreadyClaimed,
-          message: 'Starter seeds already claimed today.',
+          message: 'Starter plant access already claimed today.',
           statusCode: 409,
         });
       }
@@ -436,7 +451,7 @@ export class ClientCommandService {
         if (!createdSeedDefinition) {
           throw new BusinessError({
             code: ErrorCode.NotFound,
-            message: 'Tutorial starter seed definition not found.',
+            message: 'Tutorial starter plant definition not found.',
             statusCode: 404,
           });
         }
@@ -471,7 +486,7 @@ export class ClientCommandService {
 
         const responseSnapshot: ClientClaimStarterSeedResponse = {
           app: APP_NAME,
-          summary: `已领取 ${createdSeedDefinition.label} x${TUTORIAL_STARTER_SEED_QUANTITY}。`,
+          summary: `已领取${createdSeedDefinition.label} x${TUTORIAL_STARTER_SEED_QUANTITY}。`,
           bootstrap: await this.clientReadService.getBootstrap(input.playerId, client),
           home: await this.clientReadService.getHomeSummary(input.playerId, client),
           scenes: await this.clientReadService.getSceneContent(input.playerId, client),
@@ -519,7 +534,7 @@ export class ClientCommandService {
 
       const responseSnapshot: ClientClaimStarterSeedResponse = {
         app: APP_NAME,
-        summary: `已领取 ${seedDefinition.label} x${TUTORIAL_STARTER_SEED_QUANTITY}。`,
+        summary: `已领取${seedDefinition.label} x${TUTORIAL_STARTER_SEED_QUANTITY}。`,
         bootstrap: await this.clientReadService.getBootstrap(input.playerId, client),
         home: await this.clientReadService.getHomeSummary(input.playerId, client),
         scenes: await this.clientReadService.getSceneContent(input.playerId, client),
@@ -679,6 +694,19 @@ export class ClientCommandService {
         && (field.status === 'MATURE' || field.status === 'WITHERED')
       ) {
         await this.recordDailyTaskProgress(client, input.playerId, 'collect-field');
+        const contributionConfig = await this.taskConfigService.getDailyFactionTaskConfig('collect-field', client);
+        if (contributionConfig?.isEnabled && contributionConfig.rewardContribution > 0) {
+          await grantFactionContribution(client, {
+            playerId: input.playerId,
+            contribution: contributionConfig.rewardContribution,
+            sourceType: 'field-collect',
+            sourceId: field.id,
+            metadata: {
+              seedId: field.seedDefinition?.seedId,
+              collectMode: input.request.collectMode,
+            },
+          });
+        }
       }
 
       await this.landDeedService.reconcilePlayerLandDeeds(client, input.playerId);
@@ -1224,137 +1252,13 @@ export class ClientCommandService {
         return idempotencyRecord.responseSnapshotJson as unknown as ClientFactionTaskSubmitResponse;
       }
 
-      const dateKey = getLocalDateKey();
-      await this.dailyFactionTaskLifecycleService.ensurePlayerDailyFactionTasks(client, input.playerId, dateKey);
-
-      const task = await client.dailyFactionTask.findFirst({
-        where: {
-          id: input.request.taskId,
-          playerId: input.playerId,
-          taskDate: dateKey,
-        },
-        select: {
-          id: true,
-          factionId: true,
-          taskType: true,
-          requiredEssenceType: true,
-          requiredAmount: true,
-          progressAmount: true,
-          rewardContribution: true,
-          status: true,
-        },
-      });
-
-      if (!task) {
-        throw new BusinessError({
-          code: ErrorCode.TaskNotFound,
-          message: 'Faction task not found.',
-          statusCode: 404,
-        });
-      }
-
-      if (task.status === 'CLAIMED') {
-        throw new BusinessError({
-          code: ErrorCode.TaskAlreadyClaimed,
-          message: 'Faction task already completed.',
-          statusCode: 409,
-        });
-      }
-
-      if (!task.requiredEssenceType) {
-        throw new BusinessError({
-          code: ErrorCode.BadRequest,
-          message: 'This faction task cannot be submitted with essence.',
-          statusCode: 400,
-        });
-      }
-
-      const remainingAmount = Math.max(task.requiredAmount - task.progressAmount, 0);
-      const submitAmount = Math.min(Math.max(Math.floor(input.request.amount ?? remainingAmount), 1), remainingAmount);
-      const seedDefinition = await client.seedDefinition.findUnique({
-        where: { seedId: task.requiredEssenceType },
-        select: { id: true, seedId: true, label: true },
-      });
-
-      if (!seedDefinition) {
-        throw new BusinessError({
-          code: ErrorCode.NotFound,
-          message: 'Essence definition not found.',
-          statusCode: 404,
-        });
-      }
-
-      const inventory = await client.playerSeedInventory.findUnique({
-        where: {
-          playerId_seedDefinitionId: {
-            playerId: input.playerId,
-            seedDefinitionId: seedDefinition.id,
-          },
-        },
-        select: { id: true, quantity: true },
-      });
-
-      if (!inventory || inventory.quantity < submitAmount) {
-        throw new BusinessError({
-          code: ErrorCode.Conflict,
-          message: 'Insufficient essence inventory.',
-          statusCode: 409,
-        });
-      }
-
-      const nextQuantity = inventory.quantity - submitAmount;
-      await client.playerSeedInventory.update({
-        where: { id: inventory.id },
-        data: {
-          quantity: { decrement: submitAmount },
-          inventoryVersion: { increment: 1 },
-        },
-      });
-
-      await createEssenceTransaction(client, {
-        playerId: input.playerId,
-        essenceType: seedDefinition.seedId,
-        delta: -submitAmount,
-        reason: 'faction-task-submit',
-        sourceId: task.id,
-        balanceAfter: nextQuantity,
-      });
-
-      const nextProgress = Math.min(task.progressAmount + submitAmount, task.requiredAmount);
-      const completed = nextProgress >= task.requiredAmount;
-      await client.dailyFactionTask.update({
-        where: { id: task.id },
-        data: {
-          progressAmount: nextProgress,
-          status: completed ? 'CLAIMED' : 'IN_PROGRESS',
-          completedAt: completed ? new Date() : null,
-        },
-      });
-
-      if (completed) {
-        await grantFactionContribution(client, {
-          playerId: input.playerId,
-          factionId: task.factionId,
-          contribution: task.rewardContribution,
-          sourceType: 'faction-task-submit',
-          sourceId: task.id,
-          metadata: {
-            essenceType: seedDefinition.seedId,
-            submittedAmount: nextProgress,
-          },
-        });
-        await this.landDeedService.reconcilePlayerLandDeeds(client, input.playerId);
-      }
-
       const home = await this.clientReadService.getHomeSummary(input.playerId, client);
       const responseSnapshot: ClientFactionTaskSubmitResponse = {
         app: APP_NAME,
-        summary: completed
-          ? `\u5df2\u4e0a\u7f34${seedDefinition.label}\u7cbe\u534e x${submitAmount}\uff0c\u8d21\u732e +${task.rewardContribution}\u3002`
-          : `\u5df2\u4e0a\u7f34${seedDefinition.label}\u7cbe\u534e x${submitAmount}\u3002`,
+        summary: '阵营任务列表已停用。贡献值来自种田、灵宠、互助和对战行为。',
         home,
         scenes: await this.clientReadService.getSceneContent(input.playerId, client),
-        task: home.factionTasks.find((item) => item.id === task.id) ?? home.factionTasks[0],
+        task: home.factionTasks[0],
       };
 
       if (idempotencyRecord?.id) {
@@ -1362,14 +1266,13 @@ export class ClientCommandService {
           id: idempotencyRecord.id,
           responseSnapshotJson: responseSnapshot as unknown as Prisma.InputJsonValue,
           businessEntityType: 'daily-faction-task',
-          businessEntityId: task.id,
+          businessEntityId: input.request.taskId,
         });
       }
 
       return responseSnapshot;
     });
   }
-
   async claimFactionStipend(input: ClaimFactionStipendCommandInput): Promise<ClientClaimFactionStipendResponse> {
     validateClaimFactionStipendRequest(input.request);
     const endpointKey = 'client.actions.claim-faction-stipend';
@@ -2112,6 +2015,7 @@ export class ClientCommandService {
       });
     }
   }
+
 }
 
 function validateClaimPendingRequest(request: ClaimPendingRequestDto): void {
@@ -2279,7 +2183,7 @@ function hashStartCultivationRequest(request: StartCultivationRequestDto): strin
 function hashFactionTaskSubmitRequest(request: FactionTaskSubmitRequestDto): string {
   return createHash('sha256')
     .update(JSON.stringify({
-      taskId: request.taskId,
+      taskId: request.taskId ?? null,
       amount: request.amount ?? null,
     }))
     .digest('hex');
@@ -2452,7 +2356,7 @@ async function resolveStipendRewards(
         poolIds: reward.seedPoolIds,
         quantity,
         labelById: essenceLabelById,
-        missingMessage: 'Faction stipend seed pool definitions not found. Please seed seed definitions first.',
+        missingMessage: 'Faction stipend plant pool definitions not found. Please load plant definitions first.',
       }));
       continue;
     }
@@ -2499,7 +2403,7 @@ async function resolveFirstFactionStipendRewards(
   if (!seedLabelById.has('qinglingmai') || !seedLabelById.has('xunyamai')) {
     throw new BusinessError({
       code: ErrorCode.NotFound,
-      message: 'First faction stipend seed definitions not found. Please seed seed definitions first.',
+      message: 'First faction stipend plant definitions not found. Please load plant definitions first.',
       statusCode: 404,
     });
   }
@@ -2899,48 +2803,6 @@ async function discoverPlant(
     },
     update: {
       researchVersion: { increment: 1 },
-    },
-  });
-}
-
-async function grantFactionContribution(
-  client: Prisma.TransactionClient,
-  input: {
-    playerId: string;
-    factionId: string;
-    contribution: number;
-    sourceType: string;
-    sourceId?: string | null;
-    metadata?: Prisma.InputJsonValue;
-  },
-): Promise<void> {
-  const contribution = Math.max(Math.floor(input.contribution), 0);
-  if (contribution <= 0) {
-    return;
-  }
-
-  await client.faction.update({
-    where: { id: input.factionId },
-    data: { contributionScore: { increment: contribution } },
-  });
-
-  await client.factionMember.updateMany({
-    where: {
-      playerId: input.playerId,
-      factionId: input.factionId,
-    },
-    data: { contributionScore: { increment: contribution } },
-  });
-
-  await client.factionContributionLog.create({
-    data: {
-      factionId: input.factionId,
-      playerId: input.playerId,
-      donatedGold: 0,
-      contributionDelta: contribution,
-      sourceType: input.sourceType,
-      sourceId: input.sourceId,
-      metadataJson: input.metadata,
     },
   });
 }
