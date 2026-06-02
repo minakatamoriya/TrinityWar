@@ -16,6 +16,7 @@
     "verify:season-rollover": "tsx src/verification/verify-season-rollover.ts",
     "verify:admin-season-readonly": "tsx src/verification/verify-admin-season-readonly.ts",
     "verify:season-snapshots": "tsx src/verification/verify-season-snapshots.ts",
+    "verify:season-snapshot-fields": "tsx src/verification/verify-season-snapshot-fields.ts",
     "verify:season-activity-sign-in": "tsx src/verification/verify-season-activity-sign-in.ts",
     "verify:social-friend": "tsx src/verification/verify-social-friend-flow.ts",
     "verify:tutorial-raid-targets": "tsx src/verification/verify-tutorial-raid-targets.ts",
