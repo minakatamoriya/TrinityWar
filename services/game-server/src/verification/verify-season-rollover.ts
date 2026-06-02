@@ -106,6 +106,18 @@ async function main(): Promise<void> {
     });
 
     const bootstrap = await clientReadService.getBootstrap(playerId);
+    const previousSeasonNumber = Math.max(currentSeason.seasonNumber - 1, 1);
+    const previousSeasonSnapshot = await prisma.playerSeasonSnapshot.findUniqueOrThrow({
+      where: {
+        playerId_seasonNumber: {
+          playerId,
+          seasonNumber: previousSeasonNumber,
+        },
+      },
+      select: {
+        contributionScore: true,
+      },
+    });
     const seasonState = await prisma.playerSeasonState.findUniqueOrThrow({ where: { playerId } });
     const factionMember = await prisma.factionMember.findFirstOrThrow({ where: { playerId } });
     const fields = await prisma.playerFieldSlot.findMany({ where: { playerId, isUnlocked: true } });
@@ -116,6 +128,9 @@ async function main(): Promise<void> {
 
     if (bootstrap.season.seasonNumber !== currentSeason.seasonNumber || seasonState.lastResetSeasonNumber !== currentSeason.seasonNumber) {
       throw new Error('Expected player season state to advance to current season.');
+    }
+    if (previousSeasonSnapshot.contributionScore !== 777) {
+      throw new Error(`Expected previous season snapshot to preserve contribution 777 before reset, got ${previousSeasonSnapshot.contributionScore}.`);
     }
     if (factionMember.contributionScore !== 0) {
       throw new Error(`Expected faction contribution reset to 0, got ${factionMember.contributionScore}.`);

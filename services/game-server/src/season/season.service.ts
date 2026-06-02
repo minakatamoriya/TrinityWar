@@ -24,6 +24,10 @@ export interface SeasonSnapshotResult {
   factionSnapshotCount: number;
 }
 
+interface GenerateSeasonSnapshotsOptions {
+  preserveExisting?: boolean;
+}
+
 export interface SeasonSignInClaimResult {
   signIn: ClientSeasonSignInState;
   rewardTianjiTalisman: number;
@@ -54,33 +58,7 @@ export class SeasonService {
   async ensurePlayerSeason(client: PrismaClientLike, playerId: string, now: Date = new Date()): Promise<CurrentSeasonState> {
     const season = this.getCurrentSeason(now);
 
-    const existingSeason = await client.gameSeason.findUnique({
-      where: { seasonNumber: season.seasonNumber },
-      select: { seasonNumber: true },
-    });
-
-    if (!existingSeason) {
-      await client.gameSeason.create({
-        data: {
-          seasonNumber: season.seasonNumber,
-          startsAt: season.startsAt,
-          endsAt: season.endsAt,
-        },
-      });
-      if (season.seasonNumber > 1) {
-        await client.faction.updateMany({
-          data: { contributionScore: 0 },
-        });
-      }
-    } else {
-      await client.gameSeason.update({
-        where: { seasonNumber: season.seasonNumber },
-        data: {
-          startsAt: season.startsAt,
-          endsAt: season.endsAt,
-        },
-      });
-    }
+    await this.ensureCurrentSeasonRecord(client, season);
 
     const state = await client.playerSeasonState.findUnique({
       where: { playerId },
@@ -99,6 +77,7 @@ export class SeasonService {
     }
 
     if (state.lastResetSeasonNumber < season.seasonNumber) {
+      await this.generateSeasonSnapshotsBeforeReset(client, state.lastResetSeasonNumber);
       await this.resetPlayerForNewSeason(client, playerId, season.seasonNumber, now);
       return season;
     }
@@ -114,6 +93,7 @@ export class SeasonService {
   async generateSeasonSnapshots(
     client: PrismaClientLike,
     seasonNumber: number,
+    options: GenerateSeasonSnapshotsOptions = {},
   ): Promise<SeasonSnapshotResult> {
     const season = await this.ensureSeasonRecord(client, seasonNumber);
     const [factions, players] = await Promise.all([
@@ -172,6 +152,17 @@ export class SeasonService {
     const playerRanks = new Map(sortedPlayers.map((player, index) => [player.id, index + 1]));
 
     for (const [index, faction] of factions.entries()) {
+      if (options.preserveExisting) {
+        const existingFactionSnapshot = await client.factionSeasonSnapshot.findUnique({
+          where: { factionId_seasonNumber: { factionId: faction.id, seasonNumber } },
+          select: { id: true },
+        });
+
+        if (existingFactionSnapshot) {
+          continue;
+        }
+      }
+
       await client.factionSeasonSnapshot.upsert({
         where: { factionId_seasonNumber: { factionId: faction.id, seasonNumber } },
         create: {
@@ -204,6 +195,17 @@ export class SeasonService {
     }
 
     for (const player of players) {
+      if (options.preserveExisting) {
+        const existingPlayerSnapshot = await client.playerSeasonSnapshot.findUnique({
+          where: { playerId_seasonNumber: { playerId: player.id, seasonNumber } },
+          select: { id: true },
+        });
+
+        if (existingPlayerSnapshot) {
+          continue;
+        }
+      }
+
       const membership = player.factionMembers[0];
       const contributionScore = membership?.contributionScore ?? 0;
       const factionId = player.factionId ?? membership?.faction.id ?? null;
@@ -274,6 +276,51 @@ export class SeasonService {
     });
 
     return season;
+  }
+
+  private async ensureCurrentSeasonRecord(client: PrismaClientLike, season: CurrentSeasonState): Promise<void> {
+    const existingSeason = await client.gameSeason.findUnique({
+      where: { seasonNumber: season.seasonNumber },
+      select: { seasonNumber: true },
+    });
+
+    if (!existingSeason) {
+      if (season.seasonNumber > 1) {
+        await this.generateSeasonSnapshotsBeforeReset(client, season.seasonNumber - 1);
+      }
+
+      await client.gameSeason.create({
+        data: {
+          seasonNumber: season.seasonNumber,
+          startsAt: season.startsAt,
+          endsAt: season.endsAt,
+        },
+      });
+
+      if (season.seasonNumber > 1) {
+        await client.faction.updateMany({
+          data: { contributionScore: 0 },
+        });
+      }
+
+      return;
+    }
+
+    await client.gameSeason.update({
+      where: { seasonNumber: season.seasonNumber },
+      data: {
+        startsAt: season.startsAt,
+        endsAt: season.endsAt,
+      },
+    });
+  }
+
+  private async generateSeasonSnapshotsBeforeReset(client: PrismaClientLike, seasonNumber: number): Promise<void> {
+    if (seasonNumber < 1) {
+      return;
+    }
+
+    await this.generateSeasonSnapshots(client, seasonNumber, { preserveExisting: true });
   }
 
   async recordPlayerActivity(

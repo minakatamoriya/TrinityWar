@@ -122,6 +122,7 @@ import {
 } from './modules/spirit/spiritState';
 import { buildSpiritComposeUnlockModal } from './modules/spirit/spiritPresentation';
 import { buildAppDerivedState } from './shell/appDerivedState';
+import { selectAppEntryState } from './shell/appEntrySelectors';
 import { AppSceneRouter } from './shell/AppSceneRouter';
 import { applyClientViewModelScenePatch } from './shell/clientViewModelState';
 import { AuthEntryScreen } from './shell/AuthEntryScreen';
@@ -922,8 +923,15 @@ function App(): JSX.Element {
     };
   }, [armyQueueRefreshReadyAt, farmTick, viewModel]);
 
-  if (!viewModel || !spiritState) {
-    if (shareAssistDemo) {
+  const appEntryState = selectAppEntryState({
+    loginSession,
+    shareAssistDemo,
+    spiritState,
+    viewModel,
+  });
+
+  if (appEntryState !== 'ready') {
+    if (appEntryState === 'share-assist-demo' && shareAssistDemo) {
       return (
         <CharacterDialogProvider controller={characterDialog} portalTarget={characterDialogPortalRef.current}>
           <ShareAssistDemoScreen
@@ -940,7 +948,7 @@ function App(): JSX.Element {
       );
     }
 
-    if (!loginSession) {
+    if (appEntryState === 'auth-entry') {
       return (
         <>
           <AuthEntryScreen
@@ -980,6 +988,10 @@ function App(): JSX.Element {
       );
     }
 
+    return <LoadingScreen />;
+  }
+
+  if (!viewModel || !spiritState) {
     return <LoadingScreen />;
   }
 
