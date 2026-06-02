@@ -16,6 +16,8 @@ import { PassiveIncomeLifecycleService } from './passive-income-lifecycle.servic
 import { SceneContentAssembler } from './scene-content.assembler.js';
 import { TaskConfigService } from '../task-config/task-config.service.js';
 
+const RAID_TARGET_POOL_SIZE = 6;
+
 @Injectable()
 export class ClientReadService {
   constructor(
@@ -242,9 +244,26 @@ export class ClientReadService {
     }
   }
 
-  private async ensureRaidTargetPool(client: Prisma.TransactionClient | PrismaClient, playerId: string): Promise<void> {
+  async refreshRaidTargetPool(
+    playerId: string,
+    client?: Prisma.TransactionClient | PrismaClient,
+  ): Promise<ClientSceneContentResponse> {
+    if (!client) {
+      return this.prisma.transaction(async (transactionClient) => this.refreshRaidTargetPool(playerId, transactionClient));
+    }
+
+    await client.raidTargetPool.deleteMany({ where: { ownerPlayerId: playerId } });
+    await this.ensureRaidTargetPool(client, playerId, { force: true });
+    return this.getSceneContent(playerId, client);
+  }
+
+  private async ensureRaidTargetPool(
+    client: Prisma.TransactionClient | PrismaClient,
+    playerId: string,
+    options: { force?: boolean } = {},
+  ): Promise<void> {
     const now = new Date();
-    const existingTargetCount = await client.raidTargetPool.count({
+    const existingTargets = await client.raidTargetPool.findMany({
       where: {
         ownerPlayerId: playerId,
         expiresAt: { gt: now },
@@ -255,36 +274,81 @@ export class ClientReadService {
           ],
         },
       },
+      select: { targetPlayerId: true },
     });
 
-    if (existingTargetCount > 0) {
+    if (!options.force && existingTargets.length >= RAID_TARGET_POOL_SIZE) {
       return;
     }
+
+    const latestBatch = await client.raidTargetPool.aggregate({
+      where: { ownerPlayerId: playerId },
+      _max: { refreshBatchNo: true },
+    });
+    const refreshBatchNo = (latestBatch._max.refreshBatchNo ?? 0) + 1;
 
     await client.raidTargetPool.deleteMany({
       where: {
         ownerPlayerId: playerId,
-        OR: [
-          { expiresAt: { lte: now } },
-          {
-            targetPlayer: {
-              protectedUntil: { gt: now },
+        OR: options.force
+          ? undefined
+          : [
+            { expiresAt: { lte: now } },
+            {
+              targetPlayer: {
+                protectedUntil: { gt: now },
+              },
             },
-          },
-        ],
+          ],
       },
     });
 
-    const candidates = await client.player.findMany({
-      where: {
-        id: { not: playerId },
-        OR: [
-          { protectedUntil: null },
-          { protectedUntil: { lte: now } },
-        ],
+    const activeTargets = options.force
+      ? []
+      : await client.raidTargetPool.findMany({
+        where: {
+          ownerPlayerId: playerId,
+          expiresAt: { gt: now },
+          targetPlayer: {
+            OR: [
+              { protectedUntil: null },
+              { protectedUntil: { lte: now } },
+            ],
+          },
+        },
+        select: { targetPlayerId: true },
+      });
+    const activeTargetPlayerIds = activeTargets.map((target) => target.targetPlayerId);
+    const targetsToCreate = Math.max(RAID_TARGET_POOL_SIZE - activeTargetPlayerIds.length, 0);
+
+    if (targetsToCreate <= 0) {
+      return;
+    }
+
+    const candidateWhere = {
+      id: activeTargetPlayerIds.length > 0
+        ? { notIn: [playerId, ...activeTargetPlayerIds] }
+        : { not: playerId },
+      authIdentities: {
+        none: {
+          provider: 'DEV_FAKE' as const,
+          providerUserId: 'dev-tutorial-target',
+        },
       },
+      OR: [
+        { protectedUntil: null },
+        { protectedUntil: { lte: now } },
+      ],
+    };
+    const candidateCount = await client.player.count({ where: candidateWhere });
+    const candidateOffset = options.force && candidateCount > 0
+      ? ((refreshBatchNo - 1) * RAID_TARGET_POOL_SIZE) % candidateCount
+      : 0;
+    const candidates = await client.player.findMany({
+      where: candidateWhere,
       orderBy: [{ lastLoginAt: 'desc' }, { createdAt: 'asc' }],
-      take: 6,
+      take: targetsToCreate,
+      skip: candidateOffset,
       select: {
         id: true,
         nickname: true,
@@ -304,16 +368,37 @@ export class ClientReadService {
         },
       },
     });
+    if (options.force && candidates.length < targetsToCreate && candidateOffset > 0) {
+      const wrappedCandidates = await client.player.findMany({
+        where: candidateWhere,
+        orderBy: [{ lastLoginAt: 'desc' }, { createdAt: 'asc' }],
+        take: targetsToCreate - candidates.length,
+        select: {
+          id: true,
+          nickname: true,
+          castleLevelCache: true,
+          faction: { select: { name: true } },
+          wallet: { select: { vaultGold: true, walletGold: true } },
+          army: { select: { totalCount: true, availableCount: true } },
+          fieldSlots: {
+            orderBy: { slotIndex: 'asc' },
+            select: {
+              id: true,
+              slotIndex: true,
+              status: true,
+              currentClaimableGold: true,
+              seedDefinition: { select: { label: true } },
+            },
+          },
+        },
+      });
+      candidates.push(...wrappedCandidates.filter((target) => !candidates.some((candidate) => candidate.id === target.id)));
+    }
 
     if (candidates.length <= 0) {
       return;
     }
 
-    const latestBatch = await client.raidTargetPool.aggregate({
-      where: { ownerPlayerId: playerId },
-      _max: { refreshBatchNo: true },
-    });
-    const refreshBatchNo = (latestBatch._max.refreshBatchNo ?? 0) + 1;
     const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
     for (const [index, target] of candidates.entries()) {
@@ -330,7 +415,7 @@ export class ClientReadService {
         data: {
           ownerPlayerId: playerId,
           targetPlayerId: target.id,
-          slotIndex: index + 1,
+          slotIndex: activeTargetPlayerIds.length + index + 1,
           refreshBatchNo,
           targetSnapshotJson: {
             name: target.nickname,

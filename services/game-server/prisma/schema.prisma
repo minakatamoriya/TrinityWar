@@ -1230,6 +1230,7 @@ model FieldHarvestLog {
   id              String   @id @default(cuid())
   playerId        String   @map("player_id")
   fieldSlotId     String   @map("field_slot_id")
+  seedId          String?  @map("seed_id")
   collectMode     String   @map("collect_mode")
   collectedGold   Int      @map("collected_gold")
   overflowGold    Int      @map("overflow_gold")
@@ -1240,6 +1241,7 @@ model FieldHarvestLog {
   fieldSlot PlayerFieldSlot @relation(fields: [fieldSlotId], references: [id], onDelete: Cascade)
 
   @@index([playerId, createdAt])
+  @@index([playerId, seedId])
   @@index([fieldSlotId])
   @@map("field_harvest_log")
 }

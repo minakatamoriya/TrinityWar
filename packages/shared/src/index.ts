@@ -1412,6 +1412,7 @@ export interface ClientSocialAssistResponse {
     dateKey: string;
     createdAt: string;
   };
+  intimacyGain: number;
   field?: {
     fieldSlotId: string;
     status: 'GROWING' | 'MATURE' | 'WITHERED' | 'EMPTY' | 'LOCKED';

@@ -32,6 +32,7 @@ export class AuditService {
   createFieldHarvestLog(client: Prisma.TransactionClient, data: {
     playerId: string;
     fieldSlotId: string;
+    seedId?: string | null;
     collectMode: string;
     collectedGold: number;
     overflowGold: number;

@@ -473,7 +473,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
       title: '人界阵营',
       description: '完成阵营任务积累个人贡献，每日按贡献档位领取材料俸禄。',
       advantage: '今日俸禄档位：入门俸禄',
-      breakdown: '预计每日俸禄：青灵麦精华 x3、普通兽魂 x2、金币 x20',
+      breakdown: '预计每日俸禄：凝露草精华 x3、普通兽魂 x2、金币 x20',
       action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
     },
     contribution: {
@@ -519,7 +519,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
       tierKey: 'contribution-0',
       tierLabel: '入门俸禄',
       rewards: [
-        { kind: 'essence', essenceType: 'qinglingmai', label: '青灵麦精华', quantity: 3 },
+        { kind: 'essence', essenceType: 'ninglucao', label: '凝露草精华', quantity: 3 },
         { kind: 'ordinary-soul', label: '普通兽魂', quantity: 2 },
         { kind: 'gold', label: '金币', quantity: 20 },
       ],

@@ -117,7 +117,6 @@ type ResolvableStipendReward = ClientFactionStipendReward & {
 const TUTORIAL_STARTER_SEED_ID = 'qilingya';
 const TUTORIAL_STARTER_SEED_FALLBACK_ID = 'qinglingmai';
 const TUTORIAL_STARTER_SEED_QUANTITY = 1;
-const FIRST_FACTION_STIPEND_UNLOCK_SEED_IDS = ['qinglingmai', 'xunyamai'] as const;
 @Injectable()
 export class ClientCommandService {
   constructor(
@@ -146,6 +145,15 @@ export class ClientCommandService {
         ...result,
       };
     });
+  }
+
+  async refreshRaidTargets(input: { playerId: string }): Promise<ClientStateMutationResponse> {
+    return this.prisma.transaction<ClientStateMutationResponse>(async (client) => ({
+      app: APP_NAME,
+      summary: '目标列表已刷新。',
+      home: await this.clientReadService.getHomeSummary(input.playerId, client),
+      scenes: await this.clientReadService.refreshRaidTargetPool(input.playerId, client),
+    }));
   }
 
   async claimPending(input: ClaimPendingCommandInput): Promise<ClientClaimPendingResponse> {
@@ -682,6 +690,7 @@ export class ClientCommandService {
       await this.auditService.createFieldHarvestLog(client, {
         playerId: input.playerId,
         fieldSlotId: field.id,
+        seedId: field.seedDefinition?.seedId ?? null,
         collectMode: input.request.collectMode,
         collectedGold: resolution.collectedGold,
         overflowGold: resolution.overflowGold,
@@ -1348,9 +1357,7 @@ export class ClientCommandService {
 
       const contribution = playerState.factionMembers[0]?.contributionScore ?? 0;
       const tier = getFactionStipendTier(contribution);
-      const rewards = priorClaimCount <= 0
-        ? await resolveFirstFactionStipendRewards(client, (tier?.rewards ?? []) as ResolvableStipendReward[])
-        : await resolveStipendRewards(client, (tier?.rewards ?? []) as ResolvableStipendReward[]);
+      const rewards = await resolveStipendRewards(client, (tier?.rewards ?? []) as ResolvableStipendReward[]);
       const now = new Date();
       const goldReward = sumRewardQuantity(rewards, 'gold');
       const ordinarySoulReward = sumRewardQuantity(rewards, 'ordinary-soul');
@@ -1433,44 +1440,6 @@ export class ClientCommandService {
             inventoryVersion: { increment: 1 },
           },
         });
-      }
-
-      if (priorClaimCount <= 0) {
-        for (const seedId of FIRST_FACTION_STIPEND_UNLOCK_SEED_IDS) {
-          const seedDefinition = await client.seedDefinition.findUnique({
-            where: { seedId },
-            select: { id: true },
-          });
-
-          if (!seedDefinition) {
-            continue;
-          }
-
-          await client.playerSeedInventory.upsert({
-            where: {
-              playerId_seedDefinitionId: {
-                playerId: input.playerId,
-                seedDefinitionId: seedDefinition.id,
-              },
-            },
-            create: {
-              playerId: input.playerId,
-              seedDefinitionId: seedDefinition.id,
-              quantity: 0,
-              unlockedAt: now,
-            },
-            update: {
-              unlockedAt: now,
-              inventoryVersion: { increment: 1 },
-            },
-          });
-
-          await discoverPlant(client, {
-            playerId: input.playerId,
-            seedDefinitionId: seedDefinition.id,
-            discoveredAt: now,
-          });
-        }
       }
 
       for (const reward of spiritShardRewards) {
@@ -2384,35 +2353,6 @@ async function resolveStipendRewards(
   }
 
   return normalizeStipendRewards(resolvedRewards);
-}
-
-async function resolveFirstFactionStipendRewards(
-  client: Prisma.TransactionClient,
-  rewards: ResolvableStipendReward[],
-): Promise<ClientFactionStipendReward[]> {
-  const resolvedNonEssenceRewards = await resolveStipendRewards(
-    client,
-    rewards.filter((reward) => reward.kind !== 'essence' && reward.kind !== 'seed'),
-  );
-  const seedDefinitions = await client.seedDefinition.findMany({
-    where: { seedId: { in: ['qinglingmai', 'xunyamai'] } },
-    select: { seedId: true, label: true },
-  });
-  const seedLabelById = new Map(seedDefinitions.map((seed) => [seed.seedId, seed.label]));
-
-  if (!seedLabelById.has('qinglingmai') || !seedLabelById.has('xunyamai')) {
-    throw new BusinessError({
-      code: ErrorCode.NotFound,
-      message: 'First faction stipend plant definitions not found. Please load plant definitions first.',
-      statusCode: 404,
-    });
-  }
-
-  return normalizeStipendRewards([
-    ...resolvedNonEssenceRewards,
-    { kind: 'essence', essenceType: 'qinglingmai', label: `${seedLabelById.get('qinglingmai') ?? '\u9752\u7075\u9ea6'}\u7cbe\u534e`, quantity: 3 },
-    { kind: 'essence', essenceType: 'xunyamai', label: `${seedLabelById.get('xunyamai') ?? '\u98ce\u4e91\u7a3b'}\u7cbe\u534e`, quantity: 3 },
-  ]);
 }
 
 async function loadStipendRewardLabels(

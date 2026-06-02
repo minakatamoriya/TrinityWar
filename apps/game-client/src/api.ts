@@ -1000,7 +1000,7 @@ function syncMockFactionScene(): void {
     title: '人界阵营',
     description: '上缴金币积累个人贡献，每日按贡献档位领取材料俸禄。',
     advantage: '今日俸禄档位：入门俸禄',
-    breakdown: '预计每日俸禄：青灵麦精华 x3、普通兽魂 x2、金币 x20',
+    breakdown: '预计每日俸禄：凝露草精华 x3、普通兽魂 x2、金币 x20',
     action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
   };
   mockSceneSnapshot.faction.contribution = {
@@ -1028,7 +1028,7 @@ function syncMockFactionScene(): void {
     tierKey: 'contribution-0',
     tierLabel: '入门俸禄',
     rewards: [
-      { kind: 'essence', essenceType: 'qinglingmai', label: '青灵麦精华', quantity: 3 },
+      { kind: 'essence', essenceType: 'ninglucao', label: '凝露草精华', quantity: 3 },
       { kind: 'ordinary-soul', label: '普通兽魂', quantity: 2 },
       { kind: 'gold', label: '金币', quantity: 20 },
     ],
@@ -1692,6 +1692,26 @@ export async function raidClientTarget(input: ClientRaidActionRequest): Promise<
       ...input,
       requestIdempotencyKey: idempotencyKey,
     }),
+  });
+
+  mockHomeSnapshot = cloneHomeSummary(response.home);
+  mockSceneSnapshot = cloneSceneContent(response.scenes);
+  return response;
+}
+
+export async function refreshRaidTargets(): Promise<ClientStateMutationResponse> {
+  if (forceMockCommands) {
+    syncMockFieldLifecycle();
+    return {
+      app: mockHomeSnapshot.app,
+      summary: '目标列表已刷新。',
+      home: cloneHomeSummary(mockHomeSnapshot),
+      scenes: cloneSceneContent(mockSceneSnapshot),
+    };
+  }
+
+  const response = await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/refresh-raid-targets`, {
+    method: 'POST',
   });
 
   mockHomeSnapshot = cloneHomeSummary(response.home);

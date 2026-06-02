@@ -375,9 +375,7 @@ export class SceneContentAssembler {
     const stipendRewards = toPublicFactionStipendRewards((stipendTier?.rewards ?? []) as ClientFactionStipendReward[]);
     const visibleStipendRewards = stipendState?.claimedAt
       ? normalizeFactionStipendRewards(stipendState.rewardJson) ?? stipendRewards
-      : readModel.factionStipendClaimCount <= 0
-        ? buildFirstFactionStipendPreview(stipendRewards)
-        : stipendRewards;
+      : stipendRewards;
     const stipendRewardText = visibleStipendRewards.map((reward) => `${reward.label} x${formatNumber(reward.quantity)}`).join('\u3001') || '\u9635\u8425\u4ff8\u7984';
 
     return {
@@ -505,14 +503,6 @@ function toPublicFactionStipendRewards(rewards: ClientFactionStipendReward[]): C
       spiritId: item.spiritId,
     }))
     .filter((item) => item.label.trim().length > 0 && item.quantity > 0);
-}
-
-function buildFirstFactionStipendPreview(rewards: ClientFactionStipendReward[]): ClientFactionStipendReward[] {
-  return [
-    ...rewards.filter((reward) => reward.kind !== 'essence' && reward.kind !== 'seed'),
-    { kind: 'essence', essenceType: 'qinglingmai', label: '\u9752\u7075\u9ea6\u7cbe\u534e', quantity: 3 },
-    { kind: 'essence', essenceType: 'xunyamai', label: '\u98ce\u4e91\u7a3b\u7cbe\u534e', quantity: 3 },
-  ];
 }
 
 function getContributionSourceLabel(sourceType: string): string {

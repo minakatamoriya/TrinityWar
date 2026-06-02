@@ -12,8 +12,6 @@ interface ReportSceneProps {
   refreshPending: boolean;
   battleUsed: number;
   battleLimit: number;
-  refreshUsed: number;
-  refreshLimit: number;
   isTutorial: boolean;
   targets: ClientRaidTarget[];
   followedTargetIds: string[];
@@ -34,8 +32,6 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
     refreshPending,
     battleUsed,
     battleLimit,
-    refreshUsed,
-    refreshLimit,
     isTutorial,
     targets,
     followedTargetIds,
@@ -53,10 +49,10 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
   return (
     <div className="scene-shell">
       {uiRules.showTabs ? (
-      <div className="tab-row">
-        <button className={`tab-button ${activeTab === 'targets' ? 'active' : ''}`} onClick={() => onChangeTab('targets')} type="button">战斗</button>
-        <button className={`tab-button ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => onChangeTab('reports')} type="button">战报</button>
-      </div>
+        <div className="tab-row">
+          <button className={`tab-button ${activeTab === 'targets' ? 'active' : ''}`} onClick={() => onChangeTab('targets')} type="button">战斗</button>
+          <button className={`tab-button ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => onChangeTab('reports')} type="button">战报</button>
+        </div>
       ) : null}
 
       {activeTab === 'targets' ? (
@@ -81,17 +77,16 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
             <div className="raid-toolbar compact-raid-toolbar">
               <div className="raid-rule-strip" aria-label="探索规则">
                 {isTutorial ? (
-                  <span>教程目标 · 完成一次战斗后解锁完整探索</span>
+                  <span>推荐目标 · 完成一次战斗后解锁完整探索</span>
                 ) : (
                   <>
                     <span>今日战斗 {battleUsed}/{battleLimit}</span>
-                    <span>刷新 {refreshUsed}/{refreshLimit}</span>
                     <span>推荐目标 {visibleTargets.length}</span>
                   </>
                 )}
               </div>
-              <button className="secondary-button" disabled={refreshPending || (!isTutorial && refreshUsed >= refreshLimit)} onClick={onRefresh} type="button">
-                {refreshPending ? '刷新中...' : refreshUsed >= refreshLimit && !isTutorial ? '刷新已用完' : refreshLabel}
+              <button className="secondary-button" disabled={refreshPending} onClick={onRefresh} type="button">
+                {refreshPending ? '刷新中...' : refreshLabel}
               </button>
             </div>
           ) : null}
@@ -123,7 +118,6 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
           ))}
         </div>
       ) : null}
-
     </div>
   );
 }

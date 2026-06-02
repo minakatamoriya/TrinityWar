@@ -254,7 +254,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '基础俸禄',
       rewards: [
         { kind: 'gold', quantity: 20, label: '金币' },
-        { kind: 'essence', essencePoolIds: ['qinglingmai', 'xunyamai', 'ninglucao'], quantity: 3, label: '随机普通精华' },
+        { kind: 'essence', essencePoolIds: ['ninglucao', 'suixinhua', 'baiyulian', 'yingyuezhu'], quantity: 3, label: '随机普通精华' },
         { kind: 'ordinary-soul', quantity: 2, label: '普通兽魂' },
       ],
     },
@@ -264,7 +264,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '小有供奉',
       rewards: [
         { kind: 'gold', quantity: 30, label: '金币' },
-        { kind: 'essence', essencePoolIds: ['qinglingmai', 'xunyamai', 'ninglucao', 'suixinhua', 'baiyulian', 'yingyuezhu'], quantity: 5, label: '随机普通精华' },
+        { kind: 'essence', essencePoolIds: ['ninglucao', 'suixinhua', 'baiyulian', 'yingyuezhu'], quantity: 5, label: '随机普通精华' },
         { kind: 'ordinary-soul', quantity: 5, label: '普通兽魂' },
       ],
     },

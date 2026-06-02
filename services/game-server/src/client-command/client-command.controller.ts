@@ -93,6 +93,22 @@ export class ClientCommandController {
     });
   }
 
+  @Post('refresh-raid-targets')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Refresh current player raid targets.' })
+  async refreshRaidTargets(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+  ): Promise<ClientStateMutationResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.refreshRaidTargets({
+      playerId: currentPlayer.playerId,
+    });
+  }
+
   @Post('claim-starter-seeds')
   @UseGuards(AuthPlaceholderGuard)
   @ApiBearerAuth()
@@ -300,6 +316,7 @@ export class ClientCommandController {
 defineRouteParamTypes(ClientCommandController.prototype, 'claimPending', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimDailyTask', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimSeasonSignIn', [Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'refreshRaidTargets', [Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimStarterSeeds', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'collectField', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'startCultivation', [Object, Object, Object]);

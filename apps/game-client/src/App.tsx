@@ -32,7 +32,7 @@ import type {
   ClientUpgradeBuildingRequest,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { acceptSocialFriendRequest, ApiError, breakthroughSpirit, buySpiritShopItem, claimFactionStipend, claimNotification, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, deleteNotification, deleteSocialFriend, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, harvestSocialField, loadClientViewModel, loadFarmBoard, loadNotifications, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonSignIn, loadSocialFeed, loadSocialRelations, loadSocialSummary, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, rejectSocialFriendRequest, requestSocialFriend, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding, visitSocialFriendFields, waterSocialField } from './api';
+import { acceptSocialFriendRequest, ApiError, breakthroughSpirit, buySpiritShopItem, claimFactionStipend, claimNotification, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, deleteNotification, deleteSocialFriend, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getDevLoginModeLabel, getStoredDevLoginSession, harvestSocialField, loadClientViewModel, loadFarmBoard, loadNotifications, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonSignIn, loadSocialFeed, loadSocialRelations, loadSocialSummary, loadSpiritState, loadUnreadNotificationCount, markNotificationAsRead, raidClientTarget, recoverSpirit, refreshRaidTargets, rejectSocialFriendRequest, requestSocialFriend, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientReadSourceStatus, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding, visitSocialFriendFields, waterSocialField } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import { RaidIntelScreen } from './ui/raid/RaidIntelScreen';
 import { ArmyScene } from './ui/scenes/ArmyScene';
@@ -212,8 +212,8 @@ interface LocalFarmFieldPresentation {
 
 const seedCatalog: SeedCatalogItem[] = [
   { id: 'qilingya', name: '启灵芽', rarity: 'common', sortOrder: 1, description: '新手教程种，10 秒完成第一轮收获。', lore: '只在开荒时授予的一枚灵芽，破土极快，用来帮新人从零点亮第一笔资金。', stageGold: { growing: 20, mature: 50, withered: 50 }, growthSeconds: 10, unlockedByDefault: true },
-  { id: 'qinglingmai', name: '青灵麦', rarity: 'common', sortOrder: 10, description: '普通、标准稳收基准种，完成教程后进入日常经营。', lore: '田野间最常见的灵粮，穗头泛淡青光泽，脱壳后熬粥清香回甘。凡人食之强身，修士食之略养经脉。春种秋收，从不妖异。', stageGold: { growing: 100, mature: 200, withered: 100 }, growthSeconds: 10800, unlockedByDefault: false },
-  { id: 'xunyamai', name: '风云稻', rarity: 'common', sortOrder: 20, description: '普通、半小时快收种，适合切碎片时间。', lore: '稻芒起势极快，晨起沾露便能成势，半个时辰内就能完成一轮收益。', stageGold: { growing: 100, mature: 200, withered: 100 }, growthSeconds: 1800, unlockedByDefault: false },
+  { id: 'qinglingmai', name: '青灵麦', rarity: 'common', sortOrder: 10, description: '免费开放的基础稳收种，适合进入日常经营。', lore: '田野间最常见的灵粮，穗头泛淡青光泽，脱壳后熬粥清香回甘。凡人食之强身，修士食之略养经脉。春种秋收，从不妖异。', stageGold: { growing: 100, mature: 200, withered: 100 }, growthSeconds: 10800, unlockedByDefault: true },
+  { id: 'xunyamai', name: '风云稻', rarity: 'common', sortOrder: 20, description: '免费开放的基础快收种，适合切碎片时间。', lore: '稻芒起势极快，晨起沾露便能成势，半个时辰内就能完成一轮收益。', stageGold: { growing: 100, mature: 200, withered: 100 }, growthSeconds: 1800, unlockedByDefault: true },
   { id: 'ninglucao', name: '凝露草', rarity: 'common', sortOrder: 30, description: '普通、短线快收种，适合高频上线卡成熟。', lore: '叶尖常凝夜露，晨时如泪珠滚落，有清心明目之效。低阶弟子多用其露水研磨朱砂画符，成功率能稍许提升。', stageGold: { growing: 100, mature: 140, withered: 40 }, growthSeconds: 7200, unlockedByDefault: false },
   { id: 'suixinhua', name: '碎心花', rarity: 'common', sortOrder: 40, description: '普通、高折损高回报种，成熟收益高但枯萎折损明显。', lore: '花瓣薄如蝉翼，嫣红带紫纹，看似艳丽。但有微毒，采摘时指尖会传来一阵短暂的钻心刺痛，故名。可入麻醉类丹药。', stageGold: { growing: 120, mature: 300, withered: 50 }, growthSeconds: 10800, unlockedByDefault: false },
   { id: 'baiyulian', name: '白玉莲', rarity: 'common', sortOrder: 50, description: '普通、低频保值种，错过窗口也不容易血亏。', lore: '纯白无瑕，瓣如凝脂，生于清澈浅塘。花心微黄，清香远溢。凡人供于佛前，修士取其花瓣泡茶，可净体内杂气。', stageGold: { growing: 160, mature: 220, withered: 180 }, growthSeconds: 16200, unlockedByDefault: false },
@@ -556,6 +556,20 @@ function parseCapacityResourceValue(value: string): ResourceProgressValue {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value);
+}
+
+function formatSocialAssistSummary(input: {
+  wateredCount: number;
+  harvestedCount: number;
+  rewardGold: number;
+  intimacyGain: number;
+}): string[] {
+  return [
+    input.wateredCount > 0 ? `浇水 ${input.wateredCount} 块` : null,
+    input.harvestedCount > 0 ? `采摘 ${input.harvestedCount} 块` : null,
+    input.rewardGold > 0 ? `金币 +${formatNumber(input.rewardGold)}` : null,
+    input.intimacyGain > 0 ? `亲密度 +${formatNumber(input.intimacyGain)}` : null,
+  ].filter((part): part is string => Boolean(part));
 }
 
 function isDisplayableFarmReward(reward: { kind?: string; seedId?: string }): boolean {
@@ -1122,6 +1136,7 @@ function App(): JSX.Element {
     let wateredCount = 0;
     let harvestedCount = 0;
     let rewardGold = 0;
+    let intimacyGain = 0;
     let latestCounts: ClientSocialSummaryResponse['counts'] | null = null;
     const failedMessages: string[] = [];
 
@@ -1131,6 +1146,7 @@ function App(): JSX.Element {
           if (field.nextAction === 'water') {
             const result = await waterSocialField({ targetPlayerId, fieldSlotId: field.fieldSlotId });
             wateredCount += 1;
+            intimacyGain += result.intimacyGain;
             latestCounts = result.counts;
             continue;
           }
@@ -1139,6 +1155,7 @@ function App(): JSX.Element {
             const result = await harvestSocialField({ targetPlayerId, fieldSlotId: field.fieldSlotId });
             harvestedCount += 1;
             rewardGold += result.rewards?.reduce((sum, reward) => sum + (reward.kind === 'gold' ? reward.quantity : 0), 0) ?? 0;
+            intimacyGain += result.intimacyGain;
             latestCounts = result.counts;
           }
         } catch (error) {
@@ -1153,11 +1170,7 @@ function App(): JSX.Element {
       const refreshedVisit = await visitSocialFriendFields(targetPlayerId);
       setSocialFieldVisit(refreshedVisit);
 
-      const summaryParts = [
-        wateredCount > 0 ? `浇水 ${wateredCount} 块` : null,
-        harvestedCount > 0 ? `采摘 ${harvestedCount} 块` : null,
-        rewardGold > 0 ? `金币 +${rewardGold}` : null,
-      ].filter((part): part is string => Boolean(part));
+      const summaryParts = formatSocialAssistSummary({ wateredCount, harvestedCount, rewardGold, intimacyGain });
 
       if (summaryParts.length > 0) {
         showToast(`一键助力完成：${summaryParts.join('，')}。`, failedMessages.length > 0 ? 'info' : 'success');
@@ -1392,6 +1405,7 @@ function App(): JSX.Element {
       let wateredCount = 0;
       let harvestedCount = 0;
       let rewardGold = 0;
+      let intimacyGain = 0;
       let latestCounts: ClientSocialSummaryResponse['counts'] | null = null;
       const failedMessages: string[] = [];
 
@@ -1400,6 +1414,7 @@ function App(): JSX.Element {
           if (field.nextAction === 'water') {
             const result = await waterSocialField({ targetPlayerId, fieldSlotId: field.fieldSlotId });
             wateredCount += 1;
+            intimacyGain += result.intimacyGain;
             latestCounts = result.counts;
             continue;
           }
@@ -1407,6 +1422,7 @@ function App(): JSX.Element {
           const result = await harvestSocialField({ targetPlayerId, fieldSlotId: field.fieldSlotId });
           harvestedCount += 1;
           rewardGold += result.rewards?.reduce((sum, reward) => sum + (reward.kind === 'gold' ? reward.quantity : 0), 0) ?? 0;
+          intimacyGain += result.intimacyGain;
           latestCounts = result.counts;
         } catch (error) {
           failedMessages.push(error instanceof Error && error.message ? error.message : `${field.fieldCode} 助力失败`);
@@ -1418,11 +1434,7 @@ function App(): JSX.Element {
         setSocialSummary((current) => current ? { ...current, counts } : current);
       }
 
-      const summaryParts = [
-        wateredCount > 0 ? `浇水 ${wateredCount} 块` : null,
-        harvestedCount > 0 ? `采摘 ${harvestedCount} 块` : null,
-        rewardGold > 0 ? `金币 +${rewardGold}` : null,
-      ].filter((part): part is string => Boolean(part));
+      const summaryParts = formatSocialAssistSummary({ wateredCount, harvestedCount, rewardGold, intimacyGain });
 
       if (summaryParts.length > 0) {
         showToast(`一键助力完成：${summaryParts.join('，')}。`, failedMessages.length > 0 ? 'info' : 'success');
@@ -2273,17 +2285,12 @@ function App(): JSX.Element {
   const { bootstrap, home, scenes, usingMock, sources } = viewModel;
   const selectedRaidTarget = scenes.raid.targets.find((target) => target.id === selectedRaidTargetId) ?? scenes.raid.targets[0];
   const isTutorialUser = isNewUserInTutorial(loginSession, tutorialStage);
-  const raidTargetsForTutorial = isTutorialUser
-    ? scenes.raid.targets.filter((target) => target.tutorialTarget)
-    : scenes.raid.targets;
   const mergedReportEntries = [...scenes.report.attack, ...scenes.report.defense]
     .filter((entry) => entry.title !== '系统结算')
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
-  const visibleRaidTargets = isTutorialUser ? raidTargetsForTutorial : scenes.raid.targets.slice(0, 3);
+  const visibleRaidTargets = scenes.raid.targets.slice(0, isTutorialUser ? 1 : 3);
   const raidBattleLimit = 5;
-  const raidRefreshLimit = 5;
   const raidBattleUsed = Math.min(mergedReportEntries.length, raidBattleLimit);
-  const raidRefreshUsed = 0;
   const activeBackgroundImage = `url(${getSceneBackground(activeScene, home.factionName)})`;
   const tutorialUiRules = getTutorialUiRules(tutorialStage, isTutorialUser);
   const vaultResource = findResourceByTone('vault', home.resources);
@@ -2742,7 +2749,7 @@ function App(): JSX.Element {
       setSeedRewardModal(null);
       showToast(
         tutorialStage === 'faction'
-          ? '阵营俸禄已领取，青灵麦和风云稻精华已入库。'
+          ? '阵营俸禄已领取，奖励已入库。'
           : result.summary,
         'success',
       );
@@ -2810,11 +2817,17 @@ function App(): JSX.Element {
     setPendingActionKey('raid:refresh-targets');
 
     try {
-      const nextViewModel = await loadClientViewModel();
-      setViewModel(nextViewModel);
-      setSelectedRaidTargetId(nextViewModel.scenes.raid.targets[0]?.id ?? '');
-      syncSeedBackpackState(nextViewModel.bootstrap.backpack);
-      showToast('目标列表已刷新，可以重新挑选战斗对象。', 'success');
+      const result = await refreshRaidTargets();
+      setViewModel((current) => current
+        ? {
+          ...current,
+          home: result.home,
+          scenes: result.scenes,
+        }
+        : current);
+      setSelectedRaidTargetId(result.scenes.raid.targets[0]?.id ?? '');
+      setRaidTargetDetailsById({});
+      showToast(result.summary || '目标列表已刷新，可以重新挑选战斗对象。', 'success');
     } catch {
       showToast('当前无法刷新目标列表，请稍后重试。', 'error');
     } finally {
@@ -3041,7 +3054,7 @@ function App(): JSX.Element {
       }
 
       if (isTutorialUser) {
-        showToast('先领取阵营俸禄，领取后会解锁青灵麦和风云稻种植资格。', 'info');
+        showToast('先完成阵营俸禄领取，之后就可以自由安排基础种植。', 'info');
         if (tutorialStage === 'faction') {
           setActiveScene('faction');
           setFactionTab('overview');
@@ -3727,10 +3740,8 @@ function App(): JSX.Element {
                 onRefresh={() => {
                   void handleRefreshRaidTargets();
                 }}
-                refreshLabel={scenes.raid.hero.action.label}
+                refreshLabel="刷新目标"
                 refreshPending={pendingActionKey === 'raid:refresh-targets'}
-                refreshLimit={raidRefreshLimit}
-                refreshUsed={raidRefreshUsed}
                 reportEntries={mergedReportEntries}
                 isTutorial={isTutorialUser}
                 targets={visibleRaidTargets}

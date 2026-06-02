@@ -134,27 +134,21 @@ const tutorialTasks: Partial<Record<TutorialStage, TutorialTask>> = {
   },
   faction: {
     title: '领取阵营俸禄',
-    description: '完成首战后回到阵营领取补给。第一次领取会解锁青灵麦和风云稻种植资格。',
+    description: '完成首战后回到阵营领取补给。基础灵植已免费开放，俸禄会提供后续解锁所需材料。',
     actionLabel: '前往阵营',
     targetScene: 'faction',
   },
 };
 
 const firstStipendUnlockModal: TutorialUnlockModalConfig = {
-  title: '种植资格已解锁',
-  summary: '阵营俸禄已发放，以下灵植现在可以回到田地种植。',
+  title: '新手引导完成',
+  summary: '阵营俸禄已发放。青灵麦和风云稻已免费开放，可以回到田地继续安排日常种植。',
   items: [
     {
-      id: 'qinglingmai',
-      label: '青灵麦',
-      kind: 'plant',
-      description: '普通稳收灵植',
-    },
-    {
-      id: 'xunyamai',
-      label: '风云稻',
-      kind: 'plant',
-      description: '短周期灵植',
+      id: 'daily-planting',
+      label: '日常种植',
+      kind: 'feature',
+      description: '基础两种灵植免费开放，阵营俸禄用于推进后续植物解锁。',
     },
   ],
 };

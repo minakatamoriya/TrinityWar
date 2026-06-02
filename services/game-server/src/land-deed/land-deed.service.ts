@@ -99,13 +99,10 @@ export class LandDeedService {
       client.fieldHarvestLog.count({
         where: {
           playerId,
-          fieldSlot: {
-            seedDefinition: {
-              seedId: {
-                not: tutorialSeedId,
-              },
-            },
-          },
+          AND: [
+            { seedId: { not: null } },
+            { seedId: { not: tutorialSeedId } },
+          ],
         },
       }),
       client.factionMember.findFirst({

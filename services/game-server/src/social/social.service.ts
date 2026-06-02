@@ -530,6 +530,7 @@ export class SocialService {
         dateKey: result.assist.dateKey,
         createdAt: result.assist.createdAt.toISOString(),
       },
+      intimacyGain: WATER_INTIMACY_GAIN,
       field: {
         fieldSlotId: result.wateredField.fieldSlotId,
         status: result.wateredField.status,
@@ -732,6 +733,7 @@ export class SocialService {
         dateKey: result.assist.dateKey,
         createdAt: result.assist.createdAt.toISOString(),
       },
+      intimacyGain: HARVEST_INTIMACY_GAIN,
       rewards: [
         { kind: 'gold', quantity: result.harvestResult.rewardGold, label: '金币' },
       ],
