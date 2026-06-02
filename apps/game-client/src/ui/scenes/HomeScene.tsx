@@ -64,6 +64,30 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
     factionTask: home.factionTasks.find((task) => task.status !== 'claimed'),
   }).slice(0, 4);
 
+  const tutorialHome = tutorialTask ? (
+    <div className="scene-shell scene-shell-home">
+      <div className="scene-scroll scene-scroll-home scene-scroll-tutorial-home">
+        <article className="panel-card home-tutorial-card">
+          <div className="panel-head">
+            <h4>新手任务</h4>
+            <span className="soft-tag">当前目标</span>
+          </div>
+          <div className="home-tutorial-body">
+            <strong>{tutorialTask.title}</strong>
+            <p>{tutorialTask.description}</p>
+            <button className="primary-button" onClick={onTutorialAction} type="button">
+              {tutorialTask.actionLabel}
+            </button>
+          </div>
+        </article>
+      </div>
+    </div>
+  ) : null;
+
+  if (tutorialHome) {
+    return tutorialHome;
+  }
+
   return (
     <div className="scene-shell scene-shell-home">
       <div className="scene-scroll scene-scroll-home">

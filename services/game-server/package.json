@@ -18,6 +18,7 @@
     "verify:season-snapshots": "tsx src/verification/verify-season-snapshots.ts",
     "verify:season-activity-sign-in": "tsx src/verification/verify-season-activity-sign-in.ts",
     "verify:social-friend": "tsx src/verification/verify-social-friend-flow.ts",
+    "verify:tutorial-raid-targets": "tsx src/verification/verify-tutorial-raid-targets.ts",
     "build": "node ./scripts/build.mjs",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

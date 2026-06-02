@@ -75,30 +75,56 @@
   type HomeSummaryResponse,
 } from '@trinitywar/shared';
 import { mockBootstrap, mockHomeSummary, mockRaidTargetDetails, mockSceneContent } from './mockData';
+import {
+  cloneBootstrap,
+  cloneHomeSummary,
+  cloneSceneContent,
+  cloneSpiritState,
+  normalizeBootstrap,
+  normalizeHomeSummary,
+} from './apiSupport/clientSnapshot';
+import {
+  setStoredDevLoginSession,
+  type DevFactionChoice,
+  type DevLoginMode,
+  type DevLoginSession,
+} from './apiSupport/devAuthSession';
+import { parseViteBoolean } from './apiSupport/env';
+import { fetchJson, getFallbackReason } from './apiSupport/httpClient';
+import { buildIdempotencyKey } from './apiSupport/idempotency';
+import { clamp, formatNumber, parseCurrentAndCapacity, parseNumberText } from './apiSupport/mockNumbers';
+import {
+  getMockCultivationSeconds,
+  getMockSeedGrowthSeconds,
+  getMockSeedStageGold,
+  seedLabelMap,
+} from './apiSupport/mockSeedRules';
+import {
+  buildSourceStatus,
+  type ClientReadPolicy,
+  type ClientReadSources,
+  type DataEnvelope,
+} from './apiSupport/readPolicy';
+export { ApiError } from './apiSupport/httpClient';
+export type {
+  ClientReadEndpoint,
+  ClientReadSourceLabels,
+  ClientReadSourceStatus,
+  ClientReadSources,
+  DataSource,
+} from './apiSupport/readPolicy';
+export {
+  clearDevLoginSession,
+  getStoredDevLoginSession,
+  type DevFactionChoice,
+  type DevLoginMode,
+  type DevLoginSession,
+} from './apiSupport/devAuthSession';
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
 const forceMockReads = parseViteBoolean(import.meta.env.VITE_FORCE_MOCK_READS);
 const allowMockReadFallback = parseViteBoolean(import.meta.env.VITE_ALLOW_MOCK_READ_FALLBACK);
 const forceMockCommands = parseViteBoolean(import.meta.env.VITE_FORCE_MOCK_COMMANDS);
-const AUTH_STORAGE_KEY = 'trinitywar.devAuth';
 const PUBLIC_API_PREFIX = `${API_PREFIX}/public`;
-
-type DataSource = 'api' | 'mock';
-type ClientReadEndpoint = 'bootstrap' | 'home' | 'scenes';
-export type DevLoginMode = 'new-user' | 'existing-user' | 'test-user-1' | 'test-user-2';
-export type DevFactionChoice = 'human' | 'immortal' | 'demon';
-
-export interface DevLoginSession {
-  accessToken: string;
-  expiresAt: string;
-  player: {
-    id: string;
-    nickname: string;
-    castleLevel: number;
-    factionCode?: DevFactionChoice;
-  };
-  mode: DevLoginMode;
-}
 
 interface DevLoginResponse {
   accessToken: string;
@@ -113,32 +139,6 @@ interface DevLoginResponse {
   };
 }
 
-interface DataEnvelope<T> {
-  data: T;
-  source: DataSource;
-  fallbackReason?: string;
-}
-
-interface ClientReadPolicy<T> {
-  endpoint: ClientReadEndpoint;
-  path: string;
-  fallback: T;
-  allowFallback: boolean;
-}
-
-export interface ClientReadSourceStatus {
-  source: DataSource;
-  fallbackReason?: string;
-}
-
-export type ClientReadSources = Record<ClientReadEndpoint, ClientReadSourceStatus>;
-
-export interface ClientReadSourceLabels {
-  bootstrap: string;
-  home: string;
-  scenes: string;
-}
-
 export interface ClientViewModel {
   bootstrap: ClientBootstrapResponse;
   home: HomeSummaryResponse;
@@ -147,32 +147,9 @@ export interface ClientViewModel {
   sources: ClientReadSources;
 }
 
-function normalizeBootstrap(bootstrap: ClientBootstrapResponse): ClientBootstrapResponse {
-  return {
-    ...bootstrap,
-    season: { ...bootstrap.season },
-    backpack: {
-      seedInventory: { ...bootstrap.backpack.seedInventory },
-      essenceInventory: { ...(bootstrap.backpack.essenceInventory ?? bootstrap.backpack.seedInventory) },
-      globalItemInventory: { ...bootstrap.backpack.globalItemInventory },
-      unlockedSeedIds: [...bootstrap.backpack.unlockedSeedIds],
-      unlockedPlantIds: [...(bootstrap.backpack.unlockedPlantIds ?? bootstrap.backpack.unlockedSeedIds)],
-      starterSeedClaimed: bootstrap.backpack.starterSeedClaimed,
-      tianjiTalismanClaimed: bootstrap.backpack.tianjiTalismanClaimed,
-      spiritSoulClaimed: bootstrap.backpack.spiritSoulClaimed,
-      dailySpiritSoulAmount: bootstrap.backpack.dailySpiritSoulAmount,
-    },
-  };
-}
-
-function cloneBootstrap(bootstrap: ClientBootstrapResponse): ClientBootstrapResponse {
-  return normalizeBootstrap(bootstrap);
-}
-
 let mockBootstrapSnapshot: ClientBootstrapResponse = cloneBootstrap(mockBootstrap);
 let mockHomeSnapshot: HomeSummaryResponse = cloneHomeSummary(mockHomeSummary);
 let mockSceneSnapshot: ClientSceneContentResponse = cloneSceneContent(mockSceneContent);
-let devLoginSession: DevLoginSession | null = readStoredDevLoginSession();
 const INITIAL_MOCK_FACTION_CONTRIBUTION = 40;
 const INITIAL_MOCK_FACTION_ARMY_POWER = 1260;
 const INITIAL_MOCK_FIELD_SEED_ASSIGNMENTS: Record<string, string> = {
@@ -187,68 +164,6 @@ let mockFieldSeedAssignments: Record<string, string> = { ...INITIAL_MOCK_FIELD_S
 
 interface MockFieldTimingState {
   statusStartedAt: string;
-}
-
-const seedLabelMap: Record<string, string> = {
-  qilingya: '启灵芽',
-  qinglingmai: '青灵麦',
-  xunyamai: '风云稻',
-  ninglucao: '凝露草',
-  suixinhua: '碎心花',
-  baiyulian: '白玉莲',
-  yingyuezhu: '影月竹',
-  qianjiteng: '牵机藤',
-  huichuncao: '回春草',
-  xueyuehua: '雪月花',
-  jingdaosong: '劲道松',
-  hundunguo: '混沌果',
-  zhanqingsi: '斩情丝',
-  wangchuanying: '忘川影',
-  zhaoyouming: '照幽冥',
-};
-
-const mockSeedStageGold: Record<string, { growing: number; mature: number; withered: number }> = {
-  qilingya: { growing: 20, mature: 50, withered: 50 },
-  qinglingmai: { growing: 100, mature: 200, withered: 100 },
-  xunyamai: { growing: 100, mature: 200, withered: 100 },
-  ninglucao: { growing: 100, mature: 140, withered: 40 },
-  suixinhua: { growing: 120, mature: 300, withered: 50 },
-  baiyulian: { growing: 160, mature: 220, withered: 180 },
-  yingyuezhu: { growing: 150, mature: 230, withered: 140 },
-  qianjiteng: { growing: 170, mature: 360, withered: 120 },
-  huichuncao: { growing: 320, mature: 480, withered: 380 },
-  xueyuehua: { growing: 300, mature: 760, withered: 180 },
-  jingdaosong: { growing: 450, mature: 620, withered: 520 },
-  hundunguo: { growing: 420, mature: 880, withered: 260 },
-  zhanqingsi: { growing: 520, mature: 1200, withered: 200 },
-  wangchuanying: { growing: 760, mature: 1200, withered: 960 },
-  zhaoyouming: { growing: 700, mature: 1600, withered: 680 },
-};
-
-const mockSeedGrowthSeconds: Record<string, number> = {
-  qilingya: 10,
-  qinglingmai: 10800,
-  xunyamai: 1800,
-  ninglucao: 7200,
-  suixinhua: 10800,
-  baiyulian: 16200,
-  yingyuezhu: 12600,
-  qianjiteng: 12600,
-  huichuncao: 14400,
-  xueyuehua: 12600,
-  jingdaosong: 18000,
-  hundunguo: 19800,
-  zhanqingsi: 14400,
-  wangchuanying: 21600,
-  zhaoyouming: 18000,
-};
-
-function getMockSeedGrowthSeconds(seedId: string): number {
-  return mockSeedGrowthSeconds[seedId] ?? 10800;
-}
-
-function getMockCultivationSeconds(seedId: string): number {
-  return getMockSeedGrowthSeconds(seedId);
 }
 
 function buildInitialMockFieldTimingStates(): Record<string, MockFieldTimingState> {
@@ -277,29 +192,6 @@ function buildInitialMockFieldTimingStates(): Record<string, MockFieldTimingStat
 
 let mockFieldTimingState: Record<string, MockFieldTimingState> = buildInitialMockFieldTimingStates();
 
-function getMockSeedStageGold(seedId: string, stage: 'growing' | 'mature' | 'withered'): number {
-  return mockSeedStageGold[seedId]?.[stage] ?? 520;
-}
-
-function normalizeHomeSummary(home: HomeSummaryResponse): HomeSummaryResponse {
-  return {
-    ...home,
-    stateVersions: {
-      buildingVersion: home.stateVersions?.buildingVersion ?? 1,
-      walletVersion: home.stateVersions?.walletVersion ?? 1,
-      armyVersion: home.stateVersions?.armyVersion ?? 1,
-    },
-    protectedUntil: home.protectedUntil ?? null,
-    resources: (home.resources ?? []).map((resource) => ({ ...resource })),
-    pendingClaims: (home.pendingClaims ?? []).map((claim) => ({ ...claim })),
-    temporaryClaim: home.temporaryClaim ? { ...home.temporaryClaim } : null,
-    dailyTasks: (home.dailyTasks ?? []).map((task) => ({ ...task })),
-    factionTasks: (home.factionTasks ?? []).map((task) => ({ ...task, action: { ...task.action } })),
-    todayContribution: home.todayContribution ?? 0,
-    primaryActions: (home.primaryActions ?? []).map((action) => ({ ...action })),
-  };
-}
-
 function updateMockDailyTask(taskId: string, amount = 1): void {
   const task = mockHomeSnapshot.dailyTasks.find((item) => item.id === taskId);
   if (!task || task.status === 'claimed') {
@@ -320,39 +212,6 @@ function claimMockDailyTask(taskId: string): ClientDailyTaskSummary | null {
   task.status = 'claimed';
   task.progressText = '已领取';
   return task;
-}
-
-function cloneHomeSummary(home: HomeSummaryResponse): HomeSummaryResponse {
-  return normalizeHomeSummary(home);
-}
-
-function cloneSceneContent(scenes: ClientSceneContentResponse): ClientSceneContentResponse {
-  return structuredClone(scenes);
-}
-
-function cloneSpiritState(spirit: ClientSpiritState): ClientSpiritState {
-  return {
-    ...spirit,
-    factionAdvantage: spirit.factionAdvantage ? {
-      ...spirit.factionAdvantage,
-      details: [...spirit.factionAdvantage.details],
-      modifiers: { ...spirit.factionAdvantage.modifiers },
-    } : undefined,
-    mainSlot: spirit.mainSlot ? { ...spirit.mainSlot } : null,
-    slots: spirit.slots.map((slot) => ({ ...slot })),
-    codex: spirit.codex.map((entry) => ({
-      ...entry,
-      definition: { ...entry.definition },
-    })),
-    readyToCompose: spirit.readyToCompose.map((entry) => ({
-      ...entry,
-      definition: { ...entry.definition },
-    })),
-  };
-}
-
-function parseViteBoolean(value: string | undefined): boolean {
-  return value === '1' || value?.toLowerCase() === 'true';
 }
 
 function createRaidDetailField(field: Partial<ClientFarmField> & Pick<ClientFarmField, 'id' | 'code' | 'title' | 'badge' | 'tone' | 'description'>): ClientFarmField {
@@ -454,72 +313,6 @@ function normalizeRaidTargetDetail(detail: ClientRaidTargetDetailResponse): Clie
   };
 }
 
-function buildApiUrl(path: string): string {
-  if (!apiBaseUrl) {
-    return path;
-  }
-
-  return path.startsWith('/') ? `${apiBaseUrl}${path}` : `${apiBaseUrl}/${path}`;
-}
-
-export class ApiError extends Error {
-  readonly status: number;
-  readonly code?: string;
-  readonly details?: unknown;
-
-  constructor(message: string, status: number, code?: string, details?: unknown) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.code = code;
-    this.details = details;
-  }
-}
-
-function toUserFacingApiMessage(message: string, code?: string): string {
-  if (code === 'RAID_NOT_ALLOWED') {
-    if (message.includes('no health')) {
-      return '主位灵宠当前 0 血，无法出战。请先恢复血量，或更换主位灵宠后再发起战斗。';
-    }
-    if (message.includes('Main spirit is required')) {
-      return '当前没有可出战的主位灵宠。请先设置主位灵宠后再发起战斗。';
-    }
-  }
-
-  return message;
-}
-
-async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers ?? {});
-  if (!headers.has('Accept')) {
-    headers.set('Accept', 'application/json');
-  }
-  if (devLoginSession?.accessToken && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${devLoginSession.accessToken}`);
-  }
-
-  const response = await fetch(buildApiUrl(path), {
-    ...init,
-    headers,
-  });
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null) as {
-      message?: string;
-      error?: {
-        code?: string;
-        message?: string;
-        details?: unknown;
-      };
-    } | null;
-    const code = payload?.error?.code;
-    const message = payload?.error?.message?.trim() || payload?.message?.trim() || `HTTP ${response.status}`;
-    throw new ApiError(toUserFacingApiMessage(message, code), response.status, code, payload?.error?.details);
-  }
-
-  return (await response.json()) as T;
-}
-
 async function fetchReadEndpoint<T>(policy: ClientReadPolicy<T>): Promise<DataEnvelope<T>> {
   if (forceMockReads) {
     return {
@@ -545,14 +338,6 @@ async function fetchReadEndpoint<T>(policy: ClientReadPolicy<T>): Promise<DataEn
       fallbackReason: getFallbackReason(error),
     };
   }
-}
-
-function getFallbackReason(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message;
-  }
-
-  return 'request failed';
 }
 
 export async function loadClientViewModel(): Promise<ClientViewModel> {
@@ -741,43 +526,6 @@ export async function deleteNotification(notificationId: string): Promise<Client
   return fetchJson<ClientDeleteNotificationResponse>(`${CLIENT_API_PREFIX}/notifications/${notificationId}`, {
     method: 'DELETE',
   });
-}
-
-function buildSourceStatus<T>(envelope: DataEnvelope<T>): ClientReadSourceStatus {
-  return {
-    source: envelope.source,
-    fallbackReason: envelope.fallbackReason,
-  };
-}
-
-function buildIdempotencyKey(prefix: string): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `${prefix}-${crypto.randomUUID()}`;
-  }
-
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function parseNumberText(value: string): number {
-  const normalized = value.replace(/,/g, '').replace(/[^\d.-]/g, '').trim();
-  return normalized ? Number(normalized) : 0;
-}
-
-function parseCurrentAndCapacity(value: string): { current: number; capacity: number } {
-  const [currentText = '0', capacityText = '0'] = value.split('/');
-
-  return {
-    current: parseNumberText(currentText),
-    capacity: parseNumberText(capacityText),
-  };
-}
-
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat('zh-CN').format(value);
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
 }
 
 function getMockFieldStageStartedAtMs(fieldId: string, totalSeconds: number, fallbackRemainingSeconds: number): number {
@@ -2124,87 +1872,6 @@ export async function composeSpirit(input: ClientComposeSpiritRequest): Promise<
   };
 }
 
-function readStoredDevLoginSession(): DevLoginSession | null {
-  try {
-    const rawValue = window.localStorage.getItem(AUTH_STORAGE_KEY);
-
-    if (!rawValue) {
-      return null;
-    }
-
-    const parsed = JSON.parse(rawValue) as DevLoginSession;
-
-    if (!parsed.accessToken || !parsed.expiresAt || new Date(parsed.expiresAt).getTime() <= Date.now()) {
-      window.localStorage.removeItem(AUTH_STORAGE_KEY);
-      return null;
-    }
-
-    const repaired = repairDevLoginSession(parsed);
-    if (repaired !== parsed) {
-      window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(repaired));
-    }
-
-    return repaired;
-  } catch {
-    return null;
-  }
-}
-
-function repairDevLoginSession(session: DevLoginSession): DevLoginSession {
-  const expectedNickname = getExpectedDevNickname(session.mode, session.player.nickname);
-
-  if (!expectedNickname || !isMojibakeText(session.player.nickname)) {
-    return session;
-  }
-
-  return {
-    ...session,
-    player: {
-      ...session.player,
-      nickname: expectedNickname,
-    },
-  };
-}
-
-function getExpectedDevNickname(mode: DevLoginMode, currentNickname: string): string | null {
-  if (mode === 'new-user') {
-    const suffix = currentNickname.match(/_(\d+)$/)?.[1];
-    return suffix ? `新用户_${suffix}` : null;
-  }
-
-  if (mode === 'existing-user') {
-    return '主循环测试号';
-  }
-
-  if (mode === 'test-user-1') {
-    return '测试用户1';
-  }
-
-  if (mode === 'test-user-2') {
-    return '测试用户2';
-  }
-
-  return null;
-}
-
-function isMojibakeText(value: string): boolean {
-  return /[\uFFFD]|Ã|Â|æ|ç|è|é|å|ä|Ð|Ñ|Ó|Ê|µ/.test(value);
-}
-
-function writeStoredDevLoginSession(session: DevLoginSession): void {
-  devLoginSession = session;
-  window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
-}
-
-export function getStoredDevLoginSession(): DevLoginSession | null {
-  return devLoginSession;
-}
-
-export function clearDevLoginSession(): void {
-  devLoginSession = null;
-  window.localStorage.removeItem(AUTH_STORAGE_KEY);
-}
-
 export async function devLogin(mode: DevLoginMode, options?: { factionCode?: DevFactionChoice }): Promise<DevLoginSession> {
   const loginRequest = buildDevLoginRequest(mode, options);
   const response = await fetchJson<DevLoginResponse>(`${CLIENT_API_PREFIX}/auth/dev-login`, {
@@ -2225,7 +1892,7 @@ export async function devLogin(mode: DevLoginMode, options?: { factionCode?: Dev
     mode,
   };
 
-  writeStoredDevLoginSession(session);
+  setStoredDevLoginSession(session);
   return session;
 }
 
