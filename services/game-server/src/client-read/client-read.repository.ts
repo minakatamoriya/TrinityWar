@@ -165,6 +165,9 @@ export interface SceneContentReadModel {
       }>;
     };
   }>;
+  plantUnlockMetrics: {
+    harvestCount: number;
+  };
   dailyFactionTasks: HomeSummaryReadModel['dailyFactionTasks'];
   taskConfigs: AdminTaskConfigRecord[];
   contributionLogs: Array<{
@@ -617,7 +620,14 @@ export class ClientReadRepository {
         return contributionDelta !== 0 ? contributionDelta : left.name.localeCompare(right.name, 'zh-Hans-CN');
       });
 
-    const raidTargetPools = await client.raidTargetPool.findMany({
+    const [plantHarvestCount, raidTargetPools] = await Promise.all([
+      client.fieldHarvestLog.count({
+        where: {
+          playerId,
+          seedId: { not: null },
+        },
+      }),
+      client.raidTargetPool.findMany({
       where: {
         ownerPlayerId: playerId,
         expiresAt: { gt: new Date() },
@@ -658,7 +668,8 @@ export class ClientReadRepository {
           },
         },
       },
-    });
+      }),
+    ]);
 
     const raidMessageTemplates = await client.raidMessageTemplate.findMany({
       where: { isActive: true },
@@ -732,6 +743,9 @@ export class ClientReadRepository {
         readyAt: field.seedDefinition ? getFieldReadyAt(field, field.seedDefinition.seedId, new Date()) : null,
       })),
       seedInventory: player.seedInventory,
+      plantUnlockMetrics: {
+        harvestCount: plantHarvestCount,
+      },
       dailyFactionTasks: player.dailyFactionTasks,
       taskConfigs: [],
       contributionLogs: player.factionContributionLogs,

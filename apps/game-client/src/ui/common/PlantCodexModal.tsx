@@ -41,7 +41,6 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
   const {
     groups,
     selectedPlant,
-    formatDuration,
     formatNumber,
     busyPlantId,
     onClose,
@@ -105,15 +104,7 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
                 </span>
               </div>
               <p className="seed-codex-lore">{selectedPlant.lore}</p>
-              <div className="seed-codex-stats">
-                <div className="seed-codex-stat-row">
-                  <strong>成熟时间</strong>
-                  <span>{formatDuration(selectedPlant.growthSeconds)}</span>
-                </div>
-                <div className="seed-codex-stat-row">
-                  <strong>精华库存</strong>
-                  <span>{formatNumber(selectedResearch?.essenceOwned ?? selectedPlant.quantity ?? 0)}</span>
-                </div>
+              <div className="seed-codex-stats">
                 <div className="seed-codex-stat-row">
                   <strong>收益</strong>
                   <span>培育中 {formatNumber(selectedPlant.stageGold.growing)} / 成熟 {formatNumber(selectedPlant.stageGold.mature)} / 枯萎 {formatNumber(selectedPlant.stageGold.withered)}</span>
@@ -123,8 +114,6 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
                 <div className="seed-codex-strategy">
                   <strong>解锁研究</strong>
                   <p>
-                    精华 {formatNumber(selectedResearch.essenceOwned)}/{formatNumber(selectedResearch.essenceRequired)}
-                    {' · '}
                     贡献 {formatNumber(selectedResearch.contributionOwned)}/{formatNumber(selectedResearch.contributionRequired)}
                   </p>
                   <button

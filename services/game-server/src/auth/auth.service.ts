@@ -510,7 +510,7 @@ function buildVerificationFields(
       currentClaimableGold: 220,
       stageOffsetSeconds: 75 * 60,
     },
-    { slotIndex: 4, isUnlocked: false, unlockCastleLevel: 15, status: 'LOCKED' },
+    { slotIndex: 4, isUnlocked: true, unlockCastleLevel: 1, status: 'EMPTY' },
   ];
 }
 

@@ -90,7 +90,9 @@ const WATCHTOWER_LEVEL_CONFIG = [
   { level: 10, upgradeCost: 2400 },
 ];
 
-// Legacy only. New first-release field unlocks are driven by LAND_DEED_CONFIG.
+export const DEFAULT_FIELD_SLOT_COUNT = 4;
+
+// Legacy only. Current farming rules open all field slots by default.
 const FIELD_SLOT_UNLOCK_CONFIG = [
   { level: 1, requiredCastleLevel: 1, unlockFieldIndex: 1 },
   { level: 2, requiredCastleLevel: 5, unlockFieldIndex: 2 },
@@ -205,45 +207,8 @@ const SEED_LEVEL_CONFIG = {
  *   alternativeRequirements?: LandDeedRequirement[];
  * }>}
  */
-export const LAND_DEED_CONFIG = [
-  {
-    deedKey: 'field-2',
-    targetFieldSlotIndex: 2,
-    title: '二号地契',
-    description: '完成基础收菜和首次战斗胜利后开启第二块田。',
-    requirements: [
-      { key: 'harvestCount', label: '累计收菜', target: 3 },
-      { key: 'successfulRaidCount', label: '战斗胜利', target: 1 },
-    ],
-    alternativeRequirements: [],
-  },
-  {
-    deedKey: 'field-3',
-    targetFieldSlotIndex: 3,
-    title: '三号地契',
-    description: '通过稳定收菜、战斗和阵营精华上缴开启第三块田。',
-    requirements: [
-      { key: 'harvestCount', label: '累计收菜', target: 12 },
-      { key: 'successfulRaidCount', label: '战斗胜利', target: 5 },
-      { key: 'factionDonateCount', label: '阵营上缴次数', target: 3 },
-      { key: 'factionContribution', label: '个人阵营贡献', target: 80 },
-    ],
-    alternativeRequirements: [],
-  },
-  {
-    deedKey: 'field-4',
-    targetFieldSlotIndex: 4,
-    title: '四号地契',
-    description: '完成更高强度的收菜、战斗和阵营贡献积累后开启第四块田。',
-    requirements: [
-      { key: 'harvestCount', label: '累计收菜', target: 30 },
-      { key: 'successfulRaidCount', label: '战斗胜利', target: 15 },
-      { key: 'factionDonateCount', label: '阵营上缴次数', target: 8 },
-      { key: 'factionContribution', label: '个人阵营贡献', target: 260 },
-    ],
-    alternativeRequirements: [],
-  },
-];
+export const LAND_DEED_CONFIG = [];
+
 
 export const FACTION_STIPEND_CONFIG = {
   dateKeyTimezone: 'Asia/Shanghai',
@@ -254,7 +219,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '基础俸禄',
       rewards: [
         { kind: 'gold', quantity: 20, label: '金币' },
-        { kind: 'essence', essencePoolIds: ['ninglucao', 'suixinhua', 'baiyulian', 'yingyuezhu'], quantity: 3, label: '随机普通精华' },
+        { kind: 'ordinary-soul', quantity: 3, label: '普通兽魂' },
         { kind: 'ordinary-soul', quantity: 2, label: '普通兽魂' },
       ],
     },
@@ -264,7 +229,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '小有供奉',
       rewards: [
         { kind: 'gold', quantity: 30, label: '金币' },
-        { kind: 'essence', essencePoolIds: ['ninglucao', 'suixinhua', 'baiyulian', 'yingyuezhu'], quantity: 5, label: '随机普通精华' },
+        { kind: 'ordinary-soul', quantity: 5, label: '普通兽魂' },
         { kind: 'ordinary-soul', quantity: 5, label: '普通兽魂' },
       ],
     },
@@ -274,7 +239,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '稳定供奉',
       rewards: [
         { kind: 'gold', quantity: 40, label: '金币' },
-        { kind: 'essence', essencePoolIds: ['suixinhua', 'baiyulian', 'yingyuezhu', 'qianjiteng'], quantity: 8, label: '指定普通精华' },
+        { kind: 'rare-soul', quantity: 2, label: '稀有兽魂' },
         { kind: 'ordinary-soul', quantity: 10, label: '普通兽魂' },
       ],
     },
@@ -284,7 +249,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '阵营骨干',
       rewards: [
         { kind: 'gold', quantity: 50, label: '金币' },
-        { kind: 'essence', essencePoolIds: ['huichuncao', 'xueyuehua', 'jingdaosong', 'hundunguo'], quantity: 6, label: '随机稀有精华' },
+        { kind: 'rare-soul', quantity: 2, label: '稀有兽魂' },
         { kind: 'rare-soul', quantity: 4, label: '稀有兽魂' },
         { kind: 'spirit-shard', spiritPoolIds: ['canglang', 'linglu', 'qingyuan', 'xuanhu'], quantity: 2, label: '随机普通灵宠精魄' },
       ],
@@ -295,7 +260,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '高阶供奉',
       rewards: [
         { kind: 'gold', quantity: 60, label: '金币' },
-        { kind: 'essence', essencePoolIds: ['xueyuehua', 'jingdaosong', 'hundunguo'], quantity: 10, label: '指定稀有精华' },
+        { kind: 'rare-soul', quantity: 3, label: '稀有兽魂' },
         { kind: 'rare-soul', quantity: 8, label: '稀有兽魂' },
         { kind: 'spirit-shard', spiritPoolIds: ['chenghuang', 'guishou', 'xuangui'], quantity: 3, label: '随机稀有灵宠精魄' },
       ],
@@ -306,7 +271,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '阵营重臣',
       rewards: [
         { kind: 'gold', quantity: 80, label: '金币' },
-        { kind: 'essence', essencePoolIds: ['zhanqingsi', 'wangchuanying', 'zhaoyouming'], quantity: 8, label: '随机传说精华' },
+        { kind: 'rare-soul', quantity: 2, label: '稀有兽魂' },
         { kind: 'legendary-soul', quantity: 2, label: '传说兽魂' },
         { kind: 'spirit-shard', spiritPoolIds: ['fenghuang', 'xueyan', 'yinglong'], quantity: 2, label: '随机传说灵宠精魄' },
       ],

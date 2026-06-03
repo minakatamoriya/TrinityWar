@@ -2161,7 +2161,7 @@ function App(): JSX.Element {
               setGlobalFeatureModal({
                 title: '贡献俸禄档位',
                 eyebrow: '阵营贡献',
-                description: '每日按当前个人贡献匹配一个档位；随机精华和灵宠精魄会在确认领取时抽取为具体碎片。',
+                description: '每日按当前个人贡献匹配一个档位；兽魂和灵宠精魄会在确认领取时发放。',
                 contributionTiers: buildFactionContributionTiers(),
               });
             }}

@@ -206,7 +206,6 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
           farmBoardMessage={farmBoard?.farmBoardMessage ?? ''}
           farmBoardUpdatedAt={farmBoard?.farmBoardUpdatedAt ?? null}
           fields={farmFields}
-          landDeeds={scenes.farm.landDeeds ?? []}
           uiRules={tutorialUiRules.farm}
           onAction={onFarmAction}
           onOpenFarmBoard={onOpenFarmBoard}

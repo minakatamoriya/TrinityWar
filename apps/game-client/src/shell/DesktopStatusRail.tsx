@@ -50,8 +50,8 @@ export function DesktopStatusRail(props: DesktopStatusRailProps): JSX.Element {
             <span>农作物</span>
           </div>
           <div className="rail-note-row">
-            <span>开田方式</span>
-            <em>地契任务</em>
+            <span>田地状态</span>
+            <em>默认开放</em>
           </div>
           <div className="rail-note-row">
             <span>阵营收益</span>

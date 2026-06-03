@@ -86,7 +86,7 @@ function App(): JSX.Element {
   const [editingTaskGroup, setEditingTaskGroup] = useState<TaskConfigGroup>('contribution');
   const [isTaskEditorOpen, setIsTaskEditorOpen] = useState(false);
   const [castleLevels, setCastleLevels] = useState<AdminListResponse<AdminRecord> | null>(null);
-  const [lightweightRuleTab, setLightweightRuleTab] = useState<'land-deed' | 'faction-stipend'>('land-deed');
+  const [lightweightRuleTab, setLightweightRuleTab] = useState<'faction-stipend'>('faction-stipend');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState<string | null>(null);
 

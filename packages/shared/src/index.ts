@@ -382,7 +382,7 @@ export interface ClientClaimSeasonSignInResponse {
 export type ClientSeasonRewardGrantStatus = 'generated' | 'notified' | 'claimed' | 'voided';
 
 export interface ClientSeasonRewardItem {
-  kind: 'tianjiTalisman' | 'essence' | 'spiritSoul' | 'ordinarySoul' | 'rareSoul' | 'legendarySoul' | 'spiritShard' | 'medal';
+  kind: 'tianjiTalisman' | 'spiritSoul' | 'ordinarySoul' | 'rareSoul' | 'legendarySoul' | 'spiritShard' | 'medal';
   quantity: number;
   label: string;
   name?: string;
@@ -455,7 +455,7 @@ export type NotificationCategory = 'system' | 'announcement' | 'maintenance' | '
 
 export type PlayerNotificationClaimStatus = 'none' | 'unclaimed' | 'claimed' | 'expired';
 
-export type NotificationAttachmentKind = 'gold' | 'seed' | 'essence' | 'tianjiTalisman' | 'spiritSoul' | 'ordinarySoul' | 'rareSoul' | 'legendarySoul' | 'spiritShard' | 'medal';
+export type NotificationAttachmentKind = 'gold' | 'seed' | 'tianjiTalisman' | 'spiritSoul' | 'ordinarySoul' | 'rareSoul' | 'legendarySoul' | 'spiritShard' | 'medal';
 
 export interface AdminPagination {
   page: number;
@@ -698,7 +698,7 @@ export interface ClientLandDeedProgress {
 
 export type ClientFactionStipendStatus = 'available' | 'claimed' | 'unavailable';
 
-export type ClientFactionStipendRewardKind = 'gold' | 'essence' | 'spirit-shard' | 'ordinary-soul' | 'rare-soul' | 'legendary-soul' | 'seed';
+export type ClientFactionStipendRewardKind = 'gold' | 'spirit-shard' | 'ordinary-soul' | 'rare-soul' | 'legendary-soul' | 'seed';
 
 export interface ClientFactionStipendReward {
   kind: ClientFactionStipendRewardKind;
@@ -1172,7 +1172,7 @@ export interface ClientPlantInventoryItem {
   plantType: string;
   essenceType: string;
   plantName: string;
-  essenceLabel: string;
+  essenceLabel: string | null;
   rarity: ClientSpiritRarity;
   unlocked: boolean;
   discovered?: boolean;

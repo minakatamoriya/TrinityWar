@@ -2,11 +2,10 @@ import type { AdminListResponse } from '@trinitywar/shared';
 import { TableSection } from '../components/TableSection';
 import type { AdminRecord } from '../types';
 
-type LightweightRuleTab = 'land-deed' | 'faction-stipend';
+type LightweightRuleTab = 'faction-stipend';
 
 const ruleTabs: Array<{ key: LightweightRuleTab; label: string; description: string }> = [
-  { key: 'land-deed', label: '地契任务', description: '按累计收菜、成功掠夺、阵营上缴和个人贡献推进开田，不再要求法术或建筑升级。' },
-  { key: 'faction-stipend', label: '俸禄等级', description: '按个人阵营贡献分档，发放植物精华、兽魂和高贡献灵宠精魄。' },
+  { key: 'faction-stipend', label: '俸禄等级', description: '按个人阵营贡献分档，发放金币、兽魂和高贡献灵宠精魄。' },
 ];
 
 export function CastleLevelsView(props: {

@@ -7,7 +7,6 @@ type PrismaClientLike = Prisma.TransactionClient | PrismaClient;
 const BASIC_TASK: DailyFactionTaskType = 'ESSENCE_SUBMIT_BASIC';
 const FOCUS_TASK: DailyFactionTaskType = 'ESSENCE_SUBMIT_FOCUS';
 const CONFLICT_TASK: DailyFactionTaskType = 'CONFLICT_RAID';
-const TUTORIAL_PLANT_IDS = new Set<string>(['qilingya']);
 
 interface DailyFactionTaskSeed {
   taskType: DailyFactionTaskType;
@@ -25,21 +24,6 @@ export class DailyFactionTaskLifecycleService {
       where: { id: playerId },
       select: {
         factionId: true,
-        seedInventory: {
-          where: { unlockedAt: { not: null } },
-          orderBy: [
-            { seedDefinition: { sortOrder: 'asc' } },
-            { seedDefinition: { seedId: 'asc' } },
-          ],
-          select: {
-            seedDefinition: {
-              select: {
-                seedId: true,
-                rarity: true,
-              },
-            },
-          },
-        },
       },
     });
 
@@ -52,40 +36,11 @@ export class DailyFactionTaskLifecycleService {
       where: {
         playerId,
         taskDate: dateKey,
-        requiredEssenceType: { in: Array.from(TUTORIAL_PLANT_IDS) },
+        taskType: { in: [BASIC_TASK, FOCUS_TASK] },
       },
     });
 
-    const unlockedPlants = player.seedInventory
-      .map((inventory) => inventory.seedDefinition)
-      .filter((plant) => !TUTORIAL_PLANT_IDS.has(plant.seedId));
-
     const tasks: DailyFactionTaskSeed[] = [];
-    if (unlockedPlants.length > 0) {
-      const basicPlant = unlockedPlants.find((plant) => plant.rarity === 'common') ?? unlockedPlants[0];
-      const focusPlant = pickFocusPlant(unlockedPlants, dateKey);
-      const basicConfig = await this.taskConfigService.getDailyFactionTaskConfig('essence-submit-basic', client);
-      const focusConfig = await this.taskConfigService.getDailyFactionTaskConfig(
-        focusPlant.rarity === 'common' ? 'essence-submit-focus-common' : 'essence-submit-focus-rare',
-        client,
-      );
-      if (basicConfig?.isEnabled) {
-        tasks.push({
-          taskType: BASIC_TASK,
-          requiredEssenceType: basicPlant.seedId,
-          requiredAmount: basicConfig.targetCount,
-          rewardContribution: basicConfig.rewardContribution,
-        });
-      }
-      if (focusConfig?.isEnabled) {
-        tasks.push({
-          taskType: FOCUS_TASK,
-          requiredEssenceType: focusPlant.seedId,
-          requiredAmount: focusConfig.targetCount,
-          rewardContribution: focusConfig.rewardContribution,
-        });
-      }
-    }
 
     const conflictConfig = await this.taskConfigService.getDailyFactionTaskConfig('conflict-raid', client);
     if (conflictConfig?.isEnabled) {
@@ -118,12 +73,3 @@ export class DailyFactionTaskLifecycleService {
   }
 }
 
-function pickFocusPlant(
-  plants: Array<{ seedId: string; rarity: string }>,
-  dateKey: string,
-): { seedId: string; rarity: string } {
-  const preferredPlants = plants.filter((plant) => plant.rarity !== 'common');
-  const pool = preferredPlants.length > 0 ? preferredPlants : plants;
-  const seed = Array.from(dateKey).reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  return pool[seed % pool.length];
-}

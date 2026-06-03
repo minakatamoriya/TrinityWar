@@ -1,4 +1,4 @@
-import type { ClientFactionAdvantagePanel, ClientFarmField, ClientSceneAction, ClientSceneContentResponse } from '@trinitywar/shared';
+import type { ClientFactionAdvantagePanel, ClientFarmField, ClientSceneAction } from '@trinitywar/shared';
 import type { TutorialFarmUiRules } from '../../tutorial/tutorialFlow';
 import { buildFarmFieldStatusView, FarmStatusCard } from '../farm/FarmStatusCard';
 
@@ -12,7 +12,6 @@ interface FarmSceneProps {
   advantage?: ClientFactionAdvantagePanel;
   collectPresentation: FarmCollectPresentationState | null;
   fields: ClientFarmField[];
-  landDeeds: NonNullable<ClientSceneContentResponse['farm']['landDeeds']>;
   farmBoardMessage: string;
   farmBoardUpdatedAt: string | null;
   uiRules: TutorialFarmUiRules;
@@ -25,7 +24,6 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
     collectPresentation,
     advantage,
     fields,
-    landDeeds,
     farmBoardMessage,
     uiRules,
     onAction,
@@ -99,32 +97,6 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
           })}
         </div>
 
-        {landDeeds.length > 0 && uiRules.showLandDeeds ? (
-          <article className="panel-card">
-            <div className="panel-head">
-              <h4>地契任务</h4>
-            </div>
-            <div className="task-list">
-              {landDeeds.map((deed) => (
-                <div className={`task-row task-row-${deed.status === 'claimed' ? 'claimed' : deed.status === 'completed' ? 'completed' : 'in-progress'}`} key={deed.deedKey}>
-                  <span className="task-index">{deed.targetFieldSlotIndex}</span>
-                  <div>
-                    <div className="task-row-head">
-                      <strong>{deed.title}</strong>
-                      <span className="task-state-badge">{deed.status === 'claimed' ? '已开启' : deed.status === 'completed' ? '已完成' : '进行中'}</span>
-                    </div>
-                    <p>{deed.description}</p>
-                    {[...deed.requirements, ...(deed.alternativeRequirements ?? [])].map((requirement) => (
-                      <p className="task-progress-line" key={`${deed.deedKey}-${requirement.key}`}>
-                        {requirement.label} {requirement.current}/{requirement.target}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
-        ) : null}
       </div>
     </div>
   );

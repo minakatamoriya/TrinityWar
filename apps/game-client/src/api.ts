@@ -765,13 +765,13 @@ function syncMockFactionScene(): void {
     title: '人界阵营',
     description: '上缴金币积累个人贡献，每日按贡献档位领取材料俸禄。',
     advantage: '今日俸禄档位：入门俸禄',
-    breakdown: '预计每日俸禄：凝露草精华 x3、普通兽魂 x2、金币 x20',
+    breakdown: '预计每日俸禄：普通兽魂 x5、金币 x20',
     action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
   };
   mockSceneSnapshot.faction.contribution = {
     title: '当前贡献值',
     value: formatNumber(mockFactionContribution),
-    description: '贡献用于提升每日俸禄档位，俸禄以植物精华、灵宠精魄和分档兽魂为主。',
+    description: '贡献用于提升每日俸禄档位，俸禄以金币、灵宠精魄和分档兽魂为主。',
   };
   mockSceneSnapshot.faction.comparison = [
     { faction: '人界', advantage: `总贡献 ${formatNumber(mockFactionArmyPower)}`, totalContribution: formatNumber(mockFactionArmyPower), power: formatNumber(mockFactionArmyPower), isCurrent: true },
@@ -793,8 +793,7 @@ function syncMockFactionScene(): void {
     tierKey: 'contribution-0',
     tierLabel: '入门俸禄',
     rewards: [
-      { kind: 'essence', essenceType: 'ninglucao', label: '凝露草精华', quantity: 3 },
-      { kind: 'ordinary-soul', label: '普通兽魂', quantity: 2 },
+      { kind: 'ordinary-soul', label: '普通兽魂', quantity: 5 },
       { kind: 'gold', label: '金币', quantity: 20 },
     ],
     claimedAt: null,

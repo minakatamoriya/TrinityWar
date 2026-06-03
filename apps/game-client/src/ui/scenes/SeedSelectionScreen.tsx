@@ -57,7 +57,7 @@ export function SeedSelectionScreen(props: SeedSelectionScreenProps): JSX.Elemen
       ariaLabel={`${fieldCode} 选择灵植`}
       bodyClassName="seed-selection-body seed-codex-body"
       className="seed-selection-screen"
-      description="已解锁灵植可直接播种，播种不消耗精华库存。"
+      description="已解锁灵植可凭永久资格直接播种。"
       eyebrow="开始培育"
       onBack={onClose}
       title={`${fieldCode} 选择灵植`}
@@ -124,7 +124,7 @@ export function SeedSelectionScreen(props: SeedSelectionScreenProps): JSX.Elemen
       <div className="seed-selection-actionbar">
         <div className="seed-selection-summary">
           <strong>{selectedSeed?.unlocked ? selectedSeed.name : '请选择灵植'}</strong>
-          <span>{selectedSeed?.unlocked ? '已解锁可播种，不消耗精华库存。' : '当前只能种植已解锁的灵植。'}</span>
+          <span>{selectedSeed?.unlocked ? '已解锁可播种。' : '当前只能种植已解锁的灵植。'}</span>
         </div>
         <button className="primary-button" disabled={!selectedSeedReady || confirming} onClick={onConfirm} type="button">
           {confirming ? '培育中...' : '确认培育'}

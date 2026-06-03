@@ -490,9 +490,6 @@ export class NotificationService {
         if (item.kind === 'seed' && typeof item.seedId === 'string' && item.seedId.trim().length > 0) {
           return [item.seedId.trim()];
         }
-        if (item.kind === 'essence' && typeof item.essenceType === 'string' && item.essenceType.trim().length > 0) {
-          return [item.essenceType.trim()];
-        }
         return [];
       });
     const seedDefinitions = seedIds.length > 0
@@ -555,8 +552,7 @@ export class NotificationService {
     const rareSoulGrant = attachments.filter((item) => item.kind === 'rareSoul').reduce((sum, item) => sum + item.quantity, 0);
     const legendarySoulGrant = attachments.filter((item) => item.kind === 'legendarySoul').reduce((sum, item) => sum + item.quantity, 0);
     const talismanGrant = attachments.filter((item) => item.kind === 'tianjiTalisman').reduce((sum, item) => sum + item.quantity, 0);
-    const seedGrants = attachments.filter((item) => item.kind === 'seed');
-    const essenceGrants = attachments.filter((item) => item.kind === 'essence');
+    const seedGrants = attachments.filter((item) => item.kind === 'seed');
     const spiritShardGrants = attachments.filter((item) => item.kind === 'spiritShard');
 
     if (goldGrant > 0) {
@@ -651,72 +647,6 @@ export class NotificationService {
             quantity: { increment: seedGrant.quantity },
             unlockedAt: new Date(),
             inventoryVersion: { increment: 1 },
-          },
-        });
-      }
-    }
-
-    if (essenceGrants.length > 0) {
-      const seedDefinitions = await client.seedDefinition.findMany({
-        where: { seedId: { in: essenceGrants.map((item) => item.essenceType ?? '') } },
-        select: { id: true, seedId: true },
-      });
-      const seedIdMap = new Map(seedDefinitions.map((item) => [item.seedId, item.id]));
-
-      for (const essenceGrant of essenceGrants) {
-        const essenceType = essenceGrant.essenceType ?? '';
-        const seedDefinitionId = seedIdMap.get(essenceType);
-        if (!seedDefinitionId) {
-          throw new BusinessError({
-            code: ErrorCode.NotFound,
-            message: `Seed definition not found: ${essenceType}.`,
-            statusCode: 404,
-          });
-        }
-
-        const inventory = await client.playerSeedInventory.upsert({
-          where: {
-            playerId_seedDefinitionId: {
-              playerId,
-              seedDefinitionId,
-            },
-          },
-          create: {
-            playerId,
-            seedDefinitionId,
-            quantity: essenceGrant.quantity,
-          },
-          update: {
-            quantity: { increment: essenceGrant.quantity },
-            inventoryVersion: { increment: 1 },
-          },
-          select: { quantity: true },
-        });
-
-        await client.playerPlantResearch.upsert({
-          where: {
-            playerId_seedDefinitionId: {
-              playerId,
-              seedDefinitionId,
-            },
-          },
-          create: {
-            playerId,
-            seedDefinitionId,
-          },
-          update: {
-            researchVersion: { increment: 1 },
-          },
-        });
-
-        await client.essenceTransactionLog.create({
-          data: {
-            playerId,
-            essenceType,
-            delta: essenceGrant.quantity,
-            reason: essenceGrant.sourceType === 'season-reward' ? 'season-reward' : 'notification-attachment-claim',
-            sourceId: essenceGrant.sourceId ?? notificationId,
-            balanceAfter: inventory.quantity,
           },
         });
       }
@@ -930,8 +860,7 @@ function parseAttachments(value: Prisma.JsonValue | null): NotificationAttachmen
     const name = typeof candidate.name === 'string' ? candidate.name : undefined;
     const nameEn = typeof candidate.nameEn === 'string' ? candidate.nameEn : undefined;
     const quantity = typeof candidate.quantity === 'number' ? candidate.quantity : Number(candidate.quantity ?? 0);
-    const seedId = typeof candidate.seedId === 'string' ? candidate.seedId : undefined;
-    const essenceType = typeof candidate.essenceType === 'string' ? candidate.essenceType : undefined;
+    const seedId = typeof candidate.seedId === 'string' ? candidate.seedId : undefined;
     const spiritId = typeof candidate.spiritId === 'string' ? candidate.spiritId : undefined;
     const medalKey = typeof candidate.medalKey === 'string' ? candidate.medalKey : undefined;
     const domain = typeof candidate.domain === 'string' ? candidate.domain : undefined;
@@ -948,8 +877,7 @@ function parseAttachments(value: Prisma.JsonValue | null): NotificationAttachmen
       quantity,
       ...(name ? { name } : {}),
       ...(nameEn ? { nameEn } : {}),
-      ...(seedId ? { seedId } : {}),
-      ...(essenceType ? { essenceType } : {}),
+      ...(seedId ? { seedId } : {}),
       ...(spiritId ? { spiritId } : {}),
       ...(medalKey ? { medalKey } : {}),
       ...(domain ? { domain } : {}),
@@ -966,8 +894,7 @@ function toAttachmentJson(attachments: NotificationAttachment[]): Prisma.InputJs
     label: item.label,
     ...(item.name ? { name: item.name } : {}),
     ...(item.nameEn ? { nameEn: item.nameEn } : {}),
-    ...(item.seedId ? { seedId: item.seedId } : {}),
-    ...(item.essenceType ? { essenceType: item.essenceType } : {}),
+    ...(item.seedId ? { seedId: item.seedId } : {}),
     ...(item.spiritId ? { spiritId: item.spiritId } : {}),
     ...(item.medalKey ? { medalKey: item.medalKey } : {}),
     ...(item.domain ? { domain: item.domain } : {}),
@@ -1028,20 +955,6 @@ function normalizeAttachmentInput(
     return { kind: 'seed', quantity, seedId, label: seedLabel };
   }
 
-  if (input.kind === 'essence') {
-    const essenceType = input.essenceType?.trim();
-    const seedLabel = essenceType ? seedLabelMap.get(essenceType) : null;
-    if (!essenceType || !seedLabel) {
-      throw new BusinessError({
-        code: ErrorCode.BadRequest,
-        message: 'Essence attachment requires a valid essenceType.',
-        statusCode: 400,
-      });
-    }
-
-    return { kind: 'essence', quantity, essenceType, label: `${seedLabel}精华`, name: `${seedLabel}精华`, nameEn: `${seedLabel} Essence` };
-  }
-
   if (input.kind === 'spiritShard') {
     const spiritId = input.spiritId?.trim();
     const shardLabel = spiritId ? spiritShardLabelMap.get(spiritId) : null;
@@ -1086,8 +999,7 @@ function normalizeAttachmentInput(
 
 function isAttachmentKind(value: string): value is NotificationAttachmentKind {
   return value === 'gold'
-    || value === 'seed'
-    || value === 'essence'
+    || value === 'seed'
     || value === 'tianjiTalisman'
     || value === 'spiritSoul'
     || value === 'ordinarySoul'

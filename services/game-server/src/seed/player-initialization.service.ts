@@ -1,6 +1,6 @@
 import type { FieldStatus, Prisma, SpiritElement } from '@prisma/client';
 import { getDailyTaskActionScene } from '../client-read/daily-task-lifecycle.service.js';
-import { DAILY_TASK_CONFIG, LAND_DEED_CONFIG } from '../lib/game-balance.js';
+import { DAILY_TASK_CONFIG, DEFAULT_FIELD_SLOT_COUNT } from '../lib/game-balance.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { DEFAULT_STARTER_SPIRIT_ID, SPIRIT_SLOT_COUNT, STARTER_SPIRIT_IDS } from './seed-data/spirits.js';
 
@@ -58,7 +58,7 @@ export interface PlayerFieldInitializationInput {
   stageOffsetSeconds?: number;
 }
 
-const fieldUnlockMilestones = [1, 5, 10, 15];
+const fieldUnlockMilestones = Array.from({ length: DEFAULT_FIELD_SLOT_COUNT }, () => 1);
 const starterSeedInventory: Record<string, { quantity: number; unlocked: boolean }> = {
   qilingya: { quantity: 0, unlocked: true },
   qinglingmai: { quantity: 0, unlocked: true },
@@ -175,7 +175,6 @@ export class PlayerInitializationService {
     );
 
     await this.initializeFields(client, input.playerId, fields, seedIdToDefinitionId, now, resetExisting);
-    await this.initializeLandDeeds(client, input.playerId, fields, now, resetExisting);
     await this.initializeSeedInventory(client, input.playerId, normalizedSeedInventory, seedDefinitions, now, resetExisting);
     await this.initializeSpiritState(client, input.playerId, input.spirit, now, resetExisting);
     await this.initializeFarmBoard(client, input.playerId, resetExisting);
@@ -280,60 +279,6 @@ export class PlayerInitializationService {
             quantity: entry.quantity,
             unlockedAt: entry.unlocked ? now : null,
             inventoryVersion: { increment: 1 },
-          }
-          : {},
-      });
-    }
-  }
-
-  private async initializeLandDeeds(
-    client: Prisma.TransactionClient,
-    playerId: string,
-    fields: PlayerFieldInitializationInput[],
-    now: Date,
-    resetExisting: boolean,
-  ): Promise<void> {
-    const fieldsBySlotIndex = new Map(fields.map((field) => [field.slotIndex, field]));
-
-    for (const deed of LAND_DEED_CONFIG) {
-      const targetField = fieldsBySlotIndex.get(deed.targetFieldSlotIndex);
-      const isClaimed = Boolean(targetField?.isUnlocked);
-      const progressJson = {
-        requirements: deed.requirements.map((requirement) => ({
-          key: requirement.key,
-          label: requirement.label,
-          current: isClaimed ? requirement.target : 0,
-          target: requirement.target,
-          completed: isClaimed,
-        })),
-        alternativeRequirements: (deed.alternativeRequirements ?? []).map((requirement) => ({
-          key: requirement.key,
-          label: requirement.label,
-          current: isClaimed ? requirement.target : 0,
-          target: requirement.target,
-          completed: isClaimed,
-        })),
-      } as unknown as Prisma.InputJsonValue;
-
-      await client.playerLandDeedProgress.upsert({
-        where: {
-          playerId_deedKey: {
-            playerId,
-            deedKey: deed.deedKey,
-          },
-        },
-        create: {
-          playerId,
-          deedKey: deed.deedKey,
-          status: isClaimed ? 'claimed' : 'in_progress',
-          progressJson,
-          claimedAt: isClaimed ? now : null,
-        },
-        update: resetExisting
-          ? {
-            status: isClaimed ? 'claimed' : 'in_progress',
-            progressJson,
-            claimedAt: isClaimed ? now : null,
           }
           : {},
       });
@@ -586,13 +531,12 @@ function calculateSpiritMaxHp(
 function buildDefaultFields(): PlayerFieldInitializationInput[] {
   return fieldUnlockMilestones.map((unlockCastleLevel, index) => {
     const slotIndex = index + 1;
-    const isUnlocked = slotIndex === 1;
 
     return {
       slotIndex,
-      isUnlocked,
+      isUnlocked: true,
       unlockCastleLevel,
-      status: isUnlocked ? 'EMPTY' : 'LOCKED',
+      status: 'EMPTY',
     };
   });
 }

@@ -3,7 +3,6 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { APP_NAME, type ClientBootstrapResponse, type ClientPlantResearchState, type ClientSceneContentResponse, type ClientSeasonRewardsResponse, type ClientSeasonSignInResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
-import { LandDeedService } from '../land-deed/land-deed.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SeasonService } from '../season/season.service.js';
 import { SEED_DEFINITION_SEEDS } from '../seed/seed-data/seeds.js';
@@ -34,7 +33,6 @@ export class ClientReadService {
     @Inject(DailyTaskLifecycleService) private readonly dailyTaskLifecycleService: DailyTaskLifecycleService,
     @Inject(DailyFactionTaskLifecycleService) private readonly dailyFactionTaskLifecycleService: DailyFactionTaskLifecycleService,
     @Inject(PassiveIncomeLifecycleService) private readonly passiveIncomeLifecycleService: PassiveIncomeLifecycleService,
-    @Inject(LandDeedService) private readonly landDeedService: LandDeedService,
     @Inject(SeasonService) private readonly seasonService: SeasonService,
     @Inject(HomeSummaryAssembler) private readonly homeSummaryAssembler: HomeSummaryAssembler,
     @Inject(SceneContentAssembler) private readonly sceneContentAssembler: SceneContentAssembler,
@@ -112,18 +110,25 @@ export class ClientReadService {
     const dateKey = getLocalDateKey();
     const dailySpiritSoulAmount = Math.max(Math.floor(playerState?.castleLevelCache ?? 1), 1);
     const contribution = playerState?.factionMembers[0]?.contributionScore ?? 0;
+    const harvestCount = await db.fieldHarvestLog.count({
+      where: {
+        playerId,
+        seedId: { not: null },
+      },
+    });
 
     for (const seedDefinition of seedDefinitions) {
       const inventoryEntry = seedDefinition.playerInventory[0];
       const isTutorialSeed = seedDefinition.seedId === 'qilingya';
       const quantity = isTutorialSeed ? 0 : inventoryEntry?.quantity ?? 0;
       const unlocked = (inventoryEntry?.unlockedAt ?? null) !== null;
-      const discovered = unlocked || quantity > 0 || Boolean(seedDefinition.plantResearch[0]?.discoveredAt);
       const unlockRequirement = getPlantUnlockRequirement(seedDefinition.seedId, seedDefinition.rarity, seedDefinition.sortOrder);
+      const baseUnlocked = unlockRequirement.harvestRequired <= 0 && unlockRequirement.contributionRequired <= 0;
+      const discovered = unlocked || baseUnlocked || Boolean(seedDefinition.plantResearch[0]?.discoveredAt) || harvestCount >= Math.max(unlockRequirement.harvestRequired, 1);
       const canUnlock = discovered
         && !unlocked
-        && unlockRequirement.essenceRequired > 0
-        && quantity >= unlockRequirement.essenceRequired
+        && !baseUnlocked
+        && harvestCount >= unlockRequirement.harvestRequired
         && contribution >= unlockRequirement.contributionRequired;
 
       seedInventory[seedDefinition.seedId] = quantity;
@@ -132,8 +137,8 @@ export class ClientReadService {
         discovered,
         unlocked,
         status: unlocked ? 'unlocked' : canUnlock ? 'ready' : discovered ? 'discovered' : 'undiscovered',
-        essenceRequired: unlockRequirement.essenceRequired,
-        essenceOwned: quantity,
+        essenceRequired: 0,
+        essenceOwned: 0,
         contributionRequired: unlockRequirement.contributionRequired,
         contributionOwned: contribution,
         canUnlock,
@@ -228,7 +233,6 @@ export class ClientReadService {
     await this.passiveIncomeLifecycleService.settlePlayerPassiveIncome(client, playerId);
     await this.fieldLifecycleService.settlePlayerFields(client, playerId);
     await this.dailyFactionTaskLifecycleService.ensurePlayerDailyFactionTasks(client, playerId, getLocalDateKey());
-    await this.landDeedService.reconcilePlayerLandDeeds(client, playerId);
     await this.ensureRaidTargetPool(client, playerId);
     const [readModel, codex] = await Promise.all([
       this.clientReadRepository.findSceneContent(playerId, client),
@@ -702,14 +706,14 @@ export class ClientReadService {
         playerId: player.id,
         castleLevel: 1,
         vaultLevel: 1,
-        fieldSlotLevel: 1,
+        fieldSlotLevel: 4,
         populationLevel: 1,
         watchtowerLevel: 1,
       },
       update: {
         castleLevel: 1,
         vaultLevel: 1,
-        fieldSlotLevel: 1,
+        fieldSlotLevel: 4,
         populationLevel: 1,
         watchtowerLevel: 1,
         buildingVersion: { increment: 1 },
@@ -753,13 +757,14 @@ export class ClientReadService {
         create: {
           playerId: player.id,
           slotIndex,
-          isUnlocked: false,
-          unlockCastleLevel: slotIndex === 2 ? 5 : slotIndex === 3 ? 10 : 15,
-          status: 'LOCKED',
+          isUnlocked: true,
+          unlockCastleLevel: 1,
+          status: 'EMPTY',
         },
         update: {
-          isUnlocked: false,
-          status: 'LOCKED',
+          isUnlocked: true,
+          unlockCastleLevel: 1,
+          status: 'EMPTY',
           seedDefinitionId: null,
           currentClaimableGold: 0,
           statusVersion: { increment: 1 },
@@ -928,22 +933,26 @@ async function ensureSpiritDefinition(
   });
 }
 
-function getPlantUnlockRequirement(seedId: string, rarity: string, sortOrder: number): { essenceRequired: number; contributionRequired: number } {
+function getPlantUnlockRequirement(seedId: string, rarity: string, sortOrder: number): { harvestRequired: number; contributionRequired: number } {
   if (seedId === 'qilingya' || seedId === 'qinglingmai' || seedId === 'xunyamai') {
-    return { essenceRequired: 0, contributionRequired: 0 };
+    return { harvestRequired: 0, contributionRequired: 0 };
   }
 
   if (rarity === 'legendary') {
-    return { essenceRequired: 30, contributionRequired: 800 };
+    return { harvestRequired: 0, contributionRequired: 800 };
   }
 
   if (rarity === 'rare') {
-    return { essenceRequired: 12, contributionRequired: 300 };
+    return { harvestRequired: 0, contributionRequired: 300 };
+  }
+
+  if (sortOrder >= 60) {
+    return { harvestRequired: 30, contributionRequired: 0 };
   }
 
   if (sortOrder >= 50) {
-    return { essenceRequired: 6, contributionRequired: 120 };
+    return { harvestRequired: 20, contributionRequired: 0 };
   }
 
-  return { essenceRequired: 3, contributionRequired: 50 };
+  return { harvestRequired: 10, contributionRequired: 0 };
 }

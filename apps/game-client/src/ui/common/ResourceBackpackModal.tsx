@@ -19,7 +19,7 @@ const groupLabels: Record<BackpackResourceItem['group'], string> = {
   spirit: '灵宠养成材料',
   soul: '兽魂突破材料',
   'raid-shard': '灵宠精魄',
-  farm: '田地精华',
+  farm: '农田资源',
   other: '其他资源',
 };
 
@@ -37,7 +37,7 @@ export function ResourceBackpackModal(props: ResourceBackpackModalProps): JSX.El
       ariaLabel="我的资源"
       bodyClassName="resource-backpack-body"
       className="resource-backpack-screen"
-      description="查看当前拥有的灵宠材料、灵宠精魄、田地精华和其他资源"
+      description="查看当前拥有的灵宠材料、灵宠精魄和其他资源"
       onBack={onClose}
       title="我的资源"
     >

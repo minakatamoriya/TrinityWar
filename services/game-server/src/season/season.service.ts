@@ -816,7 +816,7 @@ function getParticipationRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewar
       },
       rewards: [
         tianjiTalisman(1),
-        essence('qinglingmai', 2, '青灵麦', 'Qinglingmai'),
+        ordinarySoul(2),
       ],
     }
     : null;
@@ -834,7 +834,7 @@ function getFarmingRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule 
       achievementDescriptionEn: 'Harvested at least 50 times in the season.',
       statSnapshot: { harvestCount: snapshot.harvestCount },
       rewards: [
-        essence('qianjiteng', 8, '千机藤', 'Qianjiteng'),
+        rareSoul(3),
       ],
     });
   }
@@ -850,7 +850,7 @@ function getFarmingRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule 
       achievementDescriptionEn: 'Harvested at least 20 times in the season.',
       statSnapshot: { harvestCount: snapshot.harvestCount },
       rewards: [
-        essence('ninglucao', 6, '凝露草', 'Ninglucao'),
+        ordinarySoul(8),
       ],
     });
   }
@@ -866,7 +866,7 @@ function getFarmingRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule 
       achievementDescriptionEn: 'Harvested at least 3 times in the season.',
       statSnapshot: { harvestCount: snapshot.harvestCount },
       rewards: [
-        essence('qinglingmai', 3, '青灵麦', 'Qinglingmai'),
+        ordinarySoul(3),
       ],
     });
   }
@@ -1000,7 +1000,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
       statSnapshot: { contributionScore: snapshot.contributionScore },
       rewards: [
         tianjiTalisman(10),
-        essence('xueyuehua', 10, '雪月花', 'Xueyuehua'),
+        rareSoul(5),
         rareSoul(3),
         spiritShard(10),
       ],
@@ -1019,7 +1019,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
       statSnapshot: { contributionScore: snapshot.contributionScore },
       rewards: [
         tianjiTalisman(7),
-        essence('huichuncao', 8, '回春草', 'Huichuncao'),
+        rareSoul(3),
         rareSoul(2),
         spiritShard(8),
       ],
@@ -1038,7 +1038,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
       statSnapshot: { contributionScore: snapshot.contributionScore },
       rewards: [
         tianjiTalisman(5),
-        essence('qianjiteng', 6, '千机藤', 'Qianjiteng'),
+        ordinarySoul(10),
         ordinarySoul(10),
         spiritShard(6),
       ],
@@ -1057,7 +1057,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
       statSnapshot: { contributionScore: snapshot.contributionScore },
       rewards: [
         tianjiTalisman(3),
-        essence('ninglucao', 5, '凝露草', 'Ninglucao'),
+        ordinarySoul(5),
         ordinarySoul(5),
         spiritShard(4),
       ],
@@ -1076,7 +1076,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
       statSnapshot: { contributionScore: snapshot.contributionScore },
       rewards: [
         tianjiTalisman(2),
-        essence('qinglingmai', 3, '青灵麦', 'Qinglingmai'),
+        ordinarySoul(3),
         ordinarySoul(3),
         spiritShard(2),
       ],
@@ -1122,10 +1122,6 @@ function getSnapshotNumber(snapshotJson: Prisma.JsonValue, key: string): number 
 
 function tianjiTalisman(quantity: number): ClientSeasonRewardItem {
   return { ...TALISMAN_REWARD, quantity };
-}
-
-function essence(essenceType: string, quantity: number, name: string, nameEn: string): ClientSeasonRewardItem {
-  return { kind: 'essence', essenceType, quantity, label: `${name}精华`, name: `${name}精华`, nameEn: `${nameEn} Essence` };
 }
 
 function ordinarySoul(quantity: number): ClientSeasonRewardItem {
@@ -1423,14 +1419,6 @@ function normalizeSeasonRewardItem(value: Prisma.JsonValue): ClientSeasonRewardI
 
   if (kind === 'spiritSoul' || kind === 'ordinarySoul' || kind === 'rareSoul' || kind === 'legendarySoul') {
     return { kind, quantity, label, name, ...(nameEn ? { nameEn } : {}) };
-  }
-
-  if (kind === 'essence') {
-    const essenceType = typeof record.essenceType === 'string' ? record.essenceType.trim() : '';
-    if (!essenceType) {
-      return null;
-    }
-    return { kind, essenceType, quantity, label, name, ...(nameEn ? { nameEn } : {}) };
   }
 
   if (kind === 'spiritShard') {

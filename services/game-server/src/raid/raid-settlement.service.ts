@@ -2,7 +2,6 @@
 import type { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
-import { LandDeedService } from '../land-deed/land-deed.service.js';
 import { grantFactionContribution } from '../faction/contribution.service.js';
 import { applyFactionBattlePostRecovery } from '../lib/faction-advantage-formulas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -10,9 +9,6 @@ import { buildRaidBattleReplay } from './raid-battle-replay.js';
 import { RaidRepository } from './raid.repository.js';
 import { RaidSettlementRuleService, type SpiritBattleSnapshot } from './raid-settlement-rule.service.js';
 
-const ESSENCE_LOOT_RATIO = 0.08;
-const ESSENCE_LOOT_MAX_PER_TYPE = 8;
-const ESSENCE_LOOT_PROTECTED_QUANTITY = 10;
 const RAID_WIN_CONTRIBUTION = 5;
 
 @Injectable()
@@ -22,7 +18,6 @@ export class RaidSettlementService {
     @Inject(RaidRepository) private readonly raidRepository: RaidRepository,
     @Inject(RaidSettlementRuleService) private readonly raidSettlementRuleService: RaidSettlementRuleService,
     @Inject(AuditService) private readonly auditService: AuditService,
-    @Inject(LandDeedService) private readonly landDeedService: LandDeedService,
   ) {}
 
   settleRaidOrder(raidOrderId: string) {
@@ -95,10 +90,6 @@ export class RaidSettlementService {
         ...settlementResult.rewardItems,
         ...settlementResult.battleEvents.map((event) => ({ ...event, type: 'battleEvent' })),
       ];
-      const essenceLoot = settlementResult.result === 'WIN'
-        ? await this.applyEssenceLoot(client, raidOrder)
-        : [];
-      rewardItemsJson.push(...essenceLoot);
       const battleReplay = buildRaidBattleReplay(raidOrder.id, {
         result: settlementResult.result,
         lootGold: settlementResult.lootGold,
@@ -221,103 +212,15 @@ export class RaidSettlementService {
           contribution: RAID_WIN_CONTRIBUTION,
           sourceType: 'raid-win',
           sourceId: raidOrder.id,
-          metadata: {
-            defenderPlayerId: raidOrder.defenderPlayerId,
-            lootGold: settlementResult.lootGold,
-            essenceLoot,
-          },
+            metadata: {
+              defenderPlayerId: raidOrder.defenderPlayerId,
+              lootGold: settlementResult.lootGold,
+            },
         });
-        await this.landDeedService.reconcilePlayerLandDeeds(client, raidOrder.attackerPlayerId, now);
       }
 
       return settlement;
     });
-  }
-
-  private async applyEssenceLoot(
-    client: Prisma.TransactionClient,
-    raidOrder: NonNullable<Awaited<ReturnType<RaidRepository['findRaidOrderForSettlement']>>>,
-  ): Promise<Array<{ kind: 'essence'; seedId: string; essenceType: string; label: string; quantity: number }>> {
-    const defenderInventory = raidOrder.defender.seedInventory
-      .filter((inventory) => inventory.quantity > ESSENCE_LOOT_PROTECTED_QUANTITY)
-      .sort((left, right) => {
-        const rarityDelta = getRarityWeight(right.seedDefinition.rarity) - getRarityWeight(left.seedDefinition.rarity);
-        if (rarityDelta !== 0) {
-          return rarityDelta;
-        }
-
-        return right.quantity - left.quantity;
-      })
-      .slice(0, 2);
-
-    const rewards: Array<{ kind: 'essence'; seedId: string; essenceType: string; label: string; quantity: number }> = [];
-
-    for (const inventory of defenderInventory) {
-      const available = Math.max(inventory.quantity - ESSENCE_LOOT_PROTECTED_QUANTITY, 0);
-      const quantity = Math.min(Math.max(Math.floor(available * ESSENCE_LOOT_RATIO), 1), ESSENCE_LOOT_MAX_PER_TYPE, available);
-
-      if (quantity <= 0) {
-        continue;
-      }
-
-      const defenderNextQuantity = inventory.quantity - quantity;
-      await client.playerSeedInventory.update({
-        where: { id: inventory.id },
-        data: {
-          quantity: { decrement: quantity },
-          inventoryVersion: { increment: 1 },
-        },
-      });
-      await createEssenceTransaction(client, {
-        playerId: raidOrder.defenderPlayerId,
-        essenceType: inventory.seedDefinition.seedId,
-        delta: -quantity,
-        reason: 'raid-looted',
-        sourceId: raidOrder.id,
-        balanceAfter: defenderNextQuantity,
-      });
-
-      const attackerInventory = await client.playerSeedInventory.upsert({
-        where: {
-          playerId_seedDefinitionId: {
-            playerId: raidOrder.attackerPlayerId,
-            seedDefinitionId: inventory.seedDefinition.id,
-          },
-        },
-        create: {
-          playerId: raidOrder.attackerPlayerId,
-          seedDefinitionId: inventory.seedDefinition.id,
-          quantity,
-        },
-        update: {
-          quantity: { increment: quantity },
-          inventoryVersion: { increment: 1 },
-        },
-        select: { quantity: true },
-      });
-      await discoverPlant(client, {
-        playerId: raidOrder.attackerPlayerId,
-        seedDefinitionId: inventory.seedDefinition.id,
-      });
-      await createEssenceTransaction(client, {
-        playerId: raidOrder.attackerPlayerId,
-        essenceType: inventory.seedDefinition.seedId,
-        delta: quantity,
-        reason: 'raid-loot',
-        sourceId: raidOrder.id,
-        balanceAfter: attackerInventory.quantity,
-      });
-
-      rewards.push({
-        kind: 'essence',
-        seedId: inventory.seedDefinition.seedId,
-        essenceType: inventory.seedDefinition.seedId,
-        label: `${inventory.seedDefinition.label}精华`,
-        quantity,
-      });
-    }
-
-    return rewards;
   }
 
   async settleDueRaidOrders(input: { take?: number } = {}): Promise<{ settled: number; failed: number }> {
@@ -756,65 +659,5 @@ function invertSettlementTitle(title: string): string {
     return '完胜';
   }
   return '相持';
-}
-
-function getRarityWeight(rarity: string): number {
-  if (rarity === 'legendary') {
-    return 3;
-  }
-
-  if (rarity === 'rare') {
-    return 2;
-  }
-
-  return 1;
-}
-
-async function createEssenceTransaction(
-  client: Prisma.TransactionClient,
-  data: {
-    playerId: string;
-    essenceType: string;
-    delta: number;
-    reason: string;
-    sourceId?: string | null;
-    balanceAfter: number;
-  },
-): Promise<void> {
-  await client.essenceTransactionLog.create({
-    data: {
-      playerId: data.playerId,
-      essenceType: data.essenceType,
-      delta: data.delta,
-      reason: data.reason,
-      sourceId: data.sourceId,
-      balanceAfter: data.balanceAfter,
-    },
-  });
-}
-
-async function discoverPlant(
-  client: Prisma.TransactionClient,
-  input: {
-    playerId: string;
-    seedDefinitionId: string;
-  },
-): Promise<void> {
-  await client.playerPlantResearch.upsert({
-    where: {
-      playerId_seedDefinitionId: {
-        playerId: input.playerId,
-        seedDefinitionId: input.seedDefinitionId,
-      },
-    },
-    create: {
-      playerId: input.playerId,
-      seedDefinitionId: input.seedDefinitionId,
-      discoveredAt: new Date(),
-    },
-    update: {
-      researchVersion: { increment: 1 },
-    },
-  });
 }
 

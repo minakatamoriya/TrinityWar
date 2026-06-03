@@ -10,6 +10,6 @@ export const navItems: NavItem[] = [
   { key: 'spiritConfig', label: '灵宠管理', description: '新增、编辑、删除灵宠定义' },
   { key: 'seedConfig', label: '植物管理', description: '新增、编辑、删除植物定义' },
   { key: 'taskConfig', label: '任务模块', description: '新手任务与贡献值设定' },
-  { key: 'castleLevels', label: '轻量规则', description: '查看地契任务和俸禄等级' },
+  { key: 'castleLevels', label: '轻量规则', description: '查看俸禄等级' },
   { key: 'system', label: '系统状态', description: '环境、依赖与开关' },
 ];

@@ -9,8 +9,6 @@ export interface FieldStateForCollect {
   status: 'LOCKED' | 'EMPTY' | 'GROWING' | 'MATURE' | 'WITHERED';
   statusVersion: number;
   currentClaimableGold: number;
-  expectedEssenceYield: number;
-  stolenEssenceYield: number;
   seedDefinition: {
     seedId: string;
     label: string;
@@ -84,29 +82,7 @@ function buildFieldRewards(field: FieldStateForCollect, collectMode: ClientColle
     return [];
   }
 
-  const essenceYield = Math.max((field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition.rarity)) - field.stolenEssenceYield, 0);
-
-  const rewards: ClientCollectRewardItem[] = [{
-    kind: 'essence',
-    seedId: field.seedDefinition.seedId,
-    essenceType: field.seedDefinition.seedId,
-    label: `${field.seedDefinition.label}精华`,
-    quantity: essenceYield,
-  }, buildSpiritCropReward(field.seedDefinition.rarity)];
-
-  return rewards;
-}
-
-function getExpectedEssenceYield(rarity: string): number {
-  if (rarity === 'legendary') {
-    return 8;
-  }
-
-  if (rarity === 'rare') {
-    return 6;
-  }
-
-  return 10;
+  return [buildSpiritCropReward(field.seedDefinition.rarity)];
 }
 
 function buildSpiritCropReward(rarity: string): ClientCollectRewardItem {

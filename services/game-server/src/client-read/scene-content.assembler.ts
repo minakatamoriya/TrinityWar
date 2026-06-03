@@ -283,9 +283,9 @@ export class SceneContentAssembler {
   ): ClientFarmField {
     const copy = FIELD_STATUS_COPY[field.status];
     const timing = getFieldTiming(field, readModel, now);
-    const expectedEssenceYield = field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition);
-    const stolenEssenceYield = Math.min(field.stolenEssenceYield, expectedEssenceYield);
-    const harvestableEssenceYield = Math.max(expectedEssenceYield - stolenEssenceYield, 0);
+    const expectedEssenceYield = 0;
+    const stolenEssenceYield = 0;
+    const harvestableEssenceYield = 0;
 
     return {
       id: field.id,
@@ -301,7 +301,7 @@ export class SceneContentAssembler {
       expectedEssenceYield,
       stolenEssenceYield,
       harvestableEssenceYield,
-      essenceLabel: field.seedDefinition ? `${field.seedDefinition.label}\u7cbe\u534e` : null,
+      essenceLabel: null,
       description: buildFieldDescription(field),
       actions: buildFieldActions(field.status),
     };
@@ -309,58 +309,64 @@ export class SceneContentAssembler {
 
   private buildPlants(readModel: SceneContentReadModel): ClientPlantInventoryItem[] {
     const contribution = readModel.player.factionMembers[0]?.contributionScore ?? 0;
+    const harvestCount = readModel.plantUnlockMetrics.harvestCount;
 
     return readModel.seedInventory.filter((inventory) => inventory.seedDefinition.seedId !== 'qilingya').map((inventory) => {
       const unlocked = Boolean(inventory.unlockedAt);
-      const discovered = unlocked || inventory.quantity > 0 || inventory.seedDefinition.plantResearch.length > 0;
       const requirement = getPlantUnlockRequirement(
         inventory.seedDefinition.seedId,
         inventory.seedDefinition.rarity,
         inventory.seedDefinition.sortOrder,
       );
+      const baseUnlocked = requirement.harvestRequired <= 0 && requirement.contributionRequired <= 0;
+      const discovered = unlocked || baseUnlocked || inventory.seedDefinition.plantResearch.length > 0 || harvestCount >= Math.max(requirement.harvestRequired, 1);
       const essenceQuantity = Math.max(inventory.quantity, 0);
       const canUnlock = discovered
         && !unlocked
-        && requirement.essenceRequired > 0
-        && essenceQuantity >= requirement.essenceRequired
+        && !baseUnlocked
+        && harvestCount >= requirement.harvestRequired
         && contribution >= requirement.contributionRequired;
 
       return {
         plantType: inventory.seedDefinition.seedId,
         essenceType: inventory.seedDefinition.seedId,
         plantName: inventory.seedDefinition.label,
-        essenceLabel: `${inventory.seedDefinition.label}\u7cbe\u534e`,
+        essenceLabel: null,
         rarity: mapSeedRarity(inventory.seedDefinition.rarity),
         unlocked,
         discovered,
         researchStatus: unlocked ? 'unlocked' : canUnlock ? 'ready' : discovered ? 'discovered' : 'undiscovered',
-        unlockEssenceRequired: requirement.essenceRequired,
+        unlockEssenceRequired: 0,
         unlockContributionRequired: requirement.contributionRequired,
         canUnlock,
         essenceQuantity,
         growSeconds: inventory.seedDefinition.growSeconds,
         matureSeconds: inventory.seedDefinition.matureSeconds,
-        expectedEssenceYield: getExpectedEssenceYield(inventory.seedDefinition),
+        expectedEssenceYield: 0,
       };
     });
   }
 
   private buildLandDeeds(readModel: SceneContentReadModel): NonNullable<ClientSceneContentResponse['farm']['landDeeds']> {
-    return readModel.landDeedProgress.map((progress) => {
+    return readModel.landDeedProgress.flatMap((progress) => {
       const config = getLandDeedConfig(progress.deedKey);
+      if (!config) {
+        return [];
+      }
+
       const progressJson = normalizeLandDeedProgressJson(progress.progressJson);
 
-      return {
+      return [{
         deedKey: normalizeLandDeedKey(progress.deedKey),
-        title: config?.title ?? progress.deedKey,
-        description: config?.description ?? '\u5b8c\u6210\u5730\u5951\u4efb\u52a1\u540e\u89e3\u9501\u7530\u5730\u3002',
+        title: config.title,
+        description: config.description,
         status: normalizeLandDeedStatus(progress.status),
-        targetFieldSlotIndex: config?.targetFieldSlotIndex ?? 0,
+        targetFieldSlotIndex: config.targetFieldSlotIndex,
         requirements: progressJson.requirements,
         alternativeRequirements: progressJson.alternativeRequirements,
         canClaim: progress.status === 'completed',
         claimedAt: progress.claimedAt?.toISOString() ?? null,
-      };
+      }];
     });
   }
 
@@ -484,7 +490,7 @@ function normalizeFactionStipendRewards(value: unknown): ClientFactionStipendRew
     .filter((item): item is Partial<ClientFactionStipendReward> => Boolean(item && typeof item.kind === 'string' && typeof item.label === 'string' && typeof item.quantity === 'number'))
     .map((item) => ({
       kind: item.kind as ClientFactionStipendReward['kind'],
-      label: item.label ?? '',
+      label: normalizeFactionStipendRewardLabel(item.label, item.kind),
       quantity: Math.max(Math.floor(item.quantity ?? 0), 0),
       seedId: item.seedId,
       essenceType: item.essenceType,
@@ -496,7 +502,7 @@ function toPublicFactionStipendRewards(rewards: ClientFactionStipendReward[]): C
   return rewards
     .map((item) => ({
       kind: item.kind,
-      label: item.label,
+      label: normalizeFactionStipendRewardLabel(item.label, item.kind),
       quantity: Math.max(Math.floor(item.quantity), 0),
       seedId: item.seedId,
       essenceType: item.essenceType,
@@ -505,9 +511,59 @@ function toPublicFactionStipendRewards(rewards: ClientFactionStipendReward[]): C
     .filter((item) => item.label.trim().length > 0 && item.quantity > 0);
 }
 
+function normalizeFactionStipendRewardLabel(label: string | undefined, kind: string | undefined): string {
+  const trimmedLabel = label?.trim() ?? '';
+
+  if (trimmedLabel.length > 0 && !/^[?？]+$/.test(trimmedLabel)) {
+    return trimmedLabel;
+  }
+
+  return getFactionStipendRewardLabel(kind) ?? trimmedLabel;
+}
+
+function getFactionStipendRewardLabel(kind: string | undefined): string | null {
+  if (kind === 'gold') {
+    return '金币';
+  }
+
+  if (kind === 'ordinary-soul') {
+    return '普通兽魂';
+  }
+
+  if (kind === 'rare-soul') {
+    return '稀有兽魂';
+  }
+
+  if (kind === 'legendary-soul') {
+    return '传说兽魂';
+  }
+
+  if (kind === 'spirit-shard') {
+    return '灵宠精魄';
+  }
+
+  if (kind === 'seed') {
+    return '种子';
+  }
+
+  if (kind === 'spirit-root') {
+    return '灵根';
+  }
+
+  if (kind === 'spirit-marrow') {
+    return '灵髓';
+  }
+
+  if (kind === 'spirit-jade') {
+    return '灵玉';
+  }
+
+  return null;
+}
+
 function getContributionSourceLabel(sourceType: string): string {
   if (sourceType === 'faction-task-submit' || sourceType === 'essence-submit') {
-    return '\u7cbe\u534e\u4e0a\u7f34';
+    return '\u8d44\u6e90\u4e0a\u7f34';
   }
 
   if (sourceType === 'field-collect') {
@@ -598,7 +654,7 @@ function getRemainingSeconds(target: Date | null, now: Date): number {
 
 function buildFieldDescription(field: SceneContentReadModel['fieldSlots'][number]): string {
   if (!field.isUnlocked) {
-    return '\u5b8c\u6210\u5bf9\u5e94\u5730\u5951\u4efb\u52a1\u540e\u89e3\u9501\u8fd9\u5757\u7530\u5730\u3002';
+    return '\u8fd9\u5757\u7530\u5730\u6682\u4e0d\u53ef\u7528\u3002';
   }
 
   if (field.status === 'EMPTY') {
@@ -606,14 +662,14 @@ function buildFieldDescription(field: SceneContentReadModel['fieldSlots'][number
   }
 
   if (field.status === 'MATURE') {
-    return `\u6210\u719f\u53ef\u6536\uff0c\u9884\u8ba1\u4ea7\u51fa ${formatNumber(field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition))} \u7cbe\u534e\uff0c\u5df2\u88ab\u597d\u53cb\u91c7\u6458 ${formatNumber(field.stolenEssenceYield)} \u7cbe\u534e\u3002`;
+    return '\u6210\u719f\u53ef\u6536\uff0c\u53ef\u83b7\u5f97\u91d1\u5e01\u548c\u57f9\u517b\u6750\u6599\u3002';
   }
 
   if (field.status === 'WITHERED') {
-    return `\u5df2\u7ecf\u67af\u840e\uff0c\u4ecd\u53ef\u6536\u53d6 ${formatNumber(Math.max((field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition)) - field.stolenEssenceYield, 0))} \u7cbe\u534e\u3002`;
+    return '\u5df2\u7ecf\u67af\u840e\uff0c\u4ecd\u53ef\u6536\u53d6\u90e8\u5206\u91d1\u5e01\u548c\u57f9\u517b\u6750\u6599\u3002';
   }
 
-  return `${field.seedDefinition?.label ?? '\u4f5c\u7269'} \u57f9\u80b2\u4e2d\uff0c\u9884\u8ba1\u4ea7\u51fa ${formatNumber(field.expectedEssenceYield || getExpectedEssenceYield(field.seedDefinition))} \u7cbe\u534e\u3002`;
+  return `${field.seedDefinition?.label ?? '\u4f5c\u7269'} \u57f9\u80b2\u4e2d\uff0c\u6210\u719f\u540e\u53ef\u6536\u83b7\u3002`;
 }
 
 function buildFieldActions(status: FieldStatus): ClientFarmField['actions'] {
@@ -798,42 +854,29 @@ function mapSeedRarity(rarity: string): ClientPlantInventoryItem['rarity'] {
   return 'common';
 }
 
-function getExpectedEssenceYield(seedDefinition: { rarity?: string; baseYieldGold?: number } | null): number {
-  if (!seedDefinition) {
-    return 0;
-  }
-
-  if (seedDefinition.rarity === 'legendary') {
-    return 8;
-  }
-
-  if (seedDefinition.rarity === 'rare') {
-    return 6;
-  }
-
-  return 10;
-}
-
-function getPlantUnlockRequirement(seedId: string, rarity: string, sortOrder: number): { essenceRequired: number; contributionRequired: number } {
+function getPlantUnlockRequirement(seedId: string, rarity: string, sortOrder: number): { harvestRequired: number; contributionRequired: number } {
   if (seedId === 'qilingya' || seedId === 'qinglingmai' || seedId === 'xunyamai') {
-    return { essenceRequired: 0, contributionRequired: 0 };
+    return { harvestRequired: 0, contributionRequired: 0 };
   }
 
   if (rarity === 'legendary') {
-    return { essenceRequired: 30, contributionRequired: 800 };
+    return { harvestRequired: 0, contributionRequired: 800 };
   }
 
   if (rarity === 'rare') {
-    return { essenceRequired: 12, contributionRequired: 300 };
+    return { harvestRequired: 0, contributionRequired: 300 };
+  }
+
+  if (sortOrder >= 60) {
+    return { harvestRequired: 30, contributionRequired: 0 };
   }
 
   if (sortOrder >= 50) {
-    return { essenceRequired: 6, contributionRequired: 120 };
+    return { harvestRequired: 20, contributionRequired: 0 };
   }
 
-  return { essenceRequired: 3, contributionRequired: 50 };
+  return { harvestRequired: 10, contributionRequired: 0 };
 }
-
 function normalizeRaidRewardItems(value: unknown): ClientRaidRewardItem[] {
   if (!Array.isArray(value)) {
     return [];

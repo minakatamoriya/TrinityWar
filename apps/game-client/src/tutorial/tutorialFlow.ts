@@ -16,7 +16,6 @@ export interface TutorialTask {
 export interface TutorialFarmUiRules {
   showFactionAdvantage: boolean;
   showFarmBoard: boolean;
-  showLandDeeds: boolean;
   visibleFieldLimit: number | null;
 }
 
@@ -285,7 +284,6 @@ export function getTutorialUiRules(stage: TutorialStage, isTutorialActive: boole
       farm: {
         showFactionAdvantage: true,
         showFarmBoard: true,
-        showLandDeeds: true,
         visibleFieldLimit: null,
       },
       army: {
@@ -323,7 +321,6 @@ export function getTutorialUiRules(stage: TutorialStage, isTutorialActive: boole
     farm: {
       showFactionAdvantage: false,
       showFarmBoard: false,
-      showLandDeeds: false,
       visibleFieldLimit: 1,
     },
     army: {

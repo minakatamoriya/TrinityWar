@@ -1,5 +1,4 @@
 import type { ClientSpiritState } from '@trinitywar/shared';
-import { playableSeedCatalog } from '../farm/seedPresentation';
 import type { BackpackResourceItem } from '../../ui/common/ResourceBackpackModal';
 import type { SeedRarity } from '../../config/seedCatalog';
 
@@ -32,12 +31,5 @@ export function buildBackpackResourceItems(input: {
     { id: 'rare-soul', label: '稀有兽魂', quantity: input.spiritState?.rareSoul ?? 0, group: 'soul', rarity: 'rare' },
     { id: 'legendary-soul', label: '传说兽魂', quantity: input.spiritState?.legendarySoul ?? 0, group: 'soul', rarity: 'legendary' },
     ...raidShardResourceItems,
-    ...playableSeedCatalog.filter((seed) => input.unlockedSeedIds.includes(seed.id)).map((seed) => ({
-      id: `essence-${seed.id}`,
-      label: `${seed.name}精华`,
-      quantity: input.seedInventory[seed.id] ?? 0,
-      group: 'farm' as const,
-      rarity: seed.rarity,
-    })),
   ];
 }

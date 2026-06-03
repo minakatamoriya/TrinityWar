@@ -237,7 +237,7 @@ export class ClientCommandController {
   @UseGuards(AuthPlaceholderGuard)
   @ApiBearerAuth()
   @ApiBody({ type: FactionTaskSubmitRequestDto })
-  @ApiOkResponse({ description: 'Submit essence to a daily faction task.' })
+  @ApiOkResponse({ description: 'Submit progress to an available daily faction task.' })
   async submitFactionTask(
     @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
     @Body() body: ClientFactionTaskSubmitRequest,
@@ -258,7 +258,7 @@ export class ClientCommandController {
   @UseGuards(AuthPlaceholderGuard)
   @ApiBearerAuth()
   @ApiBody({ type: UnlockPlantRequestDto })
-  @ApiOkResponse({ description: 'Unlock a discovered plant with essence and contribution requirements.' })
+  @ApiOkResponse({ description: 'Unlock a discovered plant after meeting its contribution requirements.' })
   async unlockPlant(
     @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
     @Body() body: ClientUnlockPlantRequest,
