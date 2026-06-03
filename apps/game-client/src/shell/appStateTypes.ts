@@ -99,6 +99,7 @@ export interface GlobalFeatureModalState {
   seasonResetRules?: boolean;
   tianjiShop?: boolean;
   seasonSignIn?: boolean;
+  seasonMedalCabinet?: boolean;
 }
 
 export interface FactionContributionTier {

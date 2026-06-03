@@ -9,17 +9,18 @@ import type { SeedRewardModalState } from '../../shell/appStateTypes';
 import type { SeedRewardModalItem } from '../../ui/common/SeedRewardModal';
 
 export function mapNotificationAttachmentToRewardItem(attachment: ClientNotificationItem['attachments'][number]): SeedRewardModalItem {
+  const label = attachment.name ?? attachment.label;
   if (attachment.kind === 'seed') {
     return {
       seedId: attachment.seedId,
-      label: attachment.label,
+      label,
       quantity: attachment.quantity,
     };
   }
 
   return {
     itemId: attachment.kind,
-    label: attachment.label,
+    label,
     quantity: attachment.quantity,
   };
 }
@@ -27,7 +28,7 @@ export function mapNotificationAttachmentToRewardItem(attachment: ClientNotifica
 export function buildNotificationClaimRewardModal(notification: ClientNotificationItem): SeedRewardModalState {
   return {
     title: notification.title || '领取附件',
-    summary: '确认后将以下附件入账。',
+    summary: '确认后将以下附件收入背包。',
     confirmAction: 'claim-notification',
     notificationId: notification.id,
     items: notification.attachments.map(mapNotificationAttachmentToRewardItem),

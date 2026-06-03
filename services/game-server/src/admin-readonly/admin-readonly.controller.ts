@@ -60,6 +60,30 @@ export class AdminReadonlyController {
     return this.adminReadonlyService.listFactionSeasonSnapshots(Number(seasonNumber), query);
   }
 
+  @Get('seasons/:seasonNumber/reward-summary')
+  @ApiOkResponse({ description: 'Readonly season reward summary.' })
+  getSeasonRewardSummary(@Param('seasonNumber') seasonNumber: string): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.getSeasonRewardSummary(Number(seasonNumber));
+  }
+
+  @Get('seasons/:seasonNumber/reward-grants')
+  @ApiOkResponse({ description: 'Readonly season reward grants.' })
+  listSeasonRewardGrants(
+    @Param('seasonNumber') seasonNumber: string,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<AdminListResponse<Record<string, unknown>>> {
+    return this.adminReadonlyService.listSeasonRewardGrants(Number(seasonNumber), query);
+  }
+
+  @Get('seasons/:seasonNumber/achievements')
+  @ApiOkResponse({ description: 'Readonly season achievements.' })
+  listSeasonAchievements(
+    @Param('seasonNumber') seasonNumber: string,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<AdminListResponse<Record<string, unknown>>> {
+    return this.adminReadonlyService.listSeasonAchievements(Number(seasonNumber), query);
+  }
+
   @Get('config/seeds')
   @ApiOkResponse({ description: 'List plant definitions.' })
   listSeedDefinitions(@Query() query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
@@ -229,6 +253,9 @@ defineRouteParamTypes(AdminReadonlyController.prototype, 'getCurrentSeasonAdmin'
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listSeasons', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listPlayerSeasonSnapshots', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listFactionSeasonSnapshots', [String, Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'getSeasonRewardSummary', [String]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'listSeasonRewardGrants', [String, Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'listSeasonAchievements', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listSeedDefinitions', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'createSeedDefinition', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'updateSeedDefinition', [String, Object]);

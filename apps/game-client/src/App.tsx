@@ -18,11 +18,12 @@ import type {
   ClientSpiritRollMode,
   ClientSpiritTraitCode,
   ClientSpiritState,
+  ClientSeasonRewardsResponse,
   ClientSeasonSignInState,
   HomeSummaryResponse,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, claimFactionStipend, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonSignIn, loadSpiritState, raidClientTarget, recoverSpirit, refreshRaidTargets, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, claimFactionStipend, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, recoverSpirit, refreshRaidTargets, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import type { SocialRelationFilter, SocialTabKey } from './ui/scenes/SocialScene';
 import type { ShareAssistAudience } from './ui/share/ShareAssistPage';
@@ -141,6 +142,7 @@ import { SeedRewardModalHost } from './shell/SeedRewardModalHost';
 import { SettingsModal } from './shell/SettingsModal';
 import { ShareAssistDemoScreen } from './shell/ShareAssistDemoScreen';
 import { TopDock } from './shell/TopDock';
+import { ProfileModal } from './shell/ProfileModal';
 import { useFeedbackLayer } from './shell/useFeedbackLayer';
 
 function App(): JSX.Element {
@@ -175,6 +177,7 @@ function App(): JSX.Element {
     onToast: showToast,
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const notifications = useNotificationCenter({
     onError: (message) => showToast(message, 'error'),
   });
@@ -208,6 +211,7 @@ function App(): JSX.Element {
   const [globalFeatureModal, setGlobalFeatureModal] = useState<GlobalFeatureModalState | null>(null);
   const [globalUnlockModal, setGlobalUnlockModal] = useState<GlobalUnlockModalState | null>(null);
   const [seasonSignInState, setSeasonSignInState] = useState<ClientSeasonSignInState | null>(null);
+  const [seasonRewardsState, setSeasonRewardsState] = useState<ClientSeasonRewardsResponse | null>(null);
   const characterDialog = useCharacterDialog();
   const { playDialogScene } = characterDialog;
   const characterDialogPortalRef = useRef<HTMLDivElement | null>(null);
@@ -378,9 +382,10 @@ function App(): JSX.Element {
     syncSeedBackpackState(data.bootstrap.backpack);
   };
 
-  const applyClientBundle = (data: { viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState; seasonSignIn: ClientSeasonSignInState }): void => {
+  const applyClientBundle = (data: { viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState; seasonSignIn: ClientSeasonSignInState; seasonRewards: ClientSeasonRewardsResponse }): void => {
     applyClientViewModel(data.viewModel);
     setSeasonSignInState(data.seasonSignIn);
+    setSeasonRewardsState(data.seasonRewards);
     applySpiritState(data.spirit);
     setFarmBoard(data.farmBoard);
   };
@@ -405,14 +410,16 @@ function App(): JSX.Element {
 
     try {
       const result = await notifications.claim(notificationId);
-      const [nextViewModel, nextSpirit] = await Promise.all([
+      const [nextViewModel, nextSpirit, nextSeasonRewards] = await Promise.all([
         loadClientViewModel(),
         loadSpiritState(),
+        loadSeasonRewards(),
       ]);
 
       setViewModel(nextViewModel);
       syncSeedBackpackState(nextViewModel.bootstrap.backpack);
       applySpiritState(nextSpirit);
+      setSeasonRewardsState(nextSeasonRewards);
       setSeedRewardModal(null);
       showToast(result.summary, 'success');
     } catch (error) {
@@ -420,12 +427,13 @@ function App(): JSX.Element {
     }
   };
 
-  const loadClientBundle = async (): Promise<{ viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState; seasonSignIn: ClientSeasonSignInState }> => {
-    const [nextViewModel, nextSpirit, nextFarmBoard, nextSeasonSignIn] = await Promise.all([
+  const loadClientBundle = async (): Promise<{ viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState; seasonSignIn: ClientSeasonSignInState; seasonRewards: ClientSeasonRewardsResponse }> => {
+    const [nextViewModel, nextSpirit, nextFarmBoard, nextSeasonSignIn, nextSeasonRewards] = await Promise.all([
       loadClientViewModel(),
       loadSpiritState(),
       loadFarmBoard(),
       loadSeasonSignIn(),
+      loadSeasonRewards(),
     ]);
 
     return {
@@ -433,6 +441,7 @@ function App(): JSX.Element {
       spirit: nextSpirit,
       farmBoard: nextFarmBoard,
       seasonSignIn: nextSeasonSignIn,
+      seasonRewards: nextSeasonRewards,
     };
   };
 
@@ -1042,6 +1051,7 @@ function App(): JSX.Element {
     unlockedSeedIds,
     viewModel,
   });
+  const avatarInitial = getAvatarInitial(currentAccountName);
 
   const runPendingAction = async (actionKey: string, action: () => Promise<void>): Promise<void> => {
     if (pendingActionKey === actionKey) {
@@ -1987,10 +1997,12 @@ function App(): JSX.Element {
           style={{ ['--scene-bg-image' as string]: activeBackgroundImage } as React.CSSProperties}
         >
           <TopDock
+            avatarInitial={avatarInitial}
             isTutorialUser={isTutorialUser}
             notificationUnreadCount={notifications.unreadCount}
             seasonProgress={seasonProgress}
             onOpenNotifications={notifications.openCenter}
+            onOpenProfile={() => setProfileOpen(true)}
             onOpenSeasonResetRules={() => {
               setGlobalFeatureModal({
                 title: '赛季规则',
@@ -2043,6 +2055,14 @@ function App(): JSX.Element {
             open={settingsOpen}
             onClose={() => setSettingsOpen(false)}
             onSwitchDevUser={handleSwitchDevUser}
+          />
+
+          <ProfileModal
+            avatarInitial={avatarInitial}
+            medalCabinet={seasonRewardsState?.medalCabinet ?? null}
+            nickname={currentAccountName}
+            open={profileOpen}
+            onClose={() => setProfileOpen(false)}
           />
 
           <GlobalResourceBar
@@ -2224,6 +2244,7 @@ function App(): JSX.Element {
             seasonSignInMilestones={seasonSignInMilestones}
             seasonSignInRecord={seasonSignInRecord}
             seasonSignInTodayReward={seasonSignInTodayReward}
+            seasonMedalCabinet={seasonRewardsState?.medalCabinet ?? null}
             spiritState={spiritState}
             tianjiTalismanCount={tianjiTalismanCount}
             onBuySpiritShopItem={(itemId) => {
@@ -2321,6 +2342,11 @@ function App(): JSX.Element {
       {appContent}
     </CharacterDialogProvider>
   );
+}
+
+function getAvatarInitial(name: string): string {
+  const [firstChar] = Array.from(name.trim());
+  return firstChar ? firstChar.toLocaleUpperCase('zh-CN') : '人';
 }
 
 export default App;

@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { APP_NAME, type ClientBootstrapResponse, type ClientPlantResearchState, type ClientSceneContentResponse, type ClientSeasonSignInResponse, type HomeSummaryResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientBootstrapResponse, type ClientPlantResearchState, type ClientSceneContentResponse, type ClientSeasonRewardsResponse, type ClientSeasonSignInResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { LandDeedService } from '../land-deed/land-deed.service.js';
@@ -206,6 +206,14 @@ export class ClientReadService {
   ): Promise<ClientSeasonSignInResponse> {
     const db = client ?? this.prisma.db;
     return this.seasonService.getSeasonSignInState(db, playerId);
+  }
+
+  async getSeasonRewards(
+    playerId: string,
+    client?: Prisma.TransactionClient | PrismaClient,
+  ): Promise<ClientSeasonRewardsResponse> {
+    const db = client ?? this.prisma.db;
+    return this.seasonService.getSeasonRewards(db, playerId);
   }
 
   async getSceneContent(

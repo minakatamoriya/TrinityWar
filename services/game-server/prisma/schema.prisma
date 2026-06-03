@@ -272,6 +272,8 @@ model Player {
   seasonSnapshots         PlayerSeasonSnapshot[]
   seasonSignIns           PlayerSeasonSignIn[]
   seasonActivities        PlayerSeasonActivity[]
+  seasonRewardGrants      PlayerSeasonRewardGrant[]
+  seasonAchievements      PlayerSeasonAchievement[]
 
   @@index([factionId])
   @@index([lastLoginAt])
@@ -289,6 +291,8 @@ model GameSeason {
   factionSnapshots FactionSeasonSnapshot[]
   playerSignIns    PlayerSeasonSignIn[]
   playerActivities PlayerSeasonActivity[]
+  playerRewardGrants PlayerSeasonRewardGrant[]
+  playerAchievements PlayerSeasonAchievement[]
 
   @@index([startsAt, endsAt])
   @@map("game_season")
@@ -371,6 +375,60 @@ model PlayerSeasonActivity {
   @@index([playerId, seasonNumber])
   @@index([seasonNumber, dateKey])
   @@map("player_season_activity")
+}
+
+model PlayerSeasonRewardGrant {
+  id                   String    @id @default(cuid())
+  playerId             String    @map("player_id")
+  seasonNumber         Int       @map("season_number")
+  rewardType           String    @map("reward_type")
+  rewardTier           String?   @map("reward_tier")
+  status               String    @default("generated")
+  notificationId       String?   @map("notification_id")
+  contributionSnapshot Int       @default(0) @map("contribution_snapshot")
+  signInDays           Int       @default(0) @map("sign_in_days")
+  loginDays            Int       @default(0) @map("login_days")
+  harvestCount         Int       @default(0) @map("harvest_count")
+  raidCount            Int       @default(0) @map("raid_count")
+  rewardJson           Json      @map("reward_json")
+  claimedAt            DateTime? @map("claimed_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  player Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  season GameSeason @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+  notification PlayerNotification? @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+  achievements PlayerSeasonAchievement[]
+
+  @@unique([playerId, seasonNumber, rewardType])
+  @@index([playerId, status])
+  @@index([seasonNumber, rewardType])
+  @@index([notificationId])
+  @@map("player_season_reward_grant")
+}
+
+model PlayerSeasonAchievement {
+  id                   String   @id @default(cuid())
+  playerId             String   @map("player_id")
+  seasonNumber         Int      @map("season_number")
+  domain               String
+  achievementKey       String   @map("achievement_key")
+  title                String
+  description          String
+  contributionSnapshot Int      @default(0) @map("contribution_snapshot")
+  statSnapshotJson     Json     @map("stat_snapshot_json")
+  rewardGrantId        String?  @map("reward_grant_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  season GameSeason @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+  rewardGrant PlayerSeasonRewardGrant? @relation(fields: [rewardGrantId], references: [id], onDelete: SetNull)
+
+  @@unique([playerId, seasonNumber, achievementKey])
+  @@index([playerId, seasonNumber, domain])
+  @@index([rewardGrantId])
+  @@map("player_season_achievement")
 }
 
 model FactionSeasonSnapshot {
@@ -903,6 +961,7 @@ model PlayerNotification {
 
   player             Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
   systemNotification SystemNotification? @relation(fields: [systemNotificationId], references: [id], onDelete: SetNull)
+  seasonRewardGrants PlayerSeasonRewardGrant[]
 
   @@index([playerId, deletedAt, createdAt])
   @@index([playerId, readAt])

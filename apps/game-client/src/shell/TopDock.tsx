@@ -1,4 +1,5 @@
 interface TopDockProps {
+  avatarInitial: string;
   isTutorialUser: boolean;
   notificationUnreadCount: number;
   seasonProgress: {
@@ -6,6 +7,7 @@ interface TopDockProps {
     detail: string;
   };
   onOpenNotifications: () => void;
+  onOpenProfile: () => void;
   onOpenSeasonResetRules: () => void;
   onOpenSeasonSignIn: () => void;
   onOpenSettings: () => void;
@@ -14,10 +16,12 @@ interface TopDockProps {
 
 export function TopDock(props: TopDockProps): JSX.Element {
   const {
+    avatarInitial,
     isTutorialUser,
     notificationUnreadCount,
     seasonProgress,
     onOpenNotifications,
+    onOpenProfile,
     onOpenSeasonResetRules,
     onOpenSeasonSignIn,
     onOpenSettings,
@@ -27,6 +31,9 @@ export function TopDock(props: TopDockProps): JSX.Element {
   return (
     <section className="top-dock">
       <header className="top-bar">
+        <button className="profile-avatar-button" aria-label="个人资料" onClick={onOpenProfile} type="button">
+          {avatarInitial}
+        </button>
         <div className="top-action-group">
           <button
             aria-label="赛季进度"

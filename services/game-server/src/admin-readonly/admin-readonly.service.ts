@@ -297,6 +297,165 @@ export class AdminReadonlyService {
     };
   }
 
+  async getSeasonRewardSummary(seasonNumber: number): Promise<Record<string, unknown>> {
+    const normalizedSeasonNumber = normalizeSeasonNumber(seasonNumber);
+    const where: Prisma.PlayerSeasonRewardGrantWhereInput = { seasonNumber: normalizedSeasonNumber };
+    const [totalGrantCount, totalAchievementCount, rewardTypeGroups, statusGroups, achievementDomainGroups] = await Promise.all([
+      this.prisma.db.playerSeasonRewardGrant.count({ where }),
+      this.prisma.db.playerSeasonAchievement.count({ where: { seasonNumber: normalizedSeasonNumber } }),
+      this.prisma.db.playerSeasonRewardGrant.groupBy({
+        by: ['rewardType'],
+        where,
+        _count: { _all: true },
+      }),
+      this.prisma.db.playerSeasonRewardGrant.groupBy({
+        by: ['status'],
+        where,
+        _count: { _all: true },
+      }),
+      this.prisma.db.playerSeasonAchievement.groupBy({
+        by: ['domain'],
+        where: { seasonNumber: normalizedSeasonNumber },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const notificationStatusRows = await this.prisma.db.playerSeasonRewardGrant.findMany({
+      where,
+      select: {
+        notification: { select: { claimStatus: true } },
+      },
+    });
+    const notificationClaimStatusCounts = new Map<string, number>();
+    for (const row of notificationStatusRows) {
+      const status = row.notification?.claimStatus ?? 'NONE';
+      notificationClaimStatusCounts.set(status, (notificationClaimStatusCounts.get(status) ?? 0) + 1);
+    }
+
+    return {
+      seasonNumber: normalizedSeasonNumber,
+      totalGrantCount,
+      totalAchievementCount,
+      rewardTypeCounts: Object.fromEntries(rewardTypeGroups.map((item) => [item.rewardType, item._count._all])),
+      grantStatusCounts: Object.fromEntries(statusGroups.map((item) => [item.status, item._count._all])),
+      notificationClaimStatusCounts: Object.fromEntries(notificationClaimStatusCounts),
+      achievementDomainCounts: Object.fromEntries(achievementDomainGroups.map((item) => [item.domain, item._count._all])),
+    };
+  }
+
+  async listSeasonRewardGrants(
+    seasonNumber: number,
+    query: Record<string, string | undefined>,
+  ): Promise<AdminListResponse<Record<string, unknown>>> {
+    const normalizedSeasonNumber = normalizeSeasonNumber(seasonNumber);
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const where: Prisma.PlayerSeasonRewardGrantWhereInput = { seasonNumber: normalizedSeasonNumber };
+    if (query.playerId?.trim()) {
+      where.playerId = query.playerId.trim();
+    }
+    if (query.rewardType?.trim()) {
+      where.rewardType = query.rewardType.trim();
+    }
+    if (query.status?.trim()) {
+      where.status = query.status.trim();
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.db.playerSeasonRewardGrant.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take,
+        include: {
+          player: { select: { nickname: true } },
+          notification: { select: { id: true, claimStatus: true, claimedAt: true, expiresAt: true, readAt: true } },
+          _count: { select: { achievements: true } },
+        },
+      }),
+      this.prisma.db.playerSeasonRewardGrant.count({ where }),
+    ]);
+
+    return {
+      items: items.map((item) => normalizeDates({
+        id: item.id,
+        playerId: item.playerId,
+        nickname: item.player.nickname,
+        seasonNumber: item.seasonNumber,
+        rewardType: item.rewardType,
+        rewardTier: item.rewardTier,
+        status: item.status,
+        notificationId: item.notificationId,
+        notificationClaimStatus: item.notification?.claimStatus ?? null,
+        notificationClaimedAt: item.notification?.claimedAt ?? null,
+        notificationReadAt: item.notification?.readAt ?? null,
+        expiresAt: item.notification?.expiresAt ?? null,
+        contributionSnapshot: item.contributionSnapshot,
+        signInDays: item.signInDays,
+        loginDays: item.loginDays,
+        harvestCount: item.harvestCount,
+        raidCount: item.raidCount,
+        achievementCount: item._count.achievements,
+        rewardJson: item.rewardJson,
+        claimedAt: item.claimedAt,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })),
+      pagination: { page, pageSize, total },
+    };
+  }
+
+  async listSeasonAchievements(
+    seasonNumber: number,
+    query: Record<string, string | undefined>,
+  ): Promise<AdminListResponse<Record<string, unknown>>> {
+    const normalizedSeasonNumber = normalizeSeasonNumber(seasonNumber);
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const where: Prisma.PlayerSeasonAchievementWhereInput = { seasonNumber: normalizedSeasonNumber };
+    if (query.playerId?.trim()) {
+      where.playerId = query.playerId.trim();
+    }
+    if (query.domain?.trim()) {
+      where.domain = query.domain.trim();
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.db.playerSeasonAchievement.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take,
+        include: {
+          player: { select: { nickname: true } },
+          rewardGrant: { select: { rewardType: true, rewardTier: true, status: true, notificationId: true } },
+        },
+      }),
+      this.prisma.db.playerSeasonAchievement.count({ where }),
+    ]);
+
+    return {
+      items: items.map((item) => normalizeDates({
+        id: item.id,
+        playerId: item.playerId,
+        nickname: item.player.nickname,
+        seasonNumber: item.seasonNumber,
+        domain: item.domain,
+        achievementKey: item.achievementKey,
+        title: item.title,
+        description: item.description,
+        contributionSnapshot: item.contributionSnapshot,
+        statSnapshotJson: item.statSnapshotJson,
+        rewardGrantId: item.rewardGrantId,
+        rewardType: item.rewardGrant?.rewardType ?? null,
+        rewardTier: item.rewardGrant?.rewardTier ?? null,
+        rewardStatus: item.rewardGrant?.status ?? null,
+        notificationId: item.rewardGrant?.notificationId ?? null,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })),
+      pagination: { page, pageSize, total },
+    };
+  }
+
   async listShareAssistCampaigns(query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
     const { page, pageSize, skip, take } = parsePagination(query);
     const where: Prisma.ShareAssistCampaignWhereInput = {};

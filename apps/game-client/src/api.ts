@@ -44,6 +44,7 @@
   type ClientRecruitArmyRequest,
   type ClientResetDemoStateResponse,
   type ClientSceneContentResponse,
+  type ClientSeasonRewardsResponse,
   type ClientSeasonSignInResponse,
   type ClientStartCultivationRequest,
   type ClientStateMutationResponse,
@@ -409,6 +410,22 @@ export async function loadSeasonSignIn(): Promise<ClientSeasonSignInResponse> {
   } catch (error) {
     if (allowMockReadFallback) {
       return buildMockSeasonSignIn();
+    }
+
+    throw error;
+  }
+}
+
+export async function loadSeasonRewards(): Promise<ClientSeasonRewardsResponse> {
+  if (forceMockReads) {
+    return buildMockSeasonRewards();
+  }
+
+  try {
+    return await fetchJson<ClientSeasonRewardsResponse>(`${CLIENT_API_PREFIX}/season/rewards`);
+  } catch (error) {
+    if (allowMockReadFallback) {
+      return buildMockSeasonRewards();
     }
 
     throw error;
@@ -1521,6 +1538,29 @@ function buildMockSeasonSignIn(claimedDays: number[] = []): ClientSeasonSignInRe
       reached: claimedDaySet.size >= milestone.dayCount,
       remainingDays: Math.max(milestone.dayCount - claimedDaySet.size, 0),
     })),
+  };
+}
+
+function buildMockSeasonRewards(): ClientSeasonRewardsResponse {
+  const seasonNumber = mockBootstrapSnapshot.season.seasonNumber;
+
+  return {
+    app: mockBootstrapSnapshot.app,
+    currentSeasonNumber: seasonNumber,
+    items: [],
+    claimableCount: 0,
+    medalCabinet: {
+      currentSeasonNumber: seasonNumber,
+      currentSeasonTitle: `S${seasonNumber}赛季奖章陈列柜`,
+      medals: [],
+      medalsBySeason: [
+        {
+          seasonNumber,
+          title: `S${seasonNumber}赛季`,
+          medals: [],
+        },
+      ],
+    },
   };
 }
 

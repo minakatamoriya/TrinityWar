@@ -379,6 +379,72 @@ export interface ClientClaimSeasonSignInResponse {
   signIn: ClientSeasonSignInState;
 }
 
+export type ClientSeasonRewardGrantStatus = 'generated' | 'notified' | 'claimed' | 'voided';
+
+export interface ClientSeasonRewardItem {
+  kind: 'tianjiTalisman' | 'essence' | 'spiritSoul' | 'ordinarySoul' | 'rareSoul' | 'legendarySoul' | 'spiritShard' | 'medal';
+  quantity: number;
+  label: string;
+  name?: string;
+  nameEn?: string;
+  essenceType?: string;
+  spiritId?: string;
+  medalKey?: string;
+  domain?: string;
+}
+
+export interface ClientSeasonRewardGrant {
+  id: string;
+  seasonNumber: number;
+  rewardType: string;
+  rewardTier: string | null;
+  status: ClientSeasonRewardGrantStatus;
+  contributionSnapshot: number;
+  signInDays: number;
+  loginDays: number;
+  harvestCount: number;
+  raidCount: number;
+  rewards: ClientSeasonRewardItem[];
+  claimedAt: string | null;
+  createdAt: string;
+}
+
+export interface ClientSeasonMedal {
+  id: string;
+  seasonNumber: number;
+  domain: string;
+  achievementKey: string;
+  title: string;
+  titleEn?: string;
+  description: string;
+  descriptionEn?: string;
+  rewardGrantId: string | null;
+  rewardType: string | null;
+  rewardTier: string | null;
+  rewardStatus: ClientSeasonRewardGrantStatus | null;
+  statSnapshot: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface ClientSeasonMedalCabinet {
+  currentSeasonNumber: number;
+  currentSeasonTitle: string;
+  medals: ClientSeasonMedal[];
+  medalsBySeason: Array<{
+    seasonNumber: number;
+    title: string;
+    medals: ClientSeasonMedal[];
+  }>;
+}
+
+export interface ClientSeasonRewardsResponse {
+  app: string;
+  currentSeasonNumber: number;
+  items: ClientSeasonRewardGrant[];
+  claimableCount: number;
+  medalCabinet: ClientSeasonMedalCabinet;
+}
+
 export interface AdminOverviewResponse {
   app: string;
   docs: string;
@@ -389,7 +455,7 @@ export type NotificationCategory = 'system' | 'announcement' | 'maintenance' | '
 
 export type PlayerNotificationClaimStatus = 'none' | 'unclaimed' | 'claimed' | 'expired';
 
-export type NotificationAttachmentKind = 'gold' | 'seed' | 'tianjiTalisman' | 'spiritSoul';
+export type NotificationAttachmentKind = 'gold' | 'seed' | 'essence' | 'tianjiTalisman' | 'spiritSoul' | 'ordinarySoul' | 'rareSoul' | 'legendarySoul' | 'spiritShard' | 'medal';
 
 export interface AdminPagination {
   page: number;
@@ -401,6 +467,14 @@ export interface NotificationAttachment {
   kind: NotificationAttachmentKind;
   quantity: number;
   seedId?: string;
+  essenceType?: string;
+  spiritId?: string;
+  medalKey?: string;
+  domain?: string;
+  sourceType?: string;
+  sourceId?: string;
+  name?: string;
+  nameEn?: string;
   label: string;
 }
 
@@ -454,6 +528,10 @@ export interface AdminCreateNotificationRequest {
     kind: NotificationAttachmentKind;
     quantity: number;
     seedId?: string;
+    essenceType?: string;
+    spiritId?: string;
+    medalKey?: string;
+    domain?: string;
   }>;
 }
 

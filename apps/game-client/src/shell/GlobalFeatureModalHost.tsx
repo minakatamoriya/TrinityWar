@@ -1,4 +1,4 @@
-import type { ClientSpiritState } from '@trinitywar/shared';
+import type { ClientSeasonMedalCabinet, ClientSpiritState } from '@trinitywar/shared';
 import { GlobalFeatureModal } from '../ui/common/GlobalFeatureModal';
 import {
   GlobalFeatureModalContent,
@@ -17,6 +17,7 @@ interface GlobalFeatureModalHostProps {
   seasonSignInMilestones: SeasonSignInMilestoneView[];
   seasonSignInRecord: SeasonSignInRecordView;
   seasonSignInTodayReward: number;
+  seasonMedalCabinet: ClientSeasonMedalCabinet | null;
   spiritState: ClientSpiritState | null;
   tianjiTalismanCount: number;
   onBuySpiritShopItem: (itemId: string) => void;
@@ -53,6 +54,7 @@ export function GlobalFeatureModalHost(props: GlobalFeatureModalHostProps): JSX.
     seasonSignInMilestones,
     seasonSignInRecord,
     seasonSignInTodayReward,
+    seasonMedalCabinet,
     spiritState,
     tianjiTalismanCount,
     onBuySpiritShopItem,
@@ -87,6 +89,7 @@ export function GlobalFeatureModalHost(props: GlobalFeatureModalHostProps): JSX.
           claimedToday: seasonSignInClaimedToday,
           onClaim: onClaimSeasonSignIn,
         } : undefined}
+        seasonMedalCabinet={modal.seasonMedalCabinet ? seasonMedalCabinet : undefined}
         tianjiShop={modal.tianjiShop && spiritState?.shop ? {
           spirit: { ...spiritState, shop: spiritState.shop },
           pendingActionKey,

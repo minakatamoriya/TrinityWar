@@ -66,6 +66,9 @@ function App(): JSX.Element {
   const [seasons, setSeasons] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [seasonPlayerSnapshots, setSeasonPlayerSnapshots] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [seasonFactionSnapshots, setSeasonFactionSnapshots] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [seasonRewardSummary, setSeasonRewardSummary] = useState<AdminRecord | null>(null);
+  const [seasonRewardGrants, setSeasonRewardGrants] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [seasonAchievements, setSeasonAchievements] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [seasonPlayerHistory, setSeasonPlayerHistory] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [seasonPlayerHistoryId, setSeasonPlayerHistoryId] = useState('');
   const [seedDefinitions, setSeedDefinitions] = useState<AdminListResponse<AdminRecord> | null>(null);
@@ -602,6 +605,28 @@ function App(): JSX.Element {
     }
   };
 
+  const loadSeasonRewardGrants = async (seasonNumber: number, page = seasonRewardGrants?.pagination.page ?? 1): Promise<void> => {
+    if (!seasonNumber) {
+      setSeasonRewardGrants(null);
+      return;
+    }
+    const result = await run('season-reward-grants', () => adminFetch<AdminListResponse<AdminRecord>>(`/seasons/${seasonNumber}/reward-grants?page=${page}&pageSize=10`));
+    if (result) {
+      setSeasonRewardGrants(result);
+    }
+  };
+
+  const loadSeasonAchievements = async (seasonNumber: number, page = seasonAchievements?.pagination.page ?? 1): Promise<void> => {
+    if (!seasonNumber) {
+      setSeasonAchievements(null);
+      return;
+    }
+    const result = await run('season-achievements', () => adminFetch<AdminListResponse<AdminRecord>>(`/seasons/${seasonNumber}/achievements?page=${page}&pageSize=10`));
+    if (result) {
+      setSeasonAchievements(result);
+    }
+  };
+
   const loadSeasonDashboard = async (): Promise<void> => {
     setBusy('season');
     setError(null);
@@ -614,12 +639,18 @@ function App(): JSX.Element {
       setSeasons(nextSeasons);
       const seasonNumber = Number(nextCurrentSeason.seasonNumber ?? 0);
       if (seasonNumber > 0) {
-        const [playerSnapshots, factionSnapshots] = await Promise.all([
+        const [playerSnapshots, factionSnapshots, rewardSummary, rewardGrants, achievements] = await Promise.all([
           adminFetch<AdminListResponse<AdminRecord>>(`/seasons/${seasonNumber}/player-snapshots?page=1&pageSize=10`),
           adminFetch<AdminListResponse<AdminRecord>>(`/seasons/${seasonNumber}/faction-snapshots?page=1&pageSize=10`),
+          adminFetch<AdminRecord>(`/seasons/${seasonNumber}/reward-summary`),
+          adminFetch<AdminListResponse<AdminRecord>>(`/seasons/${seasonNumber}/reward-grants?page=1&pageSize=10`),
+          adminFetch<AdminListResponse<AdminRecord>>(`/seasons/${seasonNumber}/achievements?page=1&pageSize=10`),
         ]);
         setSeasonPlayerSnapshots(playerSnapshots);
         setSeasonFactionSnapshots(factionSnapshots);
+        setSeasonRewardSummary(rewardSummary);
+        setSeasonRewardGrants(rewardGrants);
+        setSeasonAchievements(achievements);
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '赛季后台请求失败');
@@ -776,16 +807,21 @@ function App(): JSX.Element {
               busy={busy}
               currentSeason={currentSeason}
               factionSnapshots={seasonFactionSnapshots}
+              rewardGrants={seasonRewardGrants}
+              rewardSummary={seasonRewardSummary}
+              achievements={seasonAchievements}
               playerHistory={seasonPlayerHistory}
               playerHistoryId={seasonPlayerHistoryId}
               playerSnapshots={seasonPlayerSnapshots}
               seasons={seasons}
+              onAchievementPageChange={(page) => void loadSeasonAchievements(Number(currentSeason?.seasonNumber ?? 0), page)}
               onFactionSnapshotPageChange={(page) => void loadSeasonFactionSnapshots(Number(currentSeason?.seasonNumber ?? 0), page)}
               onLoadPlayerHistory={() => void loadSeasonPlayerHistory()}
               onPlayerHistoryIdChange={setSeasonPlayerHistoryId}
               onPlayerHistoryPageChange={(page) => void loadSeasonPlayerHistory(seasonPlayerHistoryId, page)}
               onPlayerSnapshotPageChange={(page) => void loadSeasonPlayerSnapshots(Number(currentSeason?.seasonNumber ?? 0), page)}
               onRefresh={() => void loadSeasonDashboard()}
+              onRewardGrantPageChange={(page) => void loadSeasonRewardGrants(Number(currentSeason?.seasonNumber ?? 0), page)}
               onSeasonPageChange={(page) => void loadSeasons(page)}
             />
           ) : null}
