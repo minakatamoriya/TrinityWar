@@ -216,6 +216,10 @@ function AccountSelectPanel(props: {
               <span>我是已注册用户</span>
               <strong>{loginLoadingMode === 'existing-user' ? '登录中...' : '进入已有档案'}</strong>
             </button>
+            <button className="auth-choice-button" disabled={loginLoadingMode !== null} onClick={() => onDevLogin('stable-user-2')} type="button">
+              <span>稳定测试号</span>
+              <strong>{loginLoadingMode === 'stable-user-2' ? '登录中...' : '稳定测试号2'}</strong>
+            </button>
             <button className="auth-choice-button" disabled={loginLoadingMode !== null} onClick={() => onDevLogin('test-user-1')} type="button">
               <span>验证账号</span>
               <strong>{loginLoadingMode === 'test-user-1' ? '登录中...' : '测试用户1'}</strong>
@@ -254,7 +258,7 @@ function AccountSelectPanel(props: {
         <section className="auth-share-assist-section auth-friend-invite-section">
           <div>
             <h2>微信好友邀请测试入口</h2>
-            <p>URL 只标识“哪位玩家发起邀请”。测试时由下面两个入口决定新玩家或老玩家；老玩家固定使用测试用户1。</p>
+            <p>URL 只标识“哪位玩家发起邀请”。测试时由下面两个入口决定新玩家或老玩家；老玩家固定使用稳定测试号2。</p>
           </div>
           <div className="auth-friend-invite-paste-grid">
             <label>

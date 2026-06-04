@@ -139,6 +139,8 @@ export class ClientReadService {
         status: unlocked ? 'unlocked' : canUnlock ? 'ready' : discovered ? 'discovered' : 'undiscovered',
         essenceRequired: 0,
         essenceOwned: 0,
+        harvestRequired: unlockRequirement.harvestRequired,
+        harvestOwned: harvestCount,
         contributionRequired: unlockRequirement.contributionRequired,
         contributionOwned: contribution,
         canUnlock,

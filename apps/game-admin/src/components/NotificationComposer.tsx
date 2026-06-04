@@ -3,6 +3,9 @@ import type { NotificationAttachmentKind, NotificationCategory } from '@trinityw
 export interface AdminNotificationAttachmentDraft {
   kind: NotificationAttachmentKind;
   quantity: string;
+  /**
+   * @deprecated Plant/seed notification attachments are retired.
+   */
   seedId: string;
 }
 
@@ -25,9 +28,11 @@ export const notificationCategoryOptions: Array<{ value: NotificationCategory; l
 
 export const attachmentKindOptions: Array<{ value: NotificationAttachmentKind; label: string }> = [
   { value: 'gold', label: '金币' },
-  { value: 'seed', label: '种子' },
   { value: 'tianjiTalisman', label: '天机符' },
   { value: 'spiritSoul', label: '兽魂' },
+  { value: 'ordinarySoul', label: '普通兽魂' },
+  { value: 'rareSoul', label: '稀有兽魂' },
+  { value: 'legendarySoul', label: '传说兽魂' },
 ];
 
 export function createEmptyNotificationForm(overrides: Partial<AdminNotificationFormState> = {}): AdminNotificationFormState {
@@ -130,14 +135,7 @@ export function NotificationComposer(props: {
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
-            {attachment.kind === 'seed' ? (
-              <select onChange={(event) => props.onAttachmentChange(index, 'seedId', event.target.value)} value={attachment.seedId}>
-                <option value="">选择种子</option>
-                {props.seedOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            ) : <input disabled value={attachmentKindOptions.find((option) => option.value === attachment.kind)?.label ?? attachment.kind} />}
+            <input disabled value={attachmentKindOptions.find((option) => option.value === attachment.kind)?.label ?? attachment.kind} />
             <input min="1" onChange={(event) => props.onAttachmentChange(index, 'quantity', event.target.value)} type="number" value={attachment.quantity} />
             <button className="small-button danger-button" onClick={() => props.onRemoveAttachment(index)} type="button">移除</button>
           </div>

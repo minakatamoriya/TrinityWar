@@ -2739,6 +2739,13 @@ button {
 .seed-codex-icon:disabled {
   color: rgba(247, 239, 225, 0.52);
   background: rgba(255, 248, 234, 0.02);
+}
+
+.seed-codex-icon.is-locked {
+  cursor: pointer;
+}
+
+.seed-codex-icon:disabled {
   cursor: not-allowed;
 }
 
@@ -5222,6 +5229,19 @@ button.spirit-element-chip {
   line-height: 1.45;
 }
 
+.seed-selection-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(112px, auto));
+  gap: 8px;
+  align-items: center;
+}
+
+.seed-selection-actions .primary-button,
+.seed-selection-actions .secondary-button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
 .seed-reward-modal {
   position: absolute;
   inset: 0;
@@ -7254,6 +7274,10 @@ button.spirit-element-chip {
   .target-list-raid,
   .raid-detail-grid,
   .seed-selection-actionbar {
+    grid-template-columns: 1fr;
+  }
+
+  .seed-selection-actions {
     grid-template-columns: 1fr;
   }
 

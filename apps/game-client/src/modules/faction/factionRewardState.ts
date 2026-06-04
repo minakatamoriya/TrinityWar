@@ -4,6 +4,9 @@ const spiritSoulRewardKinds = new Set<ClientFactionStipendReward['kind']>([
   'legendary-soul',
   'ordinary-soul',
   'rare-soul',
+  'spirit-jade',
+  'spirit-marrow',
+  'spirit-root',
 ]);
 
 export function applyFactionStipendSoulRewards(

@@ -44,6 +44,30 @@ export function compareSeedCatalogItems(left: SeedCatalogItem, right: SeedCatalo
   return left.sortOrder - right.sortOrder || left.id.localeCompare(right.id);
 }
 
+export function getSeedUnlockRequirement(seed: SeedCatalogItem): { harvestRequired: number; contributionRequired: number } {
+  if (seed.unlockedByDefault) {
+    return { harvestRequired: 0, contributionRequired: 0 };
+  }
+
+  if (seed.rarity === 'legendary') {
+    return { harvestRequired: 0, contributionRequired: 800 };
+  }
+
+  if (seed.rarity === 'rare') {
+    return { harvestRequired: 0, contributionRequired: 300 };
+  }
+
+  if (seed.sortOrder >= 60) {
+    return { harvestRequired: 30, contributionRequired: 0 };
+  }
+
+  if (seed.sortOrder >= 50) {
+    return { harvestRequired: 20, contributionRequired: 0 };
+  }
+
+  return { harvestRequired: 10, contributionRequired: 0 };
+}
+
 export const defaultUnlockedSeedIds = seedCatalog
   .filter((seed) => seed.unlockedByDefault)
   .sort(compareSeedCatalogItems)

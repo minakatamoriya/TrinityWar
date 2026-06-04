@@ -765,7 +765,7 @@ function syncMockFactionScene(): void {
     title: '人界阵营',
     description: '上缴金币积累个人贡献，每日按贡献档位领取材料俸禄。',
     advantage: '今日俸禄档位：入门俸禄',
-    breakdown: '预计每日俸禄：普通兽魂 x5、金币 x20',
+    breakdown: '预计每日俸禄：金币 x20、灵根 x20、普通兽魂 x5',
     action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
   };
   mockSceneSnapshot.faction.contribution = {
@@ -793,8 +793,9 @@ function syncMockFactionScene(): void {
     tierKey: 'contribution-0',
     tierLabel: '入门俸禄',
     rewards: [
-      { kind: 'ordinary-soul', label: '普通兽魂', quantity: 5 },
       { kind: 'gold', label: '金币', quantity: 20 },
+      { kind: 'spirit-root', label: '灵根', quantity: 20 },
+      { kind: 'ordinary-soul', label: '普通兽魂', quantity: 5 },
     ],
     claimedAt: null,
     action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
@@ -1944,6 +1945,10 @@ export function getDevLoginModeLabel(mode: DevLoginMode | null | undefined): str
     return '已注册用户';
   }
 
+  if (mode === 'stable-user-2') {
+    return '稳定测试号2';
+  }
+
   if (mode === 'test-user-1') {
     return '测试用户1';
   }
@@ -1970,6 +1975,14 @@ function buildDevLoginRequest(mode: DevLoginMode, options?: { factionCode?: DevF
       providerUserId: 'dev-main-loop',
       nickname: '主循环测试号',
       factionCode: 'immortal',
+    };
+  }
+
+  if (mode === 'stable-user-2') {
+    return {
+      providerUserId: 'dev-stable-flow-2',
+      nickname: '稳定测试号2',
+      factionCode: 'human',
     };
   }
 

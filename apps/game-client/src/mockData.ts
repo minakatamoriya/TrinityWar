@@ -410,7 +410,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
       title: '人界阵营',
       description: '完成阵营任务积累个人贡献，每日按贡献档位领取材料俸禄。',
       advantage: '今日俸禄档位：入门俸禄',
-      breakdown: '预计每日俸禄：普通兽魂 x5、金币 x20',
+      breakdown: '预计每日俸禄：金币 x20、灵根 x20、普通兽魂 x5',
       action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
     },
     contribution: {
@@ -440,8 +440,9 @@ export const mockSceneContent: ClientSceneContentResponse = {
       tierKey: 'contribution-0',
       tierLabel: '入门俸禄',
       rewards: [
-        { kind: 'ordinary-soul', label: '普通兽魂', quantity: 5 },
         { kind: 'gold', label: '金币', quantity: 20 },
+        { kind: 'spirit-root', label: '灵根', quantity: 20 },
+        { kind: 'ordinary-soul', label: '普通兽魂', quantity: 5 },
       ],
       claimedAt: null,
       action: { label: '领取俸禄', target: 'faction', tone: 'primary' },

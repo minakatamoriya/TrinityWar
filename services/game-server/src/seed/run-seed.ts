@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient, SocialRelationStatus, SocialRelationType } from '@prisma/client';
 import { DEV_ACCOUNT_SEEDS } from './seed-data/dev-accounts.js';
 import { FACTION_SEEDS } from './seed-data/factions.js';
 import { RAID_MESSAGE_TEMPLATE_SEEDS } from './seed-data/raid-messages.js';
@@ -7,6 +7,8 @@ import { SPIRIT_DEFINITION_SEEDS } from './seed-data/spirits.js';
 import { PlayerInitializationService } from './player-initialization.service.js';
 
 type TransactionClient = Prisma.TransactionClient;
+const DEV_MAIN_LOOP_PROVIDER_USER_ID = 'dev-main-loop';
+const DEV_STABLE_FLOW_2_PROVIDER_USER_ID = 'dev-stable-flow-2';
 
 export async function runSeed(): Promise<void> {
   const prisma = new PrismaClient();
@@ -179,6 +181,102 @@ async function seedDevAccounts(
   }
 
   await seedDevRaidTargetPools(client);
+  await seedDevSocialRelations(client);
+}
+
+async function seedDevSocialRelations(client: TransactionClient): Promise<void> {
+  const [mainLoopIdentity, stableFlow2Identity] = await Promise.all([
+    client.playerAuthIdentity.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: 'DEV_FAKE',
+          providerUserId: DEV_MAIN_LOOP_PROVIDER_USER_ID,
+        },
+      },
+      select: { playerId: true },
+    }),
+    client.playerAuthIdentity.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: 'DEV_FAKE',
+          providerUserId: DEV_STABLE_FLOW_2_PROVIDER_USER_ID,
+        },
+      },
+      select: { playerId: true },
+    }),
+  ]);
+
+  if (!mainLoopIdentity || !stableFlow2Identity) {
+    return;
+  }
+
+  await upsertActiveFriendPair(client, {
+    firstPlayerId: mainLoopIdentity.playerId,
+    secondPlayerId: stableFlow2Identity.playerId,
+    sourceType: 'dev-seed-stable-friend',
+    now: new Date(),
+  });
+}
+
+async function upsertActiveFriendPair(
+  client: TransactionClient,
+  input: {
+    firstPlayerId: string;
+    secondPlayerId: string;
+    sourceType: string;
+    now: Date;
+  },
+): Promise<void> {
+  if (input.firstPlayerId === input.secondPlayerId) {
+    return;
+  }
+
+  await Promise.all([
+    client.playerSocialRelation.upsert({
+      where: {
+        playerId_targetPlayerId_relationType: {
+          playerId: input.firstPlayerId,
+          targetPlayerId: input.secondPlayerId,
+          relationType: SocialRelationType.FRIEND,
+        },
+      },
+      create: {
+        playerId: input.firstPlayerId,
+        targetPlayerId: input.secondPlayerId,
+        relationType: SocialRelationType.FRIEND,
+        status: SocialRelationStatus.ACTIVE,
+        sourceType: input.sourceType,
+        intimacy: 20,
+        lastInteractedAt: input.now,
+      },
+      update: {
+        status: SocialRelationStatus.ACTIVE,
+        sourceType: input.sourceType,
+      },
+    }),
+    client.playerSocialRelation.upsert({
+      where: {
+        playerId_targetPlayerId_relationType: {
+          playerId: input.secondPlayerId,
+          targetPlayerId: input.firstPlayerId,
+          relationType: SocialRelationType.FRIEND,
+        },
+      },
+      create: {
+        playerId: input.secondPlayerId,
+        targetPlayerId: input.firstPlayerId,
+        relationType: SocialRelationType.FRIEND,
+        status: SocialRelationStatus.ACTIVE,
+        sourceType: input.sourceType,
+        intimacy: 20,
+        lastInteractedAt: input.now,
+      },
+      update: {
+        status: SocialRelationStatus.ACTIVE,
+        sourceType: input.sourceType,
+      },
+    }),
+  ]);
 }
 
 async function seedDevRaidTargetPools(client: TransactionClient): Promise<void> {

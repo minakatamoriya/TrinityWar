@@ -1,10 +1,11 @@
 ﻿import { Inject, Injectable } from '@nestjs/common';
 import { APP_NAME } from '@trinitywar/shared';
-import { Prisma, type FieldStatus } from '@prisma/client';
+import { Prisma, SocialRelationStatus, SocialRelationType, type FieldStatus } from '@prisma/client';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { AppConfigService } from '../config/app-config.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PlayerInitializationService, type PlayerInitializationInput } from '../seed/player-initialization.service.js';
+import { DEV_ACCOUNT_SEEDS, type DevAccountSeedData } from '../seed/seed-data/dev-accounts.js';
 import { SEED_DEFINITION_SEEDS } from '../seed/seed-data/seeds.js';
 import { AuthTokenService } from './auth-token.service.js';
 
@@ -139,6 +140,13 @@ const DEV_VERIFICATION_ACCOUNTS: DevVerificationAccount[] = [
   },
 ];
 
+const DEV_MAIN_LOOP_PROVIDER_USER_ID = 'dev-main-loop';
+const DEV_STABLE_FLOW_2_PROVIDER_USER_ID = 'dev-stable-flow-2';
+const DEV_STABLE_ACCOUNT_PROVIDER_USER_IDS = new Set([DEV_STABLE_FLOW_2_PROVIDER_USER_ID]);
+const DEV_FIXED_FRIEND_PROVIDER_PAIRS = [
+  [DEV_MAIN_LOOP_PROVIDER_USER_ID, DEV_STABLE_FLOW_2_PROVIDER_USER_ID],
+] as const;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -159,8 +167,9 @@ export class AuthService {
 
     const providerUserId = normalizeProviderUserId(input.providerUserId);
     const verificationAccount = getDevVerificationAccount(providerUserId);
-    const nickname = verificationAccount?.nickname ?? normalizeDevNickname(input.nickname?.trim(), providerUserId);
-    const factionCode = verificationAccount?.factionCode ?? input.factionCode?.trim() ?? 'human';
+    const stableAccount = getDevStableAccount(providerUserId);
+    const nickname = verificationAccount?.nickname ?? stableAccount?.nickname ?? normalizeDevNickname(input.nickname?.trim(), providerUserId);
+    const factionCode = verificationAccount?.factionCode ?? stableAccount?.factionCode ?? input.factionCode?.trim() ?? 'human';
 
     const result = await this.prisma.transaction(async (client) => {
       if (verificationAccount) {
@@ -209,7 +218,7 @@ export class AuthService {
           data: {
             nickname,
             factionId: faction.id,
-            castleLevelCache: 1,
+            castleLevelCache: stableAccount?.castleLevel ?? 1,
             lastLoginAt: new Date(),
             authIdentities: {
               create: {
@@ -226,14 +235,20 @@ export class AuthService {
           },
         });
 
-      await ensureSeedDefinitionExists(client, NEW_PLAYER_PRIMARY_SEED_ID);
+      const initialization = stableAccount && !existingIdentity
+        ? buildStableDevAccountInitialization(stableAccount)
+        : {
+          castleLevel: player.castleLevelCache,
+          vaultGold: 0,
+          seedInventory: NEW_PLAYER_SEED_INVENTORY,
+          spirit: NEW_PLAYER_SPIRIT_STATE,
+        };
+      await ensureSeedDefinitionsExist(client, getInitializationSeedIds(initialization));
       await this.playerInitializationService.initialize(client, {
         playerId: player.id,
-        castleLevel: player.castleLevelCache,
-        vaultGold: 0,
-        seedInventory: NEW_PLAYER_SEED_INVENTORY,
-        spirit: NEW_PLAYER_SPIRIT_STATE,
+        ...initialization,
       });
+      await this.ensureDevFixedFriendRelations(client, providerUserId);
 
       const authIdentity = existingIdentity
         ?? await client.playerAuthIdentity.findUniqueOrThrow({
@@ -401,6 +416,49 @@ export class AuthService {
     return player.id;
   }
 
+  private async ensureDevFixedFriendRelations(
+    client: Prisma.TransactionClient,
+    providerUserId: string,
+  ): Promise<void> {
+    const pairs = DEV_FIXED_FRIEND_PROVIDER_PAIRS.filter(([firstProviderUserId, secondProviderUserId]) => (
+      providerUserId === firstProviderUserId || providerUserId === secondProviderUserId
+    ));
+
+    for (const [firstProviderUserId, secondProviderUserId] of pairs) {
+      const [firstIdentity, secondIdentity] = await Promise.all([
+        client.playerAuthIdentity.findUnique({
+          where: {
+            provider_providerUserId: {
+              provider: 'DEV_FAKE',
+              providerUserId: firstProviderUserId,
+            },
+          },
+          select: { playerId: true },
+        }),
+        client.playerAuthIdentity.findUnique({
+          where: {
+            provider_providerUserId: {
+              provider: 'DEV_FAKE',
+              providerUserId: secondProviderUserId,
+            },
+          },
+          select: { playerId: true },
+        }),
+      ]);
+
+      if (!firstIdentity || !secondIdentity) {
+        continue;
+      }
+
+      await upsertActiveFriendPair(client, {
+        firstPlayerId: firstIdentity.playerId,
+        secondPlayerId: secondIdentity.playerId,
+        sourceType: 'dev-stable-friend',
+        now: new Date(),
+      });
+    }
+  }
+
   private async createVerificationRaidTargetPool(
     client: Prisma.TransactionClient,
     input: {
@@ -519,6 +577,107 @@ function getDevVerificationAccount(providerUserId: string): DevVerificationAccou
   return DEV_VERIFICATION_ACCOUNTS.find((account) => account.providerUserId === providerUserId) ?? null;
 }
 
+function getDevStableAccount(providerUserId: string): DevAccountSeedData | null {
+  if (!DEV_STABLE_ACCOUNT_PROVIDER_USER_IDS.has(providerUserId)) {
+    return null;
+  }
+
+  return DEV_ACCOUNT_SEEDS.find((account) => account.providerUserId === providerUserId) ?? null;
+}
+
+function buildStableDevAccountInitialization(account: DevAccountSeedData): Omit<PlayerInitializationInput, 'playerId' | 'resetExisting'> {
+  return {
+    castleLevel: account.castleLevel,
+    vaultGold: account.wallet.vaultGold,
+    walletGold: account.wallet.walletGold,
+    pendingTaxGold: account.wallet.pendingTaxGold,
+    pendingDividendGold: account.wallet.pendingDividendGold,
+    vaultLevel: account.building.vaultLevel,
+    populationLevel: account.building.populationLevel,
+    watchtowerLevel: account.building.watchtowerLevel,
+    protectionTechLevel: account.building.protectionTechLevel,
+    farmYieldTechLevel: account.building.farmYieldTechLevel,
+    collectWindowTechLevel: account.building.collectWindowTechLevel,
+    pendingClaimTechLevel: account.building.pendingClaimTechLevel,
+    army: account.army,
+    seedInventory: account.seedInventory,
+    spirit: account.spirit,
+    fields: account.fields,
+    taskOverrides: account.taskOverrides,
+  };
+}
+
+function getInitializationSeedIds(initialization: Omit<PlayerInitializationInput, 'playerId' | 'resetExisting'>): string[] {
+  return Array.from(new Set([
+    ...Object.keys(initialization.seedInventory ?? {}),
+    ...(initialization.fields ?? [])
+      .map((field) => field.seedId)
+      .filter((seedId): seedId is string => Boolean(seedId)),
+    NEW_PLAYER_PRIMARY_SEED_ID,
+  ]));
+}
+
+async function upsertActiveFriendPair(
+  client: Prisma.TransactionClient,
+  input: {
+    firstPlayerId: string;
+    secondPlayerId: string;
+    sourceType: string;
+    now: Date;
+  },
+): Promise<void> {
+  if (input.firstPlayerId === input.secondPlayerId) {
+    return;
+  }
+
+  await Promise.all([
+    client.playerSocialRelation.upsert({
+      where: {
+        playerId_targetPlayerId_relationType: {
+          playerId: input.firstPlayerId,
+          targetPlayerId: input.secondPlayerId,
+          relationType: SocialRelationType.FRIEND,
+        },
+      },
+      create: {
+        playerId: input.firstPlayerId,
+        targetPlayerId: input.secondPlayerId,
+        relationType: SocialRelationType.FRIEND,
+        status: SocialRelationStatus.ACTIVE,
+        sourceType: input.sourceType,
+        intimacy: 20,
+        lastInteractedAt: input.now,
+      },
+      update: {
+        status: SocialRelationStatus.ACTIVE,
+        sourceType: input.sourceType,
+      },
+    }),
+    client.playerSocialRelation.upsert({
+      where: {
+        playerId_targetPlayerId_relationType: {
+          playerId: input.secondPlayerId,
+          targetPlayerId: input.firstPlayerId,
+          relationType: SocialRelationType.FRIEND,
+        },
+      },
+      create: {
+        playerId: input.secondPlayerId,
+        targetPlayerId: input.firstPlayerId,
+        relationType: SocialRelationType.FRIEND,
+        status: SocialRelationStatus.ACTIVE,
+        sourceType: input.sourceType,
+        intimacy: 20,
+        lastInteractedAt: input.now,
+      },
+      update: {
+        status: SocialRelationStatus.ACTIVE,
+        sourceType: input.sourceType,
+      },
+    }),
+  ]);
+}
+
 function normalizeProviderUserId(providerUserId: string | undefined): string {
   const normalized = providerUserId?.trim() || 'dev-newbie';
 
@@ -581,29 +740,26 @@ async function getCurrentPlayerSummary(
   };
 }
 
-async function ensureSeedDefinitionExists(
+async function ensureSeedDefinitionsExist(
   client: Prisma.TransactionClient,
-  seedId: string,
+  seedIds: string[],
 ): Promise<void> {
-  const seed = SEED_DEFINITION_SEEDS.find((entry) => entry.seedId === seedId);
-  if (!seed) {
-    return;
+  for (const seed of SEED_DEFINITION_SEEDS.filter((entry) => seedIds.includes(entry.seedId))) {
+    await client.seedDefinition.upsert({
+      where: { seedId: seed.seedId },
+      create: seed,
+      update: {
+        label: seed.label,
+        rarity: seed.rarity,
+        sortOrder: seed.sortOrder,
+        growSeconds: seed.growSeconds,
+        matureSeconds: seed.matureSeconds,
+        collectWindowSeconds: seed.collectWindowSeconds,
+        baseYieldGold: seed.baseYieldGold,
+        harvestSeedReturn: seed.harvestSeedReturn,
+        strategyNote: seed.strategyNote,
+        lore: seed.lore,
+      },
+    });
   }
-
-  await client.seedDefinition.upsert({
-    where: { seedId: seed.seedId },
-    create: seed,
-    update: {
-      label: seed.label,
-      rarity: seed.rarity,
-      sortOrder: seed.sortOrder,
-      growSeconds: seed.growSeconds,
-      matureSeconds: seed.matureSeconds,
-      collectWindowSeconds: seed.collectWindowSeconds,
-      baseYieldGold: seed.baseYieldGold,
-      harvestSeedReturn: seed.harvestSeedReturn,
-      strategyNote: seed.strategyNote,
-      lore: seed.lore,
-    },
-  });
 }

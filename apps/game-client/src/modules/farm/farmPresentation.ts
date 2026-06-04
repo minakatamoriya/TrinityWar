@@ -22,6 +22,8 @@ export function buildLocalPlantResearchState(plantType: string, unlocked: boolea
     status: unlocked ? 'unlocked' : essenceOwned > 0 ? 'discovered' : 'undiscovered',
     essenceRequired: 0,
     essenceOwned,
+    harvestRequired: 0,
+    harvestOwned: 0,
     contributionRequired: 0,
     contributionOwned: 0,
     canUnlock: false,

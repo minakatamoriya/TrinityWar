@@ -66,7 +66,10 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
         <div className="card-grid farm-field-grid">
           {visibleFields.map((field) => {
             const primaryAction = field.actions[0];
-            const canClick = field.tone === 'empty' || Boolean(primaryAction?.label.includes('收取') || primaryAction?.label.includes('收获'));
+            const canClick = Boolean(primaryAction) && (
+              field.tone === 'empty'
+              || Boolean(primaryAction?.label.includes('收取') || primaryAction?.label.includes('收获'))
+            );
 
             return (
               <FarmStatusCard

@@ -42,12 +42,14 @@ export function formatSocialAssistSummary(input: {
   harvestedCount: number;
   rewardGold: number;
   intimacyGain: number;
+  cappedIntimacyCount?: number;
 }): string[] {
   return [
     input.wateredCount > 0 ? `浇水 ${input.wateredCount} 块` : null,
     input.harvestedCount > 0 ? `采摘 ${input.harvestedCount} 块` : null,
     input.rewardGold > 0 ? `金币 +${formatNumber(input.rewardGold)}` : null,
     input.intimacyGain > 0 ? `亲密度 +${formatNumber(input.intimacyGain)}` : null,
+    (input.cappedIntimacyCount ?? 0) > 0 ? '今日亲密度已达上限' : null,
   ].filter((part): part is string => Boolean(part));
 }
 

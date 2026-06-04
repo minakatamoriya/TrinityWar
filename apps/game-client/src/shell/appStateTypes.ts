@@ -38,6 +38,10 @@ export interface SeedRewardModalState {
 export interface SeedSelectionState {
   fieldId: string;
   fieldCode: string;
+  availableFields: Array<{
+    fieldId: string;
+    fieldCode: string;
+  }>;
 }
 
 export interface FarmCollectPresentationState {

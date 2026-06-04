@@ -14,6 +14,8 @@ export interface FarmStatusViewModel {
   emphasis?: string;
   note?: string;
   lockedHint?: string;
+  progressLabel?: string;
+  showProgressTrack?: boolean;
   centerActionLabel?: string;
   harvestable?: boolean;
 }
@@ -50,6 +52,10 @@ function formatDuration(seconds: number): string {
 }
 
 function getFarmProgressLabel(view: FarmStatusViewModel, remainingSeconds: number): string {
+  if (view.progressLabel) {
+    return view.progressLabel;
+  }
+
   if (view.tone === 'growing') {
     return `距离成熟 ${formatDuration(remainingSeconds)}`;
   }
@@ -125,9 +131,11 @@ interface FarmStatusCardProps {
 export function FarmStatusCard(props: FarmStatusCardProps): JSX.Element {
   const { view, minimal = false, collectPresentation = null, compact = false, footer, className, role, tabIndex, onClick, onKeyDown } = props;
   const remainingSeconds = Math.max(view.progressRemainingSeconds, 0);
-  const hasProgressTrack = minimal
-    ? view.tone === 'growing'
-    : view.tone !== 'empty' && view.tone !== 'locked';
+  const hasProgressTrack = view.showProgressTrack === false
+    ? false
+    : minimal
+      ? view.tone === 'growing'
+      : view.tone !== 'empty' && view.tone !== 'locked';
   const progressPercent = hasProgressTrack && view.progressTotalSeconds > 0
     ? Math.max(Math.min(((view.progressTotalSeconds - remainingSeconds) / view.progressTotalSeconds) * 100, 100), 0)
     : 0;

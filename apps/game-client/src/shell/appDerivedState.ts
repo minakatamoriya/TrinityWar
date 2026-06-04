@@ -8,6 +8,7 @@ import { getDevLoginModeLabel, type ClientViewModel, type DevLoginSession } from
 import { getSceneBackground } from '../config/sceneConfig';
 import { buildBackpackResourceItems } from '../modules/backpack/backpackSelectors';
 import { buildFarmFields } from '../modules/farm/farmFields';
+import type { FarmOptimisticMutation } from '../modules/farm/farmOptimisticState';
 import { buildSeedCatalogMap, buildSeedGroups, getFirstVisibleUnlockedSeedId } from '../modules/farm/seedPresentation';
 import { findResourceByTone } from '../modules/home/homeSelectors';
 import { buildSeasonProgress } from '../modules/season/seasonPresentation';
@@ -19,6 +20,7 @@ interface BuildAppDerivedStateInput {
   activeScene: ClientSceneKey;
   farmTick: number;
   fieldSeedAssignments: Record<string, string>;
+  farmOptimisticMutations: FarmOptimisticMutation[];
   globalItemInventory: Record<string, number>;
   loginSession: DevLoginSession | null;
   plantResearchState: Record<string, ClientPlantResearchState>;
@@ -38,6 +40,7 @@ export function buildAppDerivedState(input: BuildAppDerivedStateInput) {
     activeScene,
     farmTick,
     fieldSeedAssignments,
+    farmOptimisticMutations,
     globalItemInventory,
     loginSession,
     plantResearchState,
@@ -91,6 +94,7 @@ export function buildAppDerivedState(input: BuildAppDerivedStateInput) {
   const farmFields = buildFarmFields({
     fields: scenes.farm.fields,
     fieldSeedAssignments,
+    optimisticMutations: farmOptimisticMutations,
     seedCatalogMap,
     farmTick,
   });

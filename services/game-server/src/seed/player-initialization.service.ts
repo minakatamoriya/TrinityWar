@@ -73,7 +73,7 @@ export class PlayerInitializationService {
     const castleLevel = input.castleLevel ?? 1;
     const populationLevel = input.populationLevel ?? 1;
     const armyCapacity = input.army?.capacity ?? getInitialArmyCapacity(populationLevel);
-    const fields = input.fields ?? buildDefaultFields();
+    const fields = normalizeFieldUnlocks(input.fields ?? buildDefaultFields());
     const unlockedFieldCount = fields.filter((field) => field.isUnlocked).length;
 
     if (resetExisting) {
@@ -139,7 +139,9 @@ export class PlayerInitializationService {
           pendingClaimTechLevel: input.pendingClaimTechLevel ?? 0,
           buildingVersion: { increment: 1 },
         }
-        : {},
+        : {
+          fieldSlotLevel: unlockedFieldCount,
+        },
     });
 
     await client.playerArmy.upsert({
@@ -175,6 +177,7 @@ export class PlayerInitializationService {
     );
 
     await this.initializeFields(client, input.playerId, fields, seedIdToDefinitionId, now, resetExisting);
+    await this.repairUnlockedFieldSlots(client, input.playerId, fields);
     await this.initializeSeedInventory(client, input.playerId, normalizedSeedInventory, seedDefinitions, now, resetExisting);
     await this.initializeSpiritState(client, input.playerId, input.spirit, now, resetExisting);
     await this.initializeFarmBoard(client, input.playerId, resetExisting);
@@ -247,6 +250,52 @@ export class PlayerInitializationService {
           : {},
       });
     }
+  }
+
+  private async repairUnlockedFieldSlots(
+    client: Prisma.TransactionClient,
+    playerId: string,
+    fields: PlayerFieldInitializationInput[],
+  ): Promise<void> {
+    const slotIndexes = fields.map((field) => field.slotIndex);
+
+    if (slotIndexes.length <= 0) {
+      return;
+    }
+
+    await client.playerFieldSlot.updateMany({
+      where: {
+        playerId,
+        slotIndex: { in: slotIndexes },
+        status: 'LOCKED',
+      },
+      data: {
+        isUnlocked: true,
+        unlockCastleLevel: 1,
+        status: 'EMPTY',
+        seedDefinitionId: null,
+        investedGold: 0,
+        currentClaimableGold: 0,
+        seedAt: null,
+        matureAt: null,
+        readyAt: null,
+        overripeAt: null,
+        lastCalculatedAt: null,
+        statusVersion: { increment: 1 },
+      },
+    });
+
+    await client.playerFieldSlot.updateMany({
+      where: {
+        playerId,
+        slotIndex: { in: slotIndexes },
+        status: { not: 'LOCKED' },
+      },
+      data: {
+        isUnlocked: true,
+        unlockCastleLevel: 1,
+      },
+    });
   }
 
   private async initializeSeedInventory(
@@ -539,6 +588,19 @@ function buildDefaultFields(): PlayerFieldInitializationInput[] {
       status: 'EMPTY',
     };
   });
+}
+
+function normalizeFieldUnlocks(fields: PlayerFieldInitializationInput[]): PlayerFieldInitializationInput[] {
+  return fields.map((field) => ({
+    ...field,
+    isUnlocked: true,
+    unlockCastleLevel: 1,
+    status: field.status === 'LOCKED' ? 'EMPTY' : field.status,
+    seedId: field.status === 'LOCKED' ? undefined : field.seedId,
+    investedGold: field.status === 'LOCKED' ? 0 : field.investedGold,
+    currentClaimableGold: field.status === 'LOCKED' ? 0 : field.currentClaimableGold,
+    stageOffsetSeconds: field.status === 'LOCKED' ? undefined : field.stageOffsetSeconds,
+  }));
 }
 
 function getInitialVaultCapacity(vaultLevel: number): number {

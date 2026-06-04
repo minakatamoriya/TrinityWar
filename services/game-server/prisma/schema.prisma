@@ -1023,6 +1023,7 @@ model PlayerAssistRecord {
   targetEntityType String?          @map("target_entity_type")
   targetEntityId   String?          @map("target_entity_id")
   effectValue      Int              @default(0) @map("effect_value")
+  intimacyGain     Int              @default(0) @map("intimacy_gain")
   dateKey          String           @map("date_key")
   createdAt        DateTime         @default(now()) @map("created_at")
 
@@ -1030,6 +1031,7 @@ model PlayerAssistRecord {
   targetPlayer Player @relation("AssistTarget", fields: [targetPlayerId], references: [id], onDelete: Cascade)
 
   @@index([helperPlayerId, dateKey, assistType])
+  @@index([helperPlayerId, targetPlayerId, dateKey], map: "assist_pair_date_idx")
   @@index([targetPlayerId, dateKey, assistType])
   @@index([targetEntityType, targetEntityId])
   @@map("player_assist_record")

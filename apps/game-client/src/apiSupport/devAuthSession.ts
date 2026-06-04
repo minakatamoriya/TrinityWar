@@ -1,4 +1,4 @@
-export type DevLoginMode = 'new-user' | 'existing-user' | 'test-user-1' | 'test-user-2';
+export type DevLoginMode = 'new-user' | 'existing-user' | 'stable-user-2' | 'test-user-1' | 'test-user-2';
 export type DevFactionChoice = 'human' | 'immortal' | 'demon';
 
 export interface DevLoginSession {
@@ -85,6 +85,10 @@ function getExpectedDevNickname(mode: DevLoginMode, currentNickname: string): st
 
   if (mode === 'existing-user') {
     return '主循环测试号';
+  }
+
+  if (mode === 'stable-user-2') {
+    return '稳定测试号2';
   }
 
   if (mode === 'test-user-1') {

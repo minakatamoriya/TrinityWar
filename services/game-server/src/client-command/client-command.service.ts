@@ -1358,6 +1358,9 @@ export class ClientCommandService {
       const rewards = await resolveStipendRewards(client, (tier?.rewards ?? []) as ResolvableStipendReward[]);
       const now = new Date();
       const goldReward = sumRewardQuantity(rewards, 'gold');
+      const spiritRootReward = sumRewardQuantity(rewards, 'spirit-root');
+      const spiritMarrowReward = sumRewardQuantity(rewards, 'spirit-marrow');
+      const spiritJadeReward = sumRewardQuantity(rewards, 'spirit-jade');
       const ordinarySoulReward = sumRewardQuantity(rewards, 'ordinary-soul');
       const rareSoulReward = sumRewardQuantity(rewards, 'rare-soul');
       const legendarySoulReward = sumRewardQuantity(rewards, 'legendary-soul');
@@ -1388,16 +1391,22 @@ export class ClientCommandService {
         });
       }
 
-      if (ordinarySoulReward > 0 || rareSoulReward > 0 || legendarySoulReward > 0) {
+      if (spiritRootReward > 0 || spiritMarrowReward > 0 || spiritJadeReward > 0 || ordinarySoulReward > 0 || rareSoulReward > 0 || legendarySoulReward > 0) {
         await client.playerSpiritResource.upsert({
           where: { playerId: input.playerId },
           create: {
             playerId: input.playerId,
+            spiritRoot: spiritRootReward,
+            spiritMarrow: spiritMarrowReward,
+            spiritJade: spiritJadeReward,
             ordinarySoul: ordinarySoulReward,
             rareSoul: rareSoulReward,
             legendarySoul: legendarySoulReward,
           },
           update: {
+            spiritRoot: spiritRootReward > 0 ? { increment: spiritRootReward } : undefined,
+            spiritMarrow: spiritMarrowReward > 0 ? { increment: spiritMarrowReward } : undefined,
+            spiritJade: spiritJadeReward > 0 ? { increment: spiritJadeReward } : undefined,
             ordinarySoul: ordinarySoulReward > 0 ? { increment: ordinarySoulReward } : undefined,
             rareSoul: rareSoulReward > 0 ? { increment: rareSoulReward } : undefined,
             legendarySoul: legendarySoulReward > 0 ? { increment: legendarySoulReward } : undefined,
@@ -1658,6 +1667,7 @@ export class ClientCommandService {
           discovered: true,
           researchStatus: 'unlocked',
           unlockEssenceRequired: 0,
+          unlockHarvestRequired: requirement.harvestRequired,
           unlockContributionRequired: requirement.contributionRequired,
           canUnlock: false,
           essenceQuantity: inventory.quantity,
@@ -2206,7 +2216,7 @@ function buildClaimPendingSummary(
 }
 
 function normalizeStipendRewards(rewards: ClientFactionStipendReward[]): ClientFactionStipendReward[] {
-  return rewards
+  const normalizedRewards = rewards
     .map((reward) => ({
       kind: reward.kind,
       label: reward.label,
@@ -2216,6 +2226,27 @@ function normalizeStipendRewards(rewards: ClientFactionStipendReward[]): ClientF
       spiritId: reward.spiritId,
     }))
     .filter((reward) => reward.label.trim().length > 0 && reward.quantity > 0);
+  const groupedRewards = new Map<string, ClientFactionStipendReward>();
+
+  for (const reward of normalizedRewards) {
+    const key = [
+      reward.kind,
+      reward.seedId ?? '',
+      reward.essenceType ?? '',
+      reward.spiritId ?? '',
+      reward.label,
+    ].join(':');
+    const existing = groupedRewards.get(key);
+
+    if (existing) {
+      existing.quantity += reward.quantity;
+      continue;
+    }
+
+    groupedRewards.set(key, { ...reward });
+  }
+
+  return Array.from(groupedRewards.values());
 }
 
 async function resolveStipendRewards(

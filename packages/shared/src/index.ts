@@ -279,9 +279,13 @@ export interface ClientBootstrapResponse {
 
 export interface ClientSeedBackpack {
   /**
-   * @deprecated Seed inventory now represents essence inventory in client-facing copy.
+   * @deprecated Planting no longer consumes seed stock. Use unlockedPlantIds
+   * and plantResearch for player-facing plant access.
    */
   seedInventory: Record<string, number>;
+  /**
+   * @deprecated Plant essence inventory is retired from the current farming loop.
+   */
   essenceInventory?: Record<string, number>;
   globalItemInventory: Record<string, number>;
   /**
@@ -455,7 +459,7 @@ export type NotificationCategory = 'system' | 'announcement' | 'maintenance' | '
 
 export type PlayerNotificationClaimStatus = 'none' | 'unclaimed' | 'claimed' | 'expired';
 
-export type NotificationAttachmentKind = 'gold' | 'seed' | 'tianjiTalisman' | 'spiritSoul' | 'ordinarySoul' | 'rareSoul' | 'legendarySoul' | 'spiritShard' | 'medal';
+export type NotificationAttachmentKind = 'gold' | 'tianjiTalisman' | 'spiritSoul' | 'ordinarySoul' | 'rareSoul' | 'legendarySoul' | 'spiritShard' | 'medal';
 
 export interface AdminPagination {
   page: number;
@@ -466,7 +470,14 @@ export interface AdminPagination {
 export interface NotificationAttachment {
   kind: NotificationAttachmentKind;
   quantity: number;
+  /**
+   * @deprecated Notification seed attachments are retired. Plant access should
+   * be granted by unlock state, not stock or essence.
+   */
   seedId?: string;
+  /**
+   * @deprecated Plant essence is retired from season and notification rewards.
+   */
   essenceType?: string;
   spiritId?: string;
   medalKey?: string;
@@ -527,7 +538,13 @@ export interface AdminCreateNotificationRequest {
   attachments?: Array<{
     kind: NotificationAttachmentKind;
     quantity: number;
+    /**
+     * @deprecated Notification seed attachments are retired.
+     */
     seedId?: string;
+    /**
+     * @deprecated Plant essence is retired from rewards.
+     */
     essenceType?: string;
     spiritId?: string;
     medalKey?: string;
@@ -698,7 +715,7 @@ export interface ClientLandDeedProgress {
 
 export type ClientFactionStipendStatus = 'available' | 'claimed' | 'unavailable';
 
-export type ClientFactionStipendRewardKind = 'gold' | 'spirit-shard' | 'ordinary-soul' | 'rare-soul' | 'legendary-soul' | 'seed';
+export type ClientFactionStipendRewardKind = 'gold' | 'spirit-root' | 'spirit-marrow' | 'spirit-jade' | 'spirit-shard' | 'ordinary-soul' | 'rare-soul' | 'legendary-soul' | 'seed';
 
 export interface ClientFactionStipendReward {
   kind: ClientFactionStipendRewardKind;
@@ -718,6 +735,8 @@ export interface ClientPlantResearchState {
   status: ClientPlantResearchStatus;
   essenceRequired: number;
   essenceOwned: number;
+  harvestRequired?: number;
+  harvestOwned?: number;
   contributionRequired: number;
   contributionOwned: number;
   canUnlock: boolean;
@@ -1178,6 +1197,7 @@ export interface ClientPlantInventoryItem {
   discovered?: boolean;
   researchStatus?: ClientPlantResearchStatus;
   unlockEssenceRequired?: number;
+  unlockHarvestRequired?: number;
   unlockContributionRequired?: number;
   canUnlock?: boolean;
   essenceQuantity: number;

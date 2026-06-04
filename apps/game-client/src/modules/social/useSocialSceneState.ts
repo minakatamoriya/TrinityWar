@@ -75,7 +75,7 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
   const runAssistForFields = async (
     targetPlayerId: string,
     fields: ClientSocialFriendFieldVisitResponse['fields'],
-  ): Promise<void> => {
+  ): Promise<ReturnType<typeof runSocialFieldAssists> extends Promise<infer TResult> ? TResult : never> => {
     const assistResult = await runSocialFieldAssists({
       targetPlayerId,
       fields,
@@ -88,6 +88,17 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
       setSummary((current) => current ? { ...current, counts } : current);
     }
 
+    return assistResult;
+  };
+
+  const showAssistResultToast = (assistResult: {
+    wateredCount: number;
+    harvestedCount: number;
+    rewardGold: number;
+    intimacyGain: number;
+    cappedIntimacyCount: number;
+    failedMessages: string[];
+  }): void => {
     const summaryParts = formatSocialAssistSummary(assistResult);
 
     if (summaryParts.length > 0) {
@@ -137,8 +148,9 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
     setError(null);
 
     try {
-      await runAssistForFields(targetPlayerId, actionableFields);
+      const assistResult = await runAssistForFields(targetPlayerId, actionableFields);
       setFieldVisit(await visitSocialFriendFields(targetPlayerId));
+      showAssistResultToast(assistResult);
       void loadBundle();
     } finally {
       assistBusyRef.current = false;
@@ -186,7 +198,8 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
         return;
       }
 
-      await runAssistForFields(targetPlayerId, actionableFields);
+      const assistResult = await runAssistForFields(targetPlayerId, actionableFields);
+      showAssistResultToast(assistResult);
       void loadBundle();
     } catch (assistError) {
       onToast(assistError instanceof Error && assistError.message ? assistError.message : '当前无法完成一键助力，请稍后重试。', 'error');

@@ -9,6 +9,7 @@ export interface SocialFieldAssistResult {
   harvestedCount: number;
   rewardGold: number;
   intimacyGain: number;
+  cappedIntimacyCount: number;
   latestCounts: ClientSocialSummaryResponse['counts'] | null;
   failedMessages: string[];
 }
@@ -24,6 +25,7 @@ export async function runSocialFieldAssists(input: {
     harvestedCount: 0,
     rewardGold: 0,
     intimacyGain: 0,
+    cappedIntimacyCount: 0,
     latestCounts: null,
     failedMessages: [],
   };
@@ -34,6 +36,9 @@ export async function runSocialFieldAssists(input: {
         const response = await input.waterField(field.fieldSlotId);
         result.wateredCount += 1;
         result.intimacyGain += response.intimacyGain;
+        if (response.intimacyGain <= 0) {
+          result.cappedIntimacyCount += 1;
+        }
         result.latestCounts = response.counts;
         continue;
       }
@@ -43,6 +48,9 @@ export async function runSocialFieldAssists(input: {
         result.harvestedCount += 1;
         result.rewardGold += response.rewards?.reduce((sum, reward) => sum + (reward.kind === 'gold' ? reward.quantity : 0), 0) ?? 0;
         result.intimacyGain += response.intimacyGain;
+        if (response.intimacyGain <= 0) {
+          result.cappedIntimacyCount += 1;
+        }
         result.latestCounts = response.counts;
       }
     } catch (error) {

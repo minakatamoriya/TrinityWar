@@ -168,7 +168,7 @@ try {
   if (-not $SkipSafetySnapshot) {
     $snapshotTarget = "$($connection.Database) <= $snapshotPath"
     if ($PSCmdlet.ShouldProcess($snapshotTarget, 'Create pre-restore safety snapshot')) {
-      & $pgDumpPath --format=custom --no-owner --no-privileges --verbose --host=$connection.Host --port=$connection.Port --username=$connection.Username --dbname=$connection.Database --file=$snapshotPath
+      & $pgDumpPath --format=custom --no-owner --no-privileges --verbose --host=$($connection.Host) --port=$($connection.Port) --username=$($connection.Username) --dbname=$($connection.Database) --file=$snapshotPath
       if ($LASTEXITCODE -ne 0) {
         throw "pg_dump failed with exit code $LASTEXITCODE"
       }
@@ -178,7 +178,7 @@ try {
 
   $restoreTarget = "$($connection.Database) <= $resolvedBackupPath"
   if ($PSCmdlet.ShouldProcess($restoreTarget, 'Restore PostgreSQL backup')) {
-    & $pgRestorePath --clean --if-exists --no-owner --no-privileges --exit-on-error --verbose --host=$connection.Host --port=$connection.Port --username=$connection.Username --dbname=$connection.Database $resolvedBackupPath
+    & $pgRestorePath --clean --if-exists --no-owner --no-privileges --exit-on-error --verbose --host=$($connection.Host) --port=$($connection.Port) --username=$($connection.Username) --dbname=$($connection.Database) $resolvedBackupPath
     if ($LASTEXITCODE -ne 0) {
       throw "pg_restore failed with exit code $LASTEXITCODE"
     }

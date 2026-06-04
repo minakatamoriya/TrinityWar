@@ -58,6 +58,11 @@ import {
   FARM_COLLECT_PRESENTATION_MS,
 } from './modules/farm/farmPresentation';
 import {
+  createCollectFieldOptimisticMutation,
+  removeFarmOptimisticMutation,
+  type FarmOptimisticMutation,
+} from './modules/farm/farmOptimisticState';
+import {
   shouldCloseFarmBoardEditorWithoutSaving,
   validateFarmBoardMessage,
 } from './modules/farm/farmBoardState';
@@ -205,6 +210,7 @@ function App(): JSX.Element {
   const [armyQueueRefreshReadyAt, setArmyQueueRefreshReadyAt] = useState<string | null>(null);
   const [selectedSeedId, setSelectedSeedId] = useState<string>('qilingya');
   const [fieldSeedAssignments, setFieldSeedAssignments] = useState<Record<string, string>>({});
+  const [farmOptimisticMutations, setFarmOptimisticMutations] = useState<FarmOptimisticMutation[]>([]);
   const [farmCollectPresentation, setFarmCollectPresentation] = useState<FarmCollectPresentationState | null>(null);
   const [farmBoard, setFarmBoard] = useState<ClientFarmBoardState | null>(null);
   const [farmBoardEditor, setFarmBoardEditor] = useState<FarmBoardEditorState | null>(null);
@@ -378,6 +384,7 @@ function App(): JSX.Element {
 
   const applyClientViewModel = (data: ClientViewModel): void => {
     setViewModel(data);
+    setFarmOptimisticMutations([]);
     raidIntel.setSelectedTargetId(data.scenes.raid.targets[0]?.id ?? '');
     syncSeedBackpackState(data.bootstrap.backpack);
   };
@@ -520,7 +527,7 @@ function App(): JSX.Element {
         return;
       }
 
-      const helperSession = await devLogin('test-user-1');
+      const helperSession = await devLogin('stable-user-2');
       const data = await loadClientBundle();
       setTutorialStage(getInitialTutorialStage(helperSession));
       setLoginSession(helperSession);
@@ -633,7 +640,7 @@ function App(): JSX.Element {
     try {
       let helperPlayerId: string | undefined;
       if (shareAssistDemo.audience === 'returning-user') {
-        const helperSession = await devLogin('test-user-2');
+        const helperSession = await devLogin('stable-user-2');
         helperPlayerId = helperSession.player.id;
       }
 
@@ -1038,6 +1045,7 @@ function App(): JSX.Element {
     activeScene,
     farmTick,
     fieldSeedAssignments,
+    farmOptimisticMutations,
     globalItemInventory,
     loginSession,
     plantResearchState,
@@ -1634,14 +1642,38 @@ function App(): JSX.Element {
       setSeedSelectionState({
         fieldId,
         fieldCode: context,
+        availableFields: farmFields
+          .filter((item) => item.tone === 'empty')
+          .map((item) => ({
+            fieldId: item.id,
+            fieldCode: item.code,
+          })),
       });
       return;
     }
 
     if (isCollectAction) {
       const collectMode: ClientCollectFieldRequest['collectMode'] = 'ripe';
+      const optimisticMutation = field ? createCollectFieldOptimisticMutation(field) : null;
 
       setPendingActionKey(actionKey);
+      if (optimisticMutation) {
+        setFarmOptimisticMutations((current) => [...current, optimisticMutation]);
+        setFarmCollectPresentation({
+          fieldId,
+          tier: 'harvest',
+          showSeeds: false,
+        });
+        if (optimisticMutation.estimatedGold > 0) {
+          showRewardBubbles([
+            {
+              label: '金币',
+              quantity: optimisticMutation.estimatedGold,
+              tone: 'gold',
+            },
+          ]);
+        }
+      }
 
       try {
         const result: ClientCollectFieldResponse = await collectFieldEarnings({
@@ -1652,28 +1684,24 @@ function App(): JSX.Element {
         });
         applyMutationResult(result);
         const displayableRewards = result.result.rewards.filter(isDisplayableFarmReward);
-        if (displayableRewards.length > 0) {
+        const hasDisplayableRewards = displayableRewards.length > 0;
+        if (hasDisplayableRewards) {
           setSeedInventory((current) => applyFarmSeedRewardsToInventory(current, displayableRewards, TUTORIAL_STARTER_SEED_ID));
           setUnlockedSeedIds((current) => applyFarmSeedRewardsToUnlockedSeedIds(current, displayableRewards, TUTORIAL_STARTER_SEED_ID));
           setSpiritState((current) => applySpiritMaterialRewardDelta(current, buildSpiritMaterialRewardDelta(displayableRewards)));
         }
         setFarmCollectPresentation({
           fieldId,
-          tier: displayableRewards.length > 0 ? 'critical' : 'harvest',
-          showSeeds: displayableRewards.length > 0,
+          tier: hasDisplayableRewards ? 'critical' : 'harvest',
+          showSeeds: hasDisplayableRewards,
         });
-        showRewardBubbles([
-          {
-            label: '金币',
-            quantity: result.result.collectedGold,
-            tone: 'gold',
-          },
-          ...displayableRewards.map((reward) => ({
+        if (hasDisplayableRewards) {
+          showRewardBubbles(displayableRewards.map((reward) => ({
             label: reward.label,
             quantity: reward.quantity,
             tone: getRewardBubbleTone(reward),
-          })),
-        ]);
+          })));
+        }
         if (tutorialStage === 'farm') {
           runTutorialFlowActions(getTutorialFlowActions('farmRewardConfirmed'));
         }
@@ -1692,7 +1720,11 @@ function App(): JSX.Element {
         } else {
           showToast(`${context} 当前无法完成收取，请稍后重试。`, 'error');
         }
+        setFarmCollectPresentation(null);
       } finally {
+        if (optimisticMutation) {
+          setFarmOptimisticMutations((current) => removeFarmOptimisticMutation(current, optimisticMutation.id));
+        }
         setPendingActionKey(null);
       }
       return;
@@ -1916,6 +1948,82 @@ function App(): JSX.Element {
       return;
     }
     await handleStartCultivation(seedSelectionState.fieldId, seedSelectionState.fieldCode, selectedSeedId);
+  };
+
+  const handleConfirmSeedCultivationAll = async (): Promise<void> => {
+    if (!seedSelectionState) {
+      return;
+    }
+
+    const seed = seedCatalogMap.get(selectedSeedId);
+    if (!seed || !unlockedSeedIds.includes(seed.id)) {
+      showToast('当前只可选择已解锁的灵植。', 'error');
+      return;
+    }
+
+    const fieldsToCultivate = seedSelectionState.availableFields.filter((availableField) => (
+      farmFields.some((field) => field.id === availableField.fieldId && field.tone === 'empty')
+    ));
+
+    if (fieldsToCultivate.length <= 0) {
+      showToast('当前没有可一键培育的空闲田。', 'info');
+      setSeedSelectionState(null);
+      return;
+    }
+
+    const actionKey = 'farm:batch-start-cultivation';
+    if (pendingActionKey === actionKey) {
+      return;
+    }
+
+    setPendingActionKey(actionKey);
+
+    let latestResult: Awaited<ReturnType<typeof startFieldCultivation>> | null = null;
+    const nextAssignments: Record<string, string> = {};
+
+    try {
+      for (const field of fieldsToCultivate) {
+        latestResult = await startFieldCultivation({
+          fieldId: field.fieldId,
+          seedId: seed.id,
+          plantType: seed.id,
+        });
+        nextAssignments[field.fieldId] = seed.id;
+      }
+
+      if (latestResult) {
+        applyMutationResult(latestResult);
+      }
+      setFarmTick(0);
+      setFieldSeedAssignments((current) => ({
+        ...current,
+        ...nextAssignments,
+      }));
+      setSeedSelectionState(null);
+      showToast(`已将 ${fieldsToCultivate.length} 块空田全部投入 ${seed.name}。`, 'success');
+    } catch (error) {
+      if (latestResult) {
+        applyMutationResult(latestResult);
+        setFieldSeedAssignments((current) => ({
+          ...current,
+          ...nextAssignments,
+        }));
+      }
+
+      if (error instanceof ApiError && error.code === 'STATE_VERSION_CONFLICT') {
+        const nextViewModel = await loadClientViewModel().catch(() => null);
+        if (nextViewModel) {
+          applyClientViewModel(nextViewModel);
+        }
+        setSeedSelectionState(null);
+        showToast('部分田地状态刚刚发生变化，已刷新数据。请重新选择。', 'error');
+      } else {
+        setSeedSelectionState(null);
+        showToast('当前无法完成一键培育，请稍后重试。', 'error');
+      }
+    } finally {
+      setPendingActionKey(null);
+    }
   };
 
   const handleConfirmGlobalUnlock = (): void => {
@@ -2233,6 +2341,9 @@ function App(): JSX.Element {
             onCloseSeedSelection={() => setSeedSelectionState(null)}
             onConfirmSeedCultivation={() => {
               void handleConfirmSeedCultivation();
+            }}
+            onConfirmSeedCultivationAll={() => {
+              void handleConfirmSeedCultivationAll();
             }}
             onSelectSeed={setSelectedSeedId}
           />

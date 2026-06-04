@@ -219,8 +219,8 @@ export const FACTION_STIPEND_CONFIG = {
       label: '基础俸禄',
       rewards: [
         { kind: 'gold', quantity: 20, label: '金币' },
-        { kind: 'ordinary-soul', quantity: 3, label: '普通兽魂' },
-        { kind: 'ordinary-soul', quantity: 2, label: '普通兽魂' },
+        { kind: 'spirit-root', quantity: 20, label: '灵根' },
+        { kind: 'ordinary-soul', quantity: 5, label: '普通兽魂' },
       ],
     },
     {
@@ -229,8 +229,8 @@ export const FACTION_STIPEND_CONFIG = {
       label: '小有供奉',
       rewards: [
         { kind: 'gold', quantity: 30, label: '金币' },
-        { kind: 'ordinary-soul', quantity: 5, label: '普通兽魂' },
-        { kind: 'ordinary-soul', quantity: 5, label: '普通兽魂' },
+        { kind: 'spirit-root', quantity: 35, label: '灵根' },
+        { kind: 'ordinary-soul', quantity: 10, label: '普通兽魂' },
       ],
     },
     {
@@ -239,8 +239,10 @@ export const FACTION_STIPEND_CONFIG = {
       label: '稳定供奉',
       rewards: [
         { kind: 'gold', quantity: 40, label: '金币' },
+        { kind: 'spirit-root', quantity: 50, label: '灵根' },
+        { kind: 'spirit-marrow', quantity: 2, label: '灵髓' },
         { kind: 'rare-soul', quantity: 2, label: '稀有兽魂' },
-        { kind: 'ordinary-soul', quantity: 10, label: '普通兽魂' },
+        { kind: 'ordinary-soul', quantity: 8, label: '普通兽魂' },
       ],
     },
     {
@@ -249,9 +251,9 @@ export const FACTION_STIPEND_CONFIG = {
       label: '阵营骨干',
       rewards: [
         { kind: 'gold', quantity: 50, label: '金币' },
-        { kind: 'rare-soul', quantity: 2, label: '稀有兽魂' },
-        { kind: 'rare-soul', quantity: 4, label: '稀有兽魂' },
-        { kind: 'spirit-shard', spiritPoolIds: ['canglang', 'linglu', 'qingyuan', 'xuanhu'], quantity: 2, label: '随机普通灵宠精魄' },
+        { kind: 'spirit-root', quantity: 70, label: '灵根' },
+        { kind: 'spirit-marrow', quantity: 4, label: '灵髓' },
+        { kind: 'rare-soul', quantity: 6, label: '稀有兽魂' },
       ],
     },
     {
@@ -260,9 +262,10 @@ export const FACTION_STIPEND_CONFIG = {
       label: '高阶供奉',
       rewards: [
         { kind: 'gold', quantity: 60, label: '金币' },
-        { kind: 'rare-soul', quantity: 3, label: '稀有兽魂' },
-        { kind: 'rare-soul', quantity: 8, label: '稀有兽魂' },
-        { kind: 'spirit-shard', spiritPoolIds: ['chenghuang', 'guishou', 'xuangui'], quantity: 3, label: '随机稀有灵宠精魄' },
+        { kind: 'spirit-root', quantity: 90, label: '灵根' },
+        { kind: 'spirit-marrow', quantity: 6, label: '灵髓' },
+        { kind: 'spirit-jade', quantity: 1, label: '灵玉' },
+        { kind: 'rare-soul', quantity: 10, label: '稀有兽魂' },
       ],
     },
     {
@@ -271,9 +274,10 @@ export const FACTION_STIPEND_CONFIG = {
       label: '阵营重臣',
       rewards: [
         { kind: 'gold', quantity: 80, label: '金币' },
-        { kind: 'rare-soul', quantity: 2, label: '稀有兽魂' },
+        { kind: 'spirit-root', quantity: 120, label: '灵根' },
+        { kind: 'spirit-marrow', quantity: 8, label: '灵髓' },
+        { kind: 'spirit-jade', quantity: 2, label: '灵玉' },
         { kind: 'legendary-soul', quantity: 2, label: '传说兽魂' },
-        { kind: 'spirit-shard', spiritPoolIds: ['fenghuang', 'xueyan', 'yinglong'], quantity: 2, label: '随机传说灵宠精魄' },
       ],
     },
   ],

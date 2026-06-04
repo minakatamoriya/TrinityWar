@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { FieldStatus, Prisma } from '@prisma/client';
+import type { FieldStatus, Prisma, PrismaClient } from '@prisma/client';
 import { getCastleExtensionLevelConfig, getSeedStageGold } from '../lib/game-balance.js';
 import {
   getFactionFarmMatureYieldMultiplier,
@@ -30,7 +30,7 @@ interface FieldLifecycleSlot {
 
 @Injectable()
 export class FieldLifecycleService {
-  async settlePlayerFields(client: Prisma.TransactionClient, playerId: string, now: Date = new Date()): Promise<void> {
+  async settlePlayerFields(client: Prisma.TransactionClient | PrismaClient, playerId: string, now: Date = new Date()): Promise<void> {
     const player = await client.player.findUnique({
       where: { id: playerId },
       select: {

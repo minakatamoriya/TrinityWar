@@ -337,6 +337,7 @@ export class SceneContentAssembler {
         discovered,
         researchStatus: unlocked ? 'unlocked' : canUnlock ? 'ready' : discovered ? 'discovered' : 'undiscovered',
         unlockEssenceRequired: 0,
+        unlockHarvestRequired: requirement.harvestRequired,
         unlockContributionRequired: requirement.contributionRequired,
         canUnlock,
         essenceQuantity,

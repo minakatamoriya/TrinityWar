@@ -13,6 +13,7 @@ interface FarmModalLayerProps {
   onCloseFarmBoardEditor: () => void;
   onCloseSeedSelection: () => void;
   onConfirmSeedCultivation: () => void;
+  onConfirmSeedCultivationAll: () => void;
   onSelectSeed: (seedId: string) => void;
 }
 
@@ -27,6 +28,7 @@ export function FarmModalLayer(props: FarmModalLayerProps): JSX.Element {
     onCloseFarmBoardEditor,
     onCloseSeedSelection,
     onConfirmSeedCultivation,
+    onConfirmSeedCultivationAll,
     onSelectSeed,
   } = props;
 
@@ -34,10 +36,13 @@ export function FarmModalLayer(props: FarmModalLayerProps): JSX.Element {
     <>
       {seedSelectionState ? (
         <SeedSelectionScreen
+          availableFieldCount={seedSelectionState.availableFields.length}
           confirming={pendingActionKey === `farm:${seedSelectionState.fieldId}:开始培育`}
+          confirmingAll={pendingActionKey === 'farm:batch-start-cultivation'}
           fieldCode={seedSelectionState.fieldCode}
           onClose={onCloseSeedSelection}
           onConfirm={onConfirmSeedCultivation}
+          onConfirmAll={onConfirmSeedCultivationAll}
           onSelect={onSelectSeed}
           seedGroups={seedGroups}
           selectedSeedId={selectedSeedId}

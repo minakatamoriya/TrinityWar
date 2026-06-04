@@ -1,6 +1,7 @@
 import type { ClientPlantResearchState } from '@trinitywar/shared';
 import {
   compareSeedCatalogItems,
+  getSeedUnlockRequirement,
   seedCatalog,
   seedRarityLabels,
   type SeedCatalogItem,
@@ -41,15 +42,35 @@ export function buildSeedGroups(input: {
       .map((seed) => {
         const unlocked = input.unlockedSeedIds.includes(seed.id);
         const quantity = input.seedInventory[seed.id] ?? 0;
+        const research = buildSeedResearchState(seed, input.plantResearchState[seed.id], unlocked, quantity);
 
         return {
           ...seed,
           unlocked,
           quantity,
-          research: input.plantResearchState[seed.id] ?? buildLocalPlantResearchState(seed.id, unlocked, quantity),
+          research,
         };
       }),
   }));
+}
+
+function buildSeedResearchState(
+  seed: SeedCatalogItem,
+  remoteResearch: ClientPlantResearchState | undefined,
+  unlocked: boolean,
+  quantity: number,
+): ClientPlantResearchState {
+  const localResearch = buildLocalPlantResearchState(seed.id, unlocked, quantity);
+  const requirement = getSeedUnlockRequirement(seed);
+  const research = remoteResearch ?? localResearch;
+
+  return {
+    ...research,
+    harvestRequired: research.harvestRequired ?? requirement.harvestRequired,
+    harvestOwned: research.harvestOwned ?? 0,
+    contributionRequired: research.contributionRequired || requirement.contributionRequired,
+    contributionOwned: research.contributionOwned ?? 0,
+  };
 }
 
 export function getFirstVisibleUnlockedSeedId(seedGroups: SeedViewGroup[]): string {

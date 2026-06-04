@@ -433,8 +433,10 @@ function buildFriendFieldStatusView(field: ClientSocialFriendFieldVisitResponse[
     title: field.title,
     cropName: field.cropName ?? undefined,
     tone: field.tone,
-    progressRemainingSeconds: field.progressRemainingSeconds,
-    progressTotalSeconds: field.progressTotalSeconds,
+    progressRemainingSeconds: 0,
+    progressTotalSeconds: 1,
+    progressLabel: getFriendFieldProgressLabel(field),
+    showProgressTrack: false,
     yieldGold: field.yieldGold,
     description: field.unavailableReason ?? getFriendFieldDescription(field),
     emphasis: field.nextAction === 'harvest' && field.rewardPreview
@@ -444,6 +446,22 @@ function buildFriendFieldStatusView(field: ClientSocialFriendFieldVisitResponse[
         : undefined,
     harvestable: false,
   };
+}
+
+function getFriendFieldProgressLabel(field: ClientSocialFriendFieldVisitResponse['fields'][number]): string {
+  if (field.nextAction === 'water') {
+    return '可浇水';
+  }
+  if (field.nextAction === 'harvest') {
+    return '可采摘';
+  }
+  if (field.status === 'GROWING') {
+    return '本轮已浇水';
+  }
+  if (field.status === 'MATURE') {
+    return '本轮已采摘';
+  }
+  return formatFriendFieldStatus(field.status);
 }
 
 function getFriendFieldDescription(field: ClientSocialFriendFieldVisitResponse['fields'][number]): string {
