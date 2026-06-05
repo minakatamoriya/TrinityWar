@@ -443,6 +443,16 @@ h3 {
   flex: 1;
 }
 
+.season-player-lookup {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 96px repeat(3, auto);
+  gap: 8px;
+}
+
+.season-player-lookup input {
+  min-width: 0;
+}
+
 .config-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -635,6 +645,10 @@ h3 {
 
   .lookup-form {
     width: 100%;
+  }
+
+  .season-player-lookup {
+    grid-template-columns: 1fr;
   }
 
   .pagination-bar,

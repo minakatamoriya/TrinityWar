@@ -11,22 +11,22 @@ export function SeedConfigView(props: ConfigViewProps): JSX.Element {
         {...props}
         fields={seedConfigFields}
         idKey="seedId"
-        title="种子定义"
+        title="灵植定义"
         useModalEditor
         columns={[
-          { label: '种子 ID', key: 'seedId' },
+          { label: '灵植 ID', key: 'seedId' },
           { label: '名称', key: 'label' },
           { label: '稀有度', key: 'rarity' },
           { label: '排序', key: 'sortOrder' },
           { label: '成长秒', key: 'growSeconds' },
           { label: '成熟秒', key: 'matureSeconds' },
           { label: '基础产金', key: 'baseYieldGold' },
-          { label: '返种', key: 'harvestSeedReturn' },
+          { label: '兼容返还', key: 'harvestSeedReturn' },
         ]}
       />
       {props.isEditorOpen ? (
         <Modal
-          title={props.editingId ? '编辑种子定义' : '新增种子定义'}
+          title={props.editingId ? '编辑灵植定义' : '新增灵植定义'}
           subtitle={props.editingId || 'seed config'}
           onClose={props.onCancelEdit}
         >

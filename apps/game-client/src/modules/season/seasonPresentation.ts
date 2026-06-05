@@ -1,4 +1,5 @@
 import type { ClientViewModel } from '../../api';
+import { formatSeasonLabel } from '@trinitywar/shared';
 
 export function buildSeasonProgress(status: ClientViewModel['bootstrap']['season']): {
   label: string;
@@ -8,7 +9,7 @@ export function buildSeasonProgress(status: ClientViewModel['bootstrap']['season
   const safeCurrentWeek = Math.min(Math.max(status.currentWeek, 1), safeTotalWeeks);
 
   return {
-    label: `S${status.seasonNumber} 赛季`,
+    label: formatSeasonLabel(status.seasonNumber),
     detail: `${safeCurrentWeek}/${safeTotalWeeks} 周`,
   };
 }

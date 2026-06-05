@@ -87,10 +87,10 @@ export function PlayerDetailTables(props: { overview: AdminPlayerOverviewRespons
     { key: 'profile', label: '基础' },
     { key: 'spirit', label: '灵宠' },
     { key: 'farm', label: '田地' },
-    { key: 'seed', label: '种子' },
+    { key: 'seed', label: '灵植' },
     { key: 'task', label: '任务' },
   ];
-  const seedInventory = props.overview.seedInventory as { items?: AdminRecord[]; unlockedSeedIds?: string[] };
+  const plantAccess = props.overview.seedInventory as { items?: AdminRecord[]; unlockedSeedIds?: string[] };
   const spirit = props.overview.spirit as {
     resource: AdminRecord | null;
     mainSlot: AdminRecord | null;
@@ -223,7 +223,7 @@ export function PlayerDetailTables(props: { overview: AdminPlayerOverviewRespons
             { label: '序号 / slotIndex', key: 'slotIndex' },
             { label: '解锁 / isUnlocked', key: 'isUnlocked' },
             { label: '状态 / status', key: 'status' },
-            { label: '种子 / seedId', key: 'seedId' },
+            { label: '灵植 / seedId', key: 'seedId' },
             { label: '可收金币 / currentClaimableGold', key: 'currentClaimableGold' },
             { label: '成熟 / matureAt', key: 'matureAt' },
             { label: '版本 / statusVersion', key: 'statusVersion' },
@@ -234,15 +234,15 @@ export function PlayerDetailTables(props: { overview: AdminPlayerOverviewRespons
 
       {activeTab === 'seed' ? (
         <TableSection
-          title={`种子库存${seedInventory.unlockedSeedIds?.length ? ` · 已解锁 ${seedInventory.unlockedSeedIds.length}` : ''}`}
+          title={`灵植资格${plantAccess.unlockedSeedIds?.length ? ` · 已解锁 ${plantAccess.unlockedSeedIds.length}` : ''}`}
           columns={[
-            { label: '种子 ID / seedId', key: 'seedId' },
+            { label: '灵植 ID / seedId', key: 'seedId' },
             { label: '名称 / label', key: 'label' },
-            { label: '数量 / quantity', key: 'quantity' },
+            { label: '永久资格 / unlocked', key: 'unlocked' },
             { label: '版本 / inventoryVersion', key: 'inventoryVersion' },
             { label: '解锁时间 / unlockedAt', key: 'unlockedAt' },
           ]}
-          rows={seedInventory.items ?? []}
+          rows={plantAccess.items ?? []}
         />
       ) : null}
 

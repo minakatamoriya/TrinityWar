@@ -10,14 +10,6 @@ import type { SeedRewardModalItem } from '../../ui/common/SeedRewardModal';
 
 export function mapNotificationAttachmentToRewardItem(attachment: ClientNotificationItem['attachments'][number]): SeedRewardModalItem {
   const label = attachment.name ?? attachment.label;
-  if (attachment.kind === 'seed') {
-    return {
-      seedId: attachment.seedId,
-      label,
-      quantity: attachment.quantity,
-    };
-  }
-
   return {
     itemId: attachment.kind,
     label,

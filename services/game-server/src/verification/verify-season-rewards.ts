@@ -4,6 +4,7 @@ import { AppModule } from '../modules/app/app.module.js';
 import { NotificationService } from '../notification/notification.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SeasonService } from '../season/season.service.js';
+import { formatSeasonLabel } from '@trinitywar/shared';
 
 async function main(): Promise<void> {
   const app = await NestFactory.createApplicationContext(AppModule, { logger: false });
@@ -24,7 +25,7 @@ async function main(): Promise<void> {
 
     await prisma.factionMember.updateMany({
       where: { playerId },
-      data: { contributionScore: 800 },
+      data: { contributionScore: 100 },
     });
     await prisma.playerSeasonSignIn.createMany({
       data: [1, 2, 3].map((dayIndex) => ({
@@ -93,6 +94,42 @@ async function main(): Promise<void> {
       select: { shardCount: true },
     });
     await seasonService.generateSeasonSnapshots(prisma, season.seasonNumber);
+    const starterContributionGrant = await prisma.playerSeasonRewardGrant.findFirstOrThrow({
+      where: {
+        playerId,
+        seasonNumber: season.seasonNumber,
+        rewardType: 'contribution_tier',
+      },
+      select: { id: true, rewardTier: true, notificationId: true },
+    });
+    if (starterContributionGrant.rewardTier !== 'season-contribution-100') {
+      throw new Error(`Expected starter contribution tier season-contribution-100, got ${starterContributionGrant.rewardTier ?? 'null'}.`);
+    }
+    const starterNotification = await prisma.playerNotification.findUniqueOrThrow({
+      where: { id: starterContributionGrant.notificationId ?? '' },
+      select: { attachmentJson: true },
+    });
+    const starterAttachments = Array.isArray(starterNotification.attachmentJson) ? starterNotification.attachmentJson : [];
+    if (starterAttachments.some((reward) => reward && typeof reward === 'object' && !Array.isArray(reward) && (reward as { kind?: unknown }).kind === 'medal')) {
+      throw new Error('Expected starter contribution item notification not to contain medals.');
+    }
+    const medalSummaryTitle = `${formatSeasonLabel(season.seasonNumber)}奖章结算`;
+    const starterMedalSummary = await prisma.playerNotification.findFirstOrThrow({
+      where: { playerId, titleSnapshot: medalSummaryTitle },
+      select: { id: true, bodySnapshot: true, claimStatus: true, attachmentJson: true },
+    });
+    if (starterMedalSummary.claimStatus !== 'NONE' || starterMedalSummary.attachmentJson) {
+      throw new Error('Expected season medal summary notification not to be claimable.');
+    }
+    if (!starterMedalSummary.bodySnapshot.includes('赛季贡献起步章') || !starterMedalSummary.bodySnapshot.includes('赛季御灵银章')) {
+      throw new Error(`Expected starter medal summary to list starter and spirit medals, got ${starterMedalSummary.bodySnapshot}.`);
+    }
+
+    await prisma.factionMember.updateMany({
+      where: { playerId },
+      data: { contributionScore: 800 },
+    });
+    await seasonService.generateSeasonSnapshots(prisma, season.seasonNumber);
     await seasonService.generateSeasonSnapshots(prisma, season.seasonNumber);
 
     const grants = await prisma.playerSeasonRewardGrant.findMany({
@@ -129,6 +166,9 @@ async function main(): Promise<void> {
     if (currentClaimableCount !== grants.length) {
       throw new Error(`Expected ${grants.length} current season claimable rewards, got ${currentClaimableCount}.`);
     }
+    if (currentSeasonRewards.some((item) => item.rewards.some((reward) => reward.kind === 'medal'))) {
+      throw new Error('Expected season reward grant payloads not to expose medals as item rewards.');
+    }
 
     const notification = await prisma.playerNotification.findUniqueOrThrow({
       where: { id: contributionGrant.notificationId ?? '' },
@@ -137,7 +177,7 @@ async function main(): Promise<void> {
     if (notification.claimStatus !== 'UNCLAIMED') {
       throw new Error(`Expected season reward notification to be unclaimed, got ${notification.claimStatus}.`);
     }
-    if (!notification.titleSnapshot.includes('赛季奖励')) {
+    if (!notification.titleSnapshot.includes('物品奖励')) {
       throw new Error(`Expected season reward notification title to be Chinese, got ${notification.titleSnapshot}.`);
     }
     if (!notification.bodySnapshot.includes('探索战斗领域') && !notification.bodySnapshot.includes('贡献领域')) {
@@ -153,13 +193,13 @@ async function main(): Promise<void> {
     let expectedTalismanReward = 0;
     let expectedOrdinarySoulReward = 0;
     let expectedShardReward = 0;
-    let foundMedal = false;
+    let foundMedalAttachment = false;
     const attachments = Array.isArray(notification.attachmentJson) ? notification.attachmentJson : [];
     for (const reward of attachments) {
       if (!reward || typeof reward !== 'object' || Array.isArray(reward)) {
         continue;
       }
-      const record = reward as { kind?: unknown; quantity?: unknown; spiritId?: unknown };
+      const record = reward as { kind?: unknown; quantity?: unknown; spiritId?: unknown; medalKey?: unknown; label?: unknown };
       if (record.kind === 'tianjiTalisman') {
         expectedTalismanReward += Number(record.quantity ?? 0);
       }
@@ -170,11 +210,14 @@ async function main(): Promise<void> {
         expectedShardReward += Number(record.quantity ?? 0);
       }
       if (record.kind === 'medal') {
-        foundMedal = true;
+        foundMedalAttachment = true;
       }
-      if (record.kind === 'tianjiTalisman' && (record as { label?: unknown }).label !== '天机符') {
+      if (record.kind === 'tianjiTalisman' && record.label !== '天机符') {
         throw new Error('Expected season reward item label to be Chinese.');
       }
+    }
+    if (foundMedalAttachment) {
+      throw new Error('Expected contribution item notification not to contain medal attachments.');
     }
     if (expectedOrdinarySoulReward <= 0) {
       throw new Error('Expected contribution reward to include ordinary soul.');
@@ -182,8 +225,18 @@ async function main(): Promise<void> {
     if (expectedShardReward <= 0) {
       throw new Error('Expected contribution reward to include spirit shard.');
     }
-    if (!foundMedal) {
-      throw new Error('Expected contribution reward to include a season medal attachment.');
+    const refreshedMedalSummary = await prisma.playerNotification.findFirstOrThrow({
+      where: { playerId, titleSnapshot: medalSummaryTitle },
+      select: { id: true, bodySnapshot: true, claimStatus: true, attachmentJson: true },
+    });
+    if (refreshedMedalSummary.id !== starterMedalSummary.id) {
+      throw new Error('Expected season medal summary to refresh the existing notification.');
+    }
+    if (refreshedMedalSummary.claimStatus !== 'NONE' || refreshedMedalSummary.attachmentJson) {
+      throw new Error('Expected refreshed medal summary notification not to be claimable.');
+    }
+    if (!refreshedMedalSummary.bodySnapshot.includes('赛季贡献铜章') || refreshedMedalSummary.bodySnapshot.includes('赛季贡献起步章')) {
+      throw new Error(`Expected refreshed medal summary to list current medals only, got ${refreshedMedalSummary.bodySnapshot}.`);
     }
     await notificationService.claimPlayerNotification(playerId, notification.id);
 
@@ -219,8 +272,8 @@ async function main(): Promise<void> {
         sourceId: contributionGrant.id,
       },
     });
-    if (essenceLogCount <= 0) {
-      throw new Error('Expected season reward essence transaction log.');
+    if (essenceLogCount !== 0) {
+      throw new Error('Expected season rewards not to write essence transaction logs.');
     }
     const claimedGrant = await prisma.playerSeasonRewardGrant.findUniqueOrThrow({
       where: { id: contributionGrant.id },
@@ -241,13 +294,53 @@ async function main(): Promise<void> {
     if (!contributionAchievement) {
       throw new Error('Expected season contribution achievement to be recorded.');
     }
+    const spiritAchievement = await prisma.playerSeasonAchievement.findFirst({
+      where: {
+        playerId,
+        seasonNumber: season.seasonNumber,
+        achievementKey: 'season-spirit-silver',
+        rewardGrantId: spiritGrant.id,
+      },
+      select: { id: true },
+    });
+    if (!spiritAchievement) {
+      throw new Error('Expected season spirit achievement to be recorded.');
+    }
+    await prisma.playerSeasonAchievement.update({
+      where: { id: spiritAchievement.id },
+      data: {
+        title: 'Season Spirit Silver',
+        description: 'Raised a spirit to level 10 or higher in the season.',
+      },
+    });
     const rewardsAfterClaim = await seasonService.getSeasonRewards(prisma, playerId);
     const currentCabinet = rewardsAfterClaim.medalCabinet.medalsBySeason.find((item) => item.seasonNumber === season.seasonNumber);
-    if (!currentCabinet || !currentCabinet.title.includes(`S${season.seasonNumber}`)) {
+    if (!currentCabinet || !currentCabinet.title.includes(formatSeasonLabel(season.seasonNumber))) {
       throw new Error('Expected current season medal cabinet.');
     }
-    if (!currentCabinet.medals.some((medal) => medal.achievementKey === 'season-contribution-800' && medal.title === '赛季贡献铜章' && medal.titleEn === 'Season Contribution Bronze')) {
-      throw new Error('Expected bilingual contribution medal in cabinet.');
+    const visibleContributionMedal = currentCabinet.medals.find((medal) => medal.achievementKey === 'season-contribution-800');
+    if (!visibleContributionMedal || visibleContributionMedal.title !== '赛季贡献铜章' || visibleContributionMedal.description !== '本赛季阵营贡献达到 800。') {
+      throw new Error('Expected Chinese contribution medal in cabinet.');
+    }
+    if (visibleContributionMedal.titleEn || visibleContributionMedal.descriptionEn) {
+      throw new Error('Expected visible season medal not to expose English fields.');
+    }
+    if (currentCabinet.medals.some((medal) => medal.achievementKey === 'season-contribution-100')) {
+      throw new Error('Expected superseded starter contribution medal not to be visible in cabinet.');
+    }
+    const legacyEnglishMedal = currentCabinet.medals.find((medal) => medal.achievementKey === 'season-spirit-silver');
+    if (!legacyEnglishMedal || legacyEnglishMedal.title !== '赛季御灵银章' || legacyEnglishMedal.description !== '本赛季拥有等级不低于 10 的灵宠。') {
+      throw new Error('Expected legacy English season medal to be normalized into Chinese copy.');
+    }
+
+    await prisma.playerSeasonRewardGrant.update({
+      where: { id: spiritGrant.id },
+      data: { status: 'voided' },
+    });
+    const rewardsAfterVoid = await seasonService.getSeasonRewards(prisma, playerId);
+    const cabinetAfterVoid = rewardsAfterVoid.medalCabinet.medalsBySeason.find((item) => item.seasonNumber === season.seasonNumber);
+    if (cabinetAfterVoid?.medals.some((medal) => medal.rewardGrantId === spiritGrant.id)) {
+      throw new Error('Expected voided reward medal not to be visible in cabinet.');
     }
 
     try {

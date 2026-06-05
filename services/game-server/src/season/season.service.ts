@@ -1,6 +1,6 @@
 ﻿import { Injectable } from '@nestjs/common';
-import type { Prisma, PrismaClient } from '@prisma/client';
-import { APP_NAME, type ClientSeasonMedal, type ClientSeasonRewardGrant, type ClientSeasonRewardItem, type ClientSeasonRewardsResponse, type ClientSeasonSignInState } from '@trinitywar/shared';
+import { Prisma, type PrismaClient } from '@prisma/client';
+import { APP_NAME, formatSeasonLabel, type ClientSeasonMedal, type ClientSeasonRewardGrant, type ClientSeasonRewardItem, type ClientSeasonRewardsResponse, type ClientSeasonSignInState } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 
@@ -17,12 +17,41 @@ interface SeasonRewardRule {
   domain: SeasonRewardDomain;
   achievementKey?: string;
   achievementTitle?: string;
-  achievementTitleEn?: string;
   achievementDescription?: string;
-  achievementDescriptionEn?: string;
   statSnapshot: Prisma.InputJsonObject;
   rewards: ClientSeasonRewardItem[];
 }
+
+export interface SeasonRewardPreviewRule {
+  rewardType: string;
+  rewardTypeLabel: string;
+  rewardTier: string;
+  domain: SeasonRewardDomain;
+  achievementKey: string | null;
+  achievementTitle: string | null;
+  achievementDescription: string | null;
+  statSnapshot: Prisma.InputJsonObject;
+  rewards: ClientSeasonRewardItem[];
+}
+
+type SeasonRewardGrantRecord = {
+  id: string;
+  playerId: string;
+  seasonNumber: number;
+  rewardType: string;
+  rewardTier: string | null;
+  status: string;
+  notificationId: string | null;
+  contributionSnapshot: number;
+  signInDays: number;
+  loginDays: number;
+  harvestCount: number;
+  raidCount: number;
+  rewardJson: Prisma.JsonValue;
+  claimedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 export interface CurrentSeasonState {
   seasonNumber: number;
@@ -466,7 +495,7 @@ export class SeasonService {
       },
     });
     const items = grants.map(mapSeasonRewardGrant);
-    const medals = achievements.map(mapSeasonMedal);
+    const medals = achievements.map(mapSeasonMedal).filter(isVisibleSeasonMedal);
 
     return {
       app: APP_NAME,
@@ -502,15 +531,44 @@ export class SeasonService {
           grant = await client.playerSeasonRewardGrant.create({
             data: buildSeasonRewardGrantCreate(snapshot, rule.rewardType, rule.rewardTier, rule.rewards),
           });
+        } else {
+          grant = await refreshSeasonRewardGrant(client, snapshot, grant, rule);
         }
 
-        await ensureSeasonAchievement(client, snapshot, grant.id, rule);
+        if (shouldEnsureSeasonAchievement(grant, rule)) {
+          await ensureSeasonAchievement(client, snapshot, grant.id, rule);
+        }
         await ensureSeasonRewardNotification(client, grant, rule.rewards);
         generatedCount += 1;
       }
+
+      await ensureSeasonMedalSummaryNotification(client, snapshot.playerId, seasonNumber);
     }
 
     return generatedCount;
+  }
+
+  previewSeasonRewardRules(snapshot: SeasonRewardSnapshot): SeasonRewardPreviewRule[] {
+    return getSeasonRewardRules(snapshot).map((rule) => ({
+      rewardType: rule.rewardType,
+      rewardTypeLabel: getSeasonRewardTypeLabel(rule.rewardType),
+      rewardTier: rule.rewardTier,
+      domain: rule.domain,
+      achievementKey: rule.achievementKey ?? null,
+      achievementTitle: rule.achievementTitle ?? null,
+      achievementDescription: rule.achievementDescription ?? null,
+      statSnapshot: rule.statSnapshot,
+      rewards: rule.rewards.filter(isSeasonRewardInventoryItem),
+    }));
+  }
+
+  getSeasonMedalDisplayCopy(input: {
+    achievementKey: string;
+    title: string;
+    description: string;
+    statSnapshot: Record<string, unknown>;
+  }): { title: string; description: string } {
+    return getSeasonMedalDisplayCopy(input);
   }
 
   private async buildSeasonSignInState(
@@ -774,7 +832,7 @@ function getContributionRewardTier(contributionScore: number): string | null {
 const SEASON_REWARD_SHARD_SPIRIT_ID = 'canglang';
 const TALISMAN_REWARD: ClientSeasonRewardItem = { kind: 'tianjiTalisman', quantity: 1, label: '天机符', name: '天机符', nameEn: 'Tianji Talisman' };
 
-type SeasonRewardSnapshot = {
+export type SeasonRewardSnapshot = {
   playerId: string;
   seasonNumber: number;
   contributionScore: number;
@@ -829,9 +887,7 @@ function getFarmingRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule 
       rewardTier: 'season-farming-gold',
       domain: 'farming',
       achievementTitle: '赛季耕耘金章',
-      achievementTitleEn: 'Season Farming Gold',
       achievementDescription: '本赛季累计收获不少于 50 次。',
-      achievementDescriptionEn: 'Harvested at least 50 times in the season.',
       statSnapshot: { harvestCount: snapshot.harvestCount },
       rewards: [
         rareSoul(3),
@@ -845,9 +901,7 @@ function getFarmingRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule 
       rewardTier: 'season-farming-silver',
       domain: 'farming',
       achievementTitle: '赛季耕耘银章',
-      achievementTitleEn: 'Season Farming Silver',
       achievementDescription: '本赛季累计收获不少于 20 次。',
-      achievementDescriptionEn: 'Harvested at least 20 times in the season.',
       statSnapshot: { harvestCount: snapshot.harvestCount },
       rewards: [
         ordinarySoul(8),
@@ -861,9 +915,7 @@ function getFarmingRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule 
       rewardTier: 'season-farming-bronze',
       domain: 'farming',
       achievementTitle: '赛季耕耘铜章',
-      achievementTitleEn: 'Season Farming Bronze',
       achievementDescription: '本赛季累计收获不少于 3 次。',
-      achievementDescriptionEn: 'Harvested at least 3 times in the season.',
       statSnapshot: { harvestCount: snapshot.harvestCount },
       rewards: [
         ordinarySoul(3),
@@ -884,9 +936,7 @@ function getSpiritRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       rewardTier: 'season-spirit-gold',
       domain: 'spirit',
       achievementTitle: '赛季御灵金章',
-      achievementTitleEn: 'Season Spirit Gold',
       achievementDescription: '本赛季拥有等级不低于 20 的灵宠。',
-      achievementDescriptionEn: 'Raised a spirit to level 20 or higher in the season.',
       statSnapshot: { spiritOwnedCount, maxSpiritLevel },
       rewards: [
         rareSoul(2),
@@ -901,9 +951,7 @@ function getSpiritRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       rewardTier: 'season-spirit-silver',
       domain: 'spirit',
       achievementTitle: '赛季御灵银章',
-      achievementTitleEn: 'Season Spirit Silver',
       achievementDescription: '本赛季拥有等级不低于 10 的灵宠。',
-      achievementDescriptionEn: 'Raised a spirit to level 10 or higher in the season.',
       statSnapshot: { spiritOwnedCount, maxSpiritLevel },
       rewards: [
         ordinarySoul(8),
@@ -918,9 +966,7 @@ function getSpiritRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       rewardTier: 'season-spirit-bronze',
       domain: 'spirit',
       achievementTitle: '赛季御灵铜章',
-      achievementTitleEn: 'Season Spirit Bronze',
       achievementDescription: '本赛季至少持有 1 只灵宠。',
-      achievementDescriptionEn: 'Owned at least one spirit during the season.',
       statSnapshot: { spiritOwnedCount, maxSpiritLevel },
       rewards: [
         ordinarySoul(3),
@@ -939,9 +985,7 @@ function getCombatRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       rewardTier: 'season-combat-gold',
       domain: 'combat',
       achievementTitle: '赛季远征金章',
-      achievementTitleEn: 'Season Combat Gold',
       achievementDescription: '本赛季已结算探索战斗不少于 20 次。',
-      achievementDescriptionEn: 'Settled at least 20 raids in the season.',
       statSnapshot: { raidCount: snapshot.raidCount },
       rewards: [
         rareSoul(2),
@@ -956,9 +1000,7 @@ function getCombatRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       rewardTier: 'season-combat-silver',
       domain: 'combat',
       achievementTitle: '赛季远征银章',
-      achievementTitleEn: 'Season Combat Silver',
       achievementDescription: '本赛季已结算探索战斗不少于 5 次。',
-      achievementDescriptionEn: 'Settled at least 5 raids in the season.',
       statSnapshot: { raidCount: snapshot.raidCount },
       rewards: [
         ordinarySoul(8),
@@ -973,9 +1015,7 @@ function getCombatRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       rewardTier: 'season-combat-bronze',
       domain: 'combat',
       achievementTitle: '赛季远征铜章',
-      achievementTitleEn: 'Season Combat Bronze',
       achievementDescription: '本赛季已结算探索战斗不少于 1 次。',
-      achievementDescriptionEn: 'Settled at least 1 raid in the season.',
       statSnapshot: { raidCount: snapshot.raidCount },
       rewards: [
         ordinarySoul(3),
@@ -994,9 +1034,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
       rewardTier: 'season-contribution-3000',
       domain: 'contribution',
       achievementTitle: '赛季贡献金章',
-      achievementTitleEn: 'Season Contribution Gold',
       achievementDescription: '本赛季阵营贡献达到 3000。',
-      achievementDescriptionEn: 'Reached 3000 contribution in the season.',
       statSnapshot: { contributionScore: snapshot.contributionScore },
       rewards: [
         tianjiTalisman(10),
@@ -1013,9 +1051,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
       rewardTier: 'season-contribution-1500',
       domain: 'contribution',
       achievementTitle: '赛季贡献银章',
-      achievementTitleEn: 'Season Contribution Silver',
       achievementDescription: '本赛季阵营贡献达到 1500。',
-      achievementDescriptionEn: 'Reached 1500 contribution in the season.',
       statSnapshot: { contributionScore: snapshot.contributionScore },
       rewards: [
         tianjiTalisman(7),
@@ -1032,9 +1068,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
       rewardTier: 'season-contribution-800',
       domain: 'contribution',
       achievementTitle: '赛季贡献铜章',
-      achievementTitleEn: 'Season Contribution Bronze',
       achievementDescription: '本赛季阵营贡献达到 800。',
-      achievementDescriptionEn: 'Reached 800 contribution in the season.',
       statSnapshot: { contributionScore: snapshot.contributionScore },
       rewards: [
         tianjiTalisman(5),
@@ -1051,9 +1085,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
       rewardTier: 'season-contribution-300',
       domain: 'contribution',
       achievementTitle: '赛季贡献入门章',
-      achievementTitleEn: 'Season Contribution Entry',
       achievementDescription: '本赛季阵营贡献达到 300。',
-      achievementDescriptionEn: 'Reached 300 contribution in the season.',
       statSnapshot: { contributionScore: snapshot.contributionScore },
       rewards: [
         tianjiTalisman(3),
@@ -1070,9 +1102,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
       rewardTier: 'season-contribution-100',
       domain: 'contribution',
       achievementTitle: '赛季贡献起步章',
-      achievementTitleEn: 'Season Contribution Starter',
       achievementDescription: '本赛季阵营贡献达到 100。',
-      achievementDescriptionEn: 'Reached 100 contribution in the season.',
       statSnapshot: { contributionScore: snapshot.contributionScore },
       rewards: [
         tianjiTalisman(2),
@@ -1093,21 +1123,8 @@ function buildDomainRewardRule(input: Omit<SeasonRewardRule, 'achievementKey'>):
     achievementKey,
     statSnapshot: {
       ...input.statSnapshot,
-      titleEn: input.achievementTitleEn ?? input.achievementTitle ?? input.rewardTier,
-      descriptionEn: input.achievementDescriptionEn ?? input.achievementDescription ?? input.rewardTier,
     },
-    rewards: [
-      ...input.rewards,
-      {
-        kind: 'medal',
-        quantity: 1,
-        label: input.achievementTitle ?? input.rewardTier,
-        name: input.achievementTitle ?? input.rewardTier,
-        nameEn: `${input.achievementTitleEn ?? input.rewardTier} Medal`,
-        medalKey: achievementKey,
-        domain: input.domain,
-      },
-    ],
+    rewards: input.rewards,
   };
 }
 
@@ -1134,6 +1151,134 @@ function rareSoul(quantity: number): ClientSeasonRewardItem {
 
 function spiritShard(quantity: number): ClientSeasonRewardItem {
   return { kind: 'spiritShard', spiritId: SEASON_REWARD_SHARD_SPIRIT_ID, quantity, label: '苍狼精魄', name: '苍狼精魄', nameEn: 'Canglang Shard' };
+}
+
+async function refreshSeasonRewardGrant(
+  client: PrismaClientLike,
+  snapshot: SeasonRewardSnapshot,
+  grant: SeasonRewardGrantRecord,
+  rule: SeasonRewardRule,
+): Promise<SeasonRewardGrantRecord> {
+  if (grant.status === 'claimed' || grant.status === 'voided') {
+    return grant;
+  }
+
+  const shouldRefreshGrant = grant.rewardTier !== rule.rewardTier
+    || grant.contributionSnapshot !== snapshot.contributionScore
+    || grant.signInDays !== snapshot.signInDays
+    || grant.loginDays !== snapshot.loginDays
+    || grant.harvestCount !== snapshot.harvestCount
+    || grant.raidCount !== snapshot.raidCount
+    || !isSameSeasonRewards(grant.rewardJson, rule.rewards);
+
+  const refreshedGrant = shouldRefreshGrant
+    ? await client.playerSeasonRewardGrant.update({
+        where: { id: grant.id },
+        data: {
+          rewardTier: rule.rewardTier,
+          contributionSnapshot: snapshot.contributionScore,
+          signInDays: snapshot.signInDays,
+          loginDays: snapshot.loginDays,
+          harvestCount: snapshot.harvestCount,
+          raidCount: snapshot.raidCount,
+          rewardJson: rule.rewards as unknown as Prisma.InputJsonValue,
+        },
+      })
+    : grant;
+
+  if (refreshedGrant.notificationId) {
+    const notificationCopy = buildSeasonRewardNotificationCopy(refreshedGrant);
+    await client.playerNotification.updateMany({
+      where: {
+        id: refreshedGrant.notificationId,
+        playerId: refreshedGrant.playerId,
+        claimStatus: 'UNCLAIMED',
+        deletedAt: null,
+      },
+      data: {
+        titleSnapshot: notificationCopy.title,
+        bodySnapshot: notificationCopy.body,
+        attachmentJson: buildSeasonRewardNotificationAttachmentJson(refreshedGrant.id, rule.rewards),
+        expiresAt: getSeasonRewardNotificationExpiresAt(refreshedGrant.seasonNumber),
+      },
+    });
+  }
+
+  return refreshedGrant;
+}
+
+function shouldEnsureSeasonAchievement(grant: { status: string; rewardTier: string | null }, rule: SeasonRewardRule): boolean {
+  return grant.status !== 'claimed'
+    && grant.status !== 'voided'
+    && (!rule.achievementKey || grant.rewardTier === rule.achievementKey);
+}
+
+function isSameSeasonRewards(currentRewardsJson: Prisma.JsonValue, nextRewards: ClientSeasonRewardItem[]): boolean {
+  return JSON.stringify(normalizeSeasonRewardItems(currentRewardsJson))
+    === JSON.stringify(normalizeSeasonRewardItems(nextRewards as unknown as Prisma.JsonValue));
+}
+
+async function ensureSeasonMedalSummaryNotification(
+  client: PrismaClientLike,
+  playerId: string,
+  seasonNumber: number,
+): Promise<void> {
+  const achievements = await client.playerSeasonAchievement.findMany({
+    where: { playerId, seasonNumber },
+    orderBy: [{ domain: 'asc' }, { createdAt: 'asc' }, { achievementKey: 'asc' }],
+    include: {
+      rewardGrant: { select: { rewardType: true, rewardTier: true, status: true } },
+    },
+  });
+  const medals = achievements.map(mapSeasonMedal).filter(isVisibleSeasonMedal).sort(compareSeasonMedalsForSummary);
+  if (medals.length <= 0) {
+    return;
+  }
+
+  const title = `${formatSeasonLabel(seasonNumber)}奖章结算`;
+  const body = buildSeasonMedalSummaryNotificationBody(seasonNumber, medals);
+  const existing = await client.playerNotification.findFirst({
+    where: {
+      playerId,
+      category: 'REWARD',
+      titleSnapshot: title,
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { id: true, bodySnapshot: true, deletedAt: true },
+  });
+
+  if (!existing) {
+    await client.playerNotification.create({
+      data: {
+        playerId,
+        category: 'REWARD',
+        titleSnapshot: title,
+        bodySnapshot: body,
+        attachmentJson: Prisma.DbNull,
+        claimStatus: 'NONE',
+      },
+    });
+    return;
+  }
+
+  if (existing.deletedAt && existing.bodySnapshot === body) {
+    return;
+  }
+
+  if (existing.bodySnapshot !== body || existing.deletedAt) {
+    await client.playerNotification.update({
+      where: { id: existing.id },
+      data: {
+        bodySnapshot: body,
+        attachmentJson: Prisma.DbNull,
+        claimStatus: 'NONE',
+        readAt: null,
+        deletedAt: null,
+        claimedAt: null,
+        expiresAt: null,
+      },
+    });
+  }
 }
 
 async function ensureSeasonAchievement(
@@ -1194,8 +1339,7 @@ async function ensureSeasonRewardNotification(
   }
 
   const expiresAt = getSeasonRewardNotificationExpiresAt(grant.seasonNumber);
-  const title = `S${grant.seasonNumber} 赛季奖励`;
-  const body = `你在 S${grant.seasonNumber} 赛季获得了${getSeasonRewardTypeLabel(grant.rewardType)}奖励，请在过期前领取。`;
+  const { title, body } = buildSeasonRewardNotificationCopy(grant);
   const notification = await client.playerNotification.create({
     data: {
       playerId: grant.playerId,
@@ -1216,6 +1360,37 @@ async function ensureSeasonRewardNotification(
       notificationId: notification.id,
     },
   });
+}
+
+function buildSeasonRewardNotificationCopy(grant: { seasonNumber: number; rewardType: string }): { title: string; body: string } {
+  const seasonLabel = formatSeasonLabel(grant.seasonNumber);
+  return {
+    title: `${seasonLabel}物品奖励`,
+    body: `你在${seasonLabel}获得了${getSeasonRewardTypeLabel(grant.rewardType)}物品奖励，请在过期前领取。`,
+  };
+}
+
+const medalSummaryDomainOrder: Record<string, number> = {
+  farming: 1,
+  spirit: 2,
+  combat: 3,
+  contribution: 4,
+};
+
+function compareSeasonMedalsForSummary(left: ClientSeasonMedal, right: ClientSeasonMedal): number {
+  const leftDomain = medalSummaryDomainOrder[left.domain] ?? 99;
+  const rightDomain = medalSummaryDomainOrder[right.domain] ?? 99;
+  if (leftDomain !== rightDomain) {
+    return leftDomain - rightDomain;
+  }
+
+  return left.title.localeCompare(right.title, 'zh-CN');
+}
+
+function buildSeasonMedalSummaryNotificationBody(seasonNumber: number, medals: ClientSeasonMedal[]): string {
+  const seasonLabel = formatSeasonLabel(seasonNumber);
+  const medalTitles = medals.map((medal) => medal.title).join('、');
+  return `你在${seasonLabel}获得 ${medals.length} 枚奖章：${medalTitles}。可在个人资料的奖章陈列柜查看详情。`;
 }
 
 function getSeasonRewardNotificationExpiresAt(seasonNumber: number): Date {
@@ -1246,7 +1421,7 @@ function buildSeasonRewardNotificationAttachmentJson(
   grantId: string,
   rewards: ClientSeasonRewardItem[],
 ): Prisma.InputJsonValue {
-  return rewards.map((reward) => ({
+  return rewards.filter(isSeasonRewardInventoryItem).map((reward) => ({
     kind: reward.kind,
     quantity: reward.quantity,
     label: reward.label,
@@ -1259,6 +1434,10 @@ function buildSeasonRewardNotificationAttachmentJson(
     sourceType: 'season-reward',
     sourceId: grantId,
   })) as Prisma.InputJsonValue;
+}
+
+function isSeasonRewardInventoryItem(reward: ClientSeasonRewardItem): boolean {
+  return reward.kind !== 'medal';
 }
 
 function buildSeasonRewardGrantCreate(
@@ -1316,7 +1495,7 @@ function mapSeasonRewardGrant(grant: {
     loginDays: grant.loginDays,
     harvestCount: grant.harvestCount,
     raidCount: grant.raidCount,
-    rewards: normalizeSeasonRewardItems(grant.rewardJson),
+    rewards: normalizeSeasonRewardItems(grant.rewardJson).filter(isSeasonRewardInventoryItem),
     claimedAt: grant.claimedAt?.toISOString() ?? null,
     createdAt: grant.createdAt.toISOString(),
   };
@@ -1335,23 +1514,25 @@ function mapSeasonMedal(achievement: {
   rewardGrant: { rewardType: string; rewardTier: string | null; status: string } | null;
 }): ClientSeasonMedal {
   const statSnapshot = normalizeJsonObject(achievement.statSnapshotJson);
-  const titleEn = typeof statSnapshot.titleEn === 'string' ? statSnapshot.titleEn : undefined;
-  const descriptionEn = typeof statSnapshot.descriptionEn === 'string' ? statSnapshot.descriptionEn : undefined;
   const normalizedStatus = achievement.rewardGrant?.status === 'notified'
     || achievement.rewardGrant?.status === 'claimed'
     || achievement.rewardGrant?.status === 'voided'
       ? achievement.rewardGrant.status
       : achievement.rewardGrant ? 'generated' : null;
+  const displayCopy = getSeasonMedalDisplayCopy({
+    achievementKey: achievement.achievementKey,
+    title: achievement.title,
+    description: achievement.description,
+    statSnapshot,
+  });
 
   return {
     id: achievement.id,
     seasonNumber: achievement.seasonNumber,
     domain: achievement.domain,
     achievementKey: achievement.achievementKey,
-    title: achievement.title,
-    ...(titleEn ? { titleEn } : {}),
-    description: achievement.description,
-    ...(descriptionEn ? { descriptionEn } : {}),
+    title: displayCopy.title,
+    description: displayCopy.description,
     rewardGrantId: achievement.rewardGrantId,
     rewardType: achievement.rewardGrant?.rewardType ?? null,
     rewardTier: achievement.rewardGrant?.rewardTier ?? null,
@@ -1361,19 +1542,124 @@ function mapSeasonMedal(achievement: {
   };
 }
 
+function isVisibleSeasonMedal(medal: ClientSeasonMedal): boolean {
+  if (medal.rewardStatus === 'voided') {
+    return false;
+  }
+
+  if (medal.rewardTier && medal.achievementKey !== medal.rewardTier) {
+    return false;
+  }
+
+  return true;
+}
+
+function getSeasonMedalDisplayCopy(input: {
+  achievementKey: string;
+  title: string;
+  description: string;
+  statSnapshot: Record<string, unknown>;
+}): { title: string; description: string } {
+  const knownCopy = seasonMedalCopyByKey[input.achievementKey];
+  if (knownCopy) {
+    const description = typeof knownCopy.description === 'function'
+      ? knownCopy.description(input.statSnapshot)
+      : knownCopy.description;
+    return {
+      title: knownCopy.title,
+      description,
+    };
+  }
+
+  return {
+    title: stripEnglishSeasonMedalFallback(input.title, input.achievementKey),
+    description: stripEnglishSeasonMedalFallback(input.description, input.achievementKey),
+  };
+}
+
+function stripEnglishSeasonMedalFallback(value: string, achievementKey: string): string {
+  if (/^Season\s+/i.test(value)) {
+    return achievementKey;
+  }
+  return value;
+}
+
+const seasonMedalCopyByKey: Record<string, {
+  title: string;
+  description: string | ((statSnapshot: Record<string, unknown>) => string);
+}> = {
+  'season-farming-bronze': {
+    title: '赛季耕耘铜章',
+    description: '本赛季累计收获不少于 3 次。',
+  },
+  'season-farming-silver': {
+    title: '赛季耕耘银章',
+    description: '本赛季累计收获不少于 20 次。',
+  },
+  'season-farming-gold': {
+    title: '赛季耕耘金章',
+    description: '本赛季累计收获不少于 50 次。',
+  },
+  'season-spirit-bronze': {
+    title: '赛季御灵铜章',
+    description: '本赛季至少持有 1 只灵宠。',
+  },
+  'season-spirit-silver': {
+    title: '赛季御灵银章',
+    description: '本赛季拥有等级不低于 10 的灵宠。',
+  },
+  'season-spirit-gold': {
+    title: '赛季御灵金章',
+    description: '本赛季拥有等级不低于 20 的灵宠。',
+  },
+  'season-combat-bronze': {
+    title: '赛季远征铜章',
+    description: '本赛季已结算探索战斗不少于 1 次。',
+  },
+  'season-combat-silver': {
+    title: '赛季远征银章',
+    description: '本赛季已结算探索战斗不少于 5 次。',
+  },
+  'season-combat-gold': {
+    title: '赛季远征金章',
+    description: '本赛季已结算探索战斗不少于 20 次。',
+  },
+  'season-contribution-100': {
+    title: '赛季贡献起步章',
+    description: '本赛季阵营贡献达到 100。',
+  },
+  'season-contribution-300': {
+    title: '赛季贡献入门章',
+    description: '本赛季阵营贡献达到 300。',
+  },
+  'season-contribution-800': {
+    title: '赛季贡献铜章',
+    description: '本赛季阵营贡献达到 800。',
+  },
+  'season-contribution-1500': {
+    title: '赛季贡献银章',
+    description: '本赛季阵营贡献达到 1500。',
+  },
+  'season-contribution-3000': {
+    title: '赛季贡献金章',
+    description: '本赛季阵营贡献达到 3000。',
+  },
+};
+
 function buildSeasonMedalCabinet(currentSeasonNumber: number, medals: ClientSeasonMedal[]): ClientSeasonRewardsResponse['medalCabinet'] {
   const seasonNumbers = Array.from(new Set([
     currentSeasonNumber,
     ...medals.map((medal) => medal.seasonNumber),
   ])).sort((left, right) => right - left);
+  const currentSeasonLabel = formatSeasonLabel(currentSeasonNumber);
 
   return {
     currentSeasonNumber,
-    currentSeasonTitle: `S${currentSeasonNumber}赛季奖章陈列柜`,
+    currentSeasonTitle: `${currentSeasonLabel}奖章陈列柜`,
     medals,
     medalsBySeason: seasonNumbers.map((seasonNumber) => ({
       seasonNumber,
-      title: `S${seasonNumber}赛季奖章陈列柜`,
+      title: `${formatSeasonLabel(seasonNumber)}奖章陈列柜`,
       medals: medals.filter((medal) => medal.seasonNumber === seasonNumber),
     })),
   };

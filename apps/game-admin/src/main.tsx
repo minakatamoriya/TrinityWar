@@ -71,6 +71,9 @@ function App(): JSX.Element {
   const [seasonAchievements, setSeasonAchievements] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [seasonPlayerHistory, setSeasonPlayerHistory] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [seasonPlayerHistoryId, setSeasonPlayerHistoryId] = useState('');
+  const [seasonPlayerRewardHistory, setSeasonPlayerRewardHistory] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [seasonRewardPreview, setSeasonRewardPreview] = useState<AdminRecord | null>(null);
+  const [seasonPlayerRewardSeasonNumber, setSeasonPlayerRewardSeasonNumber] = useState('');
   const [seedDefinitions, setSeedDefinitions] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [seedForm, setSeedForm] = useState<Record<string, string>>(() => createEmptyConfigForm(seedConfigFields));
   const [editingSeedId, setEditingSeedId] = useState('');
@@ -288,11 +291,6 @@ function App(): JSX.Element {
     void handleLoadOrder(nextOrderId);
   };
 
-  const notificationSeedOptions = useMemo(
-    () => (seedDefinitions?.items ?? []).map((item) => ({ value: String(item.seedId), label: String(item.label ?? item.seedId) })),
-    [seedDefinitions],
-  );
-
   const patchNotificationForm = (
     setter: React.Dispatch<React.SetStateAction<AdminNotificationFormState>>,
     field: keyof AdminNotificationFormState,
@@ -316,7 +314,7 @@ function App(): JSX.Element {
   const appendNotificationAttachment = (setter: React.Dispatch<React.SetStateAction<AdminNotificationFormState>>): void => {
     setter((current) => ({
       ...current,
-      attachments: [...current.attachments, { kind: 'gold', quantity: '1', seedId: '' }],
+      attachments: [...current.attachments, { kind: 'gold', quantity: '1' }],
     }));
   };
 
@@ -335,7 +333,6 @@ function App(): JSX.Element {
     attachments: form.attachments.map((item) => ({
       kind: item.kind,
       quantity: Number(item.quantity),
-      ...(item.kind === 'seed' && item.seedId.trim() ? { seedId: item.seedId.trim() } : {}),
     })),
   });
 
@@ -439,7 +436,7 @@ function App(): JSX.Element {
   };
 
   const deleteSeedDefinition = async (seedId: string): Promise<void> => {
-    if (!window.confirm(`确认删除种子定义？\n${seedId}\n已被玩家田地或库存引用的种子不能删除。`)) {
+    if (!window.confirm(`确认删除灵植定义？\n${seedId}\n已被玩家田地或资格记录引用的灵植不能删除。`)) {
       return;
     }
     const result = await run('seed-delete', () => adminFetch<AdminRecord>(`/config/seeds/${encodeURIComponent(seedId)}`, { method: 'DELETE' }));
@@ -639,6 +636,7 @@ function App(): JSX.Element {
       setSeasons(nextSeasons);
       const seasonNumber = Number(nextCurrentSeason.seasonNumber ?? 0);
       if (seasonNumber > 0) {
+        setSeasonPlayerRewardSeasonNumber((current) => current || String(seasonNumber));
         const [playerSnapshots, factionSnapshots, rewardSummary, rewardGrants, achievements] = await Promise.all([
           adminFetch<AdminListResponse<AdminRecord>>(`/seasons/${seasonNumber}/player-snapshots?page=1&pageSize=10`),
           adminFetch<AdminListResponse<AdminRecord>>(`/seasons/${seasonNumber}/faction-snapshots?page=1&pageSize=10`),
@@ -669,6 +667,54 @@ function App(): JSX.Element {
     if (result) {
       setSeasonPlayerHistory(result);
       setSeasonPlayerHistoryId(normalizedPlayerId);
+    }
+  };
+
+  const loadSeasonPlayerRewardHistory = async (playerId = seasonPlayerHistoryId, page = 1): Promise<void> => {
+    const normalizedPlayerId = playerId.trim();
+    if (!normalizedPlayerId) {
+      setError('请输入玩家 ID。');
+      return;
+    }
+
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: '10',
+    });
+    const normalizedSeasonNumber = seasonPlayerRewardSeasonNumber.trim();
+    if (normalizedSeasonNumber) {
+      params.set('seasonNumber', normalizedSeasonNumber);
+    }
+
+    const result = await run('season-player-reward-history', () => adminFetch<AdminListResponse<AdminRecord>>(
+      `/players/${encodeURIComponent(normalizedPlayerId)}/season-rewards?${params.toString()}`,
+    ));
+    if (result) {
+      setSeasonPlayerRewardHistory(result);
+      setSeasonPlayerHistoryId(normalizedPlayerId);
+    }
+  };
+
+  const loadSeasonRewardPreview = async (playerId = seasonPlayerHistoryId): Promise<void> => {
+    const normalizedPlayerId = playerId.trim();
+    const normalizedSeasonNumber = Number(seasonPlayerRewardSeasonNumber.trim() || String(currentSeason?.seasonNumber ?? 0));
+    if (!normalizedPlayerId) {
+      setError('请输入玩家 ID。');
+      return;
+    }
+    if (!Number.isInteger(normalizedSeasonNumber) || normalizedSeasonNumber <= 0) {
+      setError('请输入有效赛季号。');
+      return;
+    }
+
+    const params = new URLSearchParams({ playerId: normalizedPlayerId });
+    const result = await run('season-reward-preview', () => adminFetch<AdminRecord>(
+      `/seasons/${normalizedSeasonNumber}/rewards/preview?${params.toString()}`,
+    ));
+    if (result) {
+      setSeasonRewardPreview(result);
+      setSeasonPlayerHistoryId(normalizedPlayerId);
+      setSeasonPlayerRewardSeasonNumber(String(normalizedSeasonNumber));
     }
   };
 
@@ -785,7 +831,6 @@ function App(): JSX.Element {
               playerForm={playerNotificationForm}
               playerHistory={playerNotificationHistory}
               playerHistoryPlayerId={playerNotificationHistoryPlayerId}
-              seedOptions={notificationSeedOptions}
             />
           ) : null}
 
@@ -812,13 +857,20 @@ function App(): JSX.Element {
               achievements={seasonAchievements}
               playerHistory={seasonPlayerHistory}
               playerHistoryId={seasonPlayerHistoryId}
+              playerRewardHistory={seasonPlayerRewardHistory}
+              playerRewardSeasonNumber={seasonPlayerRewardSeasonNumber}
+              rewardPreview={seasonRewardPreview}
               playerSnapshots={seasonPlayerSnapshots}
               seasons={seasons}
               onAchievementPageChange={(page) => void loadSeasonAchievements(Number(currentSeason?.seasonNumber ?? 0), page)}
               onFactionSnapshotPageChange={(page) => void loadSeasonFactionSnapshots(Number(currentSeason?.seasonNumber ?? 0), page)}
               onLoadPlayerHistory={() => void loadSeasonPlayerHistory()}
+              onLoadPlayerRewardHistory={() => void loadSeasonPlayerRewardHistory()}
+              onLoadRewardPreview={() => void loadSeasonRewardPreview()}
               onPlayerHistoryIdChange={setSeasonPlayerHistoryId}
               onPlayerHistoryPageChange={(page) => void loadSeasonPlayerHistory(seasonPlayerHistoryId, page)}
+              onPlayerRewardHistoryPageChange={(page) => void loadSeasonPlayerRewardHistory(seasonPlayerHistoryId, page)}
+              onPlayerRewardSeasonNumberChange={setSeasonPlayerRewardSeasonNumber}
               onPlayerSnapshotPageChange={(page) => void loadSeasonPlayerSnapshots(Number(currentSeason?.seasonNumber ?? 0), page)}
               onRefresh={() => void loadSeasonDashboard()}
               onRewardGrantPageChange={(page) => void loadSeasonRewardGrants(Number(currentSeason?.seasonNumber ?? 0), page)}
@@ -955,7 +1007,6 @@ function App(): JSX.Element {
               onRemoveAttachment={(index) => removeNotificationAttachment(setQuickNotificationForm, index)}
               onSubmit={() => void sendQuickPlayerNotification()}
               playerIdDisabled
-              seedOptions={notificationSeedOptions}
               showPlayerId
               submitBusyLabel="发送中..."
               title="复用发送组件，可同时发消息和多种物品"

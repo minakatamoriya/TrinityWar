@@ -1,14 +1,14 @@
 import type { AdminRecord, ConfigField } from '../types';
 
 export const seedConfigFields: ConfigField[] = [
-  { key: 'seedId', label: '种子 ID / seedId' },
+  { key: 'seedId', label: '灵植 ID / seedId' },
   { key: 'label', label: '名称 / label' },
   { key: 'rarity', label: '稀有度 / rarity', inputType: 'select', options: ['common', 'rare', 'legendary'] },
   { key: 'growSeconds', label: '成长秒数 / growSeconds', inputType: 'number' },
   { key: 'matureSeconds', label: '成熟秒数 / matureSeconds', inputType: 'number' },
   { key: 'collectWindowSeconds', label: '可收窗口秒数 / collectWindowSeconds', inputType: 'number' },
   { key: 'baseYieldGold', label: '基础产金 / baseYieldGold', inputType: 'number' },
-  { key: 'harvestSeedReturn', label: '收获返种 / harvestSeedReturn', inputType: 'number' },
+  { key: 'harvestSeedReturn', label: '兼容返还 / harvestSeedReturn', inputType: 'number' },
   { key: 'sortOrder', label: '排序 / sortOrder', inputType: 'number' },
   { key: 'strategyNote', label: '策略说明 / strategyNote', inputType: 'textarea', nullable: true },
   { key: 'lore', label: '背景 / lore', inputType: 'textarea', nullable: true },

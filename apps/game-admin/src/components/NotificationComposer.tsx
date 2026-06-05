@@ -3,10 +3,6 @@ import type { NotificationAttachmentKind, NotificationCategory } from '@trinityw
 export interface AdminNotificationAttachmentDraft {
   kind: NotificationAttachmentKind;
   quantity: string;
-  /**
-   * @deprecated Plant/seed notification attachments are retired.
-   */
-  seedId: string;
 }
 
 export interface AdminNotificationFormState {
@@ -52,7 +48,6 @@ export function NotificationComposer(props: {
   busy: boolean;
   eyebrow: string;
   form: AdminNotificationFormState;
-  seedOptions: Array<{ value: string; label: string }>;
   submitBusyLabel: string;
   title: string;
   onAddAttachment: () => void;

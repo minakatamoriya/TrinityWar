@@ -42,7 +42,7 @@ export function SeedRewardModalHost(props: SeedRewardModalHostProps): JSX.Elemen
       getItemLabel={(item) => {
         const seed = item.seedId ? seedCatalogMap.get(item.seedId) : undefined;
         if (modal.confirmAction === 'claim-faction-stipend' && seed) {
-          return `${seed.name}精华`;
+          return `${seed.name}资格`;
         }
         return seed?.name ?? item.label ?? item.itemId ?? item.seedId ?? '奖励';
       }}

@@ -5903,55 +5903,186 @@ button.spirit-element-chip {
   color: rgba(247, 239, 225, 0.86);
 }
 
-.season-medal-cabinet {
+.season-medal-cabinet,
+.season-medal-season-list {
+  min-width: 0;
+  display: grid;
   gap: 10px;
 }
 
 .season-medal-season {
-  gap: 10px;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  background: rgba(255, 248, 234, 0.04);
 }
 
-.season-medal-grid {
+.season-medal-season-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(247, 239, 225, 0.72);
+  font-size: 12px;
+}
+
+.season-medal-season-head strong {
+  min-width: 0;
+  color: #f8df9a;
+  overflow-wrap: anywhere;
+}
+
+.season-medal-season-head span {
+  flex: 0 0 auto;
+}
+
+.season-medal-icon-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(42px, 1fr));
   gap: 8px;
 }
 
-.season-medal-card {
+.season-medal-icon-button {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 1;
   display: grid;
-  gap: 4px;
-  min-height: 108px;
-  padding: 10px;
-  border: 1px solid rgba(248, 223, 154, 0.28);
+  place-items: center;
+  padding: 6px;
   border-radius: 8px;
-  background: linear-gradient(145deg, rgba(248, 223, 154, 0.12), rgba(100, 66, 39, 0.18));
-}
-
-.season-medal-card strong {
+  border: 1px solid rgba(248, 223, 154, 0.28);
+  background: linear-gradient(145deg, rgba(248, 223, 154, 0.14), rgba(35, 27, 24, 0.82));
   color: #ffe7a8;
-  font-size: 14px;
+  box-shadow: inset 0 0 0 1px rgba(255, 248, 234, 0.04);
 }
 
-.season-medal-card em {
-  color: rgba(247, 239, 225, 0.7);
-  font-size: 10px;
-  font-style: normal;
+.season-medal-icon-button:hover,
+.season-medal-icon-button.is-selected {
+  border-color: rgba(248, 223, 154, 0.68);
+  background: linear-gradient(145deg, rgba(248, 223, 154, 0.24), rgba(70, 48, 31, 0.9));
 }
 
-.season-medal-card p {
-  margin: 0;
-  color: rgba(247, 239, 225, 0.82);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.season-medal-domain {
-  width: fit-content;
-  padding: 2px 6px;
+.season-medal-icon-glyph {
+  width: min(34px, 70%);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
   border-radius: 999px;
-  background: rgba(248, 223, 154, 0.16);
+  border: 1px solid rgba(255, 248, 234, 0.2);
+  background: rgba(10, 7, 5, 0.28);
+  color: #fff1d2;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.season-medal-icon-rank {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(15, 11, 9, 0.82);
   color: #f8df9a;
   font-size: 10px;
+  line-height: 1;
+}
+
+.season-medal-detail-card {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(243, 181, 111, 0.18);
+  background: rgba(30, 24, 20, 0.68);
+}
+
+.season-medal-detail-head {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.season-medal-detail-head div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.season-medal-detail-head strong,
+.season-medal-detail-head span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.season-medal-detail-head strong {
+  color: #fff1d2;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.season-medal-detail-head span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.season-medal-detail-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 223, 154, 0.34);
+  background: rgba(248, 223, 154, 0.12);
+  color: #ffe7a8;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.season-medal-detail-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.season-medal-detail-list div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.season-medal-detail-list dt,
+.season-medal-detail-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.season-medal-detail-list dt {
+  color: rgba(247, 239, 225, 0.56);
+}
+
+.season-medal-detail-list dd,
+.season-medal-empty-text {
+  color: rgba(247, 239, 225, 0.82);
+}
+
+.season-medal-empty-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .faction-breakdown-line,
@@ -6380,23 +6511,20 @@ button.spirit-element-chip {
   gap: 8px;
 }
 
-.profile-medal-section,
-.profile-season-list {
+.profile-medal-section {
   min-width: 0;
   display: grid;
   gap: 10px;
 }
 
-.profile-section-head,
-.profile-season-title {
+.profile-section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 
-.profile-section-head h4,
-.profile-season-title strong {
+.profile-section-head h4 {
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -6408,70 +6536,12 @@ button.spirit-element-chip {
   line-height: 1.25;
 }
 
-.profile-section-head span,
-.profile-season-title span {
+.profile-section-head span {
   flex: 0 0 auto;
   color: var(--text-secondary);
   font-size: 12px;
 }
 
-.profile-season-card {
-  min-width: 0;
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 248, 234, 0.1);
-  background: rgba(255, 248, 234, 0.04);
-}
-
-.profile-medal-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
-}
-
-.profile-medal-card {
-  min-width: 0;
-  display: grid;
-  gap: 5px;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(243, 181, 111, 0.2);
-  background: rgba(30, 24, 20, 0.68);
-}
-
-.profile-medal-card span {
-  width: fit-content;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: rgba(243, 181, 111, 0.14);
-  color: #ffe2b7;
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.profile-medal-card strong,
-.profile-medal-card em,
-.profile-medal-card p {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.profile-medal-card strong {
-  color: #fff1d2;
-  font-size: 14px;
-  line-height: 1.3;
-}
-
-.profile-medal-card em {
-  color: rgba(255, 248, 234, 0.62);
-  font-size: 11px;
-  font-style: normal;
-  line-height: 1.3;
-}
-
-.profile-medal-card p,
 .profile-empty-text {
   margin: 0;
   color: var(--text-secondary);

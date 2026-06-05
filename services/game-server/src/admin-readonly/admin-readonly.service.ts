@@ -9,7 +9,7 @@ import type {
   AdminRaidOrderDetailResponse,
   AdminSystemStatusResponse,
 } from '@trinitywar/shared';
-import { APP_NAME, DOCS_ROUTE } from '@trinitywar/shared';
+import { APP_NAME, DOCS_ROUTE, formatSeasonLabel } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { GAME_DESIGN_CONFIG } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -295,6 +295,319 @@ export class AdminReadonlyService {
       })),
       pagination: { page, pageSize, total },
     };
+  }
+
+  async listPlayerSeasonRewardHistory(
+    playerId: string,
+    query: Record<string, string | undefined>,
+  ): Promise<AdminListResponse<Record<string, unknown>>> {
+    const normalizedPlayerId = playerId.trim();
+    if (!normalizedPlayerId) {
+      throwBadRequest('playerId is required.');
+    }
+
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const where: Prisma.PlayerSeasonRewardGrantWhereInput = { playerId: normalizedPlayerId };
+    if (query.seasonNumber?.trim()) {
+      where.seasonNumber = normalizeSeasonNumber(Number(query.seasonNumber));
+    }
+    if (query.rewardType?.trim()) {
+      where.rewardType = query.rewardType.trim();
+    }
+    if (query.status?.trim()) {
+      where.status = query.status.trim();
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.db.playerSeasonRewardGrant.findMany({
+        where,
+        orderBy: [{ seasonNumber: 'desc' }, { createdAt: 'desc' }, { rewardType: 'asc' }],
+        skip,
+        take,
+        include: {
+          player: { select: { nickname: true } },
+          notification: {
+            select: {
+              id: true,
+              titleSnapshot: true,
+              bodySnapshot: true,
+              claimStatus: true,
+              attachmentJson: true,
+              expiresAt: true,
+              readAt: true,
+              claimedAt: true,
+              deletedAt: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+          achievements: {
+            orderBy: [{ domain: 'asc' }, { achievementKey: 'asc' }],
+            include: {
+              rewardGrant: { select: { rewardType: true, rewardTier: true, status: true, notificationId: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.db.playerSeasonRewardGrant.count({ where }),
+    ]);
+
+    return {
+      items: items.map((item) => {
+        const achievements = item.achievements.map((achievement) => {
+          const statSnapshot = normalizeAdminJsonObject(achievement.statSnapshotJson);
+          const displayCopy = this.seasonService.getSeasonMedalDisplayCopy({
+            achievementKey: achievement.achievementKey,
+            title: achievement.title,
+            description: achievement.description,
+            statSnapshot,
+          });
+
+          return normalizeDates({
+            id: achievement.id,
+            playerId: achievement.playerId,
+            seasonNumber: achievement.seasonNumber,
+            seasonLabel: formatSeasonLabel(achievement.seasonNumber),
+            domain: achievement.domain,
+            achievementKey: achievement.achievementKey,
+            title: displayCopy.title,
+            description: displayCopy.description,
+            contributionSnapshot: achievement.contributionSnapshot,
+            statSnapshotJson: statSnapshot,
+            rewardGrantId: achievement.rewardGrantId,
+            rewardType: achievement.rewardGrant?.rewardType ?? null,
+            rewardTier: achievement.rewardGrant?.rewardTier ?? null,
+            rewardStatus: achievement.rewardGrant?.status ?? null,
+            notificationId: achievement.rewardGrant?.notificationId ?? null,
+            clientVisible: isVisibleAdminSeasonAchievement(achievement),
+            createdAt: achievement.createdAt,
+            updatedAt: achievement.updatedAt,
+          });
+        });
+
+        return normalizeDates({
+          id: item.id,
+          playerId: item.playerId,
+          nickname: item.player.nickname,
+          seasonNumber: item.seasonNumber,
+          seasonLabel: formatSeasonLabel(item.seasonNumber),
+          rewardType: item.rewardType,
+          rewardTypeLabel: formatSeasonRewardTypeLabel(item.rewardType),
+          rewardTier: item.rewardTier,
+          status: item.status,
+          notificationId: item.notificationId,
+          notificationTitle: item.notification?.titleSnapshot ?? null,
+          notificationBody: item.notification?.bodySnapshot ?? null,
+          notificationClaimStatus: item.notification?.claimStatus ?? null,
+          notificationAttachmentJson: item.notification?.attachmentJson ?? null,
+          notificationCreatedAt: item.notification?.createdAt ?? null,
+          notificationUpdatedAt: item.notification?.updatedAt ?? null,
+          notificationReadAt: item.notification?.readAt ?? null,
+          notificationClaimedAt: item.notification?.claimedAt ?? null,
+          notificationDeletedAt: item.notification?.deletedAt ?? null,
+          expiresAt: item.notification?.expiresAt ?? null,
+          contributionSnapshot: item.contributionSnapshot,
+          signInDays: item.signInDays,
+          loginDays: item.loginDays,
+          harvestCount: item.harvestCount,
+          raidCount: item.raidCount,
+          rewardJson: item.rewardJson,
+          rewardSummary: formatRuleRewards(item.rewardJson),
+          achievementCount: achievements.length,
+          achievementKeys: achievements.map((achievement) => achievement['achievementKey']),
+          achievementTitles: achievements.map((achievement) => achievement['title']),
+          visibleAchievementTitles: achievements
+            .filter((achievement) => achievement['clientVisible'])
+            .map((achievement) => achievement['title']),
+          achievements,
+          claimedAt: item.claimedAt,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+        });
+      }),
+      pagination: { page, pageSize, total },
+    };
+  }
+
+  async getSeasonRewardPreview(
+    seasonNumber: number,
+    query: Record<string, string | undefined>,
+  ): Promise<Record<string, unknown>> {
+    const normalizedSeasonNumber = normalizeSeasonNumber(seasonNumber);
+    const normalizedPlayerId = query.playerId?.trim() ?? '';
+    if (!normalizedPlayerId) {
+      throwBadRequest('playerId is required.');
+    }
+
+    const player = await this.prisma.db.player.findUnique({
+      where: { id: normalizedPlayerId },
+      select: {
+        id: true,
+        nickname: true,
+        faction: { select: { code: true, name: true } },
+      },
+    });
+    if (!player) {
+      throw new BusinessError({
+        code: ErrorCode.NotFound,
+        message: 'Player not found.',
+        statusCode: 404,
+      });
+    }
+
+    const [snapshot, existingGrants, existingAchievements] = await Promise.all([
+      this.prisma.db.playerSeasonSnapshot.findUnique({
+        where: {
+          playerId_seasonNumber: {
+            playerId: normalizedPlayerId,
+            seasonNumber: normalizedSeasonNumber,
+          },
+        },
+        include: {
+          faction: { select: { code: true, name: true } },
+        },
+      }),
+      this.prisma.db.playerSeasonRewardGrant.findMany({
+        where: { playerId: normalizedPlayerId, seasonNumber: normalizedSeasonNumber },
+        orderBy: [{ rewardType: 'asc' }, { createdAt: 'desc' }],
+        include: {
+          notification: { select: { id: true, claimStatus: true, claimedAt: true, expiresAt: true, readAt: true, deletedAt: true } },
+          _count: { select: { achievements: true } },
+        },
+      }),
+      this.prisma.db.playerSeasonAchievement.findMany({
+        where: { playerId: normalizedPlayerId, seasonNumber: normalizedSeasonNumber },
+        orderBy: [{ domain: 'asc' }, { achievementKey: 'asc' }],
+        include: {
+          rewardGrant: { select: { rewardType: true, rewardTier: true, status: true, notificationId: true } },
+        },
+      }),
+    ]);
+
+    const grantsByRewardType = new Map(existingGrants.map((grant) => [grant.rewardType, grant]));
+    const achievementsByKey = new Map(existingAchievements.map((achievement) => [achievement.achievementKey, achievement]));
+    const previewRules = snapshot
+      ? this.seasonService.previewSeasonRewardRules(snapshot).map((rule) => {
+          const existingGrant = grantsByRewardType.get(rule.rewardType) ?? null;
+          const existingAchievement = rule.achievementKey ? achievementsByKey.get(rule.achievementKey) ?? null : null;
+          return normalizeDates({
+            rewardType: rule.rewardType,
+            rewardTypeLabel: rule.rewardTypeLabel,
+            rewardTier: rule.rewardTier,
+            domain: rule.domain,
+            achievementKey: rule.achievementKey,
+            achievementTitle: rule.achievementTitle,
+            achievementDescription: rule.achievementDescription,
+            statSnapshot: rule.statSnapshot,
+            rewards: rule.rewards,
+            rewardSummary: formatRuleRewards(rule.rewards),
+            existingGrantId: existingGrant?.id ?? null,
+            existingGrantStatus: existingGrant?.status ?? null,
+            existingGrantTier: existingGrant?.rewardTier ?? null,
+            existingNotificationId: existingGrant?.notificationId ?? null,
+            existingNotificationClaimStatus: existingGrant?.notification?.claimStatus ?? null,
+            existingAchievementId: existingAchievement?.id ?? null,
+            previewOutcome: describeSeasonRewardPreviewOutcome(existingGrant),
+          });
+        })
+      : [];
+
+    const existingGrantRows = existingGrants.map((grant) => normalizeDates({
+      id: grant.id,
+      playerId: grant.playerId,
+      seasonNumber: grant.seasonNumber,
+      seasonLabel: formatSeasonLabel(grant.seasonNumber),
+      rewardType: grant.rewardType,
+      rewardTypeLabel: formatSeasonRewardTypeLabel(grant.rewardType),
+      rewardTier: grant.rewardTier,
+      status: grant.status,
+      notificationId: grant.notificationId,
+      notificationClaimStatus: grant.notification?.claimStatus ?? null,
+      notificationClaimedAt: grant.notification?.claimedAt ?? null,
+      notificationReadAt: grant.notification?.readAt ?? null,
+      notificationDeletedAt: grant.notification?.deletedAt ?? null,
+      expiresAt: grant.notification?.expiresAt ?? null,
+      contributionSnapshot: grant.contributionSnapshot,
+      signInDays: grant.signInDays,
+      loginDays: grant.loginDays,
+      harvestCount: grant.harvestCount,
+      raidCount: grant.raidCount,
+      achievementCount: grant._count.achievements,
+      rewardJson: grant.rewardJson,
+      rewardSummary: formatRuleRewards(grant.rewardJson),
+      claimedAt: grant.claimedAt,
+      createdAt: grant.createdAt,
+      updatedAt: grant.updatedAt,
+    }));
+    const existingAchievementRows = existingAchievements.map((achievement) => {
+      const statSnapshot = normalizeAdminJsonObject(achievement.statSnapshotJson);
+      const displayCopy = this.seasonService.getSeasonMedalDisplayCopy({
+        achievementKey: achievement.achievementKey,
+        title: achievement.title,
+        description: achievement.description,
+        statSnapshot,
+      });
+
+      return normalizeDates({
+        id: achievement.id,
+        playerId: achievement.playerId,
+        seasonNumber: achievement.seasonNumber,
+        seasonLabel: formatSeasonLabel(achievement.seasonNumber),
+        domain: achievement.domain,
+        achievementKey: achievement.achievementKey,
+        title: displayCopy.title,
+        description: displayCopy.description,
+        contributionSnapshot: achievement.contributionSnapshot,
+        statSnapshotJson: statSnapshot,
+        rewardGrantId: achievement.rewardGrantId,
+        rewardType: achievement.rewardGrant?.rewardType ?? null,
+        rewardTier: achievement.rewardGrant?.rewardTier ?? null,
+        rewardStatus: achievement.rewardGrant?.status ?? null,
+        notificationId: achievement.rewardGrant?.notificationId ?? null,
+        clientVisible: isVisibleAdminSeasonAchievement(achievement),
+        createdAt: achievement.createdAt,
+        updatedAt: achievement.updatedAt,
+      });
+    });
+
+    return normalizeDates({
+      playerId: player.id,
+      nickname: player.nickname,
+      factionCode: snapshot?.faction?.code ?? player.faction?.code ?? null,
+      factionName: snapshot?.faction?.name ?? player.faction?.name ?? null,
+      seasonNumber: normalizedSeasonNumber,
+      seasonLabel: formatSeasonLabel(normalizedSeasonNumber),
+      readOnly: true,
+      willWrite: false,
+      previewAvailable: Boolean(snapshot),
+      reason: snapshot ? null : '未找到该玩家该赛季快照，无法预览赛季奖励。',
+      snapshot: snapshot ? normalizeDates({
+        id: snapshot.id,
+        playerId: snapshot.playerId,
+        seasonNumber: snapshot.seasonNumber,
+        seasonLabel: formatSeasonLabel(snapshot.seasonNumber),
+        factionId: snapshot.factionId,
+        factionCode: snapshot.faction?.code ?? null,
+        factionName: snapshot.faction?.name ?? null,
+        contributionScore: snapshot.contributionScore,
+        signInDays: snapshot.signInDays,
+        loginDays: snapshot.loginDays,
+        harvestCount: snapshot.harvestCount,
+        raidCount: snapshot.raidCount,
+        finalRank: snapshot.finalRank,
+        rewardTier: snapshot.rewardTier,
+        snapshotJson: snapshot.snapshotJson,
+        createdAt: snapshot.createdAt,
+        updatedAt: snapshot.updatedAt,
+      }) : null,
+      ruleCount: previewRules.length,
+      existingGrantCount: existingGrantRows.length,
+      existingAchievementCount: existingAchievementRows.length,
+      visibleAchievementCount: existingAchievementRows.filter((achievement) => achievement['clientVisible']).length,
+      rules: previewRules,
+      existingGrants: existingGrantRows,
+      existingAchievements: existingAchievementRows,
+    });
   }
 
   async getSeasonRewardSummary(seasonNumber: number): Promise<Record<string, unknown>> {
@@ -747,16 +1060,6 @@ export class AdminReadonlyService {
   }
 
   async listCastleLevels(): Promise<AdminListResponse<Record<string, unknown>>> {
-    const landDeeds = GAME_DESIGN_CONFIG.landDeeds.map((deed: Record<string, unknown>) => ({
-      type: 'land-deed',
-      ruleGroup: 'land-deed',
-      key: deed['deedKey'],
-      title: deed['title'],
-      requirements: formatRuleRequirements(deed['requirements'], deed['alternativeRequirements']),
-      cost: '-',
-      effect: `unlock field ${deed['targetFieldSlotIndex']}`,
-      rewards: '-',
-    }));
     const factionStipends = ((GAME_DESIGN_CONFIG.factionStipends as { tiers?: Array<Record<string, unknown>> }).tiers ?? [])
       .map((tier) => ({
         type: 'faction-stipend',
@@ -768,7 +1071,7 @@ export class AdminReadonlyService {
         effect: '-',
         rewards: formatRuleRewards(tier['rewards']),
       }));
-    const items = [...landDeeds, ...factionStipends];
+    const items = [...factionStipends];
     return {
       items,
       pagination: { page: 1, pageSize: items.length, total: items.length },
@@ -982,6 +1285,7 @@ export class AdminReadonlyService {
           seedId: item.seedDefinition.seedId,
           label: item.seedDefinition.label,
           sortOrder: item.seedDefinition.sortOrder,
+          unlocked: Boolean(item.unlockedAt || item.quantity > 0),
           quantity: item.quantity,
           inventoryVersion: item.inventoryVersion,
           unlockedAt: item.unlockedAt,
@@ -1443,23 +1747,62 @@ function normalizeDates<T extends Record<string, unknown>>(record: T): Record<st
   );
 }
 
-function formatRuleRequirements(requirements: unknown, alternativeRequirements: unknown): string {
-  const main = formatRequirementList(requirements);
-  const alternative = formatRequirementList(alternativeRequirements);
-  return alternative ? `${main} OR ${alternative}` : main;
-}
-
-function formatRequirementList(requirements: unknown): string {
-  if (!Array.isArray(requirements)) {
-    return '';
+function normalizeAdminJsonObject(value: Prisma.JsonValue): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
   }
 
-  return requirements
-    .map((requirement) => {
-      const record = requirement && typeof requirement === 'object' ? requirement as Record<string, unknown> : {};
-      return `${record['label'] ?? record['key'] ?? 'requirement'} >= ${record['target'] ?? 0}`;
-    })
-    .join(' + ');
+  return Object.fromEntries(Object.entries(value));
+}
+
+function isVisibleAdminSeasonAchievement(achievement: {
+  achievementKey: string;
+  rewardGrant: { rewardTier: string | null; status: string } | null;
+}): boolean {
+  if (achievement.rewardGrant?.status === 'voided') {
+    return false;
+  }
+
+  if (achievement.rewardGrant?.rewardTier && achievement.achievementKey !== achievement.rewardGrant.rewardTier) {
+    return false;
+  }
+
+  return true;
+}
+
+function formatSeasonRewardTypeLabel(rewardType: string): string {
+  if (rewardType === 'participation') {
+    return '基础参与';
+  }
+  if (rewardType === 'domain_farming') {
+    return '种田领域';
+  }
+  if (rewardType === 'domain_spirit') {
+    return '养宠领域';
+  }
+  if (rewardType === 'domain_combat') {
+    return '探索战斗领域';
+  }
+  if (rewardType === 'contribution_tier') {
+    return '贡献领域';
+  }
+  return rewardType;
+}
+
+function describeSeasonRewardPreviewOutcome(grant: { status: string; notificationId: string | null } | null): string {
+  if (!grant) {
+    return '未生成：真实生成会创建奖励单和通知';
+  }
+  if (grant.status === 'claimed') {
+    return '已领取：真实生成不会刷新该奖励单';
+  }
+  if (grant.status === 'voided') {
+    return '已撤销：真实生成不会刷新该奖励单';
+  }
+  if (grant.notificationId) {
+    return '已存在：真实生成会保持或刷新未领取通知';
+  }
+  return '已存在：真实生成会补建通知';
 }
 
 function formatRuleRewards(rewards: unknown): string {

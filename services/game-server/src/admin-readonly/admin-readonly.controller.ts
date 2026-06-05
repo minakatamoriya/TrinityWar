@@ -75,6 +75,15 @@ export class AdminReadonlyController {
     return this.adminReadonlyService.listSeasonRewardGrants(Number(seasonNumber), query);
   }
 
+  @Get('seasons/:seasonNumber/rewards/preview')
+  @ApiOkResponse({ description: 'Readonly season reward preview for a player snapshot.' })
+  getSeasonRewardPreview(
+    @Param('seasonNumber') seasonNumber: string,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.getSeasonRewardPreview(Number(seasonNumber), query);
+  }
+
   @Get('seasons/:seasonNumber/achievements')
   @ApiOkResponse({ description: 'Readonly season achievements.' })
   listSeasonAchievements(
@@ -199,6 +208,15 @@ export class AdminReadonlyController {
     return this.adminReadonlyService.listPlayerSeasonHistory(playerId, query);
   }
 
+  @Get('players/:playerId/season-rewards')
+  @ApiOkResponse({ description: 'Readonly player season reward history.' })
+  listPlayerSeasonRewardHistory(
+    @Param('playerId') playerId: string,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<AdminListResponse<Record<string, unknown>>> {
+    return this.adminReadonlyService.listPlayerSeasonRewardHistory(playerId, query);
+  }
+
   @Delete('players/:playerId')
   @ApiOkResponse({ description: 'Delete player and cascaded records.' })
   deletePlayer(@Param('playerId') playerId: string): Promise<AdminDeletePlayerResponse> {
@@ -255,6 +273,7 @@ defineRouteParamTypes(AdminReadonlyController.prototype, 'listPlayerSeasonSnapsh
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listFactionSeasonSnapshots', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getSeasonRewardSummary', [String]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listSeasonRewardGrants', [String, Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'getSeasonRewardPreview', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listSeasonAchievements', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listSeedDefinitions', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'createSeedDefinition', [Object]);
@@ -273,6 +292,7 @@ defineRouteParamTypes(AdminReadonlyController.prototype, 'updateTaskConfig', [St
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getPlayerOverview', [String]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getPlayerSeasonState', [String]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listPlayerSeasonHistory', [String, Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'listPlayerSeasonRewardHistory', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'deletePlayer', [String]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getWalletLogs', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getBuildingLogs', [String, Object]);

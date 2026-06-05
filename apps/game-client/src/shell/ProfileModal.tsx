@@ -1,4 +1,5 @@
 import type { ClientSeasonMedalCabinet } from '@trinitywar/shared';
+import { SeasonMedalCabinetView } from '../ui/common/SeasonMedalCabinetView';
 
 interface ProfileModalProps {
   avatarInitial: string;
@@ -12,6 +13,8 @@ export function ProfileModal(props: ProfileModalProps): JSX.Element | null {
   if (!props.open) {
     return null;
   }
+
+  const medalCount = props.medalCabinet?.medals.filter((medal) => medal.rewardStatus !== 'voided').length ?? 0;
 
   return (
     <div className="modal-backdrop modal-backdrop-blocking" role="presentation">
@@ -43,33 +46,10 @@ export function ProfileModal(props: ProfileModalProps): JSX.Element | null {
           <div className="profile-medal-section">
             <div className="profile-section-head">
               <h4>{props.medalCabinet?.currentSeasonTitle ?? '赛季奖章陈列柜'}</h4>
-              <span>{props.medalCabinet?.medals.length ?? 0} 枚</span>
+              <span>{medalCount} 枚</span>
             </div>
             {props.medalCabinet ? (
-              <div className="profile-season-list">
-                {props.medalCabinet.medalsBySeason.map((season) => (
-                  <article className="profile-season-card" key={season.seasonNumber}>
-                    <div className="profile-season-title">
-                      <strong>{season.title}</strong>
-                      <span>{season.medals.length} 枚</span>
-                    </div>
-                    {season.medals.length <= 0 ? (
-                      <p className="profile-empty-text">本赛季暂未获得奖章。</p>
-                    ) : (
-                      <div className="profile-medal-grid">
-                        {season.medals.map((medal) => (
-                          <div className="profile-medal-card" key={medal.id}>
-                            <span>{getDomainLabel(medal.domain)}</span>
-                            <strong>{medal.title}</strong>
-                            {medal.titleEn ? <em>{medal.titleEn}</em> : null}
-                            <p>{medal.description}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </article>
-                ))}
-              </div>
+              <SeasonMedalCabinetView cabinet={props.medalCabinet} />
             ) : (
               <p className="profile-empty-text">正在读取奖章陈列柜。</p>
             )}
@@ -78,20 +58,4 @@ export function ProfileModal(props: ProfileModalProps): JSX.Element | null {
       </section>
     </div>
   );
-}
-
-function getDomainLabel(domain: string): string {
-  if (domain === 'farming') {
-    return '种田';
-  }
-  if (domain === 'spirit') {
-    return '养宠';
-  }
-  if (domain === 'combat') {
-    return '探索战斗';
-  }
-  if (domain === 'contribution') {
-    return '贡献';
-  }
-  return domain;
 }

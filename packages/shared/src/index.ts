@@ -6,6 +6,11 @@ export const DOCS_ROUTE = '/docs';
 export const ARMY_RECRUIT_GOLD_COST_PER_UNIT = 100;
 export const ARMY_RECRUIT_SECONDS_PER_UNIT = 60;
 
+export function formatSeasonLabel(seasonNumber: number): string {
+  const normalizedSeasonNumber = Number.isFinite(seasonNumber) ? Math.max(Math.floor(seasonNumber), 1) : 1;
+  return `第${normalizedSeasonNumber}赛季`;
+}
+
 export type ClientSpiritRarity = 'common' | 'rare' | 'legendary';
 export type ClientSpiritRole = 'attack' | 'balanced' | 'health';
 export type ClientSpiritElement = 'metal' | 'wood' | 'water' | 'fire' | 'earth';

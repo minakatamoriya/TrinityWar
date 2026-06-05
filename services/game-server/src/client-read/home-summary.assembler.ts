@@ -75,7 +75,7 @@ export class HomeSummaryAssembler {
     const unlockedFields = readModel.fieldSlots.filter((field) => field.isUnlocked);
 
     if (unlockedFields.length <= 0) {
-      return '暂无已解锁田地';
+      return '暂无可用田地';
     }
 
     const readyCount = unlockedFields.filter((field) => field.status === 'MATURE' || field.status === 'WITHERED').length;

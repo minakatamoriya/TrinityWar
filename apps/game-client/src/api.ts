@@ -1,6 +1,7 @@
 ﻿import {
   API_PREFIX,
   CLIENT_API_PREFIX,
+  formatSeasonLabel,
   type ClientClaimNotificationResponse,
   type ClientClaimStarterSeedRequest,
   type ClientClaimStarterSeedResponse,
@@ -600,7 +601,7 @@ function setMockFieldPresentation(field: ClientFarmField, tone: ClientFarmField[
     field.progressTotalSeconds = 1;
     field.progressRemainingSeconds = 0;
     field.yieldGold = getMockSeedStageGold(seedId, 'withered');
-    field.description = '点击收取，收益已进入衰减段，但仍能爆出金币和种子。';
+    field.description = '点击收取，收益已进入衰减段，但仍能获得金币。';
     field.actions = [{ label: '枯萎收取', target: 'farm', tone: 'secondary' }];
     return;
   }
@@ -612,7 +613,7 @@ function setMockFieldPresentation(field: ClientFarmField, tone: ClientFarmField[
   field.progressTotalSeconds = 1;
   field.progressRemainingSeconds = 0;
   field.yieldGold = 0;
-  field.description = '点击中央入口，选择种子后立刻开始新一轮培育。';
+  field.description = '点击中央入口，选择灵植后立刻开始新一轮培育。';
   field.actions = [{ label: '开始培育', target: 'farm', tone: 'primary' }];
 }
 
@@ -669,10 +670,10 @@ function updateMockFieldStatus(): void {
   mockSceneSnapshot.farm.hero.title = `成熟 ${matureCount} 块 · 培育中 ${growingCount} 块`;
   mockSceneSnapshot.farm.hero.description = mockSceneSnapshot.farm.fields.some((field) => field.tone === 'empty')
     ? '农场以田地为主，点击空地即可继续播种，成熟后直接收取。'
-    : '农场地块已排满，可直接收取成熟地块或解锁新田位。';
+    : '农场地块已排满，可直接收取成熟地块或等待下一轮安排。';
   mockSceneSnapshot.farm.hero.action = mockSceneSnapshot.farm.fields.some((field) => field.tone === 'empty')
     ? { label: '开始培育', target: 'farm', tone: 'primary' }
-    : { label: '解锁田地', target: 'farm', tone: 'secondary' };
+    : { label: '查看田地', target: 'farm', tone: 'secondary' };
 }
 
 function applyMockSeedRewards(rewards: Array<{ seedId: string; quantity: number }>): void {
@@ -971,7 +972,7 @@ function applyMockStartCultivation(input: ClientStartCultivationRequest): Client
   }
 
   if (!plantType || !mockBootstrapSnapshot.backpack.unlockedSeedIds.includes(plantType)) {
-    return buildMockMutation('当前种子尚未解锁，无法开始本轮培育。');
+    return buildMockMutation('当前灵植尚未解锁，无法开始本轮培育。');
   }
 
   setMockFieldTiming(input.fieldId, Date.now());
@@ -1543,6 +1544,7 @@ function buildMockSeasonSignIn(claimedDays: number[] = []): ClientSeasonSignInRe
 
 function buildMockSeasonRewards(): ClientSeasonRewardsResponse {
   const seasonNumber = mockBootstrapSnapshot.season.seasonNumber;
+  const seasonLabel = formatSeasonLabel(seasonNumber);
 
   return {
     app: mockBootstrapSnapshot.app,
@@ -1551,12 +1553,12 @@ function buildMockSeasonRewards(): ClientSeasonRewardsResponse {
     claimableCount: 0,
     medalCabinet: {
       currentSeasonNumber: seasonNumber,
-      currentSeasonTitle: `S${seasonNumber}赛季奖章陈列柜`,
+      currentSeasonTitle: `${seasonLabel}奖章陈列柜`,
       medals: [],
       medalsBySeason: [
         {
           seasonNumber,
-          title: `S${seasonNumber}赛季`,
+          title: `${seasonLabel}奖章陈列柜`,
           medals: [],
         },
       ],

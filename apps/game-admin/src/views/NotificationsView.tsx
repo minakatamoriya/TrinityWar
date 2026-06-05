@@ -31,14 +31,13 @@ export function NotificationsView(props: {
   playerForm: AdminNotificationFormState;
   playerHistory: AdminListResponse<AdminPlayerNotificationItem> | null;
   playerHistoryPlayerId: string;
-  seedOptions: Array<{ value: string; label: string }>;
-  onGlobalAttachmentChange: (index: number, field: 'kind' | 'quantity' | 'seedId', value: string) => void;
+  onGlobalAttachmentChange: (index: number, field: 'kind' | 'quantity', value: string) => void;
   onGlobalChange: (field: keyof AdminNotificationFormState, value: string) => void;
   onGlobalAddAttachment: () => void;
   onGlobalRemoveAttachment: (index: number) => void;
   onHistoryPageChange: (page: number) => void;
   onLoadPlayerHistory: () => void;
-  onPlayerAttachmentChange: (index: number, field: 'kind' | 'quantity' | 'seedId', value: string) => void;
+  onPlayerAttachmentChange: (index: number, field: 'kind' | 'quantity', value: string) => void;
   onPlayerChange: (field: keyof AdminNotificationFormState, value: string) => void;
   onPlayerHistoryIdChange: (value: string) => void;
   onPlayerHistoryPageChange: (page: number) => void;
@@ -111,7 +110,6 @@ export function NotificationsView(props: {
               onChange={props.onGlobalChange}
               onRemoveAttachment={props.onGlobalRemoveAttachment}
               onSubmit={props.onSendGlobal}
-              seedOptions={props.seedOptions}
               submitBusyLabel="发送中..."
               title="广播给当前所有玩家"
             />
@@ -136,7 +134,6 @@ export function NotificationsView(props: {
               onChange={props.onPlayerChange}
               onRemoveAttachment={props.onPlayerRemoveAttachment}
               onSubmit={props.onSendPlayer}
-              seedOptions={props.seedOptions}
               showPlayerId
               submitBusyLabel="发送中..."
               title="发给指定玩家，可单独发奖"

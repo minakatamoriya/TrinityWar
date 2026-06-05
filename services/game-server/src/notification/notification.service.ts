@@ -485,20 +485,6 @@ export class NotificationService {
       return [];
     }
 
-    const seedIds = input
-      .flatMap((item) => {
-        if (item.kind === 'seed' && typeof item.seedId === 'string' && item.seedId.trim().length > 0) {
-          return [item.seedId.trim()];
-        }
-        return [];
-      });
-    const seedDefinitions = seedIds.length > 0
-      ? await this.prisma.db.seedDefinition.findMany({
-          where: { seedId: { in: Array.from(new Set(seedIds)) } },
-          select: { seedId: true, label: true },
-        })
-      : [];
-    const seedLabelMap = new Map(seedDefinitions.map((item) => [item.seedId, item.label]));
     const spiritIds = input
       .flatMap((item) => item.kind === 'spiritShard' && typeof item.spiritId === 'string' && item.spiritId.trim().length > 0 ? [item.spiritId.trim()] : []);
     const spiritDefinitions = spiritIds.length > 0
@@ -509,7 +495,7 @@ export class NotificationService {
       : [];
     const spiritShardLabelMap = new Map(spiritDefinitions.map((item) => [item.spiritId, item.shardName]));
 
-    return input.map((item) => normalizeAttachmentInput(item, seedLabelMap, spiritShardLabelMap));
+    return input.map((item) => normalizeAttachmentInput(item, spiritShardLabelMap));
   }
 
   private async ensurePlayerExists(playerId: string): Promise<void> {
@@ -552,7 +538,6 @@ export class NotificationService {
     const rareSoulGrant = attachments.filter((item) => item.kind === 'rareSoul').reduce((sum, item) => sum + item.quantity, 0);
     const legendarySoulGrant = attachments.filter((item) => item.kind === 'legendarySoul').reduce((sum, item) => sum + item.quantity, 0);
     const talismanGrant = attachments.filter((item) => item.kind === 'tianjiTalisman').reduce((sum, item) => sum + item.quantity, 0);
-    const seedGrants = attachments.filter((item) => item.kind === 'seed');
     const spiritShardGrants = attachments.filter((item) => item.kind === 'spiritShard');
 
     if (goldGrant > 0) {
@@ -610,46 +595,6 @@ export class NotificationService {
           resourceVersion: { increment: 1 },
         },
       });
-    }
-
-    if (seedGrants.length > 0) {
-      const seedDefinitions = await client.seedDefinition.findMany({
-        where: { seedId: { in: seedGrants.map((item) => item.seedId ?? '') } },
-        select: { id: true, seedId: true },
-      });
-      const seedIdMap = new Map(seedDefinitions.map((item) => [item.seedId, item.id]));
-
-      for (const seedGrant of seedGrants) {
-        const seedId = seedGrant.seedId ?? '';
-        const seedDefinitionId = seedIdMap.get(seedId);
-        if (!seedDefinitionId) {
-          throw new BusinessError({
-            code: ErrorCode.NotFound,
-            message: `Seed definition not found: ${seedId}.`,
-            statusCode: 404,
-          });
-        }
-
-        await client.playerSeedInventory.upsert({
-          where: {
-            playerId_seedDefinitionId: {
-              playerId,
-              seedDefinitionId,
-            },
-          },
-          create: {
-            playerId,
-            seedDefinitionId,
-            quantity: seedGrant.quantity,
-            unlockedAt: new Date(),
-          },
-          update: {
-            quantity: { increment: seedGrant.quantity },
-            unlockedAt: new Date(),
-            inventoryVersion: { increment: 1 },
-          },
-        });
-      }
     }
 
     if (spiritShardGrants.length > 0) {
@@ -905,7 +850,6 @@ function toAttachmentJson(attachments: NotificationAttachment[]): Prisma.InputJs
 
 function normalizeAttachmentInput(
   input: NonNullable<AdminCreateNotificationRequest['attachments']>[number],
-  seedLabelMap: Map<string, string>,
   spiritShardLabelMap: Map<string, string>,
 ): NotificationAttachment {
   const quantity = Math.floor(Number(input.quantity ?? 0));
@@ -939,20 +883,6 @@ function normalizeAttachmentInput(
 
   if (input.kind === 'legendarySoul') {
     return { kind: 'legendarySoul', quantity, label: '传说兽魂', name: '传说兽魂', nameEn: 'Legendary Soul' };
-  }
-
-  if (input.kind === 'seed') {
-    const seedId = input.seedId?.trim();
-    const seedLabel = seedId ? seedLabelMap.get(seedId) : null;
-    if (!seedId || !seedLabel) {
-      throw new BusinessError({
-        code: ErrorCode.BadRequest,
-        message: 'Seed attachment requires a valid seedId.',
-        statusCode: 400,
-      });
-    }
-
-    return { kind: 'seed', quantity, seedId, label: seedLabel };
   }
 
   if (input.kind === 'spiritShard') {
@@ -999,7 +929,6 @@ function normalizeAttachmentInput(
 
 function isAttachmentKind(value: string): value is NotificationAttachmentKind {
   return value === 'gold'
-    || value === 'seed'
     || value === 'tianjiTalisman'
     || value === 'spiritSoul'
     || value === 'ordinarySoul'

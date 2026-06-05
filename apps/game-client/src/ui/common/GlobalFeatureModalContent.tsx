@@ -1,4 +1,5 @@
 import type { ClientSeasonMedalCabinet, ClientSpiritState } from '@trinitywar/shared';
+import { SeasonMedalCabinetView } from './SeasonMedalCabinetView';
 
 export interface FactionContributionTierView {
   threshold: string;
@@ -210,54 +211,7 @@ function TianjiShopPanel(props: TianjiShopPanelProps): JSX.Element {
 }
 
 function SeasonMedalCabinetPanel(props: { cabinet: ClientSeasonMedalCabinet | null }): JSX.Element {
-  const cabinet = props.cabinet;
-
-  if (!cabinet) {
-    return <p className="panel-text">正在读取赛季奖章陈列柜。</p>;
-  }
-
-  return (
-    <div className="contribution-tier-list season-medal-cabinet">
-      {cabinet.medalsBySeason.map((season) => (
-        <article className="contribution-tier-card season-medal-season" key={season.seasonNumber}>
-          <div>
-            <span>S{season.seasonNumber}</span>
-            <strong>{season.title}</strong>
-          </div>
-          {season.medals.length <= 0 ? (
-            <p className="panel-text">本赛季暂未获得奖章。</p>
-          ) : (
-            <div className="season-medal-grid">
-              {season.medals.map((medal) => (
-                <div className="season-medal-card" key={medal.id}>
-                  <span className="season-medal-domain">{getSeasonMedalDomainLabel(medal.domain)}</span>
-                  <strong>{medal.title}</strong>
-                  {medal.titleEn ? <em>{medal.titleEn}</em> : null}
-                  <p>{medal.description}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function getSeasonMedalDomainLabel(domain: string): string {
-  if (domain === 'farming') {
-    return '种田';
-  }
-  if (domain === 'spirit') {
-    return '养宠';
-  }
-  if (domain === 'combat') {
-    return '探索战斗';
-  }
-  if (domain === 'contribution') {
-    return '贡献';
-  }
-  return domain;
+  return <SeasonMedalCabinetView cabinet={props.cabinet} loadingText="正在读取赛季奖章陈列柜。" />;
 }
 
 export function GlobalFeatureModalContent(props: GlobalFeatureModalContentProps): JSX.Element {
