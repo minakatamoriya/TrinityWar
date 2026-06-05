@@ -32,25 +32,55 @@ export class AdminReadonlyService {
   ) {}
 
   async getOverview(): Promise<AdminOverviewResponse> {
+    const readonlyModules = [
+      'system-status',
+      'player-search',
+      'player-overview',
+      'wallet-logs',
+      'building-logs',
+      'field-logs',
+      'player-orders',
+      'raid-order-detail',
+      'castle-level-config',
+      'share-assist-readonly',
+      'season-readonly',
+    ];
+    const configWriteModules = [
+      'seed-config-write',
+      'spirit-config-write',
+      'task-config-write',
+    ];
+    const notificationWriteModules = [
+      'notification-history',
+      'notification-global-write',
+      'notification-player-write',
+    ];
+    const dangerousWriteModules = [
+      'player-delete',
+      'seed-delete',
+      'spirit-delete',
+    ];
+
     return {
       app: APP_NAME,
       docs: DOCS_ROUTE,
       modules: [
-        'system-status',
-        'player-search',
-        'player-overview',
-        'wallet-logs',
-        'building-logs',
-        'field-logs',
-        'player-orders',
-        'raid-order-detail',
-        'seed-config',
-        'spirit-config',
-        'task-config',
-        'castle-level-config',
-        'share-assist-readonly',
-        'season-readonly',
+        ...readonlyModules,
+        ...configWriteModules,
+        ...notificationWriteModules,
+        ...dangerousWriteModules,
       ],
+      adminCapabilities: {
+        readonly: readonlyModules,
+        configWrite: configWriteModules,
+        notificationWrite: notificationWriteModules,
+        dangerousWrite: dangerousWriteModules,
+        auth: {
+          readHeader: 'x-admin-debug-key',
+          writeHeader: 'x-admin-write-debug-key',
+          writeHeaderRequiredInProduction: true,
+        },
+      },
     };
   }
 
@@ -1000,9 +1030,21 @@ export class AdminReadonlyService {
     }
   }
 
-  async deleteSeedDefinition(seedId: string): Promise<Record<string, unknown>> {
+  async deleteSeedDefinition(seedId: string, body: unknown): Promise<Record<string, unknown>> {
+    const audit = parseDangerousOperationPayload(body, seedId);
     try {
-      const deleted = await this.prisma.db.seedDefinition.delete({ where: { seedId } });
+      const deleted = await this.prisma.transaction(async (client) => {
+        const deletedSeed = await client.seedDefinition.delete({ where: { seedId } });
+        await createAdminOperationAuditLog(client, {
+          action: 'delete-seed-definition',
+          targetType: 'seed-definition',
+          targetId: deletedSeed.seedId,
+          reason: audit.reason,
+          confirmText: audit.confirmText,
+          metadata: { label: deletedSeed.label },
+        });
+        return deletedSeed;
+      });
       return { seedId: deleted.seedId, label: deleted.label, deleted: true };
     } catch (caught) {
       throwConfigMutationError(caught, 'Seed definition is referenced by player data or does not exist.');
@@ -1050,9 +1092,21 @@ export class AdminReadonlyService {
     }
   }
 
-  async deleteSpiritDefinition(spiritId: string): Promise<Record<string, unknown>> {
+  async deleteSpiritDefinition(spiritId: string, body: unknown): Promise<Record<string, unknown>> {
+    const audit = parseDangerousOperationPayload(body, spiritId);
     try {
-      const deleted = await this.prisma.db.spiritDefinition.delete({ where: { spiritId } });
+      const deleted = await this.prisma.transaction(async (client) => {
+        const deletedSpirit = await client.spiritDefinition.delete({ where: { spiritId } });
+        await createAdminOperationAuditLog(client, {
+          action: 'delete-spirit-definition',
+          targetType: 'spirit-definition',
+          targetId: deletedSpirit.spiritId,
+          reason: audit.reason,
+          confirmText: audit.confirmText,
+          metadata: { label: deletedSpirit.label },
+        });
+        return deletedSpirit;
+      });
       return { spiritId: deleted.spiritId, label: deleted.label, deleted: true };
     } catch (caught) {
       throwConfigMutationError(caught, 'Spirit definition is referenced by player data or does not exist.');
@@ -1120,7 +1174,7 @@ export class AdminReadonlyService {
     };
   }
 
-  async deletePlayer(playerId: string): Promise<AdminDeletePlayerResponse> {
+  async deletePlayer(playerId: string, body: unknown): Promise<AdminDeletePlayerResponse> {
     const normalizedPlayerId = playerId.trim();
     if (!normalizedPlayerId) {
       throw new BusinessError({
@@ -1129,6 +1183,7 @@ export class AdminReadonlyService {
         statusCode: 400,
       });
     }
+    const audit = parseDangerousOperationPayload(body, normalizedPlayerId);
 
     const existing = await this.prisma.db.player.findUnique({
       where: { id: normalizedPlayerId },
@@ -1142,7 +1197,17 @@ export class AdminReadonlyService {
       });
     }
 
-    await this.prisma.db.player.delete({ where: { id: normalizedPlayerId } });
+    await this.prisma.transaction(async (client) => {
+      await createAdminOperationAuditLog(client, {
+        action: 'delete-player',
+        targetType: 'player',
+        targetId: existing.id,
+        reason: audit.reason,
+        confirmText: audit.confirmText,
+        metadata: { nickname: existing.nickname },
+      });
+      await client.player.delete({ where: { id: normalizedPlayerId } });
+    });
     return {
       playerId: existing.id,
       nickname: existing.nickname,
@@ -1541,6 +1606,44 @@ function requireRecord(body: unknown): Record<string, unknown> {
     throwBadRequest('Request body must be a JSON object.');
   }
   return body as Record<string, unknown>;
+}
+
+function parseDangerousOperationPayload(body: unknown, expectedConfirmText: string): { reason: string; confirmText: string } {
+  const record = requireRecord(body);
+  const reason = typeof record.reason === 'string' ? record.reason.trim() : '';
+  const confirmText = typeof record.confirmText === 'string' ? record.confirmText.trim() : '';
+
+  if (reason.length < 4 || reason.length > 200) {
+    throwBadRequest('reason must be 4-200 characters.');
+  }
+  if (confirmText !== expectedConfirmText) {
+    throwBadRequest('confirmText must match the target id.');
+  }
+
+  return { reason, confirmText };
+}
+
+async function createAdminOperationAuditLog(
+  client: Prisma.TransactionClient,
+  input: {
+    action: string;
+    targetType: string;
+    targetId: string;
+    reason: string;
+    confirmText: string;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<void> {
+  await client.adminOperationAuditLog.create({
+    data: {
+      action: input.action,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      reason: input.reason,
+      confirmText: input.confirmText,
+      ...(input.metadata ? { metadataJson: input.metadata } : {}),
+    },
+  });
 }
 
 function copyOptionalNullableString<T extends Record<string, unknown>>(

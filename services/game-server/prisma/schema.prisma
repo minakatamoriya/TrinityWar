@@ -1270,6 +1270,22 @@ model WalletChangeLog {
   @@map("wallet_change_log")
 }
 
+model AdminOperationAuditLog {
+  id             String   @id @default(cuid())
+  action         String
+  targetType     String   @map("target_type")
+  targetId       String   @map("target_id")
+  adminActor     String   @default("admin-console") @map("admin_actor")
+  reason         String
+  confirmText    String   @map("confirm_text")
+  metadataJson   Json?    @map("metadata_json")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
+  @@map("admin_operation_audit_log")
+}
+
 model BuildingUpgradeLog {
   id                    String   @id @default(cuid())
   playerId              String   @map("player_id")

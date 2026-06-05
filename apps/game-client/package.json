@@ -5,9 +5,9 @@
   "type": "module",
   "description": "TrinityWar web validation client",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 5173",
+    "dev": "vite --host 127.0.0.1 --port 6001",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host 0.0.0.0 --port 4173"
+    "preview": "vite preview --host 127.0.0.1 --port 6001"
   },
   "dependencies": {
     "react": "^18.2.0",

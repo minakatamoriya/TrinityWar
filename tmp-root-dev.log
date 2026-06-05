@@ -1,0 +1,46 @@
+
+> trinitywar-workspace@0.1.0 dev
+> concurrently -n client,admin,server -c cyan,green,yellow "npm run dev --workspace @trinitywar/game-client" "npm run dev --workspace @trinitywar/game-admin" "npm run dev --workspace @trinitywar/game-server"
+
+[client] 
+[client] > @trinitywar/game-client@0.1.0 dev
+[client] > vite --host 127.0.0.1 --port 6001
+[client] 
+[admin] 
+[admin] > @trinitywar/game-admin@0.1.0 dev
+[admin] > vite --host 127.0.0.1 --port 6002
+[admin] 
+[server] 
+[server] > @trinitywar/game-server@0.1.0 dev
+[server] > tsx watch src/main.ts
+[server] 
+[server] 01:19:41 [tsx] rerunning
+[server] c
+[client]   [32m[1mVITE[22m v4.5.14[39m  [2mready in [0m[1m281[22m[2m[0m ms[22m
+[client] 
+[client]   [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m6001[22m/[39m
+[admin] 
+[admin]   [32m[1mVITE[22m v4.5.14[39m  [2mready in [0m[1m274[22m[2m[0m ms[22m
+[admin] 
+[admin]   [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m6002[22m/[39m
+[server] game server failed to start Error: listen EADDRINUSE: address already in use 127.0.0.1:4000
+[server]     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+[server]     at listenInCluster (node:net:1965:12)
+[server]     at doListen (node:net:2139:7)
+[server]     at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+[server]   code: 'EADDRINUSE',
+[server]   errno: -4091,
+[server]   syscall: 'listen',
+[server]   address: '127.0.0.1',
+[server]   port: 4000
+[server] }
+[admin] npm ERR! Lifecycle script `dev` failed with error: 
+[admin] npm ERR! Error: command failed 
+[admin] npm ERR!   in workspace: @trinitywar/game-admin@0.1.0 
+[admin] npm ERR!   at location: D:\TrinityWar\apps\game-admin 
+[admin] npm run dev --workspace @trinitywar/game-admin exited with code 0
+[client] npm ERR! Lifecycle script `dev` failed with error: 
+[client] npm ERR! Error: command failed 
+[client] npm ERR!   in workspace: @trinitywar/game-client@0.1.0 
+[client] npm ERR!   at location: D:\TrinityWar\apps\game-client 
+[client] npm run dev --workspace @trinitywar/game-client exited with code 0

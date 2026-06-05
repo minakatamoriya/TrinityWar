@@ -458,6 +458,17 @@ export interface AdminOverviewResponse {
   app: string;
   docs: string;
   modules: string[];
+  adminCapabilities?: {
+    readonly: string[];
+    configWrite: string[];
+    notificationWrite: string[];
+    dangerousWrite: string[];
+    auth: {
+      readHeader: 'x-admin-debug-key';
+      writeHeader: 'x-admin-write-debug-key';
+      writeHeaderRequiredInProduction: boolean;
+    };
+  };
 }
 
 export type NotificationCategory = 'system' | 'announcement' | 'maintenance' | 'reward' | 'compensation';
@@ -540,6 +551,8 @@ export interface AdminCreateNotificationRequest {
   body?: string;
   category?: NotificationCategory;
   expiresAt?: string | null;
+  reason?: string;
+  confirmText?: string;
   attachments?: Array<{
     kind: NotificationAttachmentKind;
     quantity: number;
@@ -555,6 +568,11 @@ export interface AdminCreateNotificationRequest {
     medalKey?: string;
     domain?: string;
   }>;
+}
+
+export interface AdminDangerousOperationRequest {
+  reason?: string;
+  confirmText?: string;
 }
 
 export interface AdminCreateNotificationResponse {

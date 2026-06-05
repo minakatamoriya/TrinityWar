@@ -27,6 +27,8 @@ interface PagingQuery {
   pageSize?: string;
 }
 
+const ATTACHMENT_NOTIFICATION_CONFIRM_TEXT = 'SEND_ATTACHMENT_NOTIFICATION';
+
 @Injectable()
 export class NotificationService {
   constructor(
@@ -64,6 +66,23 @@ export class NotificationService {
             expiresAt: payload.expiresAt,
             claimStatus: payload.attachments.length > 0 ? 'UNCLAIMED' : 'NONE',
           })),
+        });
+      }
+
+      if (payload.audit) {
+        await client.adminOperationAuditLog.create({
+          data: {
+            action: 'create-global-notification-with-attachments',
+            targetType: 'system-notification',
+            targetId: systemNotification.id,
+            reason: payload.audit.reason,
+            confirmText: payload.audit.confirmText,
+            metadataJson: {
+              title: payload.title,
+              playerCount: players.length,
+              attachmentCount: payload.attachments.length,
+            },
+          },
         });
       }
 
@@ -112,6 +131,23 @@ export class NotificationService {
           claimStatus: payload.attachments.length > 0 ? 'UNCLAIMED' : 'NONE',
         },
       });
+
+      if (payload.audit) {
+        await client.adminOperationAuditLog.create({
+          data: {
+            action: 'create-player-notification-with-attachments',
+            targetType: 'system-notification',
+            targetId: systemNotification.id,
+            reason: payload.audit.reason,
+            confirmText: payload.audit.confirmText,
+            metadataJson: {
+              title: payload.title,
+              playerId,
+              attachmentCount: payload.attachments.length,
+            },
+          },
+        });
+      }
 
       return systemNotification;
     });
@@ -439,6 +475,7 @@ export class NotificationService {
     category: PrismaNotificationCategory;
     expiresAt: Date | null;
     attachments: NotificationAttachment[];
+    audit: { reason: string; confirmText: string } | null;
   }> {
     const payload = body as AdminCreateNotificationRequest | null;
     const attachments = await this.normalizeAttachments(payload?.attachments ?? []);
@@ -477,6 +514,7 @@ export class NotificationService {
       category,
       expiresAt,
       attachments,
+      audit: attachments.length > 0 ? parseAttachmentNotificationAuditPayload(payload) : null,
     };
   }
 
@@ -718,6 +756,29 @@ function parseOptionalDate(value: string | null | undefined): Date | null {
   }
 
   return parsed;
+}
+
+function parseAttachmentNotificationAuditPayload(payload: AdminCreateNotificationRequest | null): { reason: string; confirmText: string } {
+  const reason = typeof payload?.reason === 'string' ? payload.reason.trim() : '';
+  const confirmText = typeof payload?.confirmText === 'string' ? payload.confirmText.trim() : '';
+
+  if (reason.length < 4 || reason.length > 200) {
+    throw new BusinessError({
+      code: ErrorCode.BadRequest,
+      message: 'reason must be 4-200 characters when notification attachments are present.',
+      statusCode: 400,
+    });
+  }
+
+  if (confirmText !== ATTACHMENT_NOTIFICATION_CONFIRM_TEXT) {
+    throw new BusinessError({
+      code: ErrorCode.BadRequest,
+      message: `confirmText must be ${ATTACHMENT_NOTIFICATION_CONFIRM_TEXT} when notification attachments are present.`,
+      statusCode: 400,
+    });
+  }
+
+  return { reason, confirmText };
 }
 
 function parsePagination(query: PagingQuery): { page: number; pageSize: number; skip: number; take: number } {

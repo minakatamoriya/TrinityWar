@@ -1,6 +1,6 @@
 import { ADMIN_API_PREFIX } from '@trinitywar/shared';
 
-export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
+export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:4000';
 export const DEBUG_KEY = import.meta.env.VITE_ADMIN_DEBUG_KEY ?? '';
 export const WRITE_DEBUG_KEY = import.meta.env.VITE_ADMIN_WRITE_DEBUG_KEY ?? '';
 

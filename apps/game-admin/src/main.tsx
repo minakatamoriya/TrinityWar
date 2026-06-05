@@ -37,6 +37,7 @@ import './styles.css';
 
 const PLAYER_SEARCH_PAGE_SIZE = 10;
 const PLAYER_RAID_PAGE_SIZE = 10;
+const ATTACHMENT_NOTIFICATION_CONFIRM_TEXT = 'SEND_ATTACHMENT_NOTIFICATION';
 
 function App(): JSX.Element {
   const [activeModule, setActiveModule] = useState<ModuleKey>('player');
@@ -237,6 +238,11 @@ function App(): JSX.Element {
 
     const result = await run('delete-player', () => adminFetch<AdminDeletePlayerResponse>(`/players/${encodeURIComponent(playerId)}`, {
       method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        reason: `Delete player ${playerId} from admin console.`,
+        confirmText: playerId,
+      }),
     }));
     if (!result) {
       return;
@@ -325,16 +331,26 @@ function App(): JSX.Element {
     }));
   };
 
-  const buildNotificationPayload = (form: AdminNotificationFormState): Record<string, unknown> => ({
-    title: form.title.trim() || undefined,
-    body: form.body.trim() || undefined,
-    category: form.category,
-    expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
-    attachments: form.attachments.map((item) => ({
+  const hasNotificationAttachments = (form: AdminNotificationFormState): boolean => form.attachments.length > 0;
+
+  const buildNotificationPayload = (form: AdminNotificationFormState, reason?: string): Record<string, unknown> => {
+    const attachments = form.attachments.map((item) => ({
       kind: item.kind,
       quantity: Number(item.quantity),
-    })),
-  });
+    }));
+
+    return {
+      title: form.title.trim() || undefined,
+      body: form.body.trim() || undefined,
+      category: form.category,
+      expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
+      attachments,
+      ...(attachments.length > 0 ? {
+        reason: reason ?? 'Send notification attachments from admin console.',
+        confirmText: ATTACHMENT_NOTIFICATION_CONFIRM_TEXT,
+      } : {}),
+    };
+  };
 
   const loadNotificationHistory = async (page = notificationHistory?.pagination.page ?? 1): Promise<void> => {
     const result = await run('notification-history', () => adminFetch<AdminListResponse<AdminNotificationHistoryItem>>(`/notifications?page=${page}&pageSize=10`));
@@ -367,7 +383,11 @@ function App(): JSX.Element {
   };
 
   const sendGlobalNotification = async (): Promise<void> => {
-    const result = await run('notification-global', () => adminFetch<AdminCreateNotificationResponse>('/notifications/global', jsonRequest('POST', buildNotificationPayload(globalNotificationForm))));
+    if (hasNotificationAttachments(globalNotificationForm) && !window.confirm(`Confirm sending notification attachments.\n${ATTACHMENT_NOTIFICATION_CONFIRM_TEXT}`)) {
+      return;
+    }
+
+    const result = await run('notification-global', () => adminFetch<AdminCreateNotificationResponse>('/notifications/global', jsonRequest('POST', buildNotificationPayload(globalNotificationForm, 'Send global notification attachments from admin console.'))));
     if (!result) {
       return;
     }
@@ -384,7 +404,11 @@ function App(): JSX.Element {
       return;
     }
 
-    const result = await run(mode === 'quick' ? 'notification-player-quick' : 'notification-player', () => adminFetch<AdminCreateNotificationResponse>(`/players/${encodeURIComponent(playerId)}/notifications`, jsonRequest('POST', buildNotificationPayload(form))));
+    if (hasNotificationAttachments(form) && !window.confirm(`Confirm sending notification attachments.\n${ATTACHMENT_NOTIFICATION_CONFIRM_TEXT}`)) {
+      return;
+    }
+
+    const result = await run(mode === 'quick' ? 'notification-player-quick' : 'notification-player', () => adminFetch<AdminCreateNotificationResponse>(`/players/${encodeURIComponent(playerId)}/notifications`, jsonRequest('POST', buildNotificationPayload(form, `Send player notification attachments to ${playerId} from admin console.`))));
     if (!result) {
       return;
     }
@@ -439,7 +463,10 @@ function App(): JSX.Element {
     if (!window.confirm(`确认删除灵植定义？\n${seedId}\n已被玩家田地或资格记录引用的灵植不能删除。`)) {
       return;
     }
-    const result = await run('seed-delete', () => adminFetch<AdminRecord>(`/config/seeds/${encodeURIComponent(seedId)}`, { method: 'DELETE' }));
+    const result = await run('seed-delete', () => adminFetch<AdminRecord>(`/config/seeds/${encodeURIComponent(seedId)}`, jsonRequest('DELETE', {
+      reason: `Delete seed definition ${seedId} from admin console.`,
+      confirmText: seedId,
+    })));
     if (result) {
       await loadSeedDefinitions();
     }
@@ -476,7 +503,10 @@ function App(): JSX.Element {
     if (!window.confirm(`确认删除灵宠定义？\n${spiritId}\n已被玩家兽栏或图鉴引用的灵宠不能删除。`)) {
       return;
     }
-    const result = await run('spirit-delete', () => adminFetch<AdminRecord>(`/config/spirits/${encodeURIComponent(spiritId)}`, { method: 'DELETE' }));
+    const result = await run('spirit-delete', () => adminFetch<AdminRecord>(`/config/spirits/${encodeURIComponent(spiritId)}`, jsonRequest('DELETE', {
+      reason: `Delete spirit definition ${spiritId} from admin console.`,
+      confirmText: spiritId,
+    })));
     if (result) {
       await loadSpiritDefinitions();
     }

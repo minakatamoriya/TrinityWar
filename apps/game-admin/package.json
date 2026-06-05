@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 5174",
+    "dev": "vite --host 127.0.0.1 --port 6002",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview --host 127.0.0.1 --port 6002"
   },
   "dependencies": {
     "@trinitywar/shared": "file:../../packages/shared",

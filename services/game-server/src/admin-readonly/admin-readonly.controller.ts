@@ -19,7 +19,7 @@ export class AdminReadonlyController {
   constructor(@Inject(AdminReadonlyService) private readonly adminReadonlyService: AdminReadonlyService) {}
 
   @Get('overview')
-  @ApiOkResponse({ description: 'Admin readonly overview.' })
+  @ApiOkResponse({ description: 'Admin overview with read/write capability groups.' })
   getOverview(): Promise<AdminOverviewResponse> {
     return this.adminReadonlyService.getOverview();
   }
@@ -113,8 +113,8 @@ export class AdminReadonlyController {
 
   @Delete('config/seeds/:seedId')
   @ApiOkResponse({ description: 'Delete plant definition.' })
-  deleteSeedDefinition(@Param('seedId') seedId: string): Promise<Record<string, unknown>> {
-    return this.adminReadonlyService.deleteSeedDefinition(seedId);
+  deleteSeedDefinition(@Param('seedId') seedId: string, @Body() body: unknown): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.deleteSeedDefinition(seedId, body);
   }
 
   @Get('config/spirits')
@@ -137,8 +137,8 @@ export class AdminReadonlyController {
 
   @Delete('config/spirits/:spiritId')
   @ApiOkResponse({ description: 'Delete spirit definition.' })
-  deleteSpiritDefinition(@Param('spiritId') spiritId: string): Promise<Record<string, unknown>> {
-    return this.adminReadonlyService.deleteSpiritDefinition(spiritId);
+  deleteSpiritDefinition(@Param('spiritId') spiritId: string, @Body() body: unknown): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.deleteSpiritDefinition(spiritId, body);
   }
 
   @Get('config/castle-levels')
@@ -219,8 +219,8 @@ export class AdminReadonlyController {
 
   @Delete('players/:playerId')
   @ApiOkResponse({ description: 'Delete player and cascaded records.' })
-  deletePlayer(@Param('playerId') playerId: string): Promise<AdminDeletePlayerResponse> {
-    return this.adminReadonlyService.deletePlayer(playerId);
+  deletePlayer(@Param('playerId') playerId: string, @Body() body: unknown): Promise<AdminDeletePlayerResponse> {
+    return this.adminReadonlyService.deletePlayer(playerId, body);
   }
 
   @Get('players/:playerId/wallet-logs')
@@ -278,11 +278,11 @@ defineRouteParamTypes(AdminReadonlyController.prototype, 'listSeasonAchievements
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listSeedDefinitions', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'createSeedDefinition', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'updateSeedDefinition', [String, Object]);
-defineRouteParamTypes(AdminReadonlyController.prototype, 'deleteSeedDefinition', [String]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'deleteSeedDefinition', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listSpiritDefinitions', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'createSpiritDefinition', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'updateSpiritDefinition', [String, Object]);
-defineRouteParamTypes(AdminReadonlyController.prototype, 'deleteSpiritDefinition', [String]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'deleteSpiritDefinition', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listCastleLevels', []);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listTaskConfigs', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listShareAssistCampaigns', [Object]);
@@ -293,7 +293,7 @@ defineRouteParamTypes(AdminReadonlyController.prototype, 'getPlayerOverview', [S
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getPlayerSeasonState', [String]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listPlayerSeasonHistory', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listPlayerSeasonRewardHistory', [String, Object]);
-defineRouteParamTypes(AdminReadonlyController.prototype, 'deletePlayer', [String]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'deletePlayer', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getWalletLogs', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getBuildingLogs', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getFieldLogs', [String, Object]);

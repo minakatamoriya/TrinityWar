@@ -502,7 +502,7 @@ export async function loadUnreadNotificationCount(): Promise<ClientUnreadNotific
 }
 
 export async function markNotificationAsRead(notificationId: string): Promise<ClientMarkNotificationReadResponse> {
-  if (forceMockReads) {
+  if (forceMockCommands) {
     return {
       id: notificationId,
       read: true,
@@ -517,7 +517,7 @@ export async function markNotificationAsRead(notificationId: string): Promise<Cl
 }
 
 export async function claimNotification(notificationId: string): Promise<ClientClaimNotificationResponse> {
-  if (forceMockReads) {
+  if (forceMockCommands) {
     return {
       id: notificationId,
       claimStatus: 'claimed',
@@ -533,7 +533,7 @@ export async function claimNotification(notificationId: string): Promise<ClientC
 }
 
 export async function deleteNotification(notificationId: string): Promise<ClientDeleteNotificationResponse> {
-  if (forceMockReads) {
+  if (forceMockCommands) {
     return {
       id: notificationId,
       deleted: true,
@@ -1412,7 +1412,7 @@ export async function loadRaidTargetDetail(targetId: string): Promise<ClientRaid
 }
 
 export async function revealRaidTargetDeepIntel(targetId: string): Promise<ClientRaidDeepIntelResponse> {
-  if (forceMockReads || forceMockCommands) {
+  if (forceMockCommands) {
     const detail = mockRaidTargetDetails[targetId];
 
     if (!detail) {
