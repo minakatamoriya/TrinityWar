@@ -8,6 +8,6 @@ import { AuthTokenService } from './auth-token.service.js';
 @Module({
   controllers: [AuthController],
   providers: [AuthPlaceholderGuard, AuthService, AuthTokenService, PlayerInitializationService],
-  exports: [AuthPlaceholderGuard, AuthTokenService],
+  exports: [AuthPlaceholderGuard, AuthService, AuthTokenService],
 })
 export class AuthModule {}

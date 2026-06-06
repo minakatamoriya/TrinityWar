@@ -1,18 +1,21 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type {
+  AdminAdjustPlayerResourcesResponse,
   AdminDeletePlayerResponse,
   AdminListResponse,
   AdminOverviewResponse,
   AdminPlayerOverviewResponse,
   AdminPlayerSearchResponse,
   AdminRaidOrderDetailResponse,
+  AdminRobotDashboardResponse,
   AdminSystemStatusResponse,
 } from '@trinitywar/shared';
 import { APP_NAME, DOCS_ROUTE, formatSeasonLabel } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { GAME_DESIGN_CONFIG } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { RobotService } from '../robot/robot.service.js';
 import { SeasonService } from '../season/season.service.js';
 import { TaskConfigService, type TaskConfigGroup } from '../task-config/task-config.service.js';
 
@@ -27,6 +30,7 @@ interface PagingQuery {
 export class AdminReadonlyService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(RobotService) private readonly robotService: RobotService,
     @Inject(SeasonService) private readonly seasonService: SeasonService,
     @Inject(TaskConfigService) private readonly taskConfigService: TaskConfigService,
   ) {}
@@ -44,6 +48,7 @@ export class AdminReadonlyService {
       'castle-level-config',
       'share-assist-readonly',
       'season-readonly',
+      'robot-dashboard',
     ];
     const configWriteModules = [
       'seed-config-write',
@@ -110,6 +115,61 @@ export class AdminReadonlyService {
       playerStateCount,
       pendingResetCount,
     });
+  }
+
+  async listAuditLogs(query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
+    const { page, pageSize, skip, take } = parsePagination(query);
+    const where: Prisma.AdminOperationAuditLogWhereInput = {};
+    if (query.action?.trim()) {
+      where.action = query.action.trim();
+    }
+    if (query.targetType?.trim()) {
+      where.targetType = query.targetType.trim();
+    }
+    if (query.targetId?.trim()) {
+      where.targetId = query.targetId.trim();
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.db.adminOperationAuditLog.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take,
+      }),
+      this.prisma.db.adminOperationAuditLog.count({ where }),
+    ]);
+
+    return {
+      items: items.map((item) => normalizeDates({
+        id: item.id,
+        action: item.action,
+        targetType: item.targetType,
+        targetId: item.targetId,
+        adminActor: item.adminActor,
+        reason: item.reason,
+        confirmText: item.confirmText,
+        metadataJson: item.metadataJson,
+        createdAt: item.createdAt,
+      })),
+      pagination: { page, pageSize, total },
+    };
+  }
+
+  getRobotDashboard(): Promise<AdminRobotDashboardResponse> {
+    return this.robotService.getDashboard();
+  }
+
+  runRobotSmoke(): Promise<Record<string, unknown>> {
+    return this.robotService.runSmoke();
+  }
+
+  runRobotDaily3(): Promise<Record<string, unknown>> {
+    return this.robotService.runDaily3();
+  }
+
+  clearRobotErrors(): Promise<Record<string, unknown>> {
+    return this.robotService.clearErrors();
   }
 
   async listSeasons(query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
@@ -1361,6 +1421,182 @@ export class AdminReadonlyService {
     };
   }
 
+  async adjustPlayerResources(playerId: string, body: unknown): Promise<AdminAdjustPlayerResourcesResponse> {
+    const normalizedPlayerId = playerId.trim();
+    if (!normalizedPlayerId) {
+      throwBadRequest('playerId is required.');
+    }
+
+    const payload = parseAdjustPlayerResourcesPayload(body);
+    const changes = await this.prisma.transaction(async (client) => {
+      const player = await client.player.findUnique({
+        where: { id: normalizedPlayerId },
+        select: {
+          id: true,
+          nickname: true,
+          factionId: true,
+          wallet: { select: { vaultGold: true } },
+          spiritResource: {
+            select: {
+              tianjiTalisman: true,
+              spiritSoul: true,
+              ordinarySoul: true,
+              rareSoul: true,
+              legendarySoul: true,
+            },
+          },
+          factionMembers: {
+            select: {
+              factionId: true,
+              contributionScore: true,
+              faction: { select: { contributionScore: true } },
+            },
+            take: 1,
+          },
+        },
+      });
+
+      if (!player) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Player not found.',
+          statusCode: 404,
+        });
+      }
+
+      const result: AdminAdjustPlayerResourcesResponse['changes'] = [];
+
+      if (payload.goldDelta !== 0) {
+        const before = player.wallet?.vaultGold ?? 0;
+        const after = before + payload.goldDelta;
+        assertNonNegative(after, 'gold');
+        await client.playerWallet.upsert({
+          where: { playerId: normalizedPlayerId },
+          create: {
+            playerId: normalizedPlayerId,
+            vaultGold: after,
+            balanceVersion: 1,
+          },
+          update: {
+            vaultGold: { increment: payload.goldDelta },
+            balanceVersion: { increment: 1 },
+          },
+        });
+        await client.walletChangeLog.create({
+          data: {
+            playerId: normalizedPlayerId,
+            walletBucket: 'vault',
+            changeType: 'admin-resource-adjust',
+            deltaGold: payload.goldDelta,
+            beforeGold: before,
+            afterGold: after,
+            relatedEntityType: 'admin-operation',
+            note: payload.reason,
+          },
+        });
+        result.push({ resource: 'gold', before, delta: payload.goldDelta, after });
+      }
+
+      const spiritResourceDeltas = {
+        tianjiTalisman: payload.tianjiTalismanDelta,
+        spiritSoul: payload.spiritSoulDelta,
+        ordinarySoul: payload.ordinarySoulDelta,
+        rareSoul: payload.rareSoulDelta,
+        legendarySoul: payload.legendarySoulDelta,
+      };
+      const spiritUpdateData: Prisma.PlayerSpiritResourceUpdateInput = {};
+      const spiritCreateData: Prisma.PlayerSpiritResourceUncheckedCreateInput = {
+        playerId: normalizedPlayerId,
+      };
+
+      for (const [resource, delta] of Object.entries(spiritResourceDeltas)) {
+        if (delta === 0) {
+          continue;
+        }
+        const before = Number(player.spiritResource?.[resource as keyof NonNullable<typeof player.spiritResource>] ?? 0);
+        const after = before + delta;
+        assertNonNegative(after, resource);
+        spiritUpdateData[resource as keyof Prisma.PlayerSpiritResourceUpdateInput] = { increment: delta } as never;
+        spiritCreateData[resource as keyof Prisma.PlayerSpiritResourceUncheckedCreateInput] = after as never;
+        result.push({ resource, before, delta, after });
+      }
+
+      if (Object.keys(spiritUpdateData).length > 0) {
+        await client.playerSpiritResource.upsert({
+          where: { playerId: normalizedPlayerId },
+          create: {
+            ...spiritCreateData,
+            resourceVersion: 1,
+          },
+          update: {
+            ...spiritUpdateData,
+            resourceVersion: { increment: 1 },
+          },
+        });
+      }
+
+      if (payload.contributionDelta !== 0) {
+        const membership = player.factionMembers[0] ?? null;
+        if (!player.factionId || !membership) {
+          throwBadRequest('Player has no faction membership to adjust contribution.');
+        }
+        const before = membership.contributionScore;
+        const after = before + payload.contributionDelta;
+        assertNonNegative(after, 'contribution');
+        assertNonNegative(membership.faction.contributionScore + payload.contributionDelta, 'faction contribution');
+        await client.factionMember.updateMany({
+          where: {
+            playerId: normalizedPlayerId,
+            factionId: membership.factionId,
+          },
+          data: { contributionScore: { increment: payload.contributionDelta } },
+        });
+        await client.faction.update({
+          where: { id: membership.factionId },
+          data: { contributionScore: { increment: payload.contributionDelta } },
+        });
+        await client.factionContributionLog.create({
+          data: {
+            factionId: membership.factionId,
+            playerId: normalizedPlayerId,
+            donatedGold: 0,
+            contributionDelta: payload.contributionDelta,
+            sourceType: 'admin-resource-adjust',
+            metadataJson: {
+              reason: payload.reason,
+              before,
+              after,
+            },
+          },
+        });
+        result.push({ resource: 'contribution', before, delta: payload.contributionDelta, after });
+      }
+
+      const auditLog = await client.adminOperationAuditLog.create({
+        data: {
+          action: 'adjust-player-resources',
+          targetType: 'player',
+          targetId: normalizedPlayerId,
+          reason: payload.reason,
+          confirmText: normalizedPlayerId,
+          metadataJson: {
+            nickname: player.nickname,
+            changes: result,
+          },
+        },
+      });
+
+      return { result, auditLogId: auditLog.id };
+    });
+
+    return {
+      playerId: normalizedPlayerId,
+      adjusted: changes.result.length > 0,
+      changes: changes.result,
+      auditLogId: changes.auditLogId,
+    };
+  }
+
   async getWalletLogs(playerId: string, query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
     const { page, pageSize, skip, take } = parsePagination(query);
     const where = {
@@ -1623,6 +1859,64 @@ function parseDangerousOperationPayload(body: unknown, expectedConfirmText: stri
   return { reason, confirmText };
 }
 
+function parseAdjustPlayerResourcesPayload(body: unknown): {
+  reason: string;
+  goldDelta: number;
+  tianjiTalismanDelta: number;
+  spiritSoulDelta: number;
+  ordinarySoulDelta: number;
+  rareSoulDelta: number;
+  legendarySoulDelta: number;
+  contributionDelta: number;
+} {
+  const record = requireRecord(body);
+  const reason = typeof record.reason === 'string' ? record.reason.trim() : '';
+  if (reason.length < 1 || reason.length > 200) {
+    throwBadRequest('reason must be 1-200 characters.');
+  }
+
+  const payload = {
+    reason,
+    goldDelta: parseResourceDelta(record.goldDelta, 'goldDelta', 100_000_000),
+    tianjiTalismanDelta: parseResourceDelta(record.tianjiTalismanDelta, 'tianjiTalismanDelta', 100_000),
+    spiritSoulDelta: parseResourceDelta(record.spiritSoulDelta, 'spiritSoulDelta', 1_000_000),
+    ordinarySoulDelta: parseResourceDelta(record.ordinarySoulDelta, 'ordinarySoulDelta', 1_000_000),
+    rareSoulDelta: parseResourceDelta(record.rareSoulDelta, 'rareSoulDelta', 1_000_000),
+    legendarySoulDelta: parseResourceDelta(record.legendarySoulDelta, 'legendarySoulDelta', 1_000_000),
+    contributionDelta: parseResourceDelta(record.contributionDelta, 'contributionDelta', 1_000_000),
+  };
+
+  const totalDelta = Object.entries(payload)
+    .filter(([key]) => key.endsWith('Delta'))
+    .reduce((sum, [, value]) => sum + Math.abs(Number(value)), 0);
+  if (totalDelta <= 0) {
+    throwBadRequest('At least one resource delta is required.');
+  }
+
+  return payload;
+}
+
+function parseResourceDelta(value: unknown, field: string, maxAbsValue: number): number {
+  if (value === undefined || value === null || value === '') {
+    return 0;
+  }
+  const normalized = typeof value === 'string' ? Number(value.trim()) : value;
+  if (!Number.isInteger(normalized)) {
+    throwBadRequest(`${field} must be an integer.`);
+  }
+  const delta = Number(normalized);
+  if (Math.abs(delta) > maxAbsValue) {
+    throwBadRequest(`${field} absolute value must be <= ${maxAbsValue}.`);
+  }
+  return delta;
+}
+
+function assertNonNegative(value: number, resource: string): void {
+  if (value < 0) {
+    throwBadRequest(`${resource} cannot become negative.`);
+  }
+}
+
 async function createAdminOperationAuditLog(
   client: Prisma.TransactionClient,
   input: {
@@ -1641,7 +1935,7 @@ async function createAdminOperationAuditLog(
       targetId: input.targetId,
       reason: input.reason,
       confirmText: input.confirmText,
-      ...(input.metadata ? { metadataJson: input.metadata } : {}),
+      ...(input.metadata ? { metadataJson: input.metadata as Prisma.InputJsonValue } : {}),
     },
   });
 }

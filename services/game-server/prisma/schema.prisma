@@ -274,6 +274,7 @@ model Player {
   seasonActivities        PlayerSeasonActivity[]
   seasonRewardGrants      PlayerSeasonRewardGrant[]
   seasonAchievements      PlayerSeasonAchievement[]
+  robotActionLogs         RobotActionLog[]
 
   @@index([factionId])
   @@index([lastLoginAt])
@@ -1284,6 +1285,52 @@ model AdminOperationAuditLog {
   @@index([action, createdAt])
   @@index([targetType, targetId])
   @@map("admin_operation_audit_log")
+}
+
+model RobotTestRun {
+  id                  String    @id @default(cuid())
+  name                String
+  mode                String
+  status              String    @default("RUNNING")
+  plannedRobotCount   Int       @default(0) @map("planned_robot_count")
+  successActionCount  Int       @default(0) @map("success_action_count")
+  failedActionCount   Int       @default(0) @map("failed_action_count")
+  summary             String?
+  startedAt           DateTime  @default(now()) @map("started_at")
+  finishedAt          DateTime? @map("finished_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  actionLogs RobotActionLog[]
+
+  @@index([status, startedAt])
+  @@index([mode, startedAt])
+  @@map("robot_test_run")
+}
+
+model RobotActionLog {
+  id                String   @id @default(cuid())
+  runId             String   @map("run_id")
+  robotKey          String   @map("robot_key")
+  robotRole         String   @map("robot_role")
+  playerId          String   @map("player_id")
+  actionName        String   @map("action_name")
+  status            String
+  durationMs        Int      @default(0) @map("duration_ms")
+  errorCode         String?  @map("error_code")
+  errorMessage      String?  @map("error_message")
+  requestSummaryJson Json?   @map("request_summary_json")
+  resultSummaryJson  Json?   @map("result_summary_json")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  run    RobotTestRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  player Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@index([robotKey, createdAt])
+  @@index([playerId, createdAt])
+  @@index([status, createdAt])
+  @@map("robot_action_log")
 }
 
 model BuildingUpgradeLog {

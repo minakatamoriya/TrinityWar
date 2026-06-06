@@ -1,12 +1,14 @@
 import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type {
+  AdminAdjustPlayerResourcesResponse,
   AdminDeletePlayerResponse,
   AdminListResponse,
   AdminOverviewResponse,
   AdminPlayerOverviewResponse,
   AdminPlayerSearchResponse,
   AdminRaidOrderDetailResponse,
+  AdminRobotDashboardResponse,
   AdminSystemStatusResponse,
 } from '@trinitywar/shared';
 import { AdminReadonlyGuard } from './admin-readonly.guard.js';
@@ -28,6 +30,36 @@ export class AdminReadonlyController {
   @ApiOkResponse({ description: 'Admin system status.' })
   getSystemStatus(): Promise<AdminSystemStatusResponse> {
     return this.adminReadonlyService.getSystemStatus();
+  }
+
+  @Get('audit-logs')
+  @ApiOkResponse({ description: 'List admin operation audit logs.' })
+  listAuditLogs(@Query() query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
+    return this.adminReadonlyService.listAuditLogs(query);
+  }
+
+  @Get('robots/dashboard')
+  @ApiOkResponse({ description: 'Readonly robot smoke test dashboard.' })
+  getRobotDashboard(): Promise<AdminRobotDashboardResponse> {
+    return this.adminReadonlyService.getRobotDashboard();
+  }
+
+  @Post('robots/smoke')
+  @ApiOkResponse({ description: 'Run one robot smoke test cycle.' })
+  runRobotSmoke(): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.runRobotSmoke();
+  }
+
+  @Post('robots/daily-3')
+  @ApiOkResponse({ description: 'Run one daily-3 robot test cycle.' })
+  runRobotDaily3(): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.runRobotDaily3();
+  }
+
+  @Delete('robots/errors')
+  @ApiOkResponse({ description: 'Clear robot failed action logs.' })
+  clearRobotErrors(): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.clearRobotErrors();
   }
 
   @Get('seasons/current')
@@ -193,6 +225,15 @@ export class AdminReadonlyController {
     return this.adminReadonlyService.getPlayerOverview(playerId);
   }
 
+  @Post('players/:playerId/resources/adjust')
+  @ApiOkResponse({ description: 'Adjust player resources with admin audit.' })
+  adjustPlayerResources(
+    @Param('playerId') playerId: string,
+    @Body() body: unknown,
+  ): Promise<AdminAdjustPlayerResourcesResponse> {
+    return this.adminReadonlyService.adjustPlayerResources(playerId, body);
+  }
+
   @Get('players/:playerId/season-state')
   @ApiOkResponse({ description: 'Readonly player season state.' })
   getPlayerSeasonState(@Param('playerId') playerId: string): Promise<Record<string, unknown>> {
@@ -267,6 +308,7 @@ export class AdminReadonlyController {
 }
 
 defineRouteParamTypes(AdminReadonlyController.prototype, 'searchPlayers', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'listAuditLogs', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getCurrentSeasonAdmin', []);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listSeasons', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listPlayerSeasonSnapshots', [String, Object]);
@@ -290,6 +332,7 @@ defineRouteParamTypes(AdminReadonlyController.prototype, 'listShareAssistRecords
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listShareInviteRelations', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'updateTaskConfig', [String, String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getPlayerOverview', [String]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'adjustPlayerResources', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getPlayerSeasonState', [String]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listPlayerSeasonHistory', [String, Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listPlayerSeasonRewardHistory', [String, Object]);

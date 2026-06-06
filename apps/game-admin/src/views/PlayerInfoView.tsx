@@ -6,7 +6,7 @@ import { PaginationBar } from '../components/PaginationBar';
 import { SearchPanel } from '../components/SearchPanel';
 import { TableSection } from '../components/TableSection';
 import { formatValue, recordRows } from '../domain/labels';
-import type { AdminRecord } from '../types';
+import type { AdminRecord, PlayerResourceAdjustFormState } from '../types';
 
 export function PlayerInfoView(props: {
   busy: string;
@@ -80,7 +80,31 @@ export function PlayerInfoView(props: {
   );
 }
 
-export function PlayerDetailTables(props: { overview: AdminPlayerOverviewResponse }): JSX.Element {
+const resourceAdjustFields: Array<{
+  currentKey: string;
+  group: '基础' | '灵宠' | '阵营';
+  key: keyof PlayerResourceAdjustFormState;
+  label: string;
+  placeholder: string;
+}> = [
+  { group: '基础', key: 'goldDelta', currentKey: 'gold', label: '金币', placeholder: '+1000 / -1000' },
+  { group: '基础', key: 'tianjiTalismanDelta', currentKey: 'tianjiTalisman', label: '天机符', placeholder: '+3 / -1' },
+  { group: '灵宠', key: 'spiritSoulDelta', currentKey: 'spiritSoul', label: '兽魂', placeholder: '+20 / -5' },
+  { group: '灵宠', key: 'ordinarySoulDelta', currentKey: 'ordinarySoul', label: '普通兽魂', placeholder: '+10 / -2' },
+  { group: '灵宠', key: 'rareSoulDelta', currentKey: 'rareSoul', label: '稀有兽魂', placeholder: '+5 / -1' },
+  { group: '灵宠', key: 'legendarySoulDelta', currentKey: 'legendarySoul', label: '传说兽魂', placeholder: '+1 / -1' },
+  { group: '阵营', key: 'contributionDelta', currentKey: 'contributionScore', label: '阵营贡献', placeholder: '+100 / -50' },
+];
+
+const resourceAdjustGroups = ['基础', '灵宠', '阵营'] as const;
+
+export function PlayerDetailTables(props: {
+  adjustForm: PlayerResourceAdjustFormState;
+  adjustBusy?: boolean;
+  onAdjustChange: (field: keyof PlayerResourceAdjustFormState, value: string) => void;
+  onAdjustSubmit: () => void;
+  overview: AdminPlayerOverviewResponse;
+}): JSX.Element {
   const [activeTab, setActiveTab] = useState('profile');
   const [selectedSpiritSlotIndex, setSelectedSpiritSlotIndex] = useState<number | null>(null);
   const tabs = [
@@ -106,6 +130,14 @@ export function PlayerDetailTables(props: { overview: AdminPlayerOverviewRespons
   const mainSpiritTitle = spirit?.mainSlot
     ? `${formatValue(spirit.mainSlot.label)} / ${formatValue(spirit.mainSlot.spiritId)}`
     : '暂无主战灵宠';
+  const contributionScore = Array.isArray(props.overview.identity.factionMembers)
+    ? Number((props.overview.identity.factionMembers[0] as AdminRecord | undefined)?.contributionScore ?? 0)
+    : 0;
+  const currentAdjustValues: Record<string, unknown> = {
+    ...(props.overview.resources ?? {}),
+    ...(spirit?.resource ?? {}),
+    contributionScore,
+  };
 
   return (
     <div className="detail-stack">
@@ -139,6 +171,64 @@ export function PlayerDetailTables(props: { overview: AdminPlayerOverviewRespons
               rows={recordRows(props.overview.spell, ['playerId', 'protectionTechLevel', 'farmYieldTechLevel', 'collectWindowTechLevel', 'pendingClaimTechLevel', 'spellStateVersion'])}
             />
           </div>
+          <section className="panel resource-adjust-panel">
+            <div className="panel-head compact resource-adjust-head">
+              <div>
+                <p className="eyebrow">Admin Adjustment</p>
+                <h3>资源修正</h3>
+              </div>
+              <span className="resource-adjust-badge">只填增减量</span>
+            </div>
+            <div className="resource-adjust-layout">
+              <div className="resource-adjust-groups">
+                {resourceAdjustGroups.map((group) => (
+                  <div className="resource-adjust-group" key={group}>
+                    <div className="resource-adjust-group-title">{group}</div>
+                    {resourceAdjustFields.filter((field) => field.group === group).map((field) => (
+                      <label className="resource-adjust-row" key={field.key}>
+                        <span className="resource-adjust-label">{field.label}</span>
+                        <span className="resource-adjust-current">当前 {formatValue(currentAdjustValues[field.currentKey] ?? 0)}</span>
+                        <input
+                          inputMode="numeric"
+                          onChange={(event) => props.onAdjustChange(field.key, event.target.value)}
+                          placeholder={field.placeholder}
+                          type="number"
+                          value={props.adjustForm[field.key]}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <div className="resource-adjust-side">
+                <label className="resource-adjust-reason">
+                  <span>修正原因</span>
+                  <textarea
+                    onChange={(event) => props.onAdjustChange('reason', event.target.value)}
+                    placeholder="例如：内测补偿、排障回滚、误操作修正"
+                    rows={5}
+                    value={props.adjustForm.reason}
+                  />
+                </label>
+                <div className="resource-adjust-warning">
+                  <strong>审计规则</strong>
+                  <span>提交后会写入后台审计；金币同步写钱包流水，阵营贡献同步写贡献流水。</span>
+                  <span>输入负数表示扣减，后端会拒绝扣成负数的请求。</span>
+                </div>
+              </div>
+            </div>
+            <div className="resource-adjust-footer">
+              <span>建议一次只修正一个排障事项，便于之后按审计记录追踪。</span>
+              <button
+                className="primary-button"
+                disabled={Boolean(props.adjustBusy)}
+                onClick={props.onAdjustSubmit}
+                type="button"
+              >
+                {props.adjustBusy ? '提交中...' : '提交资源修正'}
+              </button>
+            </div>
+          </section>
         </div>
       ) : null}
 

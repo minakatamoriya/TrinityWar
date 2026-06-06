@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { RobotModule } from '../robot/robot.module.js';
 import { SeasonModule } from '../season/season.module.js';
 import { TaskConfigModule } from '../task-config/task-config.module.js';
 import { AdminReadonlyController } from './admin-readonly.controller.js';
@@ -7,7 +8,7 @@ import { AdminReadonlyGuard } from './admin-readonly.guard.js';
 import { AdminReadonlyService } from './admin-readonly.service.js';
 
 @Module({
-  imports: [PrismaModule, SeasonModule, TaskConfigModule],
+  imports: [PrismaModule, RobotModule, SeasonModule, TaskConfigModule],
   controllers: [AdminReadonlyController],
   providers: [AdminReadonlyGuard, AdminReadonlyService],
 })

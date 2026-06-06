@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import {
   APP_NAME,
   type AdminCreateNotificationResponse,
+  type AdminAdjustPlayerResourcesResponse,
   type AdminDeletePlayerResponse,
   type AdminListResponse,
   type AdminNotificationHistoryItem,
@@ -11,6 +12,7 @@ import {
   type AdminPlayerNotificationItem,
   type AdminPlayerSearchResponse,
   type AdminRaidOrderDetailResponse,
+  type AdminRobotDashboardResponse,
   type AdminSystemStatusResponse,
 } from '@trinitywar/shared';
 import { API_BASE, DEBUG_KEY, adminFetch, jsonRequest } from './api/admin';
@@ -31,13 +33,44 @@ import { SpiritConfigView } from './views/SpiritConfigView';
 import { SystemView } from './views/SystemView';
 import { TaskConfigView, type TaskConfigGroup } from './views/TaskConfigView';
 import { SeasonView } from './views/SeasonView';
+import { RobotTestView } from './views/RobotTestView';
 import { TableSection } from './components/TableSection';
 import type { AdminRecord, ModuleKey, PlayerModal } from './types';
+import type { PlayerResourceAdjustFormState } from './types';
 import './styles.css';
 
 const PLAYER_SEARCH_PAGE_SIZE = 10;
 const PLAYER_RAID_PAGE_SIZE = 10;
 const ATTACHMENT_NOTIFICATION_CONFIRM_TEXT = 'SEND_ATTACHMENT_NOTIFICATION';
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+type RobotDashboardViewModel = AdminRobotDashboardResponse & {
+  rule: Record<string, unknown>;
+  status: Record<string, unknown>;
+  errorSummary: {
+    items: AdminRecord[];
+    exportMarkdown: string;
+  };
+};
+
+const createEmptyResourceAdjustForm = (): PlayerResourceAdjustFormState => ({
+  reason: '',
+  goldDelta: '',
+  tianjiTalismanDelta: '',
+  spiritSoulDelta: '',
+  ordinarySoulDelta: '',
+  rareSoulDelta: '',
+  legendarySoulDelta: '',
+  contributionDelta: '',
+});
 
 function App(): JSX.Element {
   const [activeModule, setActiveModule] = useState<ModuleKey>('player');
@@ -47,6 +80,7 @@ function App(): JSX.Element {
   const [searchResult, setSearchResult] = useState<AdminPlayerSearchResponse | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState('');
   const [playerOverview, setPlayerOverview] = useState<AdminPlayerOverviewResponse | null>(null);
+  const [resourceAdjustForm, setResourceAdjustForm] = useState<PlayerResourceAdjustFormState>(() => createEmptyResourceAdjustForm());
   const [playerOrders, setPlayerOrders] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [playerOrdersOwnerId, setPlayerOrdersOwnerId] = useState('');
   const [activeModal, setActiveModal] = useState<PlayerModal>(null);
@@ -91,6 +125,10 @@ function App(): JSX.Element {
   const [isTaskEditorOpen, setIsTaskEditorOpen] = useState(false);
   const [castleLevels, setCastleLevels] = useState<AdminListResponse<AdminRecord> | null>(null);
   const [lightweightRuleTab, setLightweightRuleTab] = useState<'faction-stipend'>('faction-stipend');
+  const [auditLogs, setAuditLogs] = useState<AdminListResponse<AdminRecord> | null>(null);
+  const [auditTargetId, setAuditTargetId] = useState('');
+  const [auditAction, setAuditAction] = useState('');
+  const [robotDashboard, setRobotDashboard] = useState<RobotDashboardViewModel | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -129,6 +167,12 @@ function App(): JSX.Element {
     }
     if (activeModule === 'castleLevels' && !castleLevels) {
       void loadCastleLevels();
+    }
+    if (activeModule === 'system' && !auditLogs) {
+      void loadAuditLogs();
+    }
+    if (activeModule === 'robotTest' && !robotDashboard) {
+      void loadRobotDashboard();
     }
   }, [activeModule]);
 
@@ -173,6 +217,68 @@ function App(): JSX.Element {
     setStatus(nextStatus);
   };
 
+  const loadAuditLogs = async (page = auditLogs?.pagination.page ?? 1): Promise<void> => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: '10',
+    });
+    const normalizedTargetId = auditTargetId.trim();
+    const normalizedAction = auditAction.trim();
+    if (normalizedTargetId) {
+      params.set('targetId', normalizedTargetId);
+    }
+    if (normalizedAction) {
+      params.set('action', normalizedAction);
+    }
+
+    const result = await run('audit-logs', () => adminFetch<AdminListResponse<AdminRecord>>(`/audit-logs?${params.toString()}`));
+    if (result) {
+      setAuditLogs(result);
+    }
+  };
+
+  const loadRobotDashboard = async (): Promise<void> => {
+    const result = await run('robot-dashboard', () => adminFetch<RobotDashboardViewModel>('/robots/dashboard'));
+    if (result) {
+      setRobotDashboard(result);
+    }
+  };
+
+  const runRobotDaily3 = async (): Promise<void> => {
+    const result = await run('robot-daily-3', () => adminFetch<AdminRecord>('/robots/daily-3', jsonRequest('POST', {})));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
+  const clearRobotErrors = async (): Promise<void> => {
+    if (!window.confirm('确认清空机器人历史错误？成功动作日志会保留。')) {
+      return;
+    }
+    const result = await run('robot-clear-errors', () => adminFetch<AdminRecord>('/robots/errors', jsonRequest('DELETE', {})));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
+  const exportRobotErrors = async (): Promise<void> => {
+    const markdown = robotDashboard?.errorSummary.exportMarkdown ?? '';
+    if (!markdown.trim()) {
+      setError('当前没有可导出的机器人问题。');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(markdown);
+      setError(null);
+      window.alert('问题报告已复制。');
+    } catch {
+      const popup = window.open('', '_blank');
+      popup?.document.write(`<pre>${escapeHtml(markdown)}</pre>`);
+      popup?.document.close();
+    }
+  };
+
   const handleSearch = async (page = 1): Promise<void> => {
     const normalizedKeyword = keyword.trim();
     const params = new URLSearchParams({
@@ -207,6 +313,55 @@ function App(): JSX.Element {
 
     setSelectedPlayerId(playerId);
     setPlayerOverview(result);
+  };
+
+  const patchResourceAdjustForm = (field: keyof PlayerResourceAdjustFormState, value: string): void => {
+    setResourceAdjustForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const buildResourceAdjustPayload = (): Record<string, unknown> => {
+    const payload: Record<string, unknown> = {
+      reason: resourceAdjustForm.reason.trim(),
+    };
+    for (const key of Object.keys(resourceAdjustForm) as Array<keyof PlayerResourceAdjustFormState>) {
+      if (key === 'reason') {
+        continue;
+      }
+      const value = resourceAdjustForm[key].trim();
+      if (value) {
+        payload[key] = Number(value);
+      }
+    }
+    return payload;
+  };
+
+  const submitResourceAdjust = async (): Promise<void> => {
+    const playerId = playerOverview?.identity.playerId ? String(playerOverview.identity.playerId) : selectedPlayerId;
+    if (!playerId) {
+      setError('请选择玩家。');
+      return;
+    }
+    const payload = buildResourceAdjustPayload();
+    const deltaCount = Object.keys(payload).filter((key) => key.endsWith('Delta')).length;
+    if (deltaCount <= 0) {
+      setError('请至少填写一个资源增减量。');
+      return;
+    }
+    if (!String(payload.reason ?? '').trim()) {
+      setError('请填写资源修正原因。');
+      return;
+    }
+    if (!window.confirm(`确认修正玩家资源？\n${playerId}\n本操作会写入后台审计。`)) {
+      return;
+    }
+
+    const result = await run('player-resource-adjust', () => adminFetch<AdminAdjustPlayerResourcesResponse>(`/players/${encodeURIComponent(playerId)}/resources/adjust`, jsonRequest('POST', payload)));
+    if (!result) {
+      return;
+    }
+
+    setResourceAdjustForm(createEmptyResourceAdjustForm());
+    await handleLoadPlayer(playerId);
   };
 
   const handleLoadPlayerRaid = async (playerId = selectedPlayerId, page = 1): Promise<void> => {
@@ -877,6 +1032,17 @@ function App(): JSX.Element {
             />
           ) : null}
 
+          {activeModule === 'robotTest' ? (
+            <RobotTestView
+              busy={busy}
+              dashboard={robotDashboard}
+              onClearErrors={() => void clearRobotErrors()}
+              onExportErrors={() => void exportRobotErrors()}
+              onRefresh={() => void loadRobotDashboard()}
+              onRunDaily3={() => void runRobotDaily3()}
+            />
+          ) : null}
+
           {activeModule === 'season' ? (
             <SeasonView
               busy={busy}
@@ -991,7 +1157,18 @@ function App(): JSX.Element {
           ) : null}
 
           {activeModule === 'system' ? (
-            <SystemView overview={overview} status={status} />
+            <SystemView
+              auditAction={auditAction}
+              auditLogs={auditLogs}
+              auditTargetId={auditTargetId}
+              busy={busy}
+              onAuditActionChange={setAuditAction}
+              onAuditPageChange={(page) => void loadAuditLogs(page)}
+              onAuditRefresh={() => void loadAuditLogs(1)}
+              onAuditTargetIdChange={setAuditTargetId}
+              overview={overview}
+              status={status}
+            />
           ) : null}
         </section>
       </main>
@@ -1003,7 +1180,15 @@ function App(): JSX.Element {
           onClose={() => setActiveModal(null)}
         >
           {activeModal.type === 'info' ? (
-            modalOverview ? <PlayerDetailTables overview={modalOverview} /> : <EmptyState text="正在读取玩家基础信息。" />
+            modalOverview ? (
+              <PlayerDetailTables
+                adjustBusy={busy === 'player-resource-adjust'}
+                adjustForm={resourceAdjustForm}
+                onAdjustChange={patchResourceAdjustForm}
+                onAdjustSubmit={() => void submitResourceAdjust()}
+                overview={modalOverview}
+              />
+            ) : <EmptyState text="正在读取玩家基础信息。" />
           ) : modalOrders ? (
             <PlayerRaidContent
               busy={busy}

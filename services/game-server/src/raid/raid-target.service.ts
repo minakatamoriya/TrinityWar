@@ -198,6 +198,7 @@ export class RaidTargetService {
     targetId: string;
     requestIdempotencyKey?: string;
     armyVersion?: number;
+    skipQueue?: boolean;
   }): Promise<ClientRaidActionResponse> {
     const requestIdempotencyKey = input.requestIdempotencyKey?.trim();
 
@@ -435,13 +436,15 @@ export class RaidTargetService {
       return buildRaidActionResponse(raidOrder.id, settleAt, target, raidOrder.status, home, scenes);
     });
 
-    try {
-      await this.raidSettlementQueueService.enqueueRaidSettlement({
-        raidOrderId: response.result.orderId ?? '',
-        settleAt: response.result.settleAt ? new Date(response.result.settleAt) : new Date(),
-      });
-    } catch {
-      // The durable order remains queryable by settleAt/status; TW-BE-017 worker can scan and backfill.
+    if (!input.skipQueue) {
+      try {
+        await this.raidSettlementQueueService.enqueueRaidSettlement({
+          raidOrderId: response.result.orderId ?? '',
+          settleAt: response.result.settleAt ? new Date(response.result.settleAt) : new Date(),
+        });
+      } catch {
+        // The durable order remains queryable by settleAt/status; TW-BE-017 worker can scan and backfill.
+      }
     }
 
     if (response.result.orderId) {

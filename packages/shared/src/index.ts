@@ -575,6 +575,62 @@ export interface AdminDangerousOperationRequest {
   confirmText?: string;
 }
 
+export interface AdminAdjustPlayerResourcesRequest {
+  reason?: string;
+  goldDelta?: number;
+  tianjiTalismanDelta?: number;
+  spiritSoulDelta?: number;
+  ordinarySoulDelta?: number;
+  rareSoulDelta?: number;
+  legendarySoulDelta?: number;
+  contributionDelta?: number;
+}
+
+export interface AdminAdjustPlayerResourcesResponse {
+  playerId: string;
+  adjusted: boolean;
+  changes: Array<{
+    resource: string;
+    before: number;
+    delta: number;
+    after: number;
+  }>;
+  auditLogId: string;
+}
+
+export interface AdminOperationAuditLogItem {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  adminActor: string;
+  reason: string;
+  confirmText: string;
+  metadataJson: unknown;
+  createdAt: string;
+}
+
+export interface AdminRobotDashboardResponse {
+  rule: Record<string, unknown>;
+  status: Record<string, unknown>;
+  runs: {
+    items: Array<Record<string, unknown>>;
+  };
+  robots: {
+    items: Array<Record<string, unknown>>;
+  };
+  recentActions: {
+    items: Array<Record<string, unknown>>;
+  };
+  recentErrors: {
+    items: Array<Record<string, unknown>>;
+  };
+  errorSummary: {
+    items: Array<Record<string, unknown>>;
+    exportMarkdown: string;
+  };
+}
+
 export interface AdminCreateNotificationResponse {
   notificationId: string;
   audience: 'global' | 'player';

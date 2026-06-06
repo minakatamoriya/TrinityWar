@@ -242,6 +242,10 @@ h3 {
   color: #b33b2e;
 }
 
+.warn {
+  color: #b7791f;
+}
+
 .primary-button {
   border-color: #244866;
   background: #244866;
@@ -380,11 +384,141 @@ h3 {
   .notification-attachment-row {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .resource-adjust-layout,
+  .resource-adjust-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .resource-adjust-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 .danger-button:hover {
   border-color: #b33b2e;
   background: #fff0ed;
+}
+
+.resource-adjust-panel {
+  border-color: #c9d4df;
+  background: #fbfcfd;
+}
+
+.resource-adjust-head {
+  align-items: flex-start;
+}
+
+.resource-adjust-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid #c6d5e1;
+  border-radius: 999px;
+  color: #345b83;
+  background: #eef5fa;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.resource-adjust-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.85fr);
+  gap: 16px;
+}
+
+.resource-adjust-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.resource-adjust-group {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #dbe3ec;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.resource-adjust-group-title {
+  color: #516174;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.resource-adjust-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.8fr) minmax(110px, 1fr) minmax(140px, 0.9fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+}
+
+.resource-adjust-label {
+  font-weight: 700;
+}
+
+.resource-adjust-current {
+  color: #687789;
+  font-size: 12px;
+}
+
+.resource-adjust-row input {
+  width: 100%;
+  height: 38px;
+  padding: 8px 10px;
+  text-align: right;
+}
+
+.resource-adjust-side {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.resource-adjust-reason {
+  display: grid;
+  gap: 8px;
+}
+
+.resource-adjust-reason span {
+  color: #516174;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.resource-adjust-warning {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #ead5b2;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #6d5630;
+  font-size: 12px;
+}
+
+.resource-adjust-warning strong {
+  color: #533c16;
+}
+
+.resource-adjust-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e1e7ee;
+}
+
+.resource-adjust-footer span {
+  color: #687789;
+  font-size: 12px;
 }
 
 .action-group,
@@ -441,6 +575,133 @@ h3 {
 
 .lookup-form input {
   flex: 1;
+}
+
+.audit-filter-form {
+  width: min(720px, 100%);
+}
+
+.audit-filter-form input {
+  flex: 1;
+}
+
+.robot-console .panel-head .inline-form {
+  justify-content: flex-end;
+}
+
+.robot-rule-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.robot-rule-item {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.robot-rule-item span {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.robot-rule-item strong {
+  color: var(--text);
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.robot-status-line {
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.status-pill {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
+.status-pill.ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-pill.bad {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-pill.warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.robot-error-list {
+  display: grid;
+  gap: 10px;
+}
+
+.robot-error-card {
+  background: #fff7f7;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.robot-error-card.progression {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.robot-error-card.warning {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.robot-error-card.error {
+  background: #fff7f7;
+  border-color: #fecaca;
+}
+
+.robot-error-card h4 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.robot-error-card p {
+  color: var(--text);
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+
+.robot-error-meta {
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 10px;
+}
+
+.robot-issue-suggestion {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 10px;
+  padding: 10px;
 }
 
 .season-player-lookup {

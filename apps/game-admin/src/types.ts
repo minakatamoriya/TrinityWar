@@ -1,8 +1,19 @@
 import type { AdminListResponse } from '@trinitywar/shared';
 
-export type ModuleKey = 'dashboard' | 'player' | 'order' | 'notifications' | 'season' | 'shareAssist' | 'spiritConfig' | 'seedConfig' | 'taskConfig' | 'castleLevels' | 'system';
+export type ModuleKey = 'dashboard' | 'player' | 'order' | 'notifications' | 'season' | 'shareAssist' | 'robotTest' | 'spiritConfig' | 'seedConfig' | 'taskConfig' | 'castleLevels' | 'system';
 export type AdminRecord = Record<string, unknown>;
 export type PlayerModal = { type: 'info' | 'raid'; playerId: string } | null;
+
+export interface PlayerResourceAdjustFormState {
+  reason: string;
+  goldDelta: string;
+  tianjiTalismanDelta: string;
+  spiritSoulDelta: string;
+  ordinarySoulDelta: string;
+  rareSoulDelta: string;
+  legendarySoulDelta: string;
+  contributionDelta: string;
+}
 
 export interface NavItem {
   key: ModuleKey;

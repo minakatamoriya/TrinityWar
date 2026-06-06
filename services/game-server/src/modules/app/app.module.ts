@@ -12,6 +12,7 @@ import { NotificationModule } from '../../notification/notification.module.js';
 import { PlayerModule } from '../../player/player.module.js';
 import { PrismaModule } from '../../prisma/prisma.module.js';
 import { RaidModule } from '../../raid/raid.module.js';
+import { RobotModule } from '../../robot/robot.module.js';
 import { ShareAssistModule } from '../../share-assist/share-assist.module.js';
 import { SocialModule } from '../../social/social.module.js';
 import { SpiritModule } from '../../spirit/spirit.module.js';
@@ -32,6 +33,7 @@ import { SystemModule } from '../system/system.module.js';
     ClientCommandModule,
     NotificationModule,
     RaidModule,
+    RobotModule,
     SocialModule,
     ShareAssistModule,
     SpiritModule,

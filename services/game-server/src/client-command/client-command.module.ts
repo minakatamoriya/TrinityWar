@@ -16,5 +16,6 @@ import { FieldCommandRuleService } from './field-command-rule.service.js';
   imports: [AuthModule, PrismaModule, AuditModule, IdempotencyModule, ClientReadModule, SeasonModule, TaskConfigModule],
   controllers: [ClientCommandController],
   providers: [ClientCommandService, BuildingUpgradeRuleService, FieldCommandRuleService, PlayerInitializationService],
+  exports: [ClientCommandService],
 })
 export class ClientCommandModule {}
