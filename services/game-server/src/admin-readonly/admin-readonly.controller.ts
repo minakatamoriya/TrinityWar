@@ -44,6 +44,42 @@ export class AdminReadonlyController {
     return this.adminReadonlyService.getRobotDashboard();
   }
 
+  @Get('robots/daily-3/automation-config')
+  @ApiOkResponse({ description: 'Get daily-3 robot automation config.' })
+  getRobotDaily3AutomationConfig(): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.getRobotDaily3AutomationConfig();
+  }
+
+  @Patch('robots/daily-3/automation-config')
+  @ApiOkResponse({ description: 'Update daily-3 robot automation config.' })
+  updateRobotDaily3AutomationConfig(@Body() body: unknown): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.updateRobotDaily3AutomationConfig(body);
+  }
+
+  @Get('robots/social-3/automation-config')
+  @ApiOkResponse({ description: 'Get social-3 robot automation config.' })
+  getRobotSocial3AutomationConfig(): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.getRobotSocial3AutomationConfig();
+  }
+
+  @Patch('robots/social-3/automation-config')
+  @ApiOkResponse({ description: 'Update social-3 robot automation config.' })
+  updateRobotSocial3AutomationConfig(@Body() body: unknown): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.updateRobotSocial3AutomationConfig(body);
+  }
+
+  @Get('robots/player-sim-v1/automation-config')
+  @ApiOkResponse({ description: 'Get player-sim-v1 robot automation config.' })
+  getRobotPlayerSimV1AutomationConfig(): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.getRobotPlayerSimV1AutomationConfig();
+  }
+
+  @Patch('robots/player-sim-v1/automation-config')
+  @ApiOkResponse({ description: 'Update player-sim-v1 robot automation config.' })
+  updateRobotPlayerSimV1AutomationConfig(@Body() body: unknown): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.updateRobotPlayerSimV1AutomationConfig(body);
+  }
+
   @Post('robots/smoke')
   @ApiOkResponse({ description: 'Run one robot smoke test cycle.' })
   runRobotSmoke(): Promise<Record<string, unknown>> {
@@ -54,6 +90,42 @@ export class AdminReadonlyController {
   @ApiOkResponse({ description: 'Run one daily-3 robot test cycle.' })
   runRobotDaily3(): Promise<Record<string, unknown>> {
     return this.adminReadonlyService.runRobotDaily3();
+  }
+
+  @Post('robots/social-3')
+  @ApiOkResponse({ description: 'Run one social-3 robot test cycle.' })
+  runRobotSocial3(): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.runRobotSocial3();
+  }
+
+  @Post('robots/player-sim-v1')
+  @ApiOkResponse({ description: 'Run one diligent player simulation cycle.' })
+  runRobotPlayerSimV1(): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.runRobotPlayerSimV1();
+  }
+
+  @Post('robots/daily-3/loop/start')
+  @ApiOkResponse({ description: 'Start daily-3 robot test loop.' })
+  startRobotDaily3Loop(@Body() body: unknown): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.startRobotDaily3Loop(body);
+  }
+
+  @Post('robots/social-3/loop/start')
+  @ApiOkResponse({ description: 'Start social-3 robot test loop.' })
+  startRobotSocial3Loop(@Body() body: unknown): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.startRobotSocial3Loop(body);
+  }
+
+  @Post('robots/player-sim-v1/loop/start')
+  @ApiOkResponse({ description: 'Start player-sim-v1 robot test loop.' })
+  startRobotPlayerSimV1Loop(@Body() body: unknown): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.startRobotPlayerSimV1Loop(body);
+  }
+
+  @Post('robots/daily-3/loop/stop')
+  @ApiOkResponse({ description: 'Stop daily-3 robot test loop.' })
+  stopRobotDaily3Loop(): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.stopRobotDaily3Loop();
   }
 
   @Delete('robots/errors')
@@ -309,6 +381,15 @@ export class AdminReadonlyController {
 
 defineRouteParamTypes(AdminReadonlyController.prototype, 'searchPlayers', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listAuditLogs', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'getRobotDaily3AutomationConfig', []);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'updateRobotDaily3AutomationConfig', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'getRobotSocial3AutomationConfig', []);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'updateRobotSocial3AutomationConfig', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'startRobotSocial3Loop', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'getRobotPlayerSimV1AutomationConfig', []);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'updateRobotPlayerSimV1AutomationConfig', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'startRobotPlayerSimV1Loop', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'startRobotDaily3Loop', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getCurrentSeasonAdmin', []);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listSeasons', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listPlayerSeasonSnapshots', [String, Object]);

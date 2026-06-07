@@ -160,12 +160,60 @@ export class AdminReadonlyService {
     return this.robotService.getDashboard();
   }
 
+  getRobotDaily3AutomationConfig(): Promise<Record<string, unknown>> {
+    return this.robotService.getDaily3AutomationConfig();
+  }
+
+  updateRobotDaily3AutomationConfig(body: unknown): Promise<Record<string, unknown>> {
+    return this.robotService.updateDaily3AutomationConfig(body);
+  }
+
+  getRobotSocial3AutomationConfig(): Promise<Record<string, unknown>> {
+    return this.robotService.getSocial3AutomationConfig();
+  }
+
+  updateRobotSocial3AutomationConfig(body: unknown): Promise<Record<string, unknown>> {
+    return this.robotService.updateSocial3AutomationConfig(body);
+  }
+
+  getRobotPlayerSimV1AutomationConfig(): Promise<Record<string, unknown>> {
+    return this.robotService.getPlayerSimV1AutomationConfig();
+  }
+
+  updateRobotPlayerSimV1AutomationConfig(body: unknown): Promise<Record<string, unknown>> {
+    return this.robotService.updatePlayerSimV1AutomationConfig(body);
+  }
+
   runRobotSmoke(): Promise<Record<string, unknown>> {
     return this.robotService.runSmoke();
   }
 
   runRobotDaily3(): Promise<Record<string, unknown>> {
     return this.robotService.runDaily3();
+  }
+
+  runRobotSocial3(): Promise<Record<string, unknown>> {
+    return this.robotService.runSocial3();
+  }
+
+  runRobotPlayerSimV1(): Promise<Record<string, unknown>> {
+    return this.robotService.runPlayerSimV1();
+  }
+
+  startRobotDaily3Loop(body: unknown): Promise<Record<string, unknown>> {
+    return this.robotService.startDaily3Loop(body);
+  }
+
+  startRobotSocial3Loop(body: unknown): Promise<Record<string, unknown>> {
+    return this.robotService.startSocial3Loop(body);
+  }
+
+  startRobotPlayerSimV1Loop(body: unknown): Promise<Record<string, unknown>> {
+    return this.robotService.startPlayerSimV1Loop(body);
+  }
+
+  stopRobotDaily3Loop(): Promise<Record<string, unknown>> {
+    return this.robotService.stopDaily3Loop();
   }
 
   clearRobotErrors(): Promise<Record<string, unknown>> {

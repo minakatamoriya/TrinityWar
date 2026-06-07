@@ -275,6 +275,7 @@ model Player {
   seasonRewardGrants      PlayerSeasonRewardGrant[]
   seasonAchievements      PlayerSeasonAchievement[]
   robotActionLogs         RobotActionLog[]
+  robotSimSnapshots       RobotSimSnapshot[]
 
   @@index([factionId])
   @@index([lastLoginAt])
@@ -1301,7 +1302,8 @@ model RobotTestRun {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  actionLogs RobotActionLog[]
+  actionLogs   RobotActionLog[]
+  simSnapshots RobotSimSnapshot[]
 
   @@index([status, startedAt])
   @@index([mode, startedAt])
@@ -1331,6 +1333,86 @@ model RobotActionLog {
   @@index([playerId, createdAt])
   @@index([status, createdAt])
   @@map("robot_action_log")
+}
+
+model RobotAutomationJob {
+  id                    String    @id @default(cuid())
+  name                  String
+  mode                  String
+  status                String    @default("RUNNING")
+  intervalSeconds       Int       @map("interval_seconds")
+  maxRounds             Int       @map("max_rounds")
+  hardErrorLimit        Int       @map("hard_error_limit")
+  completedRounds       Int       @default(0) @map("completed_rounds")
+  consecutiveHardErrors Int       @default(0) @map("consecutive_hard_errors")
+  lastRunId             String?   @map("last_run_id")
+  lastStatus            String?   @map("last_status")
+  lastError             String?   @map("last_error")
+  stopReason            String?   @map("stop_reason")
+  startedAt             DateTime  @default(now()) @map("started_at")
+  stoppedAt             DateTime? @map("stopped_at")
+  lastRunAt             DateTime? @map("last_run_at")
+  nextRunAt             DateTime? @map("next_run_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@index([mode, status, startedAt])
+  @@index([status, startedAt])
+  @@map("robot_automation_job")
+}
+
+model RobotAutomationConfig {
+  id                    String   @id @default(cuid())
+  mode                  String   @unique
+  enabled               Boolean  @default(false)
+  intervalSeconds       Int      @default(10) @map("interval_seconds")
+  maxRounds             Int      @default(20) @map("max_rounds")
+  hardErrorLimit        Int      @default(3) @map("hard_error_limit")
+  autoStartOnBoot       Boolean  @default(false) @map("auto_start_on_boot")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@index([enabled, mode])
+  @@map("robot_automation_config")
+}
+
+model RobotSimSnapshot {
+  id                  String   @id @default(cuid())
+  runId               String   @map("run_id")
+  mode                String
+  robotKey            String   @map("robot_key")
+  playerId            String   @map("player_id")
+  factionCode         String?  @map("faction_code")
+  vaultGold           Int      @default(0) @map("vault_gold")
+  walletGold          Int      @default(0) @map("wallet_gold")
+  contributionScore   Int      @default(0) @map("contribution_score")
+  spiritSoul          Int      @default(0) @map("spirit_soul")
+  ordinarySoul        Int      @default(0) @map("ordinary_soul")
+  rareSoul            Int      @default(0) @map("rare_soul")
+  legendarySoul       Int      @default(0) @map("legendary_soul")
+  mainSpiritLevel     Int?     @map("main_spirit_level")
+  mainSpiritStage     Int?     @map("main_spirit_stage")
+  armyTotal           Int      @default(0) @map("army_total")
+  armyAvailable       Int      @default(0) @map("army_available")
+  armyCapacity        Int      @default(0) @map("army_capacity")
+  queuedArmy          Int      @default(0) @map("queued_army")
+  matureFields        Int      @default(0) @map("mature_fields")
+  growingFields       Int      @default(0) @map("growing_fields")
+  emptyFields         Int      @default(0) @map("empty_fields")
+  successActionCount  Int      @default(0) @map("success_action_count")
+  blockedActionCount  Int      @default(0) @map("blocked_action_count")
+  failedActionCount   Int      @default(0) @map("failed_action_count")
+  actionSummaryJson   Json?    @map("action_summary_json")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  run    RobotTestRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  player Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([mode, createdAt])
+  @@index([playerId, createdAt])
+  @@index([robotKey, createdAt])
+  @@map("robot_sim_snapshot")
 }
 
 model BuildingUpgradeLog {

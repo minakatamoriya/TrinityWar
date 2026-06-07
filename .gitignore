@@ -5,6 +5,7 @@ dist/
 .tmp-devserver-*.log
 logs/
 services/game-server/dist-houduan.zip
+backups/
 backups/pre-restore-*.backup
 npm-debug.log*
 yarn-debug.log*

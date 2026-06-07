@@ -251,6 +251,87 @@ function App(): JSX.Element {
     }
   };
 
+  const runRobotSocial3 = async (): Promise<void> => {
+    const result = await run('robot-social-3', () => adminFetch<AdminRecord>('/robots/social-3', jsonRequest('POST', {})));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
+  const runRobotPlayerSimV1 = async (): Promise<void> => {
+    const result = await run('robot-player-sim-v1', () => adminFetch<AdminRecord>('/robots/player-sim-v1', jsonRequest('POST', {})));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
+  const startRobotDaily3Loop = async (input: { intervalSeconds: number; maxRounds: number; hardErrorLimit: number }): Promise<void> => {
+    const result = await run('robot-loop-start', () => adminFetch<AdminRecord>('/robots/daily-3/loop/start', jsonRequest('POST', input)));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
+  const startRobotSocial3Loop = async (input: { intervalSeconds: number; maxRounds: number; hardErrorLimit: number }): Promise<void> => {
+    const result = await run('robot-loop-start', () => adminFetch<AdminRecord>('/robots/social-3/loop/start', jsonRequest('POST', input)));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
+  const startRobotPlayerSimV1Loop = async (input: { intervalSeconds: number; maxRounds: number; hardErrorLimit: number }): Promise<void> => {
+    const result = await run('robot-loop-start', () => adminFetch<AdminRecord>('/robots/player-sim-v1/loop/start', jsonRequest('POST', input)));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
+  const saveRobotDaily3AutomationConfig = async (input: {
+    enabled: boolean;
+    intervalSeconds: number;
+    maxRounds: number;
+    hardErrorLimit: number;
+    autoStartOnBoot: boolean;
+  }): Promise<void> => {
+    const result = await run('robot-config-save', () => adminFetch<AdminRecord>('/robots/daily-3/automation-config', jsonRequest('PATCH', input)));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
+  const saveRobotSocial3AutomationConfig = async (input: {
+    enabled: boolean;
+    intervalSeconds: number;
+    maxRounds: number;
+    hardErrorLimit: number;
+    autoStartOnBoot: boolean;
+  }): Promise<void> => {
+    const result = await run('robot-config-save', () => adminFetch<AdminRecord>('/robots/social-3/automation-config', jsonRequest('PATCH', input)));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
+  const saveRobotPlayerSimV1AutomationConfig = async (input: {
+    enabled: boolean;
+    intervalSeconds: number;
+    maxRounds: number;
+    hardErrorLimit: number;
+    autoStartOnBoot: boolean;
+  }): Promise<void> => {
+    const result = await run('robot-config-save', () => adminFetch<AdminRecord>('/robots/player-sim-v1/automation-config', jsonRequest('PATCH', input)));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
+  const stopRobotDaily3Loop = async (): Promise<void> => {
+    const result = await run('robot-loop-stop', () => adminFetch<AdminRecord>('/robots/daily-3/loop/stop', jsonRequest('POST', {})));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
   const clearRobotErrors = async (): Promise<void> => {
     if (!window.confirm('确认清空机器人历史错误？成功动作日志会保留。')) {
       return;
@@ -1040,6 +1121,15 @@ function App(): JSX.Element {
               onExportErrors={() => void exportRobotErrors()}
               onRefresh={() => void loadRobotDashboard()}
               onRunDaily3={() => void runRobotDaily3()}
+              onRunPlayerSimV1={() => void runRobotPlayerSimV1()}
+              onRunSocial3={() => void runRobotSocial3()}
+              onSaveAutomationConfig={(input) => void saveRobotDaily3AutomationConfig(input)}
+              onSavePlayerSimV1AutomationConfig={(input) => void saveRobotPlayerSimV1AutomationConfig(input)}
+              onSaveSocialAutomationConfig={(input) => void saveRobotSocial3AutomationConfig(input)}
+              onStartLoop={(input) => void startRobotDaily3Loop(input)}
+              onStartPlayerSimV1Loop={(input) => void startRobotPlayerSimV1Loop(input)}
+              onStartSocialLoop={(input) => void startRobotSocial3Loop(input)}
+              onStopLoop={() => void stopRobotDaily3Loop()}
             />
           ) : null}
 

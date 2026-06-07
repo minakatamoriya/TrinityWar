@@ -4,11 +4,12 @@ import { ClientCommandModule } from '../client-command/client-command.module.js'
 import { ClientReadModule } from '../client-read/client-read.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { RaidModule } from '../raid/raid.module.js';
+import { SocialModule } from '../social/social.module.js';
 import { SpiritModule } from '../spirit/spirit.module.js';
 import { RobotService } from './robot.service.js';
 
 @Module({
-  imports: [AuthModule, ClientCommandModule, ClientReadModule, PrismaModule, RaidModule, SpiritModule],
+  imports: [AuthModule, ClientCommandModule, ClientReadModule, PrismaModule, RaidModule, SocialModule, SpiritModule],
   providers: [RobotService],
   exports: [RobotService],
 })

@@ -585,8 +585,100 @@ h3 {
   flex: 1;
 }
 
+.robot-toolbar,
 .robot-console .panel-head .inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: flex-end;
+}
+
+.robot-hero {
+  display: grid;
+  gap: 14px;
+}
+
+.robot-overview {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.robot-overview-card {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 78px;
+  padding: 12px;
+}
+
+.robot-overview-card span {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+}
+
+.robot-overview-card strong {
+  display: block;
+  font-size: 22px;
+  margin-top: 8px;
+}
+
+.robot-scenario-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.robot-scenario-card {
+  align-content: start;
+  display: grid;
+  gap: 12px;
+}
+
+.robot-scenario-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.robot-scenario-actions button,
+.robot-card-footer button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.robot-toggle-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.robot-config-grid {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.robot-config-grid.compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.robot-config-grid .checkbox-line {
+  min-height: 42px;
+}
+
+.robot-card-footer {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  gap: 12px;
+  justify-content: space-between;
+  padding-top: 12px;
 }
 
 .robot-rule-grid {
@@ -626,11 +718,90 @@ h3 {
   margin-top: 12px;
 }
 
+.checkbox-line {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.checkbox-line input {
+  margin: 0;
+}
+
+.robot-log-console {
+  background: #111827;
+  border: 1px solid #233044;
+  border-radius: 8px;
+  color: #d1d5db;
+  display: grid;
+  gap: 4px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  max-height: 320px;
+  min-height: 220px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.robot-log-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+
+.robot-log-empty {
+  align-self: center;
+  color: #9ca3af;
+  justify-self: center;
+}
+
+.robot-log-line {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 22px;
+}
+
+.robot-log-line span {
+  color: #9ca3af;
+}
+
+.robot-log-line strong {
+  color: #d1d5db;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.robot-log-line.success strong {
+  color: #86efac;
+}
+
+.robot-log-line.warning strong {
+  color: #fde68a;
+}
+
+.robot-log-line.error strong {
+  color: #fca5a5;
+}
+
+.robot-log-line.info strong {
+  color: #bfdbfe;
+}
+
 .status-pill {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
   padding: 6px 10px;
+}
+
+.status-pill.neutral {
+  background: #e5e7eb;
+  color: #374151;
 }
 
 .status-pill.ok {
@@ -646,6 +817,50 @@ h3 {
 .status-pill.warn {
   background: #fef3c7;
   color: #92400e;
+}
+
+.robot-job-list {
+  display: grid;
+  gap: 10px;
+}
+
+.robot-job-row {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.robot-job-row strong,
+.robot-job-row span {
+  display: block;
+}
+
+.robot-job-row strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.robot-job-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.robot-job-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.robot-job-meta span:not(.status-pill) {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  padding: 6px 8px;
 }
 
 .robot-error-list {
@@ -894,7 +1109,14 @@ h3 {
   .quick-grid,
   .config-form,
   .metric-grid,
+  .robot-overview,
+  .robot-scenario-grid,
   .two-column {
+    grid-template-columns: 1fr;
+  }
+
+  .robot-config-grid.compact,
+  .robot-scenario-actions {
     grid-template-columns: 1fr;
   }
 

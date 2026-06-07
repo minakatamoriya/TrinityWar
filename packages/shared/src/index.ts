@@ -613,6 +613,16 @@ export interface AdminOperationAuditLogItem {
 export interface AdminRobotDashboardResponse {
   rule: Record<string, unknown>;
   status: Record<string, unknown>;
+  automation?: {
+    loop?: unknown;
+    config?: Record<string, unknown>;
+    configs?: {
+      items: Array<Record<string, unknown>>;
+    };
+    jobs?: {
+      items: Array<Record<string, unknown>>;
+    };
+  };
   runs: {
     items: Array<Record<string, unknown>>;
   };
