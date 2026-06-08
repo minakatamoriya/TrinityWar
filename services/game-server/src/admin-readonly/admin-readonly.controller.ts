@@ -80,6 +80,18 @@ export class AdminReadonlyController {
     return this.adminReadonlyService.updateRobotPlayerSimV1AutomationConfig(body);
   }
 
+  @Get('robots/season-sim-v1/automation-config')
+  @ApiOkResponse({ description: 'Get season-sim-v1 robot automation config.' })
+  getRobotSeasonSimV1AutomationConfig(): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.getRobotSeasonSimV1AutomationConfig();
+  }
+
+  @Patch('robots/season-sim-v1/automation-config')
+  @ApiOkResponse({ description: 'Update season-sim-v1 robot automation config.' })
+  updateRobotSeasonSimV1AutomationConfig(@Body() body: unknown): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.updateRobotSeasonSimV1AutomationConfig(body);
+  }
+
   @Post('robots/smoke')
   @ApiOkResponse({ description: 'Run one robot smoke test cycle.' })
   runRobotSmoke(): Promise<Record<string, unknown>> {
@@ -104,6 +116,12 @@ export class AdminReadonlyController {
     return this.adminReadonlyService.runRobotPlayerSimV1();
   }
 
+  @Post('robots/season-sim-v1/day')
+  @ApiOkResponse({ description: 'Run one simulated season day for diligent players.' })
+  runRobotSeasonSimV1Day(@Body() body: unknown): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.runRobotSeasonSimV1Day(body);
+  }
+
   @Post('robots/daily-3/loop/start')
   @ApiOkResponse({ description: 'Start daily-3 robot test loop.' })
   startRobotDaily3Loop(@Body() body: unknown): Promise<Record<string, unknown>> {
@@ -122,10 +140,22 @@ export class AdminReadonlyController {
     return this.adminReadonlyService.startRobotPlayerSimV1Loop(body);
   }
 
+  @Post('robots/season-sim-v1/loop/start')
+  @ApiOkResponse({ description: 'Start season-sim-v1 robot simulation loop.' })
+  startRobotSeasonSimV1Loop(@Body() body: unknown): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.startRobotSeasonSimV1Loop(body);
+  }
+
   @Post('robots/daily-3/loop/stop')
   @ApiOkResponse({ description: 'Stop daily-3 robot test loop.' })
   stopRobotDaily3Loop(): Promise<Record<string, unknown>> {
     return this.adminReadonlyService.stopRobotDaily3Loop();
+  }
+
+  @Post('robots/season-sim-v1/loop/stop')
+  @ApiOkResponse({ description: 'Stop season-sim-v1 robot simulation loop.' })
+  stopRobotSeasonSimV1Loop(): Promise<Record<string, unknown>> {
+    return this.adminReadonlyService.stopRobotSeasonSimV1Loop();
   }
 
   @Delete('robots/errors')
@@ -388,7 +418,11 @@ defineRouteParamTypes(AdminReadonlyController.prototype, 'updateRobotSocial3Auto
 defineRouteParamTypes(AdminReadonlyController.prototype, 'startRobotSocial3Loop', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getRobotPlayerSimV1AutomationConfig', []);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'updateRobotPlayerSimV1AutomationConfig', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'getRobotSeasonSimV1AutomationConfig', []);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'updateRobotSeasonSimV1AutomationConfig', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'startRobotPlayerSimV1Loop', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'runRobotSeasonSimV1Day', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'startRobotSeasonSimV1Loop', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'startRobotDaily3Loop', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getCurrentSeasonAdmin', []);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listSeasons', [Object]);

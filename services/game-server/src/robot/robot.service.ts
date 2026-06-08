@@ -4,7 +4,6 @@ import type {
   ClientFactionStipendReward,
   ClientRaidRewardItem,
   ClientSpiritBreakthroughRequirement,
-  ClientSpiritState,
 } from '@trinitywar/shared';
 import { SocialRelationStatus, SocialRelationType, type Prisma } from '@prisma/client';
 import { AuthService } from '../auth/auth.service.js';
@@ -15,11 +14,13 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { RaidTargetService } from '../raid/raid-target.service.js';
 import { SocialService } from '../social/social.service.js';
 import { SpiritService } from '../spirit/spirit.service.js';
+import { createSeasonSimClock } from './season-sim-clock.js';
 
 type RobotRole = 'farmer' | 'spirit' | 'raid' | 'daily' | 'social' | 'sim';
 type RobotActionStatus = 'SUCCESS' | 'FAILED' | 'BLOCKED';
 type FactionCode = 'human' | 'immortal' | 'demon';
-type RobotAutomationMode = 'daily-3' | 'social-3' | 'player-sim-v1';
+type RobotAutomationMode = 'daily-3' | 'social-3' | 'player-sim-v1' | 'season-sim-v1';
+type SeasonSimRunKind = 'single-day' | 'season';
 
 interface RobotSpec {
   robotKey: string;
@@ -60,16 +61,42 @@ interface RobotAutomationConfigPayload {
   autoStartOnBoot: boolean;
 }
 
+interface SeasonSimPlayerState {
+  spec: RobotSpec;
+  playerId: string;
+  sources: string[];
+}
+
+interface SeasonSimSessionState {
+  runId: string;
+  runKind: SeasonSimRunKind;
+  clock: ReturnType<typeof createSeasonSimClock>;
+  totalDays: number;
+  intervalSeconds: number;
+  actionDelayMs: number;
+  currentDayIndex: number;
+  players: SeasonSimPlayerState[];
+  startedAt: string;
+  lastDayAt: string | null;
+  stoppedAt: string | null;
+  stopReason: string | null;
+  lastStatus: string | null;
+  lastSummary: Record<string, unknown> | null;
+  totalSuccessActionCount: number;
+  totalFailedActionCount: number;
+  totalBlockedActionCount: number;
+}
+
 const ROBOT_SPECS: RobotSpec[] = [
-  { robotKey: 'robot-farmer-001', role: 'farmer', nickname: '机器人农夫01', factionCode: 'human' },
-  { robotKey: 'robot-spirit-001', role: 'spirit', nickname: '机器人灵宠01', factionCode: 'immortal' },
-  { robotKey: 'robot-raid-001', role: 'raid', nickname: '机器人掠夺01', factionCode: 'demon' },
+  { robotKey: 'robot-farmer-001', role: 'farmer', nickname: 'Robot Farmer 01', factionCode: 'human' },
+  { robotKey: 'robot-spirit-001', role: 'spirit', nickname: 'Robot Spirit 01', factionCode: 'immortal' },
+  { robotKey: 'robot-raid-001', role: 'raid', nickname: 'Robot Raider 01', factionCode: 'demon' },
 ];
 
 const DAILY_ROBOT_SPECS: RobotSpec[] = [
-  { robotKey: 'robot-human-001', role: 'daily', nickname: '人界日常机器人001', factionCode: 'human' },
-  { robotKey: 'robot-immortal-001', role: 'daily', nickname: '仙界日常机器人001', factionCode: 'immortal' },
-  { robotKey: 'robot-demon-001', role: 'daily', nickname: '魔界日常机器人001', factionCode: 'demon' },
+  { robotKey: 'robot-human-001', role: 'daily', nickname: 'Human Daily Robot 01', factionCode: 'human' },
+  { robotKey: 'robot-immortal-001', role: 'daily', nickname: 'Immortal Daily Robot 01', factionCode: 'immortal' },
+  { robotKey: 'robot-demon-001', role: 'daily', nickname: 'Demon Daily Robot 01', factionCode: 'demon' },
 ];
 
 const PLAYER_SIM_SPECS: RobotSpec[] = [
@@ -84,6 +111,10 @@ const PLAYER_SIM_SPECS: RobotSpec[] = [
   { robotKey: 'sim-demon-003', role: 'sim', nickname: '魔界勤奋玩家003', factionCode: 'demon' },
 ];
 
+const ROBOT_SPEC_BY_KEY = new Map(
+  [...ROBOT_SPECS, ...DAILY_ROBOT_SPECS, ...PLAYER_SIM_SPECS].map((spec) => [spec.robotKey, spec]),
+);
+
 const ROBOT_RAID_TARGET_KEY = 'robot-raid-target-001';
 const ROBOT_SEED_ID = 'qinglingmai';
 const ROBOT_STARTER_SPIRIT_ID = 'linglu';
@@ -93,11 +124,21 @@ const PLAYER_SIM_V1_MODE = 'player-sim-v1';
 const DAILY_3_CONFIG_ID = 'robot-automation-config-daily-3';
 const SOCIAL_3_CONFIG_ID = 'robot-automation-config-social-3';
 const PLAYER_SIM_V1_CONFIG_ID = 'robot-automation-config-player-sim-v1';
+const SEASON_SIM_V1_CONFIG_ID = 'robot-automation-config-season-sim-v1';
+const SEASON_SIM_V1_MODE = 'season-sim-v1';
+const SEASON_SIM_FARM_CYCLES_PER_DAY = 8;
+const SEASON_SIM_FARM_CYCLE_HOURS = 3;
+const SEASON_SIM_RAIDS_PER_DAY = 3;
+const SEASON_SIM_DEFAULT_TOTAL_DAYS = 28;
+const SEASON_SIM_DEFAULT_START_AT = new Date('2026-06-08T00:00:00+08:00');
+const SEASON_SIM_DEFAULT_ACTION_DELAY_MS = 250;
 
 @Injectable()
 export class RobotService implements OnApplicationBootstrap {
   private loopTimer: NodeJS.Timeout | null = null;
+  private seasonSimTimer: NodeJS.Timeout | null = null;
   private loopState: RobotLoopState = createIdleLoopState();
+  private seasonSimSession: SeasonSimSessionState | null = null;
 
   constructor(
     @Inject(AuthService) private readonly authService: AuthService,
@@ -115,9 +156,17 @@ export class RobotService implements OnApplicationBootstrap {
     }
 
     await this.markInterruptedAutomationJobs();
-    for (const mode of [DAILY_3_MODE, SOCIAL_3_MODE, PLAYER_SIM_V1_MODE] as const) {
+    for (const mode of [DAILY_3_MODE, SOCIAL_3_MODE, PLAYER_SIM_V1_MODE, SEASON_SIM_V1_MODE] as const) {
       const config = await this.getOrCreateAutomationConfig(mode);
       if (!config.enabled || !config.autoStartOnBoot) {
+        continue;
+      }
+
+      if (mode === SEASON_SIM_V1_MODE) {
+        await this.startSeasonSimV1Loop({
+          intervalSeconds: config.intervalSeconds,
+          totalDays: config.maxRounds,
+        });
         continue;
       }
 
@@ -132,7 +181,7 @@ export class RobotService implements OnApplicationBootstrap {
   async runSmoke(): Promise<Record<string, unknown>> {
     const run = await this.prisma.db.robotTestRun.create({
       data: {
-        name: '轻量机器人日常 smoke',
+        name: 'robot smoke',
         mode: 'smoke',
         plannedRobotCount: ROBOT_SPECS.length,
       },
@@ -229,7 +278,7 @@ export class RobotService implements OnApplicationBootstrap {
         status: finalStatus,
         successActionCount: successCount,
         failedActionCount: failedCount + blockedCount,
-        summary: `完成 ${successCount} 个动作，硬错误 ${failedCount} 个，成长卡点 ${blockedCount} 个。`,
+        summary: `completed ${successCount} actions, hard errors ${failedCount}, blocked ${blockedCount}.`,
         finishedAt: new Date(),
       },
     });
@@ -347,12 +396,152 @@ export class RobotService implements OnApplicationBootstrap {
         status: finalStatus,
         successActionCount: successCount,
         failedActionCount: failedCount + blockedCount,
-        summary: `勤奋玩家模拟：完成 ${successCount} 个动作，硬错误 ${failedCount} 个，卡点 ${blockedCount} 个。`,
+        summary: `player sim completed ${successCount} actions, hard errors ${failedCount}, blocked ${blockedCount}.`,
         finishedAt: new Date(),
       },
     });
 
     return this.buildRunResult(run.id, finishedRun.status, successCount, failedCount, blockedCount);
+  }
+
+  async runSeasonSimV1Day(body: unknown = {}): Promise<Record<string, unknown>> {
+    const payload = parseSeasonSimDayPayload(body);
+    return this.startSeasonSimV1Session('single-day', {
+      totalDays: 1,
+      intervalSeconds: 0,
+      actionDelayMs: payload.actionDelayMs,
+      startAt: payload.startAt,
+    });
+  }
+  private async runSeasonSimDay(
+    runId: string,
+    clock: ReturnType<typeof createSeasonSimClock>,
+    players: Array<{ spec: RobotSpec; playerId: string; sources: string[] }>,
+    dayIndex: number,
+    actionDelayMs = 0,
+  ): Promise<{
+    successActionCount: number;
+    failedActionCount: number;
+    blockedActionCount: number;
+    dateKey: string;
+    simulatedAt: string;
+  }> {
+    let successCount = 0;
+    let failedCount = 0;
+    let blockedCount = 0;
+    const countStatus = (status: RobotActionStatus): void => {
+      if (status === 'SUCCESS') successCount += 1;
+      if (status === 'FAILED') failedCount += 1;
+      if (status === 'BLOCKED') blockedCount += 1;
+    };
+
+    const dayDateKey = clock.dateKey();
+    await this.settleSeasonSimPlayers(players, clock.now());
+
+    for (let cycle = 1; cycle <= SEASON_SIM_FARM_CYCLES_PER_DAY; cycle += 1) {
+      const now = clock.now();
+      for (const player of players) {
+        countStatus(await this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-farm-cycle-${cycle}`, async () => {
+          const result = await this.runSimFarmCycle(player.playerId, now);
+          return {
+            actionName: 'season-farm-cycle',
+            resultSummary: {
+              ...result.resultSummary,
+              dayIndex,
+              cycle,
+              simulatedAt: now.toISOString(),
+            },
+          };
+        }));
+        await delay(actionDelayMs);
+      }
+      if (cycle < SEASON_SIM_FARM_CYCLES_PER_DAY) {
+        clock.advanceHours(SEASON_SIM_FARM_CYCLE_HOURS);
+      }
+    }
+
+    for (const player of players) {
+      const now = clock.now();
+      countStatus(await this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-claim-faction-stipend`, async () => {
+        const result = await this.claimFactionStipendForRobot(player.playerId, now, dayDateKey);
+        player.sources.push(result.sourceSummary);
+        return {
+          actionName: 'claim-faction-stipend',
+          resultSummary: {
+            ...result.resultSummary,
+            dayIndex,
+            simulatedAt: now.toISOString(),
+            dateKey: dayDateKey,
+          },
+        };
+      }));
+      await delay(actionDelayMs);
+    }
+
+    for (const player of players) {
+      const now = clock.now();
+      countStatus(await this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-spirit-growth`, async () => {
+        const result = await this.runDailySpiritGrowth(player.playerId, player.sources, { blockOnBreakthrough: false, feedWhenPossible: true }, now);
+        return {
+          actionName: result.actionName,
+          resultSummary: {
+            ...result.resultSummary,
+            dayIndex,
+            simulatedAt: now.toISOString(),
+          },
+        };
+      }));
+      await delay(actionDelayMs);
+    }
+
+    for (let raidRound = 1; raidRound <= SEASON_SIM_RAIDS_PER_DAY; raidRound += 1) {
+      const now = clock.now();
+      for (let index = 0; index < players.length; index += 1) {
+        const player = players[index];
+        const target = findSeasonSimRaidTarget(players, index, raidRound);
+        if (!target) {
+          countStatus(await this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-raid-${raidRound}`, async () => (
+            this.runSimNoCrossFactionRaidTarget(player.playerId)
+          )));
+          await delay(actionDelayMs);
+          continue;
+        }
+
+        countStatus(await this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-raid-${raidRound}`, async () => {
+          const result = await this.runRaidAgainst(player.playerId, target.playerId, now);
+          player.sources.push(result.sourceSummary);
+          return {
+            actionName: 'raid-target',
+            resultSummary: {
+              ...result.resultSummary,
+              dayIndex,
+              raidRound,
+              simulatedAt: now.toISOString(),
+              defenderPlayerId: target.playerId,
+              defenderFactionCode: target.spec.factionCode,
+              defenderRobotKey: target.spec.robotKey,
+              defenderNickname: target.spec.nickname,
+            },
+          };
+        }));
+        await delay(actionDelayMs);
+      }
+      clock.advanceHours(1);
+    }
+
+    await this.recordSeasonSimDaySnapshots(runId, players, {
+      dayIndex,
+      simulatedAt: clock.now(),
+      dateKey: dayDateKey,
+    });
+
+    return {
+      successActionCount: successCount,
+      failedActionCount: failedCount,
+      blockedActionCount: blockedCount,
+      dateKey: dayDateKey,
+      simulatedAt: clock.now().toISOString(),
+    };
   }
 
   async startDaily3Loop(body: unknown): Promise<Record<string, unknown>> {
@@ -365,6 +554,110 @@ export class RobotService implements OnApplicationBootstrap {
 
   async startPlayerSimV1Loop(body: unknown): Promise<Record<string, unknown>> {
     return this.startLoopForMode(PLAYER_SIM_V1_MODE, parseLoopStartPayload(body));
+  }
+
+  async startSeasonSimV1Loop(body: unknown): Promise<Record<string, unknown>> {
+    const payload = parseSeasonSimLoopPayload(body);
+    return this.startSeasonSimV1Session('season', payload);
+  }
+
+  private async startSeasonSimV1Session(
+    runKind: SeasonSimRunKind,
+    payload: { startAt?: Date; totalDays: number; intervalSeconds: number; actionDelayMs: number },
+  ): Promise<Record<string, unknown>> {
+    if (this.seasonSimSession) {
+      return {
+        ok: true,
+        alreadyRunning: true,
+        session: this.getSeasonSimSessionState(),
+      };
+    }
+
+    const totalDays = payload.totalDays;
+    const intervalSeconds = payload.intervalSeconds;
+    const actionDelayMs = payload.actionDelayMs;
+    const startAt = payload.startAt ?? SEASON_SIM_DEFAULT_START_AT;
+    const clock = createSeasonSimClock(startAt);
+    const run = await this.prisma.db.robotTestRun.create({
+      data: {
+        name: '勤奋玩家赛季模拟 v1',
+        mode: SEASON_SIM_V1_MODE,
+        plannedRobotCount: PLAYER_SIM_SPECS.length,
+      },
+    });
+
+    const players: SeasonSimPlayerState[] = [];
+    for (const spec of PLAYER_SIM_SPECS) {
+      const login = await this.authService.devLogin({
+        providerUserId: spec.robotKey,
+        nickname: spec.nickname,
+        factionCode: spec.factionCode,
+      });
+      await this.preparePlayerSimRobot(spec, login.player.id, clock.now());
+      players.push({ spec, playerId: login.player.id, sources: [] });
+    }
+
+    this.seasonSimSession = {
+      runId: run.id,
+      runKind,
+      clock,
+      totalDays,
+      intervalSeconds,
+      actionDelayMs,
+      currentDayIndex: 0,
+      players,
+      startedAt: new Date().toISOString(),
+      lastDayAt: null,
+      stoppedAt: null,
+      stopReason: null,
+      lastStatus: null,
+      lastSummary: null,
+      totalSuccessActionCount: 0,
+      totalFailedActionCount: 0,
+      totalBlockedActionCount: 0,
+    };
+
+    this.scheduleNextSeasonSimTick(0);
+    return {
+      ok: true,
+      resetBeforeRun: true,
+      session: this.getSeasonSimSessionState(),
+    };
+  }
+
+  async stopSeasonSimV1Loop(reason = '手动停止'): Promise<Record<string, unknown>> {
+    await this.stopSeasonSimSession(reason);
+    return {
+      ok: true,
+      session: this.getSeasonSimSessionState(),
+    };
+  }
+
+  getSeasonSimSessionState(): Record<string, unknown> {
+    if (!this.seasonSimSession) {
+      return {
+        running: false,
+      };
+    }
+
+    return {
+      running: true,
+      runId: this.seasonSimSession.runId,
+      runKind: this.seasonSimSession.runKind,
+      totalDays: this.seasonSimSession.totalDays,
+      intervalSeconds: this.seasonSimSession.intervalSeconds,
+      actionDelayMs: this.seasonSimSession.actionDelayMs,
+      currentDayIndex: this.seasonSimSession.currentDayIndex,
+      startedAt: this.seasonSimSession.startedAt,
+      lastDayAt: this.seasonSimSession.lastDayAt,
+      stoppedAt: this.seasonSimSession.stoppedAt,
+      stopReason: this.seasonSimSession.stopReason,
+      lastStatus: this.seasonSimSession.lastStatus,
+      lastSummary: this.seasonSimSession.lastSummary,
+      totalSuccessActionCount: this.seasonSimSession.totalSuccessActionCount,
+      totalFailedActionCount: this.seasonSimSession.totalFailedActionCount,
+      totalBlockedActionCount: this.seasonSimSession.totalBlockedActionCount,
+    };
   }
 
   private async startLoopForMode(mode: RobotAutomationMode, config: { intervalSeconds: number; maxRounds: number; hardErrorLimit: number }): Promise<Record<string, unknown>> {
@@ -450,6 +743,14 @@ export class RobotService implements OnApplicationBootstrap {
     return this.updateAutomationConfig(PLAYER_SIM_V1_MODE, body);
   }
 
+  async getSeasonSimV1AutomationConfig(): Promise<Record<string, unknown>> {
+    return mapAutomationConfig(await this.getOrCreateAutomationConfig(SEASON_SIM_V1_MODE));
+  }
+
+  async updateSeasonSimV1AutomationConfig(body: unknown): Promise<Record<string, unknown>> {
+    return this.updateAutomationConfig(SEASON_SIM_V1_MODE, body);
+  }
+
   private async updateAutomationConfig(mode: RobotAutomationMode, body: unknown): Promise<Record<string, unknown>> {
     const current = await this.getOrCreateAutomationConfig(mode);
     const payload = parseAutomationConfigPayload(body, {
@@ -471,7 +772,7 @@ export class RobotService implements OnApplicationBootstrap {
     });
 
     if (!updated.enabled && this.loopState.running && this.loopState.mode === mode) {
-      await this.stopLoop('自动调度已关闭');
+      await this.stopLoop('automation disabled');
     }
 
     return {
@@ -494,6 +795,20 @@ export class RobotService implements OnApplicationBootstrap {
     }, delayMs);
     this.loopTimer.unref?.();
     void this.persistLoopState();
+  }
+
+  private scheduleNextSeasonSimTick(delayMs: number): void {
+    if (!this.seasonSimSession) {
+      return;
+    }
+    if (this.seasonSimTimer) {
+      clearTimeout(this.seasonSimTimer);
+    }
+    this.seasonSimTimer = setTimeout(() => {
+      this.seasonSimTimer = null;
+      void this.runSeasonSimTick();
+    }, delayMs);
+    this.seasonSimTimer.unref?.();
   }
 
   private async runLoopTick(): Promise<void> {
@@ -520,16 +835,102 @@ export class RobotService implements OnApplicationBootstrap {
     await this.persistLoopState();
 
     if (this.loopState.maxRounds > 0 && this.loopState.completedRounds >= this.loopState.maxRounds) {
-      await this.stopLoop('达到最大轮数', 'COMPLETED');
+      await this.stopLoop('max rounds reached', 'COMPLETED');
       return;
     }
 
     if (this.loopState.consecutiveHardErrors >= this.loopState.hardErrorLimit) {
-      await this.stopLoop('连续硬错误达到阈值', 'FAILED');
+      await this.stopLoop('hard error limit reached', 'FAILED');
       return;
     }
 
     this.scheduleNextLoopTick(this.loopState.intervalSeconds * 1000);
+  }
+
+  private async runSeasonSimTick(): Promise<void> {
+    const session = this.seasonSimSession;
+    if (!session) {
+      return;
+    }
+
+    try {
+      const dayIndex = session.currentDayIndex + 1;
+      const dayResult = await this.runSeasonSimDay(session.runId, session.clock, session.players, dayIndex, session.actionDelayMs);
+      session.currentDayIndex = dayIndex;
+      session.lastDayAt = dayResult.simulatedAt;
+      session.lastStatus = dayResult.failedActionCount > 0 ? 'FAILED' : dayResult.blockedActionCount > 0 ? 'ISSUE' : 'SUCCESS';
+      session.lastSummary = {
+        dayIndex,
+        dateKey: dayResult.dateKey,
+        simulatedAt: dayResult.simulatedAt,
+        successActionCount: dayResult.successActionCount,
+        failedActionCount: dayResult.failedActionCount,
+        blockedActionCount: dayResult.blockedActionCount,
+      };
+      session.totalSuccessActionCount += dayResult.successActionCount;
+      session.totalFailedActionCount += dayResult.failedActionCount;
+      session.totalBlockedActionCount += dayResult.blockedActionCount;
+
+      await this.prisma.db.robotTestRun.update({
+        where: { id: session.runId },
+        data: {
+          successActionCount: session.totalSuccessActionCount,
+          failedActionCount: session.totalFailedActionCount + session.totalBlockedActionCount,
+          summary: `season sim running: day ${dayIndex} / ${session.totalDays}, date ${dayResult.dateKey}, success ${dayResult.successActionCount}, hard errors ${dayResult.failedActionCount}, blocked ${dayResult.blockedActionCount}.`,
+        },
+      });
+
+      session.lastStatus = session.lastStatus ?? 'SUCCESS';
+
+      if (session.currentDayIndex >= session.totalDays) {
+        await this.finishSeasonSimSession('max days reached', 'COMPLETED');
+        return;
+      }
+    } catch (error) {
+      session.lastStatus = 'FAILED';
+      session.lastSummary = {
+        error: resolveErrorMessage(error),
+      };
+      await this.finishSeasonSimSession(resolveErrorMessage(error), 'FAILED');
+      return;
+    }
+
+    this.scheduleNextSeasonSimTick(session.intervalSeconds * 1000);
+  }
+
+  private async finishSeasonSimSession(reason: string, status: string): Promise<void> {
+    const session = this.seasonSimSession;
+    if (!session) {
+      return;
+    }
+
+    if (this.seasonSimTimer) {
+      clearTimeout(this.seasonSimTimer);
+      this.seasonSimTimer = null;
+    }
+
+    session.stoppedAt = new Date().toISOString();
+    session.stopReason = reason;
+    session.lastStatus = status;
+    await this.prisma.db.robotTestRun.update({
+      where: { id: session.runId },
+      data: {
+        status,
+        finishedAt: new Date(),
+        successActionCount: session.totalSuccessActionCount,
+        failedActionCount: session.totalFailedActionCount + session.totalBlockedActionCount,
+        summary: `season sim finished: ${reason}. total success ${session.totalSuccessActionCount}, hard errors ${session.totalFailedActionCount}, blocked ${session.totalBlockedActionCount}.`,
+      },
+    });
+
+    this.seasonSimSession = null;
+  }
+
+  private async stopSeasonSimSession(reason: string): Promise<void> {
+    if (!this.seasonSimSession) {
+      return;
+    }
+    await this.finishSeasonSimSession(reason, 'STOPPED');
   }
 
   private runAutomationMode(mode: RobotAutomationMode): Promise<Record<string, unknown>> {
@@ -561,7 +962,7 @@ export class RobotService implements OnApplicationBootstrap {
   async getDashboard(): Promise<AdminRobotDashboardResponse> {
     const issueStatuses = ['FAILED', 'BLOCKED'];
     await this.markInterruptedAutomationJobs();
-    const [runs, dailyAutomationConfig, socialAutomationConfig, playerSimAutomationConfig, automationJobs, robotPlayers, logs, errors, errorGroups] = await Promise.all([
+    const [runs, dailyAutomationConfig, socialAutomationConfig, playerSimAutomationConfig, seasonSimAutomationConfig, automationJobs, robotPlayers, logs, errors, errorGroups] = await Promise.all([
       this.prisma.db.robotTestRun.findMany({
         orderBy: { startedAt: 'desc' },
         take: 10,
@@ -569,6 +970,7 @@ export class RobotService implements OnApplicationBootstrap {
       this.getOrCreateAutomationConfig(DAILY_3_MODE),
       this.getOrCreateAutomationConfig(SOCIAL_3_MODE),
       this.getOrCreateAutomationConfig(PLAYER_SIM_V1_MODE),
+      this.getOrCreateAutomationConfig(SEASON_SIM_V1_MODE),
       this.prisma.db.robotAutomationJob.findMany({
         orderBy: { startedAt: 'desc' },
         take: 10,
@@ -591,7 +993,6 @@ export class RobotService implements OnApplicationBootstrap {
               lastLoginAt: true,
               faction: { select: { code: true, name: true } },
               wallet: { select: { vaultGold: true } },
-              army: { select: { availableCount: true, frozenCount: true } },
             },
           },
         },
@@ -599,11 +1000,27 @@ export class RobotService implements OnApplicationBootstrap {
       this.prisma.db.robotActionLog.findMany({
         orderBy: { createdAt: 'desc' },
         take: 100,
+        include: {
+          player: {
+            select: {
+              nickname: true,
+              faction: { select: { code: true, name: true } },
+            },
+          },
+        },
       }),
       this.prisma.db.robotActionLog.findMany({
         where: { status: { in: issueStatuses } },
         orderBy: { createdAt: 'desc' },
         take: 10,
+        include: {
+          player: {
+            select: {
+              nickname: true,
+              faction: { select: { code: true, name: true } },
+            },
+          },
+        },
       }),
       this.prisma.db.robotActionLog.groupBy({
         by: ['status', 'robotRole', 'actionName', 'errorCode', 'errorMessage'],
@@ -638,6 +1055,30 @@ export class RobotService implements OnApplicationBootstrap {
       };
     });
     const latestRun = runs[0] ?? null;
+    const latestRunLogWhere = latestRun ? { runId: latestRun.id } : {};
+    const [latestSnapshots, latestRunLogs] = latestRun
+      ? await Promise.all([
+        this.prisma.db.robotSimSnapshot.findMany({
+          where: { runId: latestRun.id },
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.db.robotActionLog.findMany({
+          where: latestRunLogWhere,
+          orderBy: { createdAt: 'desc' },
+          take: 100,
+          include: {
+            player: {
+              select: {
+                nickname: true,
+                faction: { select: { code: true, name: true } },
+              },
+            },
+          },
+        }),
+      ])
+      : [[], logs];
+    const latestStats = buildRobotRunStats(latestSnapshots);
+    const latestDayReports = buildRobotDayReports(latestRunLogs, latestSnapshots);
     const latestRunIssueGroups = latestRun
       ? await this.prisma.db.robotActionLog.groupBy({
         by: ['robotRole', 'actionName', 'status', 'errorCode', 'errorMessage'],
@@ -686,18 +1127,22 @@ export class RobotService implements OnApplicationBootstrap {
 
     return {
       rule: {
-        name: '3 阵营日常循环',
-        robots: '人界 1 / 仙界 1 / 魔界 1',
-        actions: '收菜 -> 领俸禄 -> 环形掠夺 -> 购买升级兽魂 / 升级 / 突破判断',
-        raidRelation: '人界 -> 仙界 -> 魔界 -> 人界',
-        maturityPolicy: '测试准备层每轮放置 1 块成熟田；收菜仍走真实业务 service。',
-        resourcePolicy: '升级兽魂可用金币购买；突破材料只来自俸禄和掠夺，不足记录为成长卡点。',
+        name: '勤奋玩家赛季模拟 v1',
+        robots: '人界 3 / 仙界 3 / 魔界 3，共 9 名勤奋玩家机器人',
+        clock: 'Sim clock advances by day. Default season length is 28 days. Each start resets the 9 sim robots.',
+        dailyFlow: 'Daily flow: settle fields -> farm cycles -> claim faction stipend -> feed/grow spirit -> cross-faction raids.',
+        raidRelation: 'Each robot raids cross-faction targets 3 times per day. Raid settlement uses the real raid service and defender gold is deducted by business rules.',
+        factionBuffs: 'Faction buffs are handled by existing services: human farming, immortal spirit growth, demon battle/raid.',
+        dataPolicy: 'Each simulated day writes snapshots and action logs for gold, spirit, materials, fields, success, failure, and blockers.',
       },
       status: {
         state: displayState,
         rawState: latestRun?.status ?? 'IDLE',
         latestRunId: latestRun?.id ?? null,
         latestRunAt: latestRun?.startedAt.toISOString() ?? null,
+        latestRunFinishedAt: latestRun?.finishedAt?.toISOString() ?? null,
+        latestRunMode: latestRun?.mode ?? null,
+        latestRunSummary: latestRun?.summary ?? null,
         successActionCount: latestRun?.successActionCount ?? 0,
         failedActionCount: latestRun?.failedActionCount ?? 0,
         totalIssueGroups: errorSummary.length,
@@ -710,6 +1155,10 @@ export class RobotService implements OnApplicationBootstrap {
       runs: {
         items: runs.map(mapRun),
       },
+      stats: latestStats,
+      dayReports: {
+        items: latestDayReports,
+      },
       robots: {
         items: robotPlayers.map((item) => ({
           robotKey: item.providerUserId,
@@ -718,13 +1167,11 @@ export class RobotService implements OnApplicationBootstrap {
           factionCode: item.player.faction?.code ?? null,
           factionName: item.player.faction?.name ?? null,
           vaultGold: item.player.wallet?.vaultGold ?? null,
-          availableArmy: item.player.army?.availableCount ?? null,
-          frozenArmy: item.player.army?.frozenCount ?? null,
           lastLoginAt: item.player.lastLoginAt?.toISOString() ?? null,
         })),
       },
       recentActions: {
-        items: logs.map(mapActionLog),
+        items: latestRunLogs.map(mapActionLog),
       },
       recentErrors: {
         items: errors.map(mapActionLog),
@@ -741,10 +1188,15 @@ export class RobotService implements OnApplicationBootstrap {
             mapAutomationConfig(dailyAutomationConfig),
             mapAutomationConfig(socialAutomationConfig),
             mapAutomationConfig(playerSimAutomationConfig),
+            mapAutomationConfig(seasonSimAutomationConfig),
           ],
         },
         jobs: {
           items: automationJobs.map(mapAutomationJob),
+        },
+        season: {
+          config: mapAutomationConfig(seasonSimAutomationConfig),
+          session: this.getSeasonSimSessionState(),
         },
       },
     };
@@ -757,7 +1209,7 @@ export class RobotService implements OnApplicationBootstrap {
     await this.prisma.db.robotTestRun.updateMany({
       where: { status: { in: ['FAILED', 'ISSUE'] } },
       data: {
-        summary: '历史问题已清空，仅保留成功动作日志。',
+        summary: 'historical issues cleared; successful action logs retained',
       },
     });
 
@@ -876,98 +1328,8 @@ export class RobotService implements OnApplicationBootstrap {
     };
   }
 
-  private async runSimCollectField(playerId: string): Promise<RobotActionResult> {
-    await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, playerId);
-
-    const matureField = await this.prisma.db.playerFieldSlot.findFirst({
-      where: { playerId, status: { in: ['MATURE', 'WITHERED'] }, isUnlocked: true },
-      orderBy: { slotIndex: 'asc' },
-      select: { id: true, status: true },
-    });
-    if (!matureField) {
-      const counts = await this.getPlayerFieldStatusCounts(playerId);
-      return {
-        actionName: 'wait-field-harvest',
-        resultSummary: {
-          summary: '当前没有成熟田可收，等待田地成长。',
-          reason: 'no_collectable_field',
-          ...counts,
-        },
-      };
-      throw new RobotProgressionBlockError('当前没有可收取的成熟或枯萎田地。', {
-        reason: 'no_collectable_field',
-      });
-    }
-
-    const wallet = await this.prisma.db.playerWallet.findUniqueOrThrow({
-      where: { playerId },
-      select: { balanceVersion: true },
-    });
-    const result = await this.clientCommandService.collectField({
-      playerId,
-      request: {
-        fieldId: matureField.id,
-        walletVersion: wallet.balanceVersion,
-        collectMode: 'ripe',
-        requestIdempotencyKey: `player-sim-collect-${playerId}-${Date.now()}`,
-      },
-    });
-
-    return {
-      actionName: 'collect-field',
-      resultSummary: {
-        summary: result.summary,
-        fieldId: matureField.id,
-        fieldStatus: matureField.status,
-        collectedGold: result.result.collectedGold,
-      },
-    };
-  }
-
-  private async runSimStartCultivation(playerId: string): Promise<RobotActionResult> {
-    await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, playerId);
-
-    const emptyField = await this.prisma.db.playerFieldSlot.findFirst({
-      where: { playerId, status: 'EMPTY', isUnlocked: true },
-      orderBy: { slotIndex: 'asc' },
-      select: { id: true },
-    });
-    if (!emptyField) {
-      const counts = await this.getPlayerFieldStatusCounts(playerId);
-      return {
-        actionName: 'wait-field-slot',
-        resultSummary: {
-          summary: '当前没有空田可播种，等待田地进入可操作状态。',
-          reason: 'no_empty_field',
-          ...counts,
-        },
-      };
-      throw new RobotProgressionBlockError('当前没有空田可播种。', {
-        reason: 'no_empty_field',
-      });
-    }
-
-    const result = await this.clientCommandService.startCultivation({
-      playerId,
-      request: {
-        fieldId: emptyField.id,
-        plantType: ROBOT_SEED_ID,
-      },
-      idempotencyKey: `player-sim-start-${playerId}-${Date.now()}`,
-    });
-
-    return {
-      actionName: 'start-cultivation',
-      resultSummary: {
-        summary: result.summary,
-        fieldId: emptyField.id,
-        seedId: ROBOT_SEED_ID,
-      },
-    };
-  }
-
-  private async runSimFarmCycle(playerId: string): Promise<RobotActionResult> {
-    await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, playerId);
+  private async runSimFarmCycle(playerId: string, now: Date = new Date()): Promise<RobotActionResult> {
+    await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, playerId, now);
 
     let harvestedCount = 0;
     let plantedCount = 0;
@@ -991,6 +1353,8 @@ export class RobotService implements OnApplicationBootstrap {
       });
       const result = await this.clientCommandService.collectField({
         playerId,
+        now,
+        skipReadModels: true,
         request: {
           fieldId: matureField.id,
           walletVersion: wallet.balanceVersion,
@@ -1001,7 +1365,7 @@ export class RobotService implements OnApplicationBootstrap {
       harvestedCount += 1;
       collectedGold += result.result.collectedGold;
       harvestedFieldIds.push(matureField.id);
-      await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, playerId);
+      await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, playerId, now);
     }
 
     while (true) {
@@ -1016,6 +1380,8 @@ export class RobotService implements OnApplicationBootstrap {
 
       await this.clientCommandService.startCultivation({
         playerId,
+        now,
+        skipReadModels: true,
         request: {
           fieldId: emptyField.id,
           plantType: ROBOT_SEED_ID,
@@ -1024,14 +1390,14 @@ export class RobotService implements OnApplicationBootstrap {
       });
       plantedCount += 1;
       plantedFieldIds.push(emptyField.id);
-      await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, playerId);
+      await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, playerId, now);
     }
 
-    const counts = await this.getPlayerFieldStatusCounts(playerId);
+    const counts = await this.getPlayerFieldStatusCounts(playerId, now);
     return {
       actionName: 'farm-cycle',
       resultSummary: {
-        summary: `农田循环完成：收获 ${harvestedCount} 块，播种 ${plantedCount} 块。`,
+        summary: `farm cycle completed: harvested ${harvestedCount}, planted ${plantedCount}.`,
         harvestedCount,
         plantedCount,
         collectedGold,
@@ -1043,8 +1409,8 @@ export class RobotService implements OnApplicationBootstrap {
     };
   }
 
-  private async getPlayerFieldStatusCounts(playerId: string): Promise<{ matureFields: number; growingFields: number; emptyFields: number }> {
-    await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, playerId);
+  private async getPlayerFieldStatusCounts(playerId: string, now: Date = new Date()): Promise<{ matureFields: number; growingFields: number; emptyFields: number }> {
+    await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, playerId, now);
     const fields = await this.prisma.db.playerFieldSlot.findMany({
       where: { playerId, isUnlocked: true },
       select: { status: true },
@@ -1057,76 +1423,11 @@ export class RobotService implements OnApplicationBootstrap {
     };
   }
 
-  private async runSimRecruitArmy(playerId: string): Promise<RobotActionResult> {
-    const [wallet, army] = await Promise.all([
-      this.prisma.db.playerWallet.findUniqueOrThrow({
-        where: { playerId },
-        select: { balanceVersion: true, vaultGold: true },
-      }),
-      this.prisma.db.playerArmy.findUniqueOrThrow({
-        where: { playerId },
-        select: { armyVersion: true, totalCount: true, capacity: true },
-      }),
-    ]);
-
-    if (army.totalCount >= army.capacity) {
-      throw new RobotProgressionBlockError('兵力容量已满，当前不能继续练兵。', {
-        reason: 'army_capacity_full',
-        totalCount: army.totalCount,
-        capacity: army.capacity,
-      });
-    }
-
-    if (wallet.vaultGold <= 0) {
-      throw new RobotProgressionBlockError('金库金币不足，当前不能练兵。', {
-        reason: 'insufficient_vault_gold',
-      });
-    }
-
-    const result = await this.clientCommandService.recruitArmy({
-      playerId,
-      request: {
-        recruitCount: 5,
-        walletVersion: wallet.balanceVersion,
-        armyVersion: army.armyVersion,
-        requestIdempotencyKey: `player-sim-recruit-${playerId}-${Date.now()}`,
-      },
-    });
-
-    return {
-      actionName: 'recruit-army',
-      resultSummary: {
-        summary: result.summary,
-        requestedCount: 5,
-        beforeTotalCount: army.totalCount,
-        capacity: army.capacity,
-      },
-    };
-  }
-
-  private async runSimFriendFieldAssist(helperPlayerId: string, targetPlayerId: string): Promise<RobotActionResult> {
-    try {
-      return await this.runFriendFieldAssist(helperPlayerId, targetPlayerId);
-    } catch (error) {
-      if (error instanceof RobotProgressionBlockError && error.details.reason === 'no_friend_field_assist_available') {
-        return {
-          actionName: 'wait-friend-field-assist',
-          resultSummary: {
-            summary: '好友当前没有可助力田地，等待好友田地成长。',
-            reason: 'no_friend_field_assist_available',
-            targetPlayerId,
-          },
-        };
-      }
-      throw error;
-    }
-  }
-
   private async runSimNoCrossFactionRaidTarget(playerId: string): Promise<RobotActionResult> {
     return {
       actionName: 'raid-target',
       resultSummary: {
-        summary: '当前没有可用的跨阵营掠夺目标，本轮跳过掠夺。',
+        summary: 'no cross-faction raid target available; skipped this raid.',
         playerId,
         reason: 'no_cross_faction_target',
       },
@@ -1180,17 +1481,6 @@ export class RobotService implements OnApplicationBootstrap {
             take: 1,
             select: { level: true, exp: true, breakthroughStage: true, satiatedUntil: true },
           },
-          army: {
-            select: {
-              totalCount: true,
-              availableCount: true,
-              capacity: true,
-            },
-          },
-          trainingQueues: {
-            where: { status: 'QUEUED' },
-            select: { queuedCount: true },
-          },
           fieldSlots: {
             where: { isUnlocked: true },
             select: { status: true },
@@ -1229,10 +1519,7 @@ export class RobotService implements OnApplicationBootstrap {
           legendarySoul: state.spiritResource?.legendarySoul ?? 0,
           mainSpiritLevel: mainSpirit?.level ?? null,
           mainSpiritStage: mainSpirit?.breakthroughStage ?? null,
-          armyTotal: state.army?.totalCount ?? 0,
-          armyAvailable: state.army?.availableCount ?? 0,
-          armyCapacity: state.army?.capacity ?? 0,
-          queuedArmy: state.trainingQueues.reduce((sum, item) => sum + item.queuedCount, 0),
+          ...deprecatedArmySnapshotFields(),
           matureFields: fieldStatusCounts.mature,
           growingFields: fieldStatusCounts.growing,
           emptyFields: fieldStatusCounts.empty,
@@ -1242,6 +1529,128 @@ export class RobotService implements OnApplicationBootstrap {
           actionSummaryJson: snapshotSummary as Prisma.InputJsonValue,
         },
       });
+    }
+  }
+
+  private async recordSeasonSimDaySnapshots(
+    runId: string,
+    players: Array<{ spec: RobotSpec; playerId: string }>,
+    context: { dayIndex: number; simulatedAt: Date; dateKey: string },
+  ): Promise<void> {
+    const logs = await this.prisma.db.robotActionLog.findMany({
+      where: {
+        runId,
+        resultSummaryJson: {
+          path: ['dayIndex'],
+          equals: context.dayIndex,
+        },
+      },
+      select: {
+        playerId: true,
+        actionName: true,
+        status: true,
+        errorCode: true,
+        errorMessage: true,
+        resultSummaryJson: true,
+      },
+    });
+    const logsByPlayerId = new Map<string, typeof logs>();
+    for (const log of logs) {
+      const items = logsByPlayerId.get(log.playerId) ?? [];
+      items.push(log);
+      logsByPlayerId.set(log.playerId, items);
+    }
+
+    for (const player of players) {
+      await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, player.playerId, context.simulatedAt);
+      const state = await this.prisma.db.player.findUniqueOrThrow({
+        where: { id: player.playerId },
+        select: {
+          faction: { select: { code: true } },
+          wallet: { select: { vaultGold: true, walletGold: true } },
+          factionMembers: {
+            take: 1,
+            select: { contributionScore: true },
+          },
+          spiritResource: {
+            select: {
+              spiritSoul: true,
+              spiritRoot: true,
+              spiritMarrow: true,
+              spiritJade: true,
+              ordinarySoul: true,
+              rareSoul: true,
+              legendarySoul: true,
+            },
+          },
+          spiritSlots: {
+            where: { isMain: true, spiritDefinitionId: { not: null } },
+            take: 1,
+            select: { level: true, exp: true, breakthroughStage: true, satiatedUntil: true },
+          },
+          fieldSlots: {
+            where: { isUnlocked: true },
+            select: { status: true },
+          },
+        },
+      });
+      const playerLogs = logsByPlayerId.get(player.playerId) ?? [];
+      const actionSummary = summarizeActionLogs(playerLogs);
+      const fieldStatusCounts = countFieldStatuses(state.fieldSlots);
+      const mainSpirit = state.spiritSlots[0] ?? null;
+      const resourceDeltas = summarizeSeasonSimResourceDeltas(playerLogs);
+      const snapshotSummary = {
+        ...actionSummary,
+        dayIndex: context.dayIndex,
+        simulatedAt: context.simulatedAt.toISOString(),
+        dateKey: context.dateKey,
+        resourceDeltas,
+        resources: {
+          spiritRoot: state.spiritResource?.spiritRoot ?? 0,
+          spiritMarrow: state.spiritResource?.spiritMarrow ?? 0,
+          spiritJade: state.spiritResource?.spiritJade ?? 0,
+        },
+        spirit: {
+          exp: mainSpirit?.exp ?? null,
+          satiatedUntil: mainSpirit?.satiatedUntil?.toISOString() ?? null,
+        },
+      };
+
+      await this.prisma.db.robotSimSnapshot.create({
+        data: {
+          runId,
+          mode: SEASON_SIM_V1_MODE,
+          robotKey: player.spec.robotKey,
+          playerId: player.playerId,
+          factionCode: state.faction?.code ?? null,
+          vaultGold: state.wallet?.vaultGold ?? 0,
+          walletGold: state.wallet?.walletGold ?? 0,
+          contributionScore: state.factionMembers[0]?.contributionScore ?? 0,
+          spiritSoul: state.spiritResource?.spiritSoul ?? 0,
+          ordinarySoul: state.spiritResource?.ordinarySoul ?? 0,
+          rareSoul: state.spiritResource?.rareSoul ?? 0,
+          legendarySoul: state.spiritResource?.legendarySoul ?? 0,
+          mainSpiritLevel: mainSpirit?.level ?? null,
+          mainSpiritStage: mainSpirit?.breakthroughStage ?? null,
+          ...deprecatedArmySnapshotFields(),
+          matureFields: fieldStatusCounts.mature,
+          growingFields: fieldStatusCounts.growing,
+          emptyFields: fieldStatusCounts.empty,
+          successActionCount: actionSummary.success,
+          blockedActionCount: actionSummary.blocked,
+          failedActionCount: actionSummary.failed,
+          actionSummaryJson: snapshotSummary as Prisma.InputJsonValue,
+        },
+      });
+    }
+  }
+
+  private async settleSeasonSimPlayers(players: Array<{ playerId: string }>, now: Date): Promise<void> {
+    for (const player of players) {
+      await Promise.all([
+        this.fieldLifecycleService.settlePlayerFields(this.prisma.db, player.playerId, now),
+        this.restoreMainSpiritHp(player.playerId),
+      ]);
     }
   }
 
@@ -1315,7 +1724,7 @@ export class RobotService implements OnApplicationBootstrap {
     return {
       actionName: 'friend-link',
       resultSummary: {
-        summary: '已准备三名机器人之间的好友关系。',
+        summary: 'prepared friend relations between the three robots.',
         relationCount: players.length,
       },
     };
@@ -1360,13 +1769,13 @@ export class RobotService implements OnApplicationBootstrap {
       };
     }
 
-    throw new RobotProgressionBlockError('好友当前没有可采摘或可浇水的田地。', {
+    throw new RobotProgressionBlockError('friend has no assistable field right now', {
       reason: 'no_friend_field_assist_available',
       targetPlayerId,
     });
   }
 
-  private async claimFactionStipendForRobot(playerId: string): Promise<RobotActionResult & { sourceSummary: string }> {
+  private async claimFactionStipendForRobot(playerId: string, now: Date = new Date(), dateKey?: string): Promise<RobotActionResult & { sourceSummary: string }> {
     const wallet = await this.prisma.db.playerWallet.findUniqueOrThrow({
       where: { playerId },
       select: { balanceVersion: true },
@@ -1375,6 +1784,8 @@ export class RobotService implements OnApplicationBootstrap {
     try {
       const result = await this.clientCommandService.claimFactionStipend({
         playerId,
+        now,
+        dateKey,
         request: {
           walletVersion: wallet.balanceVersion,
           requestIdempotencyKey: `robot-stipend-${playerId}-${Date.now()}`,
@@ -1397,30 +1808,30 @@ export class RobotService implements OnApplicationBootstrap {
         return {
           actionName: 'claim-faction-stipend',
           sourceSummary: '俸禄：今日已领取',
-          resultSummary: { summary: '今日俸禄已领取，本轮不重复发放。' },
+          resultSummary: { summary: 'daily stipend already claimed; skipped duplicate claim.' },
         };
       }
       throw error;
     }
   }
 
-  private async runRaidAgainst(playerId: string, defenderPlayerId: string): Promise<RobotActionResult & { sourceSummary: string }> {
+  private async runRaidAgainst(playerId: string, defenderPlayerId: string, now: Date = new Date()): Promise<RobotActionResult & { sourceSummary: string }> {
     await Promise.all([
       this.restoreMainSpiritHp(playerId),
       this.restoreMainSpiritHp(defenderPlayerId),
     ]);
-    const targetId = await this.prepareRaidTargetFor(playerId, defenderPlayerId);
+    const targetId = await this.prepareRaidTargetFor(playerId, defenderPlayerId, now);
     const army = await this.prisma.db.playerArmy.findUniqueOrThrow({
       where: { playerId },
       select: { armyVersion: true },
     });
-    const detail = await this.raidTargetService.getRaidTargetDetail(playerId, targetId);
     const result = await this.raidTargetService.createRaidOrder({
       playerId,
-      targetId: detail.targetId,
+      targetId,
       armyVersion: army.armyVersion,
-      requestIdempotencyKey: `robot-daily-raid-${playerId}-${Date.now()}`,
+      requestIdempotencyKey: `robot-daily-raid-${playerId}-${now.getTime()}`,
       skipQueue: true,
+      now,
     });
     const sourceSummary = summarizeRaidRewards(result.result.rewards);
 
@@ -1432,9 +1843,12 @@ export class RobotService implements OnApplicationBootstrap {
         sourceSummary,
         orderId: result.result.orderId ?? null,
         settlementStatus: result.result.settlementStatus ?? null,
-        targetId: detail.targetId,
+        targetId,
         targetName: result.result.targetName,
         goldLoot: result.result.goldLoot,
+        attackerGainGold: result.result.goldLoot,
+        defenderLostGold: result.result.goldLoot,
+        netGoldDelta: 0,
         rewards: result.result.rewards,
       },
     };
@@ -1472,11 +1886,34 @@ export class RobotService implements OnApplicationBootstrap {
     playerId: string,
     sourceSummaries: string[],
     options: { blockOnBreakthrough?: boolean; feedWhenPossible?: boolean } = {},
+    now: Date = new Date(),
   ): Promise<RobotActionResult> {
-    const state = await this.spiritService.getSpiritState(playerId);
+    const state = await this.spiritService.getSpiritState(playerId, undefined, now);
     const mainSlot = state.mainSlot;
     if (!mainSlot) {
       throw new Error('No main spirit available for daily robot.');
+    }
+
+    const satiatedRemainingSeconds = mainSlot.satiatedRemainingSeconds ?? 0;
+    if (options.feedWhenPossible && Number(state.spiritRoot ?? 0) >= 10 && satiatedRemainingSeconds < 2 * 60 * 60) {
+      const result = await this.spiritService.feedSpirit(playerId, {
+        slotIndex: mainSlot.slotIndex,
+        actionType: 'feed_once',
+        slotVersion: mainSlot.slotVersion,
+        resourceVersion: state.resourceVersion,
+        requestIdempotencyKey: `robot-feed-spirit-${playerId}-${Date.now()}`,
+      }, undefined, now);
+      return {
+        actionName: 'feed-spirit',
+        resultSummary: {
+          summary: result.summary,
+          level: result.spirit.mainSlot?.level ?? mainSlot.level,
+          exp: result.spirit.mainSlot?.exp ?? mainSlot.exp,
+          spiritRoot: result.spirit.spiritRoot ?? null,
+          satiatedRemainingSeconds: result.spirit.mainSlot?.satiatedRemainingSeconds ?? null,
+          sources: sourceSummaries,
+        },
+      };
     }
 
     const requirement = state.breakthroughRequirement;
@@ -1486,7 +1923,7 @@ export class RobotService implements OnApplicationBootstrap {
           return {
             actionName: 'wait-spirit-breakthrough-material',
             resultSummary: {
-              summary: `灵宠到达突破节点，等待 ${requirement.label} x${Math.max(requirement.required - requirement.owned, 0)}。`,
+              summary: `spirit reached breakthrough node; waiting for ${requirement.label} x${Math.max(requirement.required - requirement.owned, 0)}.`,
               level: mainSlot.level,
               breakthroughStage: mainSlot.breakthroughStage,
               required: requirement.required,
@@ -1505,7 +1942,7 @@ export class RobotService implements OnApplicationBootstrap {
         slotVersion: mainSlot.slotVersion,
         resourceVersion: state.resourceVersion,
         requestIdempotencyKey: `robot-breakthrough-${playerId}-${Date.now()}`,
-      });
+      }, undefined, now);
       return {
         actionName: 'breakthrough-spirit',
         resultSummary: {
@@ -1517,35 +1954,14 @@ export class RobotService implements OnApplicationBootstrap {
       };
     }
 
-    if (options.feedWhenPossible && Number(state.spiritRoot ?? 0) >= 10 && mainSlot.satiatedRemainingSeconds < 2 * 60 * 60) {
-      const result = await this.spiritService.feedSpirit(playerId, {
-        slotIndex: mainSlot.slotIndex,
-        actionType: 'feed_once',
-        slotVersion: mainSlot.slotVersion,
-        resourceVersion: state.resourceVersion,
-        requestIdempotencyKey: `robot-feed-spirit-${playerId}-${Date.now()}`,
-      });
-      return {
-        actionName: 'feed-spirit',
-        resultSummary: {
-          summary: result.summary,
-          level: result.spirit.mainSlot?.level ?? mainSlot.level,
-          exp: result.spirit.mainSlot?.exp ?? mainSlot.exp,
-          spiritRoot: result.spirit.spiritRoot ?? null,
-          satiatedRemainingSeconds: result.spirit.mainSlot?.satiatedRemainingSeconds ?? null,
-          sources: sourceSummaries,
-        },
-      };
-    }
-
     return {
       actionName: 'spirit-idle-progress',
       resultSummary: {
-        summary: '灵宠挂机进度已结算，当前未到突破节点。',
+        summary: 'spirit idle progress settled; no breakthrough node yet.',
         level: mainSlot.level,
         exp: mainSlot.exp,
         breakthroughStage: mainSlot.breakthroughStage,
-        satiatedRemainingSeconds: mainSlot.satiatedRemainingSeconds,
+        satiatedRemainingSeconds,
         sources: sourceSummaries,
       },
     };
@@ -1553,7 +1969,7 @@ export class RobotService implements OnApplicationBootstrap {
 /*
     const upgradeCost = getRobotSpiritUpgradeCost(mainSlot.level);
     if (upgradeCost === null) {
-      throw new RobotProgressionBlockError('灵宠已到当前最高等级，日常循环暂时无法继续升级。', {
+      throw new RobotProgressionBlockError('spirit reached current max level; cannot continue daily upgrade', {
         level: mainSlot.level,
         sources: sourceSummaries,
       });
@@ -1572,7 +1988,7 @@ export class RobotService implements OnApplicationBootstrap {
         resourceVersion: currentState.resourceVersion,
         requestIdempotencyKey: `robot-buy-soul-${playerId}-${Date.now()}`,
       });
-      sourceSummaries.push(`金币购买：升级兽魂 +${needSoul}`);
+      sourceSummaries.push(`gold purchase: upgrade soul +${needSoul}`);
       currentState = buyResult.spirit;
     }
 
@@ -1702,12 +2118,23 @@ export class RobotService implements OnApplicationBootstrap {
     });
   }
 
-  private async preparePlayerSimRobot(spec: RobotSpec, playerId: string): Promise<void> {
+  private async preparePlayerSimRobot(spec: RobotSpec, playerId: string, simStartAt: Date = new Date()): Promise<void> {
     await this.prisma.transaction(async (client) => {
       const seed = await client.seedDefinition.findUniqueOrThrow({ where: { seedId: ROBOT_SEED_ID } });
       const spirit = await client.spiritDefinition.findUniqueOrThrow({ where: { spiritId: ROBOT_STARTER_SPIRIT_ID } });
-      const now = Date.now();
+      const now = simStartAt.getTime();
       const matureAt = new Date(now - 5 * 60 * 1000);
+
+      await Promise.all([
+        client.robotActionLog.deleteMany({ where: { playerId } }),
+        client.robotSimSnapshot.deleteMany({ where: { playerId } }),
+        client.playerFactionStipendState.deleteMany({ where: { playerId } }),
+        client.factionContributionLog.deleteMany({ where: { playerId } }),
+        client.factionMember.updateMany({
+          where: { playerId },
+          data: { contributionScore: 0 },
+        }),
+      ]);
 
       await client.player.update({
         where: { id: playerId },
@@ -1730,6 +2157,8 @@ export class RobotService implements OnApplicationBootstrap {
         update: {
           vaultGold: { set: 500 },
           vaultCapacity: { set: 10000 },
+          walletGold: { set: 0 },
+          walletCapacity: { set: 1000 },
           balanceVersion: { increment: 1 },
         },
       });
@@ -1767,7 +2196,7 @@ export class RobotService implements OnApplicationBootstrap {
           unlockedAt: new Date(),
         },
         update: {
-          quantity: { increment: 2 },
+          quantity: { set: 20 },
           unlockedAt: new Date(),
         },
       });
@@ -1777,18 +2206,19 @@ export class RobotService implements OnApplicationBootstrap {
         create: {
           playerId,
           spiritSoul: 0,
-          ordinarySoul: 0,
+          spiritRoot: 20,
+          ordinarySoul: 5,
           rareSoul: 0,
           legendarySoul: 0,
           tianjiTalisman: 0,
         },
         update: {
           spiritSoul: 0,
-          ordinarySoul: 0,
+          ordinarySoul: 5,
           rareSoul: 0,
           legendarySoul: 0,
           tianjiTalisman: 0,
-          spiritRoot: 0,
+          spiritRoot: 20,
           spiritMarrow: 0,
           spiritJade: 0,
           resourceVersion: { increment: 1 },
@@ -2037,7 +2467,7 @@ export class RobotService implements OnApplicationBootstrap {
   private async prepareRaidTarget(ownerPlayerId: string): Promise<string> {
     const targetLogin = await this.authService.devLogin({
       providerUserId: ROBOT_RAID_TARGET_KEY,
-      nickname: '机器人靶场01',
+      nickname: 'Robot Target 01',
       factionCode: 'human',
     });
     const targetPlayerId = targetLogin.player.id;
@@ -2045,14 +2475,14 @@ export class RobotService implements OnApplicationBootstrap {
     await this.prepareRobotPlayer({
       robotKey: ROBOT_RAID_TARGET_KEY,
       role: 'farmer',
-      nickname: '机器人靶场01',
+      nickname: 'Robot Target 01',
       factionCode: 'human',
     }, targetPlayerId);
 
     return this.prepareRaidTargetFor(ownerPlayerId, targetPlayerId);
   }
 
-  private async prepareRaidTargetFor(ownerPlayerId: string, targetPlayerId: string): Promise<string> {
+  private async prepareRaidTargetFor(ownerPlayerId: string, targetPlayerId: string, now: Date = new Date()): Promise<string> {
     return this.prisma.transaction(async (client) => {
       await client.player.update({
         where: { id: targetPlayerId },
@@ -2099,16 +2529,16 @@ export class RobotService implements OnApplicationBootstrap {
             level: target.castleLevelCache,
             combatPower: target.army?.totalCount ?? 0,
             raidableGold: Math.max(...fields.map((field) => field.currentClaimableGold), 0),
-            exposedFruit: 'daily-3 成熟田',
+            exposedFruit: 'daily-3 mature fields',
             raidRule: 'daily-3 阵营环形互相掠夺',
             defenseStatus: `可用战力 ${target.army?.availableCount ?? 0}`,
-            protectionStatus: '可发起掠夺',
-            risk: '机器人日常循环测试',
-            detail: '用于验证机器人日常循环中的掠夺、掉落和保护规则。',
+            protectionStatus: 'raid available',
+            risk: 'daily-3 robot test',
+            detail: 'Used to verify raid, loot, and protection rules in daily robot loops.',
           },
           fieldSnapshotJson: fields,
           riskSnapshotJson: { risk: 'robot-daily-3' },
-          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
         },
         select: { id: true },
       });
@@ -2206,8 +2636,8 @@ export class RobotService implements OnApplicationBootstrap {
         id: getAutomationConfigId(mode),
         mode,
         enabled: false,
-        intervalSeconds: mode === PLAYER_SIM_V1_MODE ? 5 : 10,
-        maxRounds: mode === PLAYER_SIM_V1_MODE ? 0 : 20,
+        intervalSeconds: mode === PLAYER_SIM_V1_MODE ? 5 : mode === SEASON_SIM_V1_MODE ? 1 : 10,
+        maxRounds: mode === PLAYER_SIM_V1_MODE ? 0 : mode === SEASON_SIM_V1_MODE ? SEASON_SIM_DEFAULT_TOTAL_DAYS : 20,
         hardErrorLimit: 3,
         autoStartOnBoot: false,
       },
@@ -2276,11 +2706,13 @@ function createIdleLoopState(): RobotLoopState {
 }
 
 function getAutomationConfigId(mode: RobotAutomationMode): string {
+  if (mode === SEASON_SIM_V1_MODE) return SEASON_SIM_V1_CONFIG_ID;
   if (mode === PLAYER_SIM_V1_MODE) return PLAYER_SIM_V1_CONFIG_ID;
   return mode === SOCIAL_3_MODE ? SOCIAL_3_CONFIG_ID : DAILY_3_CONFIG_ID;
 }
 
 function getAutomationModeName(mode: RobotAutomationMode): string {
+  if (mode === SEASON_SIM_V1_MODE) return '勤奋玩家赛季模拟 v1';
   if (mode === PLAYER_SIM_V1_MODE) return '勤奋玩家模拟 v1';
   return mode === SOCIAL_3_MODE ? '3 阵营社交助力' : '3 阵营日常循环';
 }
@@ -2299,6 +2731,112 @@ function findNextCrossFactionPlayer<T extends { spec: RobotSpec; playerId: strin
   }
 
   return null;
+}
+
+function findSeasonSimRaidTarget<T extends { spec: RobotSpec; playerId: string }>(players: T[], currentIndex: number, raidRound: number): T | null {
+  const current = players[currentIndex];
+  if (!current || players.length <= 1) {
+    return null;
+  }
+
+  for (let offset = 1; offset < players.length; offset += 1) {
+    const candidate = players[(currentIndex + offset + raidRound - 1) % players.length];
+    if (candidate && candidate.spec.factionCode !== current.spec.factionCode) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function parseSeasonSimDayPayload(body: unknown): { startAt?: Date; actionDelayMs: number } {
+  const record = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
+  const startAtText = typeof record.startAt === 'string' ? record.startAt.trim() : '';
+  const actionDelayMs = parseBoundedInteger(record.actionDelayMs, SEASON_SIM_DEFAULT_ACTION_DELAY_MS, 0, 5000);
+  if (!startAtText) {
+    return { actionDelayMs };
+  }
+
+  const startAt = new Date(startAtText);
+  return Number.isNaN(startAt.getTime()) ? { actionDelayMs } : { startAt, actionDelayMs };
+}
+
+function parseSeasonSimLoopPayload(body: unknown): { startAt?: Date; totalDays: number; intervalSeconds: number; actionDelayMs: number } {
+  const record = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
+  const startAtText = typeof record.startAt === 'string' ? record.startAt.trim() : '';
+  const startAt = startAtText ? new Date(startAtText) : undefined;
+
+  return {
+    startAt: startAt && !Number.isNaN(startAt.getTime()) ? startAt : undefined,
+    totalDays: parseBoundedInteger(record.totalDays ?? record.maxRounds, SEASON_SIM_DEFAULT_TOTAL_DAYS, 1, 365),
+    intervalSeconds: parseBoundedInteger(record.intervalSeconds, 1, 0, 3600),
+    actionDelayMs: parseBoundedInteger(record.actionDelayMs, 0, 0, 5000),
+  };
+}
+
+function summarizeSeasonSimResourceDeltas(logs: Array<{ actionName: string; status: string; resultSummaryJson: Prisma.JsonValue | null }>): {
+  farmGoldIncome: number;
+  raidGoldIncome: number;
+  stipendClaimCount: number;
+  stipendSpiritRoot: number;
+  stipendOrdinarySoul: number;
+  stipendRareSoul: number;
+  stipendLegendarySoul: number;
+  raidCount: number;
+  raidWinCount: number;
+  feedCount: number;
+} {
+  const summary = {
+    farmGoldIncome: 0,
+    raidGoldIncome: 0,
+    stipendClaimCount: 0,
+    stipendSpiritRoot: 0,
+    stipendOrdinarySoul: 0,
+    stipendRareSoul: 0,
+    stipendLegendarySoul: 0,
+    raidCount: 0,
+    raidWinCount: 0,
+    feedCount: 0,
+  };
+
+  for (const log of logs) {
+    if (log.status !== 'SUCCESS') {
+      continue;
+    }
+    const result = log.resultSummaryJson && typeof log.resultSummaryJson === 'object' && !Array.isArray(log.resultSummaryJson)
+      ? log.resultSummaryJson as Record<string, unknown>
+      : {};
+    if (log.actionName.includes('farm-cycle')) {
+      summary.farmGoldIncome += Math.max(Number(result.collectedGold ?? 0), 0);
+    }
+    if (log.actionName.includes('raid')) {
+      summary.raidCount += 1;
+      const goldLoot = Math.max(Number(result.goldLoot ?? 0), 0);
+      summary.raidGoldIncome += goldLoot;
+      if (goldLoot > 0 || String(result.summary ?? '').toLowerCase().includes('win')) {
+        summary.raidWinCount += 1;
+      }
+    }
+    if (log.actionName.includes('claim-faction-stipend')) {
+      summary.stipendClaimCount += 1;
+      const rewards = Array.isArray(result.rewards) ? result.rewards as Array<{ kind?: unknown; quantity?: unknown }> : [];
+      for (const reward of rewards) {
+        const quantity = Math.max(Number(reward.quantity ?? 0), 0);
+        const kind = String(reward.kind ?? '');
+        if (kind === 'spirit-root') summary.stipendSpiritRoot += quantity;
+        if (kind === 'ordinary-soul') summary.stipendOrdinarySoul += quantity;
+        if (kind === 'rare-soul') summary.stipendRareSoul += quantity;
+        if (kind === 'legendary-soul') summary.stipendLegendarySoul += quantity;
+      }
+    }
+    if (log.actionName.includes('spirit-growth') || log.actionName.includes('feed-spirit')) {
+      if (String(result.summary ?? '').includes('加速') || String(result.summary ?? '').toLowerCase().includes('buff')) {
+        summary.feedCount += 1;
+      }
+    }
+  }
+
+  return summary;
 }
 
 function parseLoopStartPayload(body: unknown): { intervalSeconds: number; maxRounds: number; hardErrorLimit: number } {
@@ -2348,11 +2886,20 @@ function parseBoundedInteger(value: unknown, fallback: number, min: number, max:
   return Math.min(Math.max(Number(normalized), min), max);
 }
 
+function delay(ms: number): Promise<void> {
+  if (ms <= 0) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function buildBreakthroughBlock(requirement: ClientSpiritBreakthroughRequirement, sourceSummaries: string[]): RobotProgressionBlockError {
   const missing = Math.max(requirement.required - requirement.owned, 0);
-  const sources = sourceSummaries.length > 0 ? sourceSummaries.join('；') : '本轮没有新增突破材料';
+  const sources = sourceSummaries.length > 0 ? sourceSummaries.join('; ') : 'no new breakthrough materials this round';
   return new RobotProgressionBlockError(
-    `突破材料不足：${requirement.label} ${requirement.owned} / ${requirement.required}，缺少 ${missing}。本轮来源：${sources}。`,
+    `breakthrough material insufficient: ${requirement.label} ${requirement.owned} / ${requirement.required}, missing ${missing}. Sources: ${sources}.`,
     {
       stage: requirement.stage,
       quality: requirement.quality,
@@ -2410,6 +2957,520 @@ function countFieldStatuses(fields: Array<{ status: string }>): { mature: number
     if (field.status === 'EMPTY') counts.empty += 1;
     return counts;
   }, { mature: 0, growing: 0, empty: 0 });
+}
+
+function deprecatedArmySnapshotFields(): {
+  armyTotal: number;
+  armyAvailable: number;
+  armyCapacity: number;
+  queuedArmy: number;
+} {
+  // Legacy robot_sim_snapshot schema fields. The current simulation/player model uses spirits, not army.
+  return {
+    armyTotal: 0,
+    armyAvailable: 0,
+    armyCapacity: 0,
+    queuedArmy: 0,
+  };
+}
+
+function buildRobotDayReports(
+  logs: Array<{
+    robotKey: string;
+    playerId: string;
+    actionName: string;
+    status: string;
+    errorCode: string | null;
+    errorMessage: string | null;
+    resultSummaryJson: Prisma.JsonValue | null;
+    createdAt: Date;
+  }>,
+  snapshots: Array<{
+    robotKey: string;
+    playerId: string;
+    factionCode: string | null;
+    vaultGold: number;
+    walletGold: number;
+    contributionScore: number;
+    spiritSoul: number;
+    ordinarySoul: number;
+    rareSoul: number;
+    legendarySoul: number;
+    mainSpiritLevel: number | null;
+    mainSpiritStage: number | null;
+    matureFields: number;
+    growingFields: number;
+    emptyFields: number;
+    successActionCount: number;
+    blockedActionCount: number;
+    failedActionCount: number;
+    actionSummaryJson: Prisma.JsonValue | null;
+    createdAt: Date;
+  }>,
+): Array<Record<string, unknown>> {
+  const reports = new Map<number, ReturnType<typeof createEmptyDayReport>>();
+  const snapshotsByDay = new Map<number, typeof snapshots>();
+
+  for (const snapshot of snapshots) {
+    const summary = toPlainRecord(snapshot.actionSummaryJson);
+    const dayIndex = Math.max(Number(summary.dayIndex ?? 0), 0);
+    if (dayIndex <= 0) {
+      continue;
+    }
+    const items = snapshotsByDay.get(dayIndex) ?? [];
+    items.push(snapshot);
+    snapshotsByDay.set(dayIndex, items);
+    const report = getOrCreateDayReport(reports, dayIndex, String(summary.dateKey ?? ''), String(summary.simulatedAt ?? snapshot.createdAt.toISOString()));
+    const player = getOrCreateDayPlayer(report, snapshot.playerId, snapshot.robotKey, snapshot.factionCode);
+    player.endState = {
+      vaultGold: snapshot.vaultGold,
+      walletGold: snapshot.walletGold,
+      contributionScore: snapshot.contributionScore,
+      spiritSoul: snapshot.spiritSoul,
+      ordinarySoul: snapshot.ordinarySoul,
+      rareSoul: snapshot.rareSoul,
+      legendarySoul: snapshot.legendarySoul,
+      mainSpiritLevel: snapshot.mainSpiritLevel,
+      mainSpiritStage: snapshot.mainSpiritStage,
+      matureFields: snapshot.matureFields,
+      growingFields: snapshot.growingFields,
+      emptyFields: snapshot.emptyFields,
+    };
+  }
+
+  for (const log of logs) {
+    const result = toPlainRecord(log.resultSummaryJson);
+    const dayIndex = Math.max(Number(result.dayIndex ?? 0), 0);
+    if (dayIndex <= 0) {
+      continue;
+    }
+    const report = getOrCreateDayReport(reports, dayIndex, String(result.dateKey ?? ''), String(result.simulatedAt ?? log.createdAt.toISOString()));
+    const player = getOrCreateDayPlayer(report, log.playerId, log.robotKey, ROBOT_SPEC_BY_KEY.get(log.robotKey)?.factionCode ?? null);
+    player.actionCount += 1;
+    const playerFaction = getOrCreateFactionMetrics(report, player.factionCode);
+    if (log.status === 'SUCCESS') {
+      player.successActionCount += 1;
+      report.totals.successActionCount += 1;
+      playerFaction.successActionCount += 1;
+    }
+    if (log.status === 'FAILED') {
+      player.failedActionCount += 1;
+      report.totals.failedActionCount += 1;
+      playerFaction.failedActionCount += 1;
+    }
+    if (log.status === 'BLOCKED') {
+      player.blockedActionCount += 1;
+      report.totals.blockedActionCount += 1;
+      playerFaction.blockedActionCount += 1;
+    }
+    player.actions[log.actionName] = (player.actions[log.actionName] ?? 0) + 1;
+    if (log.status !== 'SUCCESS') {
+      player.issues.push({
+        actionName: log.actionName,
+        status: log.status,
+        errorCode: log.errorCode,
+        errorMessage: log.errorMessage,
+      });
+    }
+
+    applyDayActionMetrics(report, player, log.actionName, result);
+  }
+
+  for (const [dayIndex, report] of reports) {
+    const daySnapshots = snapshotsByDay.get(dayIndex) ?? [];
+    report.snapshotCount = daySnapshots.length;
+    report.players = Object.values(report.playersById).sort((left, right) => left.robotKey.localeCompare(right.robotKey));
+    report.byFaction = Object.values(report.factionsByCode).sort((left, right) => left.factionCode.localeCompare(right.factionCode));
+    report.validation = buildDayReportValidation(report);
+    delete (report as Record<string, unknown>).playersById;
+    delete (report as Record<string, unknown>).factionsByCode;
+  }
+
+  return Array.from(reports.values()).sort((left, right) => left.dayIndex - right.dayIndex);
+}
+
+function createEmptyDayReport(dayIndex: number, dateKey: string, simulatedAt: string): {
+  dayIndex: number;
+  dateKey: string;
+  simulatedAt: string;
+  snapshotCount: number;
+  totals: ReturnType<typeof createEmptyDayMetrics>;
+  byFaction: Array<ReturnType<typeof createEmptyFactionDayMetrics>>;
+  players: Array<ReturnType<typeof createEmptyPlayerDayMetrics>>;
+  validation: Record<string, unknown>;
+  playersById: Record<string, ReturnType<typeof createEmptyPlayerDayMetrics>>;
+  factionsByCode: Record<string, ReturnType<typeof createEmptyFactionDayMetrics>>;
+} {
+  return {
+    dayIndex,
+    dateKey,
+    simulatedAt,
+    snapshotCount: 0,
+    totals: createEmptyDayMetrics(),
+    byFaction: [],
+    players: [],
+    validation: {},
+    playersById: {},
+    factionsByCode: {},
+  };
+}
+
+function getOrCreateDayReport(
+  reports: Map<number, ReturnType<typeof createEmptyDayReport>>,
+  dayIndex: number,
+  dateKey: string,
+  simulatedAt: string,
+): ReturnType<typeof createEmptyDayReport> {
+  const existing = reports.get(dayIndex);
+  if (existing) {
+    if (!existing.dateKey && dateKey) existing.dateKey = dateKey;
+    if (!existing.simulatedAt && simulatedAt) existing.simulatedAt = simulatedAt;
+    return existing;
+  }
+  const next = createEmptyDayReport(dayIndex, dateKey, simulatedAt);
+  reports.set(dayIndex, next);
+  return next;
+}
+
+function getOrCreateDayPlayer(
+  report: ReturnType<typeof createEmptyDayReport>,
+  playerId: string,
+  robotKey: string,
+  factionCode: unknown,
+): ReturnType<typeof createEmptyPlayerDayMetrics> {
+  const existing = report.playersById[playerId];
+  if (existing) {
+    return existing;
+  }
+  const player = createEmptyPlayerDayMetrics(playerId, robotKey, factionCode);
+  report.playersById[playerId] = player;
+  getOrCreateFactionMetrics(report, player.factionCode).playerCount += 1;
+  return player;
+}
+
+function getOrCreateFactionMetrics(
+  report: ReturnType<typeof createEmptyDayReport>,
+  factionCode: string,
+): ReturnType<typeof createEmptyFactionDayMetrics> {
+  const existing = report.factionsByCode[factionCode];
+  if (existing) {
+    return existing;
+  }
+  const next = createEmptyFactionDayMetrics(factionCode);
+  report.factionsByCode[factionCode] = next;
+  return next;
+}
+
+function createEmptyDayMetrics(): {
+  farmGoldIncome: number;
+  stipendClaimCount: number;
+  stipendSpiritRoot: number;
+  stipendOrdinarySoul: number;
+  stipendRareSoul: number;
+  stipendLegendarySoul: number;
+  feedCount: number;
+  raidCount: number;
+  raidWinCount: number;
+  attackerGainGold: number;
+  defenderLostGold: number;
+  netGoldDelta: number;
+  successActionCount: number;
+  blockedActionCount: number;
+  failedActionCount: number;
+} {
+  return {
+    farmGoldIncome: 0,
+    stipendClaimCount: 0,
+    stipendSpiritRoot: 0,
+    stipendOrdinarySoul: 0,
+    stipendRareSoul: 0,
+    stipendLegendarySoul: 0,
+    feedCount: 0,
+    raidCount: 0,
+    raidWinCount: 0,
+    attackerGainGold: 0,
+    defenderLostGold: 0,
+    netGoldDelta: 0,
+    successActionCount: 0,
+    blockedActionCount: 0,
+    failedActionCount: 0,
+  };
+}
+
+function createEmptyFactionDayMetrics(factionCode: string): ReturnType<typeof createEmptyDayMetrics> & {
+  factionCode: string;
+  factionName: string;
+  playerCount: number;
+  buffExplanation: string;
+} {
+  return {
+    factionCode,
+    factionName: getFactionLabel(factionCode) ?? '未知阵营',
+    playerCount: 0,
+    buffExplanation: getFactionBuffExplanation(factionCode),
+    ...createEmptyDayMetrics(),
+  };
+}
+
+function createEmptyPlayerDayMetrics(playerId: string, robotKey: string, factionCodeValue: unknown): ReturnType<typeof createEmptyDayMetrics> & {
+  playerId: string;
+  robotKey: string;
+  nickname: string;
+  factionCode: string;
+  factionName: string;
+  actionCount: number;
+  actions: Record<string, number>;
+  issues: Array<Record<string, unknown>>;
+  endState: Record<string, unknown> | null;
+} {
+  const factionCode = String(factionCodeValue ?? ROBOT_SPEC_BY_KEY.get(robotKey)?.factionCode ?? 'unknown');
+  return {
+    playerId,
+    robotKey,
+    nickname: ROBOT_SPEC_BY_KEY.get(robotKey)?.nickname ?? robotKey,
+    factionCode,
+    factionName: getFactionLabel(factionCode) ?? '未知阵营',
+    actionCount: 0,
+    actions: {},
+    issues: [],
+    endState: null,
+    ...createEmptyDayMetrics(),
+  };
+}
+
+function applyDayActionMetrics(
+  report: ReturnType<typeof createEmptyDayReport>,
+  player: ReturnType<typeof createEmptyPlayerDayMetrics>,
+  actionName: string,
+  result: Record<string, unknown>,
+): void {
+  const add = (field: keyof ReturnType<typeof createEmptyDayMetrics>, value: number): void => {
+    player[field] += value;
+    report.totals[field] += value;
+    getOrCreateFactionMetrics(report, player.factionCode)[field] += value;
+  };
+
+  if (actionName === 'season-farm-cycle') {
+    add('farmGoldIncome', Math.max(Number(result.collectedGold ?? 0), 0));
+  }
+  if (actionName === 'claim-faction-stipend') {
+    add('stipendClaimCount', 1);
+    for (const reward of Array.isArray(result.rewards) ? result.rewards as Array<{ kind?: unknown; quantity?: unknown }> : []) {
+      const quantity = Math.max(Number(reward.quantity ?? 0), 0);
+      const kind = String(reward.kind ?? '');
+      if (kind === 'spirit-root') add('stipendSpiritRoot', quantity);
+      if (kind === 'ordinary-soul') add('stipendOrdinarySoul', quantity);
+      if (kind === 'rare-soul') add('stipendRareSoul', quantity);
+      if (kind === 'legendary-soul') add('stipendLegendarySoul', quantity);
+    }
+  }
+  if (actionName === 'feed-spirit') {
+    add('feedCount', 1);
+  }
+  if (actionName === 'raid-target') {
+    const gain = Math.max(Number(result.attackerGainGold ?? result.goldLoot ?? 0), 0);
+    const defenderLoss = Math.max(Number(result.defenderLostGold ?? result.goldLoot ?? 0), 0);
+    add('raidCount', 1);
+    if (gain > 0 || String(result.summary ?? '').toLowerCase().includes('win')) add('raidWinCount', 1);
+    add('attackerGainGold', gain);
+    add('netGoldDelta', gain);
+    const defenderPlayerId = String(result.defenderPlayerId ?? '');
+    if (defenderPlayerId) {
+      const defenderRobotKey = String(result.defenderRobotKey ?? defenderPlayerId);
+      const defender = getOrCreateDayPlayer(report, defenderPlayerId, defenderRobotKey, result.defenderFactionCode ?? ROBOT_SPEC_BY_KEY.get(defenderRobotKey)?.factionCode ?? null);
+      defender.defenderLostGold += defenderLoss;
+      defender.netGoldDelta -= defenderLoss;
+      report.totals.defenderLostGold += defenderLoss;
+      report.totals.netGoldDelta -= defenderLoss;
+      getOrCreateFactionMetrics(report, defender.factionCode).defenderLostGold += defenderLoss;
+      getOrCreateFactionMetrics(report, defender.factionCode).netGoldDelta -= defenderLoss;
+    }
+  }
+}
+
+function buildDayReportValidation(report: ReturnType<typeof createEmptyDayReport>): Record<string, unknown> {
+  const issues: Array<Record<string, unknown>> = [];
+  const expectedPlayers = PLAYER_SIM_SPECS.length;
+  const expectedActionCount = SEASON_SIM_FARM_CYCLES_PER_DAY + 1 + 1 + SEASON_SIM_RAIDS_PER_DAY;
+  if (report.snapshotCount !== expectedPlayers) {
+    issues.push({ code: 'SNAPSHOT_COUNT_MISMATCH', message: `快照数量 ${report.snapshotCount} / ${expectedPlayers}` });
+  }
+  for (const player of Object.values(report.playersById)) {
+    if (player.actionCount !== expectedActionCount) {
+      issues.push({ code: 'PLAYER_ACTION_COUNT_MISMATCH', robotKey: player.robotKey, message: `${player.nickname} action count ${player.actionCount} / ${expectedActionCount}` });
+    }
+    const endState = player.endState ?? {};
+    for (const key of ['vaultGold', 'walletGold']) {
+      if (Number(endState[key] ?? 0) < 0) {
+        issues.push({ code: 'NEGATIVE_GOLD', robotKey: player.robotKey, field: key, value: endState[key] });
+      }
+    }
+  }
+  if (report.totals.attackerGainGold !== report.totals.defenderLostGold) {
+    issues.push({
+      code: 'RAID_GOLD_MISMATCH',
+      message: `掠夺收入 ${report.totals.attackerGainGold} / 防守损失 ${report.totals.defenderLostGold}`,
+    });
+  }
+
+  return {
+    ok: issues.length <= 0,
+    expectedPlayers,
+    expectedActionCount,
+    issueCount: issues.length,
+    issues,
+  };
+}
+
+function getFactionBuffExplanation(factionCode: string): string {
+  if (factionCode === 'human') return 'Human buff: compare farmGoldIncome.';
+  if (factionCode === 'immortal') return 'Immortal buff: compare feedCount and end-of-day spirit state.';
+  if (factionCode === 'demon') return 'Demon buff: compare raidWinCount and attackerGainGold.';
+  return 'Unknown faction: no buff explanation matched.';
+}
+
+function toPlainRecord(value: Prisma.JsonValue | null): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
+}
+
+function buildRobotRunStats(snapshots: Array<{
+  robotKey: string;
+  playerId: string;
+  factionCode: string | null;
+  vaultGold: number;
+  walletGold: number;
+  contributionScore: number;
+  spiritSoul: number;
+  ordinarySoul: number;
+  rareSoul: number;
+  legendarySoul: number;
+  mainSpiritLevel: number | null;
+  mainSpiritStage: number | null;
+  matureFields: number;
+  growingFields: number;
+  emptyFields: number;
+  successActionCount: number;
+  blockedActionCount: number;
+  failedActionCount: number;
+  actionSummaryJson: Prisma.JsonValue | null;
+  createdAt: Date;
+}>): Record<string, unknown> {
+  const latestByPlayerId = new Map<string, typeof snapshots[number]>();
+  for (const snapshot of snapshots) {
+    if (!latestByPlayerId.has(snapshot.playerId)) {
+      latestByPlayerId.set(snapshot.playerId, snapshot);
+    }
+  }
+
+  const latestSnapshots = Array.from(latestByPlayerId.values());
+  const totals = createEmptyRobotStatsTotals();
+  const byFaction: Record<string, ReturnType<typeof createEmptyRobotStatsTotals> & { factionCode: string; factionName: string }> = {};
+  const players = latestSnapshots.map((snapshot) => {
+    const totalsForFaction = byFaction[snapshot.factionCode ?? 'unknown'] ?? {
+      factionCode: snapshot.factionCode ?? 'unknown',
+      factionName: getFactionLabel(snapshot.factionCode) ?? '未知阵营',
+      ...createEmptyRobotStatsTotals(),
+    };
+    byFaction[snapshot.factionCode ?? 'unknown'] = totalsForFaction;
+    addSnapshotToStatsTotals(totals, snapshot);
+    addSnapshotToStatsTotals(totalsForFaction, snapshot);
+
+    return {
+      robotKey: snapshot.robotKey,
+      nickname: ROBOT_SPEC_BY_KEY.get(snapshot.robotKey)?.nickname ?? snapshot.robotKey,
+      factionCode: snapshot.factionCode,
+      factionName: getFactionLabel(snapshot.factionCode) ?? '未知阵营',
+      vaultGold: snapshot.vaultGold,
+      walletGold: snapshot.walletGold,
+      contributionScore: snapshot.contributionScore,
+      mainSpiritLevel: snapshot.mainSpiritLevel,
+      mainSpiritStage: snapshot.mainSpiritStage,
+      successActionCount: snapshot.successActionCount,
+      blockedActionCount: snapshot.blockedActionCount,
+      failedActionCount: snapshot.failedActionCount,
+      actionSummary: snapshot.actionSummaryJson,
+      createdAt: snapshot.createdAt.toISOString(),
+    };
+  });
+
+  return {
+    snapshotCount: snapshots.length,
+    playerCount: latestSnapshots.length,
+    totals,
+    byFaction: Object.values(byFaction),
+    players,
+  };
+}
+
+function createEmptyRobotStatsTotals(): {
+  playerCount: number;
+  vaultGold: number;
+  walletGold: number;
+  contributionScore: number;
+  spiritSoul: number;
+  ordinarySoul: number;
+  rareSoul: number;
+  legendarySoul: number;
+  matureFields: number;
+  growingFields: number;
+  emptyFields: number;
+  successActionCount: number;
+  blockedActionCount: number;
+  failedActionCount: number;
+} {
+  return {
+    playerCount: 0,
+    vaultGold: 0,
+    walletGold: 0,
+    contributionScore: 0,
+    spiritSoul: 0,
+    ordinarySoul: 0,
+    rareSoul: 0,
+    legendarySoul: 0,
+    matureFields: 0,
+    growingFields: 0,
+    emptyFields: 0,
+    successActionCount: 0,
+    blockedActionCount: 0,
+    failedActionCount: 0,
+  };
+}
+
+function addSnapshotToStatsTotals(
+  totals: ReturnType<typeof createEmptyRobotStatsTotals>,
+  snapshot: {
+    vaultGold: number;
+    walletGold: number;
+    contributionScore: number;
+    spiritSoul: number;
+    ordinarySoul: number;
+    rareSoul: number;
+    legendarySoul: number;
+    matureFields: number;
+    growingFields: number;
+    emptyFields: number;
+    successActionCount: number;
+    blockedActionCount: number;
+    failedActionCount: number;
+  },
+): void {
+  totals.playerCount += 1;
+  totals.vaultGold += snapshot.vaultGold;
+  totals.walletGold += snapshot.walletGold;
+  totals.contributionScore += snapshot.contributionScore;
+  totals.spiritSoul += snapshot.spiritSoul;
+  totals.ordinarySoul += snapshot.ordinarySoul;
+  totals.rareSoul += snapshot.rareSoul;
+  totals.legendarySoul += snapshot.legendarySoul;
+  totals.matureFields += snapshot.matureFields;
+  totals.growingFields += snapshot.growingFields;
+  totals.emptyFields += snapshot.emptyFields;
+  totals.successActionCount += snapshot.successActionCount;
+  totals.blockedActionCount += snapshot.blockedActionCount;
+  totals.failedActionCount += snapshot.failedActionCount;
 }
 
 function mapRun(run: {
@@ -2579,13 +3640,21 @@ function mapActionLog(log: {
   requestSummaryJson: Prisma.JsonValue | null;
   resultSummaryJson: Prisma.JsonValue | null;
   createdAt: Date;
+  player?: {
+    nickname: string;
+    faction: { code: string; name: string } | null;
+  };
 }): Record<string, unknown> {
+  const spec = ROBOT_SPEC_BY_KEY.get(log.robotKey);
   return {
     id: log.id,
     runId: log.runId,
     robotKey: log.robotKey,
+    robotNickname: spec?.nickname ?? log.player?.nickname ?? log.robotKey,
     robotRole: log.robotRole,
     playerId: log.playerId,
+    factionCode: spec?.factionCode ?? log.player?.faction?.code ?? null,
+    factionName: log.player?.faction?.name ?? getFactionLabel(spec?.factionCode),
     actionName: log.actionName,
     status: log.status,
     durationMs: log.durationMs,
@@ -2595,6 +3664,14 @@ function mapActionLog(log: {
     resultSummaryJson: log.resultSummaryJson,
     createdAt: log.createdAt.toISOString(),
   };
+}
+
+function getFactionLabel(value: unknown): string | null {
+  const key = String(value ?? '');
+  if (key === 'human') return '人界';
+  if (key === 'immortal') return '仙界';
+  if (key === 'demon') return '魔界';
+  return null;
 }
 
 function resolveErrorCode(error: unknown): string {
@@ -2616,7 +3693,7 @@ function buildIssueExportMarkdown(
   latestRun: Record<string, unknown> | null,
 ): string {
   const lines = [
-    '# 机器人测试问题报告',
+    '# Robot Test Issue Report',
     '',
     `最新任务：${String(latestRun?.id ?? '-')}`,
     `最新状态：${String(latestRun?.status ?? '-')}`,
@@ -2625,27 +3702,27 @@ function buildIssueExportMarkdown(
   ];
 
   if (errors.length <= 0) {
-    lines.push('当前没有问题。');
+    lines.push('No current issues.');
     return lines.join('\n');
   }
 
   for (const [index, error] of errors.entries()) {
     lines.push(`## 问题 ${index + 1}`);
     lines.push('');
-    lines.push(`- 类型：${getIssueTypeLabel(error.issueType)}`);
-    lines.push(`- 严重程度：${getIssueSeverityLabel(error.severity)}`);
-    lines.push(`- 角色：${getRobotRoleLabel(error.robotRole)}`);
-    lines.push(`- 动作：${getRobotActionLabel(error.actionName)}`);
+    lines.push(`- Type: ${getIssueTypeLabel(error.issueType)}`);
+    lines.push(`- Severity: ${getIssueSeverityLabel(error.severity)}`);
+    lines.push(`- Role: ${getRobotRoleLabel(error.robotRole)}`);
+    lines.push(`- Action: ${getRobotActionLabel(error.actionName)}`);
     lines.push(`- 错误码：${getRobotErrorCodeLabel(error.errorCode)}`);
-    lines.push(`- 错误信息：${getRobotErrorMessageLabel(error.errorMessage)}`);
-    lines.push(`- 出现次数：${String(error.count ?? 0)}`);
-    lines.push(`- 首次出现：${formatRobotDateTime(error.firstSeenAt)}`);
+    lines.push(`- Error message: ${getRobotErrorMessageLabel(error.errorMessage)}`);
+    lines.push(`- Count: ${String(error.count ?? 0)}`);
+    lines.push(`- First seen: ${formatRobotDateTime(error.firstSeenAt)}`);
     lines.push(`- 最近出现：${formatRobotDateTime(error.lastSeenAt)}`);
-    lines.push(`- 处理建议：${String(error.suggestion ?? '-')}`);
-    lines.push(`- 原始角色：${String(error.robotRole ?? '-')}`);
-    lines.push(`- 原始动作：${String(error.actionName ?? '-')}`);
+    lines.push(`- Suggestion: ${String(error.suggestion ?? '-')}`);
+    lines.push(`- Raw role: ${String(error.robotRole ?? '-')}`);
+    lines.push(`- Raw action: ${String(error.actionName ?? '-')}`);
     lines.push(`- 原始错误码：${String(error.errorCode ?? '-')}`);
-    lines.push(`- 原始错误信息：${String(error.errorMessage ?? '-')}`);
+    lines.push(`- Raw error message: ${String(error.errorMessage ?? '-')}`);
     lines.push('');
   }
 
@@ -2695,15 +3772,15 @@ function resolveIssueSeverity(issueType: string): 'observe' | 'warning' | 'error
 
 function buildIssueSuggestion(issueType: string, errorMessage: string | null): string {
   if (issueType === 'progression_block' && errorMessage?.includes('突破材料不足')) {
-    return '这是成长资源卡点。继续运行 daily-3 观察俸禄和掠夺是否能逐步补足；若长期不增长，再调整掉落或俸禄节奏。';
+    return 'Progression resource blocker. Continue observing stipend and raid income, then tune drops or stipend pacing if needed.';
   }
   if (issueType === 'progression_block') {
-    return '继续循环观察资源增长；如果连续多轮不增长，再检查资源来源或数值节奏。';
+    return 'Continue observing resource growth; inspect sources and pacing if growth stalls.';
   }
   if (issueType === 'rule_error') {
-    return '检查机器人目标选择和规则保护条件，确认是否跳过不可操作对象。';
+    return 'Check target selection and protection rules.';
   }
-  return '交给 AI 排查接口、状态版本或服务端异常。';
+  return 'Investigate API, state version, or server exception.';
 }
 
 function getIssueTypeLabel(value: unknown): string {
@@ -2746,7 +3823,6 @@ function getRobotActionLabel(value: unknown): string {
   if (key === 'raid-target') return '发起掠夺';
   if (key === 'friend-link') return '好友关系';
   if (key === 'friend-field-assist') return '灵田助力';
-  if (key === 'recruit-army') return '练兵';
   if (key === 'farmer') return '种田';
   if (key === 'spirit') return '养宠';
   if (key === 'raid') return '掠夺';
@@ -2757,21 +3833,21 @@ function getRobotActionLabel(value: unknown): string {
 
 function getRobotErrorCodeLabel(value: unknown): string {
   const key = String(value ?? '');
-  if (key === 'CONFLICT') return '状态冲突';
+  if (key === 'CONFLICT') return 'state conflict';
   if (key === 'PROGRESSION_BLOCK') return '成长卡点';
   if (key === 'INSUFFICIENT_RESOURCE') return '资源不足';
   if (key === 'INSUFFICIENT_SPIRIT_SOUL') return '兽魂不足';
   if (key === 'RAID_NOT_ALLOWED') return '掠夺受限';
-  if (key === 'STATE_VERSION_CONFLICT') return '状态版本冲突';
-  if (key === 'ROBOT_ACTION_FAILED') return '机器人动作失败';
+  if (key === 'STATE_VERSION_CONFLICT') return 'state version conflict';
+  if (key === 'ROBOT_ACTION_FAILED') return 'robot action failed';
   return key || '-';
 }
 
 function getRobotErrorMessageLabel(value: unknown): string {
   const text = String(value ?? '');
-  if (text === 'Insufficient spirit soul.') return '升级兽魂不足，当前无法继续升级灵宠。';
-  if (text === 'Target is under raid protection.') return '目标处于保护期，当前不能发起掠夺。';
-  if (text === 'fieldVersion conflict.') return '田地状态版本已变化，需要刷新后重试。';
+  if (text === 'Insufficient spirit soul.') return 'insufficient spirit soul';
+  if (text === 'Target is under raid protection.') return 'target is under raid protection';
+  if (text === 'fieldVersion conflict.') return 'field version conflict';
   return text || '-';
 }
 
@@ -2799,22 +3875,22 @@ function summarizeStipendRewards(rewards: ClientFactionStipendReward[]): string 
   const parts = rewards
     .filter((reward) => ['ordinary-soul', 'rare-soul', 'legendary-soul'].includes(reward.kind) && reward.quantity > 0)
     .map((reward) => `${normalizeRewardLabel(reward.label, reward.kind)} +${reward.quantity}`);
-  return parts.length > 0 ? `俸禄：${parts.join('，')}` : '俸禄：未获得突破材料';
+  return parts.length > 0 ? `stipend: ${parts.join('; ')}` : 'stipend: no breakthrough materials';
 }
 
 function summarizeRaidRewards(rewards: ClientRaidRewardItem[]): string {
   const parts = rewards
     .filter((reward) => ['ordinarySoul', 'rareSoul', 'legendarySoul', 'ordinary-soul', 'rare-soul', 'legendary-soul'].includes(reward.seedId) || isSoulLabel(reward.label))
     .map((reward) => `${normalizeRewardLabel(reward.label, reward.seedId)} +${reward.quantity}`);
-  return parts.length > 0 ? `掠夺：${parts.join('，')}` : '掠夺：未获得突破材料';
+  return parts.length > 0 ? `raid: ${parts.join('; ')}` : 'raid: no breakthrough materials';
 }
 
 function normalizeRewardLabel(label: string, fallback: string): string {
-  if (label.includes('普通')) return '普通兽魂';
-  if (label.includes('稀有')) return '稀有兽魂';
+  if (label.includes('普通')) return 'ordinary soul';
+  if (label.includes('稀有')) return 'rare soul';
   if (label.includes('传说')) return '传说兽魂';
-  if (fallback.includes('ordinary')) return '普通兽魂';
-  if (fallback.includes('rare')) return '稀有兽魂';
+  if (fallback.includes('ordinary')) return 'ordinary soul';
+  if (fallback.includes('rare')) return 'rare soul';
   if (fallback.includes('legendary')) return '传说兽魂';
   return label || fallback;
 }
@@ -2823,37 +3899,3 @@ function isSoulLabel(label: string): boolean {
   return label.includes('兽魂') || label.includes('ordinary') || label.includes('rare') || label.includes('legendary');
 }
 
-function getRobotSpiritUpgradeCost(level: number): number | null {
-  if (level >= 50) {
-    return null;
-  }
-  const fixedCosts: Record<number, number> = {
-    1: 1,
-    2: 2,
-    3: 3,
-    4: 4,
-    5: 5,
-    6: 6,
-    7: 8,
-    8: 10,
-    9: 12,
-    10: 15,
-    41: 290,
-    42: 300,
-    43: 320,
-    44: 340,
-    45: 360,
-    46: 390,
-    47: 420,
-    48: 450,
-    49: 490,
-  };
-  if (fixedCosts[level]) return fixedCosts[level];
-  if (level >= 11 && level <= 15) return 18 + (level - 11) * 3;
-  if (level >= 16 && level <= 20) return 35 + (level - 16) * 5;
-  if (level >= 21 && level <= 25) return 63 + (level - 21) * 8;
-  if (level >= 26 && level <= 30) return 105 + (level - 26) * 10;
-  if (level >= 31 && level <= 35) return 160 + (level - 31) * 15;
-  if (level >= 36 && level <= 40) return 240 + (level - 36) * 20;
-  return 1;
-}

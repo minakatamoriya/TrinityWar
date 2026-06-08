@@ -12,8 +12,16 @@ type RobotDashboardViewModel = AdminRobotDashboardResponse & {
     jobs?: {
       items?: AdminRecord[];
     };
+    season?: {
+      config?: Record<string, unknown>;
+      session?: Record<string, unknown>;
+    };
   };
   rule: Record<string, unknown>;
+  stats?: Record<string, unknown>;
+  dayReports?: {
+    items?: AdminRecord[];
+  };
   status: Record<string, unknown>;
   errorSummary: {
     items: AdminRecord[];
@@ -35,6 +43,7 @@ export function RobotTestView(props: {
   onExportErrors: () => void;
   onRefresh: () => void;
   onRunDaily3: () => void;
+  onRunSeasonSimV1Day: () => void;
   onRunPlayerSimV1: () => void;
   onRunSocial3: () => void;
   onSaveAutomationConfig: (input: {
@@ -61,7 +70,9 @@ export function RobotTestView(props: {
   onStartLoop: (input: { intervalSeconds: number; maxRounds: number; hardErrorLimit: number }) => void;
   onStartSocialLoop: (input: { intervalSeconds: number; maxRounds: number; hardErrorLimit: number }) => void;
   onStartPlayerSimV1Loop: (input: { intervalSeconds: number; maxRounds: number; hardErrorLimit: number }) => void;
+  onStartSeasonSimV1Loop: (input: { intervalSeconds: number; totalDays: number; actionDelayMs?: number }) => void;
   onStopLoop: () => void;
+  onStopSeasonSimV1Loop: () => void;
 }): JSX.Element {
   const [configEnabled, setConfigEnabled] = useState(false);
   const [configAutoStart, setConfigAutoStart] = useState(false);
@@ -84,9 +95,20 @@ export function RobotTestView(props: {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
   const [hiddenLogIds, setHiddenLogIds] = useState<Set<string>>(() => new Set());
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
   const consoleRef = useRef<HTMLDivElement | null>(null);
 
   const rule = props.dashboard?.rule ?? {};
+  const stats = toRecord(props.dashboard?.stats);
+  const statTotals = toRecord(stats.totals);
+  const factionStats = toRecordArray(stats.byFaction);
+  const playerStats = toRecordArray(stats.players).slice(0, 9);
+  const dayReports = toRecordArray(props.dashboard?.dayReports?.items);
+  const selectedDayReport = dayReports.find((item) => Number(item.dayIndex) === selectedDayIndex) ?? dayReports[dayReports.length - 1] ?? {};
+  const selectedDayTotals = toRecord(selectedDayReport.totals);
+  const selectedDayValidation = toRecord(selectedDayReport.validation);
+  const selectedDayFactions = toRecordArray(selectedDayReport.byFaction);
+  const selectedDayPlayers = toRecordArray(selectedDayReport.players);
   const status = props.dashboard?.status ?? {};
   const loop = toRecord(props.dashboard?.automation?.loop);
   const automationConfig = toRecord(props.dashboard?.automation?.config);
@@ -94,24 +116,34 @@ export function RobotTestView(props: {
   const dailyAutomationConfig = toRecord(automationConfigs.find((item) => String(item.mode ?? '') === 'daily-3') ?? automationConfig);
   const socialAutomationConfig = toRecord(automationConfigs.find((item) => String(item.mode ?? '') === 'social-3'));
   const playerSimAutomationConfig = toRecord(automationConfigs.find((item) => String(item.mode ?? '') === 'player-sim-v1'));
+  const seasonSession = toRecord(props.dashboard?.automation?.season?.session);
   const automationJobs = props.dashboard?.automation?.jobs?.items ?? [];
+  const latestRun = toRecord(props.dashboard?.runs?.items?.[0]);
   const issues = props.dashboard?.errorSummary.items ?? [];
   const recentActions = props.dashboard?.recentActions.items ?? [];
   const latestActionId = String(recentActions[0]?.id ?? '');
   const hardIssueCount = Number(status.hardIssueCount ?? status.totalErrorCount ?? 0);
   const progressionBlockCount = Number(status.progressionBlockCount ?? 0);
   const loopRunning = Boolean(loop.running);
+  const seasonRunning = Boolean(seasonSession.running);
   const loopMode = String(loop.mode ?? '');
+  const latestRunSummary = stringValue(status.latestRunSummary ?? latestRun.summary, '');
+  const latestRunMode = status.latestRunMode ?? latestRun.mode;
+  const latestRunFinishedAt = status.latestRunFinishedAt ?? latestRun.finishedAt;
+  const seasonLastSummary = toRecord(seasonSession.lastSummary);
   const isBusy = props.busy === 'robot-dashboard'
     || props.busy === 'robot-daily-3'
+    || props.busy === 'robot-season-day'
     || props.busy === 'robot-player-sim-v1'
     || props.busy === 'robot-social-3'
     || props.busy === 'robot-clear-errors'
     || props.busy === 'robot-config-save'
     || props.busy === 'robot-loop-start'
-    || props.busy === 'robot-loop-stop';
+    || props.busy === 'robot-loop-stop'
+    || props.busy === 'robot-season-loop-start'
+    || props.busy === 'robot-season-loop-stop';
 
-  const consoleLines = useMemo(() => buildConsoleLines(recentActions, loop, hiddenLogIds), [recentActions, loop, hiddenLogIds]);
+  const consoleLines = useMemo(() => buildConsoleLines(recentActions, loop, seasonSession, hiddenLogIds), [recentActions, loop, seasonSession, hiddenLogIds]);
   const scrollToBottom = useCallback(() => {
     window.requestAnimationFrame(() => {
       if (consoleRef.current) {
@@ -121,14 +153,14 @@ export function RobotTestView(props: {
   }, []);
 
   useEffect(() => {
-    if (!autoRefresh || !loopRunning) {
+    if (!autoRefresh || (!loopRunning && !seasonRunning)) {
       return undefined;
     }
     const timer = window.setInterval(() => {
       props.onRefresh();
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [autoRefresh, loopRunning, props]);
+  }, [autoRefresh, loopRunning, seasonRunning, props]);
 
   useEffect(() => {
     if (configTouched || Object.keys(automationConfig).length <= 0) {
@@ -168,6 +200,17 @@ export function RobotTestView(props: {
       scrollToBottom();
     }
   }, [autoScroll, latestActionId, consoleLines.length, props.dashboard, scrollToBottom]);
+
+  useEffect(() => {
+    if (dayReports.length <= 0) {
+      setSelectedDayIndex(null);
+      return;
+    }
+    if (selectedDayIndex && dayReports.some((item) => Number(item.dayIndex) === selectedDayIndex)) {
+      return;
+    }
+    setSelectedDayIndex(Number(dayReports[dayReports.length - 1]?.dayIndex ?? 1));
+  }, [dayReports, selectedDayIndex]);
 
   const startLoop = (): void => {
     props.onStartLoop({
@@ -252,7 +295,9 @@ export function RobotTestView(props: {
           </div>
           <div className="robot-toolbar">
             <button className="ghost-button" disabled={isBusy} onClick={props.onRefresh} type="button">刷新</button>
-            <button className="primary-button" disabled={isBusy || loopRunning} onClick={props.onRunPlayerSimV1} type="button">勤奋模拟 1 轮</button>
+            <button className="ghost-button" disabled={isBusy || seasonRunning} onClick={props.onRunSeasonSimV1Day} type="button">重置后运行第 1 天</button>
+            <button className="primary-button" disabled={isBusy || seasonRunning} onClick={() => props.onStartSeasonSimV1Loop({ intervalSeconds: 1, totalDays: 28, actionDelayMs: 0 })} type="button">启动 28 天赛季模拟</button>
+            <button className="ghost-button" disabled={isBusy || !seasonRunning} onClick={props.onStopSeasonSimV1Loop} type="button">停止模拟</button>
             <button className="ghost-button" disabled={props.busy === 'robot-clear-errors'} onClick={props.onClearErrors} type="button">清空问题</button>
             <button className="ghost-button" disabled={issues.length <= 0} onClick={props.onExportErrors} type="button">导出问题</button>
           </div>
@@ -279,121 +324,264 @@ export function RobotTestView(props: {
           <span>最新任务：{stringValue(status.latestRunId, '-')}</span>
           <span>最后运行：{formatDateTime(status.latestRunAt)}</span>
           <span>循环：{loopRunning ? `${getModeLabel(loopMode)} 运行中` : '未运行'}</span>
+          <span>赛季：{seasonRunning ? formatSeasonProgress(seasonSession) : '未运行'}</span>
           <span>已跑轮数：{stringValue(loop.completedRounds, '0')} / {stringValue(loop.maxRounds, '-')}</span>
           <span>下次运行：{formatDateTime(loop.nextRunAt)}</span>
         </div>
       </section>
 
-      <section className="robot-scenario-grid">
-        <RobotScenarioPanel
-          autoStart={configAutoStart}
-          busy={isBusy}
-          configTouched={configTouched}
-          enabled={configEnabled}
-          hardErrorLimit={configHardErrorLimit}
-          loopRunning={loopRunning}
-          maxRounds={configMaxRounds}
-          mode="daily-3"
-          onAutoStartChange={(value) => {
-            markConfigTouched();
-            setConfigAutoStart(value);
-          }}
-          onEnabledChange={(value) => {
-            markConfigTouched();
-            setConfigEnabled(value);
-          }}
-          onHardErrorLimitChange={(value) => {
-            markConfigTouched();
-            setConfigHardErrorLimit(value);
-          }}
-          onIntervalChange={(value) => {
-            markConfigTouched();
-            setConfigIntervalSeconds(value);
-          }}
-          onMaxRoundsChange={(value) => {
-            markConfigTouched();
-            setConfigMaxRounds(value);
-          }}
-          onRunOnce={props.onRunDaily3}
-          onSave={saveAutomationConfig}
-          onStartLoop={startLoop}
-          onStopLoop={props.onStopLoop}
-          intervalSeconds={configIntervalSeconds}
-          updatedAt={dailyAutomationConfig.updatedAt}
-        />
-        <RobotScenarioPanel
-          autoStart={socialConfigAutoStart}
-          busy={isBusy}
-          configTouched={socialConfigTouched}
-          enabled={socialConfigEnabled}
-          hardErrorLimit={socialConfigHardErrorLimit}
-          loopRunning={loopRunning}
-          maxRounds={socialConfigMaxRounds}
-          mode="social-3"
-          onAutoStartChange={(value) => {
-            markSocialConfigTouched();
-            setSocialConfigAutoStart(value);
-          }}
-          onEnabledChange={(value) => {
-            markSocialConfigTouched();
-            setSocialConfigEnabled(value);
-          }}
-          onHardErrorLimitChange={(value) => {
-            markSocialConfigTouched();
-            setSocialConfigHardErrorLimit(value);
-          }}
-          onIntervalChange={(value) => {
-            markSocialConfigTouched();
-            setSocialConfigIntervalSeconds(value);
-          }}
-          onMaxRoundsChange={(value) => {
-            markSocialConfigTouched();
-            setSocialConfigMaxRounds(value);
-          }}
-          onRunOnce={props.onRunSocial3}
-          onSave={saveSocialAutomationConfig}
-          onStartLoop={startSocialLoop}
-          onStopLoop={props.onStopLoop}
-          intervalSeconds={socialConfigIntervalSeconds}
-          updatedAt={socialAutomationConfig.updatedAt}
-        />
-        <RobotScenarioPanel
-          autoStart={playerSimConfigAutoStart}
-          busy={isBusy}
-          configTouched={playerSimConfigTouched}
-          enabled={playerSimConfigEnabled}
-          hardErrorLimit={playerSimConfigHardErrorLimit}
-          loopRunning={loopRunning}
-          maxRounds={playerSimConfigMaxRounds}
-          mode="player-sim-v1"
-          onAutoStartChange={(value) => {
-            markPlayerSimConfigTouched();
-            setPlayerSimConfigAutoStart(value);
-          }}
-          onEnabledChange={(value) => {
-            markPlayerSimConfigTouched();
-            setPlayerSimConfigEnabled(value);
-          }}
-          onHardErrorLimitChange={(value) => {
-            markPlayerSimConfigTouched();
-            setPlayerSimConfigHardErrorLimit(value);
-          }}
-          onIntervalChange={(value) => {
-            markPlayerSimConfigTouched();
-            setPlayerSimConfigIntervalSeconds(value);
-          }}
-          onMaxRoundsChange={(value) => {
-            markPlayerSimConfigTouched();
-            setPlayerSimConfigMaxRounds(value);
-          }}
-          onRunOnce={props.onRunPlayerSimV1}
-          onSave={savePlayerSimAutomationConfig}
-          onStartLoop={startPlayerSimLoop}
-          onStopLoop={props.onStopLoop}
-          intervalSeconds={playerSimConfigIntervalSeconds}
-          updatedAt={playerSimAutomationConfig.updatedAt}
-        />
+      <section className="panel robot-run-summary">
+        <div className="panel-head compact">
+          <div>
+            <p className="eyebrow">Run Summary</p>
+            <h3>最近统计</h3>
+          </div>
+          <span className={getJobStatusClass(status.rawState ?? latestRun.status)}>
+            {getJobStatusLabel(status.rawState ?? latestRun.status)}
+          </span>
+        </div>
+        <div className="robot-summary-body">
+          <p>{latestRunSummary || (seasonRunning ? '赛季模拟正在运行，完成后会生成最终统计。' : '还没有可显示的运行统计。')}</p>
+          {seasonRunning ? (
+            <div className="robot-summary-live">
+              <span>当前进度：{formatSeasonProgress(seasonSession)}</span>
+              <span>最近模拟日：{stringValue(seasonLastSummary.dateKey, '-')}</span>
+              <span>累计成功：{stringValue(seasonSession.totalSuccessActionCount, '0')}</span>
+              <span>累计硬错误：{stringValue(seasonSession.totalFailedActionCount, '0')}</span>
+              <span>累计卡点：{stringValue(seasonSession.totalBlockedActionCount, '0')}</span>
+            </div>
+          ) : null}
+        </div>
+        <div className="robot-summary-grid">
+          <RuleItem label="模式" value={getModeLabel(latestRunMode)} />
+          <RuleItem label="最新任务" value={stringValue(status.latestRunId ?? latestRun.id, '-')} />
+          <RuleItem label="开始时间" value={formatDateTime(status.latestRunAt ?? latestRun.startedAt)} />
+          <RuleItem label="结束时间" value={formatDateTime(latestRunFinishedAt)} />
+          <RuleItem label="成功动作" value={stringValue(status.successActionCount ?? latestRun.successActionCount, '0')} />
+          <RuleItem label="失败动作" value={stringValue(status.failedActionCount ?? latestRun.failedActionCount, '0')} />
+        </div>
+        {Number(stats.playerCount ?? 0) > 0 ? (
+          <>
+            <div className="robot-summary-grid">
+              <RuleItem label="快照玩家" value={`${stringValue(stats.playerCount, '0')} 人 / ${stringValue(stats.snapshotCount, '0')} 条快照`} />
+              <RuleItem label="金库存量" value={stringValue(statTotals.vaultGold, '0')} />
+              <RuleItem label="钱包金币" value={stringValue(statTotals.walletGold, '0')} />
+              <RuleItem label="贡献总量" value={stringValue(statTotals.contributionScore, '0')} />
+              <RuleItem label="灵根库存" value={stringValue(statTotals.spiritRoot, '0')} />
+              <RuleItem label="兽魂材料" value={`普通 ${stringValue(statTotals.ordinarySoul, '0')} / 稀有 ${stringValue(statTotals.rareSoul, '0')} / 传说 ${stringValue(statTotals.legendarySoul, '0')}`} />
+            </div>
+            <div className="robot-faction-stats">
+              {factionStats.map((item) => (
+                <article key={stringValue(item.factionCode, 'unknown')}>
+                  <strong>{stringValue(item.factionName, getFactionLabel(item.factionCode))}</strong>
+                  <span>玩家 {stringValue(item.playerCount, '0')}，金库 {stringValue(item.vaultGold, '0')}，灵根 {stringValue(item.spiritRoot, '0')}</span>
+                  <span>动作 成功 {stringValue(item.successActionCount, '0')} / 卡点 {stringValue(item.blockedActionCount, '0')} / 失败 {stringValue(item.failedActionCount, '0')}</span>
+                </article>
+              ))}
+            </div>
+            <div className="robot-player-stats">
+              {playerStats.map((item) => (
+                <article key={stringValue(item.robotKey, '')}>
+                  <strong>{stringValue(item.nickname, item.robotKey ? String(item.robotKey) : '-')}（{stringValue(item.factionName, getFactionLabel(item.factionCode))}）</strong>
+                  <span>金库 {stringValue(item.vaultGold, '0')}，灵宠 Lv.{stringValue(item.mainSpiritLevel, '-')}，阶段 {stringValue(item.mainSpiritStage, '-')}</span>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : null}
       </section>
+
+      <section className="panel robot-day-report">
+        <div className="panel-head compact">
+          <div>
+            <p className="eyebrow">Day Report</p>
+            <h3>按天统计</h3>
+          </div>
+          <span className={Boolean(selectedDayValidation.ok) ? 'status-pill ok' : dayReports.length > 0 ? 'status-pill warn' : 'status-pill neutral'}>
+            {dayReports.length > 0 ? Boolean(selectedDayValidation.ok) ? '校验通过' : `${stringValue(selectedDayValidation.issueCount, '0')} 个校验问题` : '暂无日报'}
+          </span>
+        </div>
+        {dayReports.length <= 0 ? (
+          <div className="empty-block">运行第 1 天验证或 28 天赛季模拟后生成 Day Report。</div>
+        ) : (
+          <div className="robot-day-layout">
+            <div className="robot-day-list">
+              {dayReports.map((report) => {
+                const validation = toRecord(report.validation);
+                const isActive = Number(report.dayIndex) === Number(selectedDayReport.dayIndex);
+                return (
+                  <button className={isActive ? 'robot-day-tab active' : 'robot-day-tab'} key={stringValue(report.dayIndex, '')} onClick={() => setSelectedDayIndex(Number(report.dayIndex))} type="button">
+                    <strong>Day {stringValue(report.dayIndex, '-')}</strong>
+                    <span>{stringValue(report.dateKey, '-')}</span>
+                    <small>{Boolean(validation.ok) ? 'OK' : `${stringValue(validation.issueCount, '0')} issues`}</small>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="robot-day-detail">
+              <div className="robot-summary-grid">
+                <RuleItem label="模拟日" value={`Day ${stringValue(selectedDayReport.dayIndex, '-')} · ${stringValue(selectedDayReport.dateKey, '-')}`} />
+                <RuleItem label="快照" value={`${stringValue(selectedDayReport.snapshotCount, '0')} / ${stringValue(selectedDayValidation.expectedPlayers, '9')}`} />
+                <RuleItem label="种田收入" value={stringValue(selectedDayTotals.farmGoldIncome, '0')} />
+                <RuleItem label="俸禄领取" value={`${stringValue(selectedDayTotals.stipendClaimCount, '0')} 次`} />
+                <RuleItem label="投喂次数" value={stringValue(selectedDayTotals.feedCount, '0')} />
+                <RuleItem label="掠夺" value={`${stringValue(selectedDayTotals.raidWinCount, '0')} 胜 / ${stringValue(selectedDayTotals.raidCount, '0')} 次`} />
+                <RuleItem label="A 掠夺收入" value={stringValue(selectedDayTotals.attackerGainGold, '0')} />
+                <RuleItem label="B 防守损失" value={stringValue(selectedDayTotals.defenderLostGold, '0')} />
+                <RuleItem label="净金币变化" value={stringValue(selectedDayTotals.netGoldDelta, '0')} />
+                <RuleItem label="动作" value={`成功 ${stringValue(selectedDayTotals.successActionCount, '0')} / 卡点 ${stringValue(selectedDayTotals.blockedActionCount, '0')} / 失败 ${stringValue(selectedDayTotals.failedActionCount, '0')}`} />
+              </div>
+              <div className="robot-day-subgrid">
+                {selectedDayFactions.map((item) => (
+                  <article key={stringValue(item.factionCode, 'unknown')}>
+                    <strong>{stringValue(item.factionName, getFactionLabel(item.factionCode))}</strong>
+                    <span>{stringValue(item.buffExplanation, '-')}</span>
+                    <span>种田 {stringValue(item.farmGoldIncome, '0')}，掠夺收入 {stringValue(item.attackerGainGold, '0')}，防守损失 {stringValue(item.defenderLostGold, '0')}</span>
+                    <span>灵根 {stringValue(item.stipendSpiritRoot, '0')}，普通/稀有/传说兽魂 {stringValue(item.stipendOrdinarySoul, '0')} / {stringValue(item.stipendRareSoul, '0')} / {stringValue(item.stipendLegendarySoul, '0')}</span>
+                  </article>
+                ))}
+              </div>
+              <div className="robot-day-player-table">
+                {selectedDayPlayers.map((item) => (
+                  <article key={stringValue(item.playerId, '')}>
+                    <strong>{stringValue(item.nickname, item.robotKey ? String(item.robotKey) : '-')}（{stringValue(item.factionName, getFactionLabel(item.factionCode))}）</strong>
+                    <span>种田 {stringValue(item.farmGoldIncome, '0')}，掠夺 +{stringValue(item.attackerGainGold, '0')} / -{stringValue(item.defenderLostGold, '0')}，净 {stringValue(item.netGoldDelta, '0')}</span>
+                    <span>动作 {stringValue(item.actionCount, '0')} 次，成功 {stringValue(item.successActionCount, '0')}，卡点 {stringValue(item.blockedActionCount, '0')}，失败 {stringValue(item.failedActionCount, '0')}</span>
+                    <span>日末灵宠 Lv.{stringValue(toRecord(item.endState).mainSpiritLevel, '-')}，金库 {stringValue(toRecord(item.endState).vaultGold, '0')}</span>
+                  </article>
+                ))}
+              </div>
+              {!Boolean(selectedDayValidation.ok) ? (
+                <div className="robot-day-issues">
+                  {toRecordArray(selectedDayValidation.issues).map((issue, index) => (
+                    <span key={`${stringValue(issue.code, 'issue')}-${index}`}>{stringValue(issue.message, stringValue(issue.code, '未知校验问题'))}</span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <details className="panel legacy-robot-tools">
+        <summary>
+          <span>
+            <strong>旧验证工具</strong>
+            <small>日常三阵营、社交助力、勤奋玩家模拟保留为接口冒烟和回归检查</small>
+          </span>
+          <span className="status-pill neutral">可展开</span>
+        </summary>
+        <section className="robot-scenario-grid">
+          <RobotScenarioPanel
+            autoStart={configAutoStart}
+            busy={isBusy}
+            configTouched={configTouched}
+            enabled={configEnabled}
+            hardErrorLimit={configHardErrorLimit}
+            loopRunning={loopRunning}
+            maxRounds={configMaxRounds}
+            mode="daily-3"
+            onAutoStartChange={(value) => {
+              markConfigTouched();
+              setConfigAutoStart(value);
+            }}
+            onEnabledChange={(value) => {
+              markConfigTouched();
+              setConfigEnabled(value);
+            }}
+            onHardErrorLimitChange={(value) => {
+              markConfigTouched();
+              setConfigHardErrorLimit(value);
+            }}
+            onIntervalChange={(value) => {
+              markConfigTouched();
+              setConfigIntervalSeconds(value);
+            }}
+            onMaxRoundsChange={(value) => {
+              markConfigTouched();
+              setConfigMaxRounds(value);
+            }}
+            onRunOnce={props.onRunDaily3}
+            onSave={saveAutomationConfig}
+            onStartLoop={startLoop}
+            onStopLoop={props.onStopLoop}
+            intervalSeconds={configIntervalSeconds}
+            updatedAt={dailyAutomationConfig.updatedAt}
+          />
+          <RobotScenarioPanel
+            autoStart={socialConfigAutoStart}
+            busy={isBusy}
+            configTouched={socialConfigTouched}
+            enabled={socialConfigEnabled}
+            hardErrorLimit={socialConfigHardErrorLimit}
+            loopRunning={loopRunning}
+            maxRounds={socialConfigMaxRounds}
+            mode="social-3"
+            onAutoStartChange={(value) => {
+              markSocialConfigTouched();
+              setSocialConfigAutoStart(value);
+            }}
+            onEnabledChange={(value) => {
+              markSocialConfigTouched();
+              setSocialConfigEnabled(value);
+            }}
+            onHardErrorLimitChange={(value) => {
+              markSocialConfigTouched();
+              setSocialConfigHardErrorLimit(value);
+            }}
+            onIntervalChange={(value) => {
+              markSocialConfigTouched();
+              setSocialConfigIntervalSeconds(value);
+            }}
+            onMaxRoundsChange={(value) => {
+              markSocialConfigTouched();
+              setSocialConfigMaxRounds(value);
+            }}
+            onRunOnce={props.onRunSocial3}
+            onSave={saveSocialAutomationConfig}
+            onStartLoop={startSocialLoop}
+            onStopLoop={props.onStopLoop}
+            intervalSeconds={socialConfigIntervalSeconds}
+            updatedAt={socialAutomationConfig.updatedAt}
+          />
+          <RobotScenarioPanel
+            autoStart={playerSimConfigAutoStart}
+            busy={isBusy}
+            configTouched={playerSimConfigTouched}
+            enabled={playerSimConfigEnabled}
+            hardErrorLimit={playerSimConfigHardErrorLimit}
+            loopRunning={loopRunning}
+            maxRounds={playerSimConfigMaxRounds}
+            mode="player-sim-v1"
+            onAutoStartChange={(value) => {
+              markPlayerSimConfigTouched();
+              setPlayerSimConfigAutoStart(value);
+            }}
+            onEnabledChange={(value) => {
+              markPlayerSimConfigTouched();
+              setPlayerSimConfigEnabled(value);
+            }}
+            onHardErrorLimitChange={(value) => {
+              markPlayerSimConfigTouched();
+              setPlayerSimConfigHardErrorLimit(value);
+            }}
+            onIntervalChange={(value) => {
+              markPlayerSimConfigTouched();
+              setPlayerSimConfigIntervalSeconds(value);
+            }}
+            onMaxRoundsChange={(value) => {
+              markPlayerSimConfigTouched();
+              setPlayerSimConfigMaxRounds(value);
+            }}
+            onRunOnce={props.onRunPlayerSimV1}
+            onSave={savePlayerSimAutomationConfig}
+            onStartLoop={startPlayerSimLoop}
+            onStopLoop={props.onStopLoop}
+            intervalSeconds={playerSimConfigIntervalSeconds}
+            updatedAt={playerSimAutomationConfig.updatedAt}
+          />
+        </section>
+      </details>
 
       <section className="panel">
         <div className="panel-head compact">
@@ -460,15 +648,13 @@ export function RobotTestView(props: {
         <div className="panel-head compact">
           <div>
             <p className="eyebrow">Rule</p>
-            <h3>{stringValue(rule.name, '3 阵营日常循环')}</h3>
+            <h3>{stringValue(rule.name, '勤奋玩家赛季模拟 v1')}</h3>
           </div>
         </div>
         <div className="robot-rule-grid">
-          <RuleItem label="机器人" value={stringValue(rule.robots, '-')} />
-          <RuleItem label="行为" value={stringValue(rule.actions, '-')} />
-          <RuleItem label="掠夺关系" value={stringValue(rule.raidRelation, '-')} />
-          <RuleItem label="成熟处理" value={stringValue(rule.maturityPolicy, '-')} />
-          <RuleItem label="资源来源" value={stringValue(rule.resourcePolicy, '-')} />
+          {getRuleItems(rule).map((item) => (
+            <RuleItem key={item.key} label={item.label} value={item.value} />
+          ))}
         </div>
       </section>
 
@@ -587,7 +773,7 @@ function RobotScenarioPanel(props: {
   );
 }
 
-function buildConsoleLines(actions: Array<Record<string, unknown>>, loop: Record<string, unknown>, hiddenLogIds: Set<string>): ConsoleLine[] {
+function buildConsoleLines(actions: Array<Record<string, unknown>>, loop: Record<string, unknown>, seasonSession: Record<string, unknown>, hiddenLogIds: Set<string>): ConsoleLine[] {
   const lines = actions
     .filter((item) => !hiddenLogIds.has(String(item.id ?? '')))
     .slice()
@@ -595,15 +781,18 @@ function buildConsoleLines(actions: Array<Record<string, unknown>>, loop: Record
     .map((item) => {
       const status = String(item.status ?? '');
       const actionName = String(item.actionName ?? '');
-      const role = String(item.robotRole ?? '');
       const result = toRecord(item.resultSummaryJson);
       const errorMessage = String(item.errorMessage ?? '');
       const summary = String(result.summary ?? result.sourceSummary ?? '');
+      const actor = formatRobotActor(item);
+      const target = actionName === 'raid-target' && result.defenderNickname
+        ? ` -> ${String(result.defenderNickname)}（${getFactionLabel(result.defenderFactionCode)}）`
+        : '';
       return {
         id: String(item.id ?? `${item.runId}-${item.actionName}-${item.createdAt}`),
         at: String(item.createdAt ?? ''),
         tone: getConsoleTone(status),
-        text: `${getRoleLabel(role)}：${getActionLabel(actionName)} ${getStatusLabel(status)}${errorMessage ? `，${getErrorMessageLabel(errorMessage)}` : summary ? `，${summary}` : ''}`,
+        text: `${actor}${target}：${getActionLabel(actionName)} ${getStatusLabel(status)}${errorMessage ? `，${getErrorMessageLabel(errorMessage)}` : summary ? `，${summary}` : ''}`,
       };
     });
 
@@ -624,6 +813,16 @@ function buildConsoleLines(actions: Array<Record<string, unknown>>, loop: Record
     });
   }
 
+  if (Boolean(seasonSession.running)) {
+    const lastSummary = toRecord(seasonSession.lastSummary);
+    const runKindLabel = String(seasonSession.runKind ?? '') === 'single-day' ? '单日模拟' : '赛季模拟';
+    lines.push({
+      id: `season-running-${String(seasonSession.runId ?? '')}-${String(seasonSession.currentDayIndex ?? '0')}`,
+      at: String(seasonSession.lastDayAt ?? seasonSession.startedAt ?? ''),
+      tone: 'info',
+      text: `${runKindLabel}运行中：${formatSeasonProgress(seasonSession)}，最后状态 ${stringValue(seasonSession.lastStatus, '等待执行')}${lastSummary.dateKey ? `，模拟日期 ${String(lastSummary.dateKey)}` : ''}。`,
+    });
+  }
   return lines.slice(-100);
 }
 
@@ -641,11 +840,23 @@ function getStatusLabel(status: string): string {
   return status || '-';
 }
 
+function formatSeasonProgress(seasonSession: Record<string, unknown>): string {
+  const completedDays = Math.max(Number(seasonSession.currentDayIndex ?? 0), 0);
+  const totalDays = Math.max(Number(seasonSession.totalDays ?? 28), 1);
+  if (completedDays <= 0) {
+    return `准备第 1 天 / 共 ${totalDays} 天`;
+  }
+  if (completedDays >= totalDays) {
+    return `已完成 ${totalDays} / ${totalDays} 天`;
+  }
+  return `已完成 ${completedDays} 天，准备第 ${completedDays + 1} 天 / 共 ${totalDays} 天`;
+}
 function getModeLabel(value: unknown): string {
   const key = String(value ?? '');
   if (key === 'daily-3') return '日常三阵营';
   if (key === 'social-3') return '社交助力';
   if (key === 'player-sim-v1') return '勤奋玩家模拟';
+  if (key === 'season-sim-v1') return '赛季模拟';
   return key || '-';
 }
 
@@ -661,6 +872,45 @@ function toRecord(value: unknown): Record<string, unknown> {
     return {};
   }
   return value as Record<string, unknown>;
+}
+
+function toRecordArray(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map(toRecord).filter((item) => Object.keys(item).length > 0);
+}
+
+function getRuleItems(rule: Record<string, unknown>): Array<{ key: string; label: string; value: string }> {
+  const labels: Record<string, string> = {
+    robots: '机器人',
+    clock: '模拟时钟',
+    dailyFlow: '每日流程',
+    raidRelation: '掠夺规则',
+    factionBuffs: '阵营 BUFF',
+    dataPolicy: '统计口径',
+  };
+
+  return Object.entries(labels).map(([key, label]) => ({
+    key,
+    label,
+    value: stringValue(rule[key], '-'),
+  }));
+}
+
+function formatRobotActor(item: Record<string, unknown>): string {
+  const factionName = stringValue(item.factionName, getFactionLabel(item.factionCode));
+  const nickname = stringValue(item.robotNickname, stringValue(item.robotKey, '-'));
+  const role = getRoleLabel(item.robotRole);
+  return `${nickname}（${factionName}，${role}）`;
+}
+
+function getFactionLabel(value: unknown): string {
+  const key = String(value ?? '');
+  if (key === 'human') return '人界';
+  if (key === 'immortal') return '仙界';
+  if (key === 'demon') return '魔界';
+  return key || '未知阵营';
 }
 
 function getRoleLabel(value: unknown): string {
@@ -687,7 +937,6 @@ function getActionLabel(value: unknown): string {
   if (key === 'raid-target') return '发起掠夺';
   if (key === 'friend-link') return '好友关系';
   if (key === 'friend-field-assist') return '灵田助力';
-  if (key === 'recruit-army') return '练兵';
   if (key === 'farmer') return '种田';
   if (key === 'spirit') return '养宠';
   if (key === 'raid') return '掠夺';

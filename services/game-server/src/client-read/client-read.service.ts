@@ -182,18 +182,19 @@ export class ClientReadService {
   async getHomeSummary(
     playerId: string,
     client?: Prisma.TransactionClient | PrismaClient,
+    now: Date = new Date(),
   ): Promise<HomeSummaryResponse> {
     if (!client) {
-      return this.prisma.transaction(async (transactionClient) => this.getHomeSummary(playerId, transactionClient));
+      return this.prisma.transaction(async (transactionClient) => this.getHomeSummary(playerId, transactionClient, now));
     }
 
-    await this.armyTrainingLifecycleService.settlePlayerTrainingQueues(client, playerId);
-    await this.passiveIncomeLifecycleService.settlePlayerPassiveIncome(client, playerId);
-    await this.fieldLifecycleService.settlePlayerFields(client, playerId);
-    const dateKey = getLocalDateKey();
+    await this.armyTrainingLifecycleService.settlePlayerTrainingQueues(client, playerId, now);
+    await this.passiveIncomeLifecycleService.settlePlayerPassiveIncome(client, playerId, now);
+    await this.fieldLifecycleService.settlePlayerFields(client, playerId, now);
+    const dateKey = getLocalDateKey(now);
     await this.dailyTaskLifecycleService.ensurePlayerDailyTasks(client, playerId, dateKey);
     await this.dailyFactionTaskLifecycleService.ensurePlayerDailyFactionTasks(client, playerId, dateKey);
-    const readModel = await this.clientReadRepository.findHomeSummary(playerId, dateKey, client);
+    const readModel = await this.clientReadRepository.findHomeSummary(playerId, dateKey, client, now);
 
     if (!readModel) {
       throw new BusinessError({
@@ -226,18 +227,19 @@ export class ClientReadService {
   async getSceneContent(
     playerId: string,
     client?: Prisma.TransactionClient | PrismaClient,
+    now: Date = new Date(),
   ): Promise<ClientSceneContentResponse> {
     if (!client) {
-      return this.prisma.transaction(async (transactionClient) => this.getSceneContent(playerId, transactionClient));
+      return this.prisma.transaction(async (transactionClient) => this.getSceneContent(playerId, transactionClient, now));
     }
 
-    await this.armyTrainingLifecycleService.settlePlayerTrainingQueues(client, playerId);
-    await this.passiveIncomeLifecycleService.settlePlayerPassiveIncome(client, playerId);
-    await this.fieldLifecycleService.settlePlayerFields(client, playerId);
-    await this.dailyFactionTaskLifecycleService.ensurePlayerDailyFactionTasks(client, playerId, getLocalDateKey());
-    await this.ensureRaidTargetPool(client, playerId);
+    await this.armyTrainingLifecycleService.settlePlayerTrainingQueues(client, playerId, now);
+    await this.passiveIncomeLifecycleService.settlePlayerPassiveIncome(client, playerId, now);
+    await this.fieldLifecycleService.settlePlayerFields(client, playerId, now);
+    await this.dailyFactionTaskLifecycleService.ensurePlayerDailyFactionTasks(client, playerId, getLocalDateKey(now));
+    await this.ensureRaidTargetPool(client, playerId, { now });
     const [readModel, codex] = await Promise.all([
-      this.clientReadRepository.findSceneContent(playerId, client),
+      this.clientReadRepository.findSceneContent(playerId, client, now),
       client.playerSpiritCodex.findMany({
         where: { playerId },
         select: { spiritDefinition: { select: { spiritId: true } }, hasSeen: true },
@@ -253,7 +255,7 @@ export class ClientReadService {
     }
 
     readModel.taskConfigs = await this.listTaskConfigsForClientRead(client);
-    return this.sceneContentAssembler.assemble(readModel, codex);
+    return this.sceneContentAssembler.assemble(readModel, codex, now);
   }
 
   private async listTaskConfigsForClientRead(client: Prisma.TransactionClient | PrismaClient): Promise<Awaited<ReturnType<TaskConfigService['listAdminTaskConfigs']>>> {
@@ -273,16 +275,16 @@ export class ClientReadService {
     }
 
     await client.raidTargetPool.deleteMany({ where: { ownerPlayerId: playerId } });
-    await this.ensureRaidTargetPool(client, playerId, { force: true });
+    await this.ensureRaidTargetPool(client, playerId, { force: true, now: new Date() });
     return this.getSceneContent(playerId, client);
   }
 
   private async ensureRaidTargetPool(
     client: Prisma.TransactionClient | PrismaClient,
     playerId: string,
-    options: { force?: boolean } = {},
+    options: { force?: boolean; now?: Date } = {},
   ): Promise<void> {
-    const now = new Date();
+    const now = options.now ?? new Date();
     const isTutorialPlayer = await this.isPlayerInRaidTutorial(client, playerId);
     const playerFactionId = await this.getPlayerFactionId(client, playerId);
 

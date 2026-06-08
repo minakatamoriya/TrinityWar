@@ -30,7 +30,7 @@ export function OrderView(props: {
         <div className="detail-stack">
           <InfoSection
             title="订单信息"
-            rows={recordRows(props.orderDetail.order, ['id', 'attackerPlayerId', 'defenderPlayerId', 'defenderFieldSlotId', 'sourceTargetPoolId', 'mode', 'status', 'dispatchedUnitCount', 'requestIdempotencyKey', 'dispatchedAt', 'settleAt', 'settledAt', 'settlementVersion', 'createdAt', 'updatedAt'])}
+            rows={recordRows(props.orderDetail.order, ['id', 'attackerPlayerId', 'defenderPlayerId', 'defenderFieldSlotId', 'sourceTargetPoolId', 'mode', 'status', 'requestIdempotencyKey', 'dispatchedAt', 'settleAt', 'settledAt', 'settlementVersion', 'createdAt', 'updatedAt'])}
           />
           <InfoSection
             title="结算结果"

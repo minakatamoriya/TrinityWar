@@ -184,6 +184,14 @@ export class AdminReadonlyService {
     return this.robotService.updatePlayerSimV1AutomationConfig(body);
   }
 
+  getRobotSeasonSimV1AutomationConfig(): Promise<Record<string, unknown>> {
+    return this.robotService.getSeasonSimV1AutomationConfig();
+  }
+
+  updateRobotSeasonSimV1AutomationConfig(body: unknown): Promise<Record<string, unknown>> {
+    return this.robotService.updateSeasonSimV1AutomationConfig(body);
+  }
+
   runRobotSmoke(): Promise<Record<string, unknown>> {
     return this.robotService.runSmoke();
   }
@@ -200,6 +208,10 @@ export class AdminReadonlyService {
     return this.robotService.runPlayerSimV1();
   }
 
+  runRobotSeasonSimV1Day(body: unknown): Promise<Record<string, unknown>> {
+    return this.robotService.runSeasonSimV1Day(body);
+  }
+
   startRobotDaily3Loop(body: unknown): Promise<Record<string, unknown>> {
     return this.robotService.startDaily3Loop(body);
   }
@@ -212,8 +224,16 @@ export class AdminReadonlyService {
     return this.robotService.startPlayerSimV1Loop(body);
   }
 
+  startRobotSeasonSimV1Loop(body: unknown): Promise<Record<string, unknown>> {
+    return this.robotService.startSeasonSimV1Loop(body);
+  }
+
   stopRobotDaily3Loop(): Promise<Record<string, unknown>> {
     return this.robotService.stopDaily3Loop();
+  }
+
+  stopRobotSeasonSimV1Loop(): Promise<Record<string, unknown>> {
+    return this.robotService.stopSeasonSimV1Loop();
   }
 
   clearRobotErrors(): Promise<Record<string, unknown>> {
@@ -1345,7 +1365,6 @@ export class AdminReadonlyService {
         },
         wallet: true,
         buildings: true,
-        army: true,
         spiritResource: true,
         spiritSlots: {
           orderBy: { slotIndex: 'asc' },
@@ -1410,7 +1429,6 @@ export class AdminReadonlyService {
       },
       wallet: player.wallet ? normalizeDates(player.wallet) : null,
       building: player.buildings ? normalizeDates(player.buildings) : null,
-      army: player.army ? normalizeDates(player.army) : null,
       spirit: {
         resource: player.spiritResource ? normalizeDates(player.spiritResource) : null,
         mainSlot: (() => {
@@ -1698,62 +1716,38 @@ export class AdminReadonlyService {
     const { page, pageSize, skip, take } = parsePagination(query);
     const status = query.status?.trim();
     const type = query.type?.trim();
-    const mergeTake = skip + take;
-    const trainingWhere = { playerId, ...(status ? { status: status as never } : {}) };
     const raidWhere = {
       OR: [{ attackerPlayerId: playerId }, { defenderPlayerId: playerId }],
       ...(status ? { status: status as never } : {}),
     };
-    const [trainingQueues, trainingTotal, raidOrders, raidTotal] = await Promise.all([
-      type && type !== 'army-training'
-        ? Promise.resolve([])
-        : this.prisma.db.armyTrainingQueue.findMany({
-          where: trainingWhere,
-          orderBy: { createdAt: 'desc' },
-          take: mergeTake,
-        }),
-      type && type !== 'army-training'
-        ? Promise.resolve(0)
-        : this.prisma.db.armyTrainingQueue.count({ where: trainingWhere }),
+    const [raidOrders, raidTotal] = await Promise.all([
       type && type !== 'raid'
         ? Promise.resolve([])
         : this.prisma.db.raidOrder.findMany({
           where: raidWhere,
           orderBy: { createdAt: 'desc' },
-          take: mergeTake,
+          skip,
+          take,
         }),
       type && type !== 'raid'
         ? Promise.resolve(0)
         : this.prisma.db.raidOrder.count({ where: raidWhere }),
     ]);
-    const items = [
-      ...trainingQueues.map((queue) => normalizeDates({
-        type: 'army-training',
-        orderId: queue.id,
-        status: queue.status,
-        queuedCount: queue.queuedCount,
-        totalCostGold: queue.totalCostGold,
-        startedAt: queue.startedAt,
-        finishAt: queue.finishAt,
-        createdAt: queue.createdAt,
-      })),
-      ...raidOrders.map((order) => normalizeDates({
+    const items = raidOrders.map((order) => normalizeDates({
         type: 'raid',
         orderId: order.id,
         status: order.status,
         attackerPlayerId: order.attackerPlayerId,
         defenderPlayerId: order.defenderPlayerId,
-        dispatchedUnitCount: order.dispatchedUnitCount,
         dispatchedAt: order.dispatchedAt,
         settleAt: order.settleAt,
         settledAt: order.settledAt,
         createdAt: order.createdAt,
-      })),
-    ].sort((left, right) => String(right['createdAt'] ?? '').localeCompare(String(left['createdAt'] ?? '')));
+      }));
 
     return {
-      items: items.slice(skip, skip + take),
-      pagination: { page, pageSize, total: trainingTotal + raidTotal },
+      items,
+      pagination: { page, pageSize, total: raidTotal },
     };
   }
 
@@ -1784,7 +1778,6 @@ export class AdminReadonlyService {
         sourceTargetPoolId: order.sourceTargetPoolId,
         mode: order.mode,
         status: order.status,
-        dispatchedUnitCount: order.dispatchedUnitCount,
         requestIdempotencyKey: order.requestIdempotencyKey,
         dispatchedAt: order.dispatchedAt,
         settleAt: order.settleAt,

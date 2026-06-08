@@ -265,6 +265,13 @@ function App(): JSX.Element {
     }
   };
 
+  const runRobotSeasonSimV1Day = async (): Promise<void> => {
+    const result = await run('robot-season-day', () => adminFetch<AdminRecord>('/robots/season-sim-v1/day', jsonRequest('POST', { actionDelayMs: 250 })));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
   const startRobotDaily3Loop = async (input: { intervalSeconds: number; maxRounds: number; hardErrorLimit: number }): Promise<void> => {
     const result = await run('robot-loop-start', () => adminFetch<AdminRecord>('/robots/daily-3/loop/start', jsonRequest('POST', input)));
     if (result) {
@@ -281,6 +288,13 @@ function App(): JSX.Element {
 
   const startRobotPlayerSimV1Loop = async (input: { intervalSeconds: number; maxRounds: number; hardErrorLimit: number }): Promise<void> => {
     const result = await run('robot-loop-start', () => adminFetch<AdminRecord>('/robots/player-sim-v1/loop/start', jsonRequest('POST', input)));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
+  const startRobotSeasonSimV1Loop = async (input: { intervalSeconds: number; totalDays: number; actionDelayMs?: number }): Promise<void> => {
+    const result = await run('robot-season-loop-start', () => adminFetch<AdminRecord>('/robots/season-sim-v1/loop/start', jsonRequest('POST', input)));
     if (result) {
       await loadRobotDashboard();
     }
@@ -327,6 +341,13 @@ function App(): JSX.Element {
 
   const stopRobotDaily3Loop = async (): Promise<void> => {
     const result = await run('robot-loop-stop', () => adminFetch<AdminRecord>('/robots/daily-3/loop/stop', jsonRequest('POST', {})));
+    if (result) {
+      await loadRobotDashboard();
+    }
+  };
+
+  const stopRobotSeasonSimV1Loop = async (): Promise<void> => {
+    const result = await run('robot-season-loop-stop', () => adminFetch<AdminRecord>('/robots/season-sim-v1/loop/stop', jsonRequest('POST', {})));
     if (result) {
       await loadRobotDashboard();
     }
@@ -1122,14 +1143,17 @@ function App(): JSX.Element {
               onRefresh={() => void loadRobotDashboard()}
               onRunDaily3={() => void runRobotDaily3()}
               onRunPlayerSimV1={() => void runRobotPlayerSimV1()}
+              onRunSeasonSimV1Day={() => void runRobotSeasonSimV1Day()}
               onRunSocial3={() => void runRobotSocial3()}
               onSaveAutomationConfig={(input) => void saveRobotDaily3AutomationConfig(input)}
               onSavePlayerSimV1AutomationConfig={(input) => void saveRobotPlayerSimV1AutomationConfig(input)}
               onSaveSocialAutomationConfig={(input) => void saveRobotSocial3AutomationConfig(input)}
               onStartLoop={(input) => void startRobotDaily3Loop(input)}
               onStartPlayerSimV1Loop={(input) => void startRobotPlayerSimV1Loop(input)}
+              onStartSeasonSimV1Loop={(input) => void startRobotSeasonSimV1Loop(input)}
               onStartSocialLoop={(input) => void startRobotSocial3Loop(input)}
               onStopLoop={() => void stopRobotDaily3Loop()}
+              onStopSeasonSimV1Loop={() => void stopRobotSeasonSimV1Loop()}
             />
           ) : null}
 

@@ -265,6 +265,7 @@ export class ClientReadRepository {
     playerId: string,
     dateKey: string,
     client: Prisma.TransactionClient | PrismaClient = this.prisma.db,
+    now: Date = new Date(),
   ): Promise<HomeSummaryReadModel | null> {
     const player = await client.player.findUnique({
       where: { id: playerId },
@@ -374,7 +375,7 @@ export class ClientReadRepository {
           },
         },
         factionStipendStates: {
-          where: { dateKey: getLocalDateKeyForRepository() },
+          where: { dateKey },
           take: 1,
           select: {
             dateKey: true,
@@ -391,6 +392,15 @@ export class ClientReadRepository {
       return null;
     }
 
+    const wallet = player.wallet
+      ? {
+        ...player.wallet,
+        pendingRaidOverflowGold: player.wallet.pendingRaidOverflowExpiresAt && player.wallet.pendingRaidOverflowExpiresAt > now
+          ? player.wallet.pendingRaidOverflowGold
+          : 0,
+      }
+      : null;
+
     return {
       player: {
         id: player.id,
@@ -400,7 +410,7 @@ export class ClientReadRepository {
         faction: player.faction,
         factionMembers: player.factionMembers,
       },
-      wallet: player.wallet,
+      wallet,
       buildings: player.buildings,
       army: player.army,
       fieldSlots: player.fieldSlots,
@@ -416,7 +426,9 @@ export class ClientReadRepository {
   async findSceneContent(
     playerId: string,
     client: Prisma.TransactionClient | PrismaClient = this.prisma.db,
+    now: Date = new Date(),
   ): Promise<SceneContentReadModel | null> {
+    const dateKey = getLocalDateKeyForRepository(now);
     const player = await client.player.findUnique({
       where: { id: playerId },
       select: {
@@ -537,7 +549,7 @@ export class ClientReadRepository {
           },
         },
         dailyFactionTasks: {
-          where: { taskDate: getLocalDateKeyForRepository() },
+          where: { taskDate: dateKey },
           orderBy: { generatedAt: 'asc' },
           select: {
             id: true,
@@ -570,7 +582,7 @@ export class ClientReadRepository {
           },
         },
         factionStipendStates: {
-          where: { dateKey: getLocalDateKeyForRepository() },
+          where: { dateKey },
           take: 1,
           select: {
             dateKey: true,
@@ -630,7 +642,7 @@ export class ClientReadRepository {
       client.raidTargetPool.findMany({
       where: {
         ownerPlayerId: playerId,
-        expiresAt: { gt: new Date() },
+        expiresAt: { gt: now },
       },
       orderBy: [{ refreshBatchNo: 'desc' }, { slotIndex: 'asc' }],
       take: 6,
@@ -740,7 +752,7 @@ export class ClientReadRepository {
       trainingQueues: player.trainingQueues,
       fieldSlots: player.fieldSlots.map((field) => ({
         ...field,
-        readyAt: field.seedDefinition ? getFieldReadyAt(field, field.seedDefinition.seedId, new Date()) : null,
+        readyAt: field.seedDefinition ? getFieldReadyAt(field, field.seedDefinition.seedId, now) : null,
       })),
       seedInventory: player.seedInventory,
       plantUnlockMetrics: {
@@ -760,7 +772,7 @@ export class ClientReadRepository {
   }
 }
 
-function getLocalDateKeyForRepository(): string {
+function getLocalDateKeyForRepository(now = new Date()): string {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai',
     year: 'numeric',
@@ -768,7 +780,7 @@ function getLocalDateKeyForRepository(): string {
     day: '2-digit',
   });
 
-  return formatter.format(new Date());
+  return formatter.format(now);
 }
 
 function startOfDateKey(dateKey: string): Date {

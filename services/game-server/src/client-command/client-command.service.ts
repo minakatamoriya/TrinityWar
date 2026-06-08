@@ -70,12 +70,16 @@ interface CollectFieldCommandInput {
   playerId: string;
   request: CollectFieldRequestDto;
   idempotencyKey?: string;
+  now?: Date;
+  skipReadModels?: boolean;
 }
 
 interface StartCultivationCommandInput {
   playerId: string;
   request: StartCultivationRequestDto;
   idempotencyKey?: string;
+  now?: Date;
+  skipReadModels?: boolean;
 }
 
 interface RecruitArmyCommandInput {
@@ -99,6 +103,8 @@ interface ClaimFactionStipendCommandInput {
   playerId: string;
   request: ClaimFactionStipendRequestDto;
   idempotencyKey?: string;
+  now?: Date;
+  dateKey?: string;
 }
 
 interface UnlockPlantCommandInput {
@@ -583,7 +589,8 @@ export class ClientCommandService {
         return idempotencyRecord.responseSnapshotJson as unknown as ClientCollectFieldResponse;
       }
 
-      await this.fieldLifecycleService.settlePlayerFields(client, input.playerId);
+      const now = input.now ?? new Date();
+      await this.fieldLifecycleService.settlePlayerFields(client, input.playerId, now);
 
       const playerState = await client.player.findUnique({
         where: { id: input.playerId },
@@ -656,7 +663,7 @@ export class ClientCommandService {
           matureAt: null,
           readyAt: null,
           overripeAt: null,
-          lastCalculatedAt: new Date(),
+          lastCalculatedAt: now,
           statusVersion: { increment: 1 },
         },
       });
@@ -704,7 +711,7 @@ export class ClientCommandService {
         && input.request.collectMode === 'ripe'
         && (field.status === 'MATURE' || field.status === 'WITHERED')
       ) {
-        await this.recordDailyTaskProgress(client, input.playerId, 'collect-field');
+        await this.recordDailyTaskProgress(client, input.playerId, 'collect-field', 1, now);
         const contributionConfig = await this.taskConfigService.getDailyFactionTaskConfig('collect-field', client);
         if (contributionConfig?.isEnabled && contributionConfig.rewardContribution > 0) {
           await grantFactionContribution(client, {
@@ -723,8 +730,8 @@ export class ClientCommandService {
       const responseSnapshot: ClientCollectFieldResponse = {
         app: APP_NAME,
         summary: resolution.summary,
-        home: await this.clientReadService.getHomeSummary(input.playerId, client),
-        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
+        home: input.skipReadModels ? null as unknown as ClientCollectFieldResponse['home'] : await this.clientReadService.getHomeSummary(input.playerId, client, now),
+        scenes: input.skipReadModels ? null as unknown as ClientCollectFieldResponse['scenes'] : await this.clientReadService.getSceneContent(input.playerId, client, now),
         result: {
           collectedGold: resolution.collectedGold,
           overflowGold: resolution.overflowGold,
@@ -760,7 +767,8 @@ export class ClientCommandService {
         return idempotencyRecord.responseSnapshotJson as unknown as ClientStateMutationResponse;
       }
 
-      await this.fieldLifecycleService.settlePlayerFields(client, input.playerId);
+      const now = input.now ?? new Date();
+      await this.fieldLifecycleService.settlePlayerFields(client, input.playerId, now);
 
       const [field, seedDefinition] = await Promise.all([
         client.playerFieldSlot.findFirst({
@@ -850,7 +858,6 @@ export class ClientCommandService {
         });
       }
 
-      const now = new Date();
       const readyAt = addSeconds(now, getCultivationSeconds(seedDefinition.seedId));
       await client.playerFieldSlot.update({
         where: { id: field.id },
@@ -872,15 +879,15 @@ export class ClientCommandService {
       });
 
       if (seedDefinition.seedId !== TUTORIAL_STARTER_SEED_ID) {
-        await this.recordDailyTaskProgress(client, input.playerId, 'start-cultivation');
-        await this.recordDailyTaskProgress(client, input.playerId, 'farm-cycle');
+        await this.recordDailyTaskProgress(client, input.playerId, 'start-cultivation', 1, now);
+        await this.recordDailyTaskProgress(client, input.playerId, 'farm-cycle', 1, now);
       }
 
       const responseSnapshot: ClientStateMutationResponse = {
         app: APP_NAME,
         summary: `${seedDefinition.label} 已开始培育。`,
-        home: await this.clientReadService.getHomeSummary(input.playerId, client),
-        scenes: await this.clientReadService.getSceneContent(input.playerId, client),
+        home: input.skipReadModels ? null as unknown as ClientStateMutationResponse['home'] : await this.clientReadService.getHomeSummary(input.playerId, client, now),
+        scenes: input.skipReadModels ? null as unknown as ClientStateMutationResponse['scenes'] : await this.clientReadService.getSceneContent(input.playerId, client, now),
       };
 
       if (idempotencyRecord?.id) {
@@ -1295,7 +1302,8 @@ export class ClientCommandService {
         return idempotencyRecord.responseSnapshotJson as unknown as ClientClaimFactionStipendResponse;
       }
 
-      const dateKey = getLocalDateKey();
+      const now = input.now ?? new Date();
+      const dateKey = input.dateKey ?? getLocalDateKey(now);
       const playerState = await client.player.findUnique({
         where: { id: input.playerId },
         select: {
@@ -1356,7 +1364,6 @@ export class ClientCommandService {
       const contribution = playerState.factionMembers[0]?.contributionScore ?? 0;
       const tier = getFactionStipendTier(contribution);
       const rewards = await resolveStipendRewards(client, (tier?.rewards ?? []) as ResolvableStipendReward[]);
-      const now = new Date();
       const goldReward = sumRewardQuantity(rewards, 'gold');
       const spiritRootReward = sumRewardQuantity(rewards, 'spirit-root');
       const spiritMarrowReward = sumRewardQuantity(rewards, 'spirit-marrow');
@@ -1505,8 +1512,8 @@ export class ClientCommandService {
         });
       }
 
-      const home = await this.clientReadService.getHomeSummary(input.playerId, client);
-      const scenes = await this.clientReadService.getSceneContent(input.playerId, client);
+      const home = await this.clientReadService.getHomeSummary(input.playerId, client, now);
+      const scenes = await this.clientReadService.getSceneContent(input.playerId, client, now);
       const bootstrap = await this.clientReadService.getBootstrap(input.playerId, client);
       const responseSnapshot: ClientClaimFactionStipendResponse = {
         app: APP_NAME,
@@ -1889,6 +1896,7 @@ export class ClientCommandService {
     playerId: string,
     objectiveType: string,
     amount = 1,
+    now: Date = new Date(),
   ): Promise<void> {
     if (amount <= 0) {
       return;
@@ -1900,7 +1908,7 @@ export class ClientCommandService {
       return;
     }
 
-    const dateKey = getLocalDateKey();
+    const dateKey = getLocalDateKey(now);
     await this.dailyTaskLifecycleService.ensurePlayerDailyTasks(client, playerId, dateKey);
 
     const taskStates = await client.playerDailyTaskState.findMany({

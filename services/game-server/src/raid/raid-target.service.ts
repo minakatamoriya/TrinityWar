@@ -199,8 +199,10 @@ export class RaidTargetService {
     requestIdempotencyKey?: string;
     armyVersion?: number;
     skipQueue?: boolean;
+    now?: Date;
   }): Promise<ClientRaidActionResponse> {
     const requestIdempotencyKey = input.requestIdempotencyKey?.trim();
+    const now = input.now ?? new Date();
 
     if (!requestIdempotencyKey) {
       throw new BusinessError({
@@ -213,6 +215,7 @@ export class RaidTargetService {
     let target = await this.raidRepository.findVisibleTargetPoolEntry({
       ownerPlayerId: input.playerId,
       targetPoolId: input.targetId,
+      now,
     });
 
     if (!target) {
@@ -223,7 +226,7 @@ export class RaidTargetService {
       });
     }
 
-    if (target.targetPlayer.protectedUntil && target.targetPlayer.protectedUntil.getTime() > Date.now()) {
+    if (target.targetPlayer.protectedUntil && target.targetPlayer.protectedUntil.getTime() > now.getTime()) {
       throw new BusinessError({
         code: ErrorCode.RaidNotAllowed,
         message: 'Target is under raid protection.',
@@ -232,7 +235,6 @@ export class RaidTargetService {
     }
 
     const response = await this.prisma.transaction(async (client) => {
-      const now = new Date();
       const currentArmy = await client.playerArmy.findUnique({
         where: { playerId: input.playerId },
         select: {
@@ -372,7 +374,7 @@ export class RaidTargetService {
       }
 
       const nextDispatchedCount = Math.max(1, Math.min(currentArmy.availableCount, 10));
-      const settleAt = new Date();
+      const settleAt = now;
       const frozenUnitSnapshot = { dispatchedCount: nextDispatchedCount };
       const lockedGold = resolveLockedGold(target, primaryField);
       const raidOrder = await this.raidRepository.createRaidOrder({
@@ -430,8 +432,8 @@ export class RaidTargetService {
         expiresAt: target.expiresAt,
       }, client);
 
-      const home = await this.clientReadService.getHomeSummary(input.playerId, client);
-      const scenes = await this.clientReadService.getSceneContent(input.playerId, client);
+      const home = await this.clientReadService.getHomeSummary(input.playerId, client, now);
+      const scenes = await this.clientReadService.getSceneContent(input.playerId, client, now);
 
       return buildRaidActionResponse(raidOrder.id, settleAt, target, raidOrder.status, home, scenes);
     });
@@ -449,19 +451,19 @@ export class RaidTargetService {
 
     if (response.result.orderId) {
       try {
-        const settlement = await this.raidSettlementService.settleRaidOrder(response.result.orderId);
+        const settlement = await this.raidSettlementService.settleRaidOrder(response.result.orderId, now);
         await this.prisma.db.raidTargetPool.updateMany({
           where: {
             id: input.targetId,
             ownerPlayerId: input.playerId,
           },
           data: {
-            expiresAt: new Date(),
+            expiresAt: now,
           },
         });
         const [home, scenes, order] = await Promise.all([
-          this.clientReadService.getHomeSummary(input.playerId),
-          this.clientReadService.getSceneContent(input.playerId),
+          this.clientReadService.getHomeSummary(input.playerId, undefined, now),
+          this.clientReadService.getSceneContent(input.playerId, undefined, now),
           this.prisma.db.raidOrder.findUnique({
             where: { id: response.result.orderId },
             select: {

@@ -103,13 +103,14 @@ export class SpiritService {
   async getSpiritState(
     playerId: string,
     client?: Prisma.TransactionClient | PrismaClient,
+    now: Date = new Date(),
   ): Promise<ClientSpiritState> {
     if (!client) {
-      return this.prisma.transaction(async (transactionClient) => this.getSpiritState(playerId, transactionClient));
+      return this.prisma.transaction(async (transactionClient) => this.getSpiritState(playerId, transactionClient, now));
     }
 
     const readModel = await this.findSpiritReadModel(playerId, client);
-    return buildSpiritState(readModel.resource, readModel.slots, readModel.codex, readModel.shopPurchases, readModel.adRewardUsedToday);
+    return buildSpiritState(readModel.resource, readModel.slots, readModel.codex, readModel.shopPurchases, readModel.adRewardUsedToday, now);
   }
 
   async buySpiritSoul(
@@ -334,6 +335,7 @@ export class SpiritService {
     playerId: string,
     request: ClientFeedSpiritRequest,
     headerIdempotencyKey?: string,
+    now: Date = new Date(),
   ): Promise<ClientSpiritMutationResponse> {
     validateFeedSpiritRequest(request);
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
@@ -391,7 +393,6 @@ export class SpiritService {
       assertVersion('resourceVersion', request.resourceVersion, resource.resourceVersion);
       assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
 
-      const now = new Date();
       const factionCode = toFactionAdvantageCode(resource.player?.faction?.code);
       const settled = settleSpiritProgress(slot, now, factionCode);
       const satiatedRemainingSeconds = Math.max(Math.floor(((settled.satiatedUntil?.getTime() ?? now.getTime()) - now.getTime()) / 1000), 0);
@@ -435,9 +436,9 @@ export class SpiritService {
           requestIdempotencyKey: idempotencyKey ?? null,
         },
       });
-      await this.recordDailyTaskProgress(client, playerId, 'feed-spirit');
+      await this.recordDailyTaskProgress(client, playerId, 'feed-spirit', 1, now);
 
-      const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 已安排 2 小时自动加速。');
+      const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 已安排 2 小时自动加速。', now);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
     });
@@ -447,6 +448,7 @@ export class SpiritService {
     playerId: string,
     request: ClientBreakthroughSpiritRequest,
     headerIdempotencyKey?: string,
+    now: Date = new Date(),
   ): Promise<ClientSpiritMutationResponse> {
     validateBreakthroughSpiritRequest(request);
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
@@ -506,7 +508,6 @@ export class SpiritService {
       assertVersion('resourceVersion', request.resourceVersion, resource.resourceVersion);
       assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
 
-      const now = new Date();
       const settled = settleSpiritProgress(slot, now, toFactionAdvantageCode(resource.player?.faction?.code));
       const targetStage = request.targetStage ?? getBreakthroughStageForLevel(settled.level);
       const expectedStage = getBreakthroughStageForLevel(settled.level);
@@ -555,7 +556,7 @@ export class SpiritService {
       });
 
       await this.ensureNaturalTraitSlots(client, slot.id, expectedStage);
-      const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 已突破。');
+      const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 已突破。', now);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
     });
@@ -1385,13 +1386,14 @@ export class SpiritService {
     client: Prisma.TransactionClient,
     playerId: string,
     summary: string,
+    now: Date = new Date(),
   ): Promise<ClientSpiritMutationResponse> {
     return {
       app: APP_NAME,
       summary,
-      spirit: await this.getSpiritState(playerId, client),
-      home: await this.clientReadService.getHomeSummary(playerId, client),
-      scenes: await this.clientReadService.getSceneContent(playerId, client),
+      spirit: await this.getSpiritState(playerId, client, now),
+      home: await this.clientReadService.getHomeSummary(playerId, client, now),
+      scenes: await this.clientReadService.getSceneContent(playerId, client, now),
     };
   }
 
@@ -1624,6 +1626,7 @@ export class SpiritService {
     playerId: string,
     objectiveType: string,
     amount = 1,
+    now: Date = new Date(),
   ): Promise<void> {
     if (amount <= 0) {
       return;
@@ -1641,7 +1644,7 @@ export class SpiritService {
       return;
     }
 
-    const dateKey = getLocalDateKey();
+    const dateKey = getLocalDateKey(now);
     await this.dailyTaskLifecycleService.ensurePlayerDailyTasks(client, playerId, dateKey);
 
     const taskStates = await client.playerDailyTaskState.findMany({
@@ -1711,8 +1714,8 @@ function buildSpiritState(
   }>,
   shopPurchases: Array<{ itemId: string; periodKey: string | null }>,
   adRewardUsedToday: number,
+  now: Date = new Date(),
 ): ClientSpiritState {
-  const now = new Date();
   const mappedSlots: ClientSpiritSlot[] = slots.map((slot) => {
     const settled = slot.spiritDefinition ? settleSpiritProgress(slot, now, toFactionAdvantageCode(resource.factionCode)) : {
       level: slot.level,

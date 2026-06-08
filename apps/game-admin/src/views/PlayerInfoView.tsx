@@ -384,7 +384,6 @@ export function PlayerRaidContent(props: {
           { label: '状态 / status', key: 'status' },
           { label: '攻击方 / attackerPlayerId', key: 'attackerPlayerId' },
           { label: '防守方 / defenderPlayerId', key: 'defenderPlayerId' },
-          { label: '出征战力 / dispatchedUnitCount', key: 'dispatchedUnitCount' },
           { label: '预计结算 / settleAt', key: 'settleAt' },
           { label: '创建时间 / createdAt', key: 'createdAt' },
         ]}

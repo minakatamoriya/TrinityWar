@@ -20,7 +20,7 @@ export class RaidSettlementService {
     @Inject(AuditService) private readonly auditService: AuditService,
   ) {}
 
-  settleRaidOrder(raidOrderId: string) {
+  settleRaidOrder(raidOrderId: string, now: Date = new Date()) {
     return this.prisma.transaction(async (client) => {
       const raidOrder = await this.raidRepository.findRaidOrderForSettlement(raidOrderId, client);
 
@@ -78,7 +78,6 @@ export class RaidSettlementService {
         guaranteedOrdinarySoul: readGuaranteedOrdinarySoul(raidOrder.defenderSnapshotJson),
         suppressRandomRewards: readTutorialTarget(raidOrder.defenderSnapshotJson),
       });
-      const now = new Date();
       const nextVaultGold = raidOrder.attacker.wallet.vaultGold + settlementResult.depositedGold;
       const attackerUnitLoss = 0;
       const unitsReturned = raidOrder.dispatchedUnitCount;

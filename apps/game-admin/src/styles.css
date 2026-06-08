@@ -718,6 +718,212 @@ h3 {
   margin-top: 12px;
 }
 
+.robot-run-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.robot-summary-body {
+  background: #f8fafc;
+  border: 1px solid #d2d9e2;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.robot-summary-body p {
+  color: #1b2430;
+  font-weight: 700;
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.robot-summary-live,
+.robot-summary-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.robot-summary-live {
+  color: #516174;
+  font-size: 13px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.robot-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.robot-faction-stats,
+.robot-player-stats {
+  display: grid;
+  gap: 10px;
+}
+
+.robot-faction-stats {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.robot-player-stats {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.robot-faction-stats article,
+.robot-player-stats article {
+  background: #ffffff;
+  border: 1px solid #d2d9e2;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.robot-faction-stats strong,
+.robot-player-stats strong {
+  color: #1b2430;
+  font-size: 14px;
+}
+
+.robot-faction-stats span,
+.robot-player-stats span {
+  color: #516174;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.robot-day-report {
+  display: grid;
+  gap: 12px;
+}
+
+.robot-day-layout {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 180px minmax(0, 1fr);
+}
+
+.robot-day-list {
+  align-content: start;
+  display: grid;
+  gap: 8px;
+}
+
+.robot-day-tab {
+  align-items: start;
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  min-height: 66px;
+  text-align: left;
+}
+
+.robot-day-tab.active {
+  border-color: #244866;
+  background: #e8f1f7;
+}
+
+.robot-day-tab strong,
+.robot-day-tab span,
+.robot-day-tab small {
+  display: block;
+}
+
+.robot-day-tab span,
+.robot-day-tab small {
+  color: #516174;
+  font-size: 12px;
+}
+
+.robot-day-detail {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.robot-day-subgrid,
+.robot-day-player-table {
+  display: grid;
+  gap: 10px;
+}
+
+.robot-day-subgrid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.robot-day-player-table {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.robot-day-subgrid article,
+.robot-day-player-table article {
+  background: #ffffff;
+  border: 1px solid #d2d9e2;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.robot-day-subgrid strong,
+.robot-day-player-table strong {
+  color: #1b2430;
+  font-size: 14px;
+}
+
+.robot-day-subgrid span,
+.robot-day-player-table span,
+.robot-day-issues span {
+  color: #516174;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.robot-day-issues {
+  border: 1px solid #f2c15f;
+  border-radius: 8px;
+  background: #fffbeb;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.legacy-robot-tools {
+  display: block;
+}
+
+.legacy-robot-tools summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  list-style: none;
+}
+
+.legacy-robot-tools summary::-webkit-details-marker {
+  display: none;
+}
+
+.legacy-robot-tools summary > span:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.legacy-robot-tools summary strong {
+  color: #1b2430;
+}
+
+.legacy-robot-tools summary small {
+  color: #516174;
+  font-size: 12px;
+}
+
+.legacy-robot-tools[open] .robot-scenario-grid {
+  margin-top: 14px;
+}
+
 .checkbox-line {
   align-items: center;
   color: var(--muted);
@@ -1116,7 +1322,8 @@ h3 {
   }
 
   .robot-config-grid.compact,
-  .robot-scenario-actions {
+  .robot-scenario-actions,
+  .robot-day-layout {
     grid-template-columns: 1fr;
   }
 

@@ -622,8 +622,16 @@ export interface AdminRobotDashboardResponse {
     jobs?: {
       items: Array<Record<string, unknown>>;
     };
+    season?: {
+      config?: Record<string, unknown>;
+      session?: Record<string, unknown>;
+    };
   };
   runs: {
+    items: Array<Record<string, unknown>>;
+  };
+  stats?: Record<string, unknown>;
+  dayReports?: {
     items: Array<Record<string, unknown>>;
   };
   robots: {
@@ -726,7 +734,6 @@ export interface AdminPlayerOverviewResponse {
   spell?: Record<string, unknown> | null;
   wallet: Record<string, unknown> | null;
   building: Record<string, unknown> | null;
-  army: Record<string, unknown> | null;
   spirit: {
     resource: Record<string, unknown> | null;
     mainSlot: Record<string, unknown> | null;

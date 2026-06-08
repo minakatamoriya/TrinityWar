@@ -466,7 +466,7 @@ export class SceneContentAssembler {
     if (factionCode === 'immortal' && scene === 'spirit') {
       return {
         ...config,
-        summary: `\u4ed9\u754c\u4f18\u52bf\uff1a\u7075\u5ba0\u6302\u673a +${formatNumber(config.modifiers.spiritPassiveExpBonusPercent)}%\uff0c\u6295\u5582\u65f6\u957f +${formatNumber(config.modifiers.spiritFeedDurationBonusPercent)}%`,
+        summary: `\u4ed9\u754c\u4f18\u52bf\uff1a\u7075\u5ba0\u6302\u673a +${formatNumber(config.modifiers.spiritPassiveExpBonusPercent)}%\uff0c\u6295\u5582\u540e\u57f9\u80b2\u52a0\u901f +${formatNumber(config.modifiers.spiritFeedDurationBonusPercent)}%`,
       };
     }
 

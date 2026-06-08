@@ -307,10 +307,10 @@ export const FACTION_ADVANTAGE_CONFIG = {
     factionCode: 'immortal',
     factionName: '仙界',
     title: '灵宠更强',
-    summary: '挂机经验更高，投喂续航更久，适合围绕主宠持续培养。',
+    summary: '挂机经验更高，投喂后培育更快，适合围绕主宠持续培养。',
     details: [
       '挂机经验 +10%',
-      '投喂加速时长 +25%',
+      '投喂后培育加速 +25%',
       '灵宠等级赛季重置后可更快重新养成',
     ],
     modifiers: {
