@@ -15,6 +15,19 @@ import { RaidTargetService } from '../raid/raid-target.service.js';
 import { SocialService } from '../social/social.service.js';
 import { SpiritService } from '../spirit/spirit.service.js';
 import { createSeasonSimClock } from './season-sim-clock.js';
+import {
+  SEASON_SIM_DEFAULT_ACTION_DELAY_MS,
+  SEASON_SIM_DEFAULT_START_AT,
+  SEASON_SIM_DEFAULT_TOTAL_DAYS,
+  SEASON_SIM_FARM_CYCLE_HOURS,
+  SEASON_SIM_FARM_CYCLES_PER_DAY,
+  SEASON_SIM_RAIDS_PER_DAY,
+  buildSeasonSimProgress,
+  evaluateRobotLoopStartBoundary,
+  evaluateSeasonSimStartBoundary,
+  findSeasonSimRaidTarget,
+  getSeasonSimExpectedActionsPerPlayer,
+} from './season-sim-plan.js';
 
 type RobotRole = 'farmer' | 'spirit' | 'raid' | 'daily' | 'social' | 'sim';
 type RobotActionStatus = 'SUCCESS' | 'FAILED' | 'BLOCKED';
@@ -78,6 +91,7 @@ interface SeasonSimSessionState {
   players: SeasonSimPlayerState[];
   startedAt: string;
   lastDayAt: string | null;
+  nextRunAt: string | null;
   stoppedAt: string | null;
   stopReason: string | null;
   lastStatus: string | null;
@@ -126,12 +140,6 @@ const SOCIAL_3_CONFIG_ID = 'robot-automation-config-social-3';
 const PLAYER_SIM_V1_CONFIG_ID = 'robot-automation-config-player-sim-v1';
 const SEASON_SIM_V1_CONFIG_ID = 'robot-automation-config-season-sim-v1';
 const SEASON_SIM_V1_MODE = 'season-sim-v1';
-const SEASON_SIM_FARM_CYCLES_PER_DAY = 8;
-const SEASON_SIM_FARM_CYCLE_HOURS = 3;
-const SEASON_SIM_RAIDS_PER_DAY = 3;
-const SEASON_SIM_DEFAULT_TOTAL_DAYS = 28;
-const SEASON_SIM_DEFAULT_START_AT = new Date('2026-06-08T00:00:00+08:00');
-const SEASON_SIM_DEFAULT_ACTION_DELAY_MS = 250;
 
 @Injectable()
 export class RobotService implements OnApplicationBootstrap {
@@ -139,6 +147,7 @@ export class RobotService implements OnApplicationBootstrap {
   private seasonSimTimer: NodeJS.Timeout | null = null;
   private loopState: RobotLoopState = createIdleLoopState();
   private seasonSimSession: SeasonSimSessionState | null = null;
+  private seasonSimTickRunning = false;
 
   constructor(
     @Inject(AuthService) private readonly authService: AuthService,
@@ -565,10 +574,24 @@ export class RobotService implements OnApplicationBootstrap {
     runKind: SeasonSimRunKind,
     payload: { startAt?: Date; totalDays: number; intervalSeconds: number; actionDelayMs: number },
   ): Promise<Record<string, unknown>> {
-    if (this.seasonSimSession) {
+    const boundary = evaluateSeasonSimStartBoundary({
+      loopRunning: this.loopState.running,
+      seasonRunning: Boolean(this.seasonSimSession),
+    });
+    if (!boundary.ok) {
+      return {
+        ok: false,
+        blocked: true,
+        reason: boundary.reason,
+        loop: this.getLoopState(),
+      };
+    }
+
+    if ('alreadyRunning' in boundary && this.seasonSimSession) {
       return {
         ok: true,
         alreadyRunning: true,
+        reason: boundary.reason,
         session: this.getSeasonSimSessionState(),
       };
     }
@@ -608,6 +631,7 @@ export class RobotService implements OnApplicationBootstrap {
       players,
       startedAt: new Date().toISOString(),
       lastDayAt: null,
+      nextRunAt: null,
       stoppedAt: null,
       stopReason: null,
       lastStatus: null,
@@ -640,6 +664,7 @@ export class RobotService implements OnApplicationBootstrap {
       };
     }
 
+    const progress = buildSeasonSimProgress(this.seasonSimSession.totalDays, this.seasonSimSession.currentDayIndex);
     return {
       running: true,
       runId: this.seasonSimSession.runId,
@@ -648,8 +673,12 @@ export class RobotService implements OnApplicationBootstrap {
       intervalSeconds: this.seasonSimSession.intervalSeconds,
       actionDelayMs: this.seasonSimSession.actionDelayMs,
       currentDayIndex: this.seasonSimSession.currentDayIndex,
+      completedDays: progress.completedDays,
+      remainingDays: progress.remainingDays,
+      progressPercent: progress.progressPercent,
       startedAt: this.seasonSimSession.startedAt,
       lastDayAt: this.seasonSimSession.lastDayAt,
+      nextRunAt: this.seasonSimSession.nextRunAt,
       stoppedAt: this.seasonSimSession.stoppedAt,
       stopReason: this.seasonSimSession.stopReason,
       lastStatus: this.seasonSimSession.lastStatus,
@@ -661,10 +690,24 @@ export class RobotService implements OnApplicationBootstrap {
   }
 
   private async startLoopForMode(mode: RobotAutomationMode, config: { intervalSeconds: number; maxRounds: number; hardErrorLimit: number }): Promise<Record<string, unknown>> {
-    if (this.loopState.running) {
+    const boundary = evaluateRobotLoopStartBoundary({
+      loopRunning: this.loopState.running,
+      seasonRunning: Boolean(this.seasonSimSession),
+    });
+    if (!boundary.ok) {
+      return {
+        ok: false,
+        blocked: true,
+        reason: boundary.reason,
+        session: this.getSeasonSimSessionState(),
+      };
+    }
+
+    if ('alreadyRunning' in boundary) {
       return {
         ok: true,
         alreadyRunning: true,
+        reason: boundary.reason,
         loop: this.getLoopState(),
       };
     }
@@ -774,6 +817,9 @@ export class RobotService implements OnApplicationBootstrap {
     if (!updated.enabled && this.loopState.running && this.loopState.mode === mode) {
       await this.stopLoop('automation disabled');
     }
+    if (!updated.enabled && mode === SEASON_SIM_V1_MODE && this.seasonSimSession) {
+      await this.stopSeasonSimSession('automation disabled');
+    }
 
     return {
       ok: true,
@@ -804,6 +850,7 @@ export class RobotService implements OnApplicationBootstrap {
     if (this.seasonSimTimer) {
       clearTimeout(this.seasonSimTimer);
     }
+    this.seasonSimSession.nextRunAt = new Date(Date.now() + delayMs).toISOString();
     this.seasonSimTimer = setTimeout(() => {
       this.seasonSimTimer = null;
       void this.runSeasonSimTick();
@@ -849,13 +896,19 @@ export class RobotService implements OnApplicationBootstrap {
 
   private async runSeasonSimTick(): Promise<void> {
     const session = this.seasonSimSession;
-    if (!session) {
+    if (!session || this.seasonSimTickRunning) {
       return;
     }
 
+    this.seasonSimTickRunning = true;
+    let shouldScheduleNextTick = false;
     try {
+      session.nextRunAt = null;
       const dayIndex = session.currentDayIndex + 1;
       const dayResult = await this.runSeasonSimDay(session.runId, session.clock, session.players, dayIndex, session.actionDelayMs);
+      if (this.seasonSimSession !== session) {
+        return;
+      }
       session.currentDayIndex = dayIndex;
       session.lastDayAt = dayResult.simulatedAt;
       session.lastStatus = dayResult.failedActionCount > 0 ? 'FAILED' : dayResult.blockedActionCount > 0 ? 'ISSUE' : 'SUCCESS';
@@ -886,16 +939,24 @@ export class RobotService implements OnApplicationBootstrap {
         await this.finishSeasonSimSession('max days reached', 'COMPLETED');
         return;
       }
+      shouldScheduleNextTick = true;
     } catch (error) {
+      if (this.seasonSimSession !== session) {
+        return;
+      }
       session.lastStatus = 'FAILED';
       session.lastSummary = {
         error: resolveErrorMessage(error),
       };
       await this.finishSeasonSimSession(resolveErrorMessage(error), 'FAILED');
       return;
+    } finally {
+      this.seasonSimTickRunning = false;
     }
 
-    this.scheduleNextSeasonSimTick(session.intervalSeconds * 1000);
+    if (shouldScheduleNextTick && this.seasonSimSession === session) {
+      this.scheduleNextSeasonSimTick(session.intervalSeconds * 1000);
+    }
   }
 
   private async finishSeasonSimSession(reason: string, status: string): Promise<void> {
@@ -910,6 +971,7 @@ export class RobotService implements OnApplicationBootstrap {
     }
 
     session.stoppedAt = new Date().toISOString();
+    session.nextRunAt = null;
     session.stopReason = reason;
     session.lastStatus = status;
     await this.prisma.db.robotTestRun.update({
@@ -2733,22 +2795,6 @@ function findNextCrossFactionPlayer<T extends { spec: RobotSpec; playerId: strin
   return null;
 }
 
-function findSeasonSimRaidTarget<T extends { spec: RobotSpec; playerId: string }>(players: T[], currentIndex: number, raidRound: number): T | null {
-  const current = players[currentIndex];
-  if (!current || players.length <= 1) {
-    return null;
-  }
-
-  for (let offset = 1; offset < players.length; offset += 1) {
-    const candidate = players[(currentIndex + offset + raidRound - 1) % players.length];
-    if (candidate && candidate.spec.factionCode !== current.spec.factionCode) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
 function parseSeasonSimDayPayload(body: unknown): { startAt?: Date; actionDelayMs: number } {
   const record = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
   const startAtText = typeof record.startAt === 'string' ? record.startAt.trim() : '';
@@ -3291,7 +3337,7 @@ function applyDayActionMetrics(
 function buildDayReportValidation(report: ReturnType<typeof createEmptyDayReport>): Record<string, unknown> {
   const issues: Array<Record<string, unknown>> = [];
   const expectedPlayers = PLAYER_SIM_SPECS.length;
-  const expectedActionCount = SEASON_SIM_FARM_CYCLES_PER_DAY + 1 + 1 + SEASON_SIM_RAIDS_PER_DAY;
+  const expectedActionCount = getSeasonSimExpectedActionsPerPlayer();
   if (report.snapshotCount !== expectedPlayers) {
     issues.push({ code: 'SNAPSHOT_COUNT_MISMATCH', message: `快照数量 ${report.snapshotCount} / ${expectedPlayers}` });
   }

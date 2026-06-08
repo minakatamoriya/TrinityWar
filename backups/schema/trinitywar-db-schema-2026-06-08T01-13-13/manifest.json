@@ -1,0 +1,20 @@
+﻿{
+    "app":  "TrinityWar",
+    "backupType":  "database-schema-only",
+    "createdAt":  "2026-06-07T17:13:13.2430957Z",
+    "includes":  [
+                     "services/game-server/prisma/schema.prisma",
+                     "services/game-server/prisma/migrations/**"
+                 ],
+    "excludes":  [
+                     "table data",
+                     "test players",
+                     "robot logs",
+                     "wallet logs",
+                     "raid orders",
+                     "JSON data backup"
+                 ],
+    "migrationCount":  56,
+    "latestMigration":  "056_robot_sim_snapshots",
+    "restoreHint":  "Copy prisma/schema.prisma and prisma/migrations into services/game-server/prisma, set DATABASE_URL, then run npm run prisma:generate --workspace @trinitywar/game-server and npx prisma migrate deploy --schema services/game-server/prisma/schema.prisma."
+}

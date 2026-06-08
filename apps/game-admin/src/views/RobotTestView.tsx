@@ -92,6 +92,9 @@ export function RobotTestView(props: {
   const [playerSimConfigMaxRounds, setPlayerSimConfigMaxRounds] = useState('0');
   const [playerSimConfigHardErrorLimit, setPlayerSimConfigHardErrorLimit] = useState('3');
   const [playerSimConfigTouched, setPlayerSimConfigTouched] = useState(false);
+  const [seasonTotalDays, setSeasonTotalDays] = useState('28');
+  const [seasonIntervalSeconds, setSeasonIntervalSeconds] = useState('1');
+  const [seasonActionDelayMs, setSeasonActionDelayMs] = useState('0');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
   const [hiddenLogIds, setHiddenLogIds] = useState<Set<string>>(() => new Set());
@@ -116,6 +119,7 @@ export function RobotTestView(props: {
   const dailyAutomationConfig = toRecord(automationConfigs.find((item) => String(item.mode ?? '') === 'daily-3') ?? automationConfig);
   const socialAutomationConfig = toRecord(automationConfigs.find((item) => String(item.mode ?? '') === 'social-3'));
   const playerSimAutomationConfig = toRecord(automationConfigs.find((item) => String(item.mode ?? '') === 'player-sim-v1'));
+  const seasonAutomationConfig = toRecord(automationConfigs.find((item) => String(item.mode ?? '') === 'season-sim-v1') ?? props.dashboard?.automation?.season?.config);
   const seasonSession = toRecord(props.dashboard?.automation?.season?.session);
   const automationJobs = props.dashboard?.automation?.jobs?.items ?? [];
   const latestRun = toRecord(props.dashboard?.runs?.items?.[0]);
@@ -196,6 +200,14 @@ export function RobotTestView(props: {
   }, [playerSimAutomationConfig, playerSimConfigTouched]);
 
   useEffect(() => {
+    if (seasonRunning || Object.keys(seasonAutomationConfig).length <= 0) {
+      return;
+    }
+    setSeasonTotalDays(stringValue(seasonAutomationConfig.maxRounds, '28'));
+    setSeasonIntervalSeconds(stringValue(seasonAutomationConfig.intervalSeconds, '1'));
+  }, [seasonAutomationConfig, seasonRunning]);
+
+  useEffect(() => {
     if (autoScroll) {
       scrollToBottom();
     }
@@ -233,6 +245,14 @@ export function RobotTestView(props: {
       intervalSeconds: Number(playerSimConfigIntervalSeconds) || 5,
       maxRounds: Number(playerSimConfigMaxRounds),
       hardErrorLimit: Number(playerSimConfigHardErrorLimit) || 3,
+    });
+  };
+
+  const startSeasonLoop = (): void => {
+    props.onStartSeasonSimV1Loop({
+      intervalSeconds: Math.max(1, Number(seasonIntervalSeconds) || 1),
+      totalDays: Math.max(1, Number(seasonTotalDays) || 28),
+      actionDelayMs: Math.max(0, Number(seasonActionDelayMs) || 0),
     });
   };
 
@@ -295,12 +315,26 @@ export function RobotTestView(props: {
           </div>
           <div className="robot-toolbar">
             <button className="ghost-button" disabled={isBusy} onClick={props.onRefresh} type="button">刷新</button>
-            <button className="ghost-button" disabled={isBusy || seasonRunning} onClick={props.onRunSeasonSimV1Day} type="button">重置后运行第 1 天</button>
-            <button className="primary-button" disabled={isBusy || seasonRunning} onClick={() => props.onStartSeasonSimV1Loop({ intervalSeconds: 1, totalDays: 28, actionDelayMs: 0 })} type="button">启动 28 天赛季模拟</button>
+            <button className="ghost-button" disabled={isBusy || loopRunning || seasonRunning} onClick={props.onRunSeasonSimV1Day} type="button">重置后运行第 1 天</button>
+            <button className="primary-button" disabled={isBusy || loopRunning || seasonRunning} onClick={startSeasonLoop} type="button">启动赛季模拟</button>
             <button className="ghost-button" disabled={isBusy || !seasonRunning} onClick={props.onStopSeasonSimV1Loop} type="button">停止模拟</button>
             <button className="ghost-button" disabled={props.busy === 'robot-clear-errors'} onClick={props.onClearErrors} type="button">清空问题</button>
             <button className="ghost-button" disabled={issues.length <= 0} onClick={props.onExportErrors} type="button">导出问题</button>
           </div>
+        </div>
+        <div className="robot-config-grid compact">
+          <label>
+            赛季天数
+            <input disabled={seasonRunning} min="1" onChange={(event) => setSeasonTotalDays(event.target.value)} type="number" value={seasonTotalDays} />
+          </label>
+          <label>
+            日间隔秒数
+            <input disabled={seasonRunning} min="1" onChange={(event) => setSeasonIntervalSeconds(event.target.value)} type="number" value={seasonIntervalSeconds} />
+          </label>
+          <label>
+            动作延迟毫秒
+            <input disabled={seasonRunning} min="0" onChange={(event) => setSeasonActionDelayMs(event.target.value)} type="number" value={seasonActionDelayMs} />
+          </label>
         </div>
         <div className="robot-overview">
           <div className={stringValue(status.state, 'IDLE') === 'SUCCESS' && hardIssueCount <= 0 ? 'robot-overview-card ok' : hardIssueCount > 0 ? 'robot-overview-card bad' : 'robot-overview-card neutral'}>
@@ -326,7 +360,7 @@ export function RobotTestView(props: {
           <span>循环：{loopRunning ? `${getModeLabel(loopMode)} 运行中` : '未运行'}</span>
           <span>赛季：{seasonRunning ? formatSeasonProgress(seasonSession) : '未运行'}</span>
           <span>已跑轮数：{stringValue(loop.completedRounds, '0')} / {stringValue(loop.maxRounds, '-')}</span>
-          <span>下次运行：{formatDateTime(loop.nextRunAt)}</span>
+          <span>下次运行：{formatDateTime(seasonRunning ? seasonSession.nextRunAt : loop.nextRunAt)}</span>
         </div>
       </section>
 
@@ -474,7 +508,7 @@ export function RobotTestView(props: {
         <section className="robot-scenario-grid">
           <RobotScenarioPanel
             autoStart={configAutoStart}
-            busy={isBusy}
+            busy={isBusy || seasonRunning}
             configTouched={configTouched}
             enabled={configEnabled}
             hardErrorLimit={configHardErrorLimit}
@@ -510,7 +544,7 @@ export function RobotTestView(props: {
           />
           <RobotScenarioPanel
             autoStart={socialConfigAutoStart}
-            busy={isBusy}
+            busy={isBusy || seasonRunning}
             configTouched={socialConfigTouched}
             enabled={socialConfigEnabled}
             hardErrorLimit={socialConfigHardErrorLimit}
@@ -546,7 +580,7 @@ export function RobotTestView(props: {
           />
           <RobotScenarioPanel
             autoStart={playerSimConfigAutoStart}
-            busy={isBusy}
+            busy={isBusy || seasonRunning}
             configTouched={playerSimConfigTouched}
             enabled={playerSimConfigEnabled}
             hardErrorLimit={playerSimConfigHardErrorLimit}
