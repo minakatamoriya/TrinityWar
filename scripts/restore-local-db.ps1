@@ -15,7 +15,7 @@ if ([string]::IsNullOrWhiteSpace($EnvFilePath)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($BackupDirectory)) {
-  $BackupDirectory = Join-Path $repoRoot 'backups'
+  $BackupDirectory = Join-Path $repoRoot 'backups\full'
 }
 
 function Read-DotEnvValue {
@@ -154,7 +154,12 @@ if (-not (Test-Path $resolvedBackupDirectory)) {
   New-Item -ItemType Directory -Path $resolvedBackupDirectory | Out-Null
 }
 
-$snapshotPath = Join-Path $resolvedBackupDirectory ("pre-restore-{0}.backup" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$safetySnapshotDirectory = Join-Path $repoRoot 'backups\safety'
+if (-not (Test-Path $safetySnapshotDirectory)) {
+  New-Item -ItemType Directory -Path $safetySnapshotDirectory | Out-Null
+}
+
+$snapshotPath = Join-Path $safetySnapshotDirectory ("pre-restore-{0}.backup" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
 
 Write-Host "Env file: $EnvFilePath"
 Write-Host "Restore backup: $resolvedBackupPath"
