@@ -209,6 +209,22 @@ const SEED_LEVEL_CONFIG = {
  */
 export const LAND_DEED_CONFIG = [];
 
+export const SPIRIT_BALANCE_CONFIG = {
+  passiveExpRateBps: 1300,
+};
+
+
+export const FACTION_STIPEND_BALANCE_CONFIG = {
+  tiers: [
+    { tierKey: 'contribution-0', minContribution: 0 },
+    { tierKey: 'contribution-100', minContribution: 100 },
+    { tierKey: 'contribution-300', minContribution: 300 },
+    { tierKey: 'contribution-600', minContribution: 600 },
+    { tierKey: 'contribution-800', minContribution: 800 },
+    { tierKey: 'contribution-1000', minContribution: 1000 },
+  ],
+};
+
 
 export const FACTION_STIPEND_CONFIG = {
   dateKeyTimezone: 'Asia/Shanghai',
@@ -257,8 +273,8 @@ export const FACTION_STIPEND_CONFIG = {
       ],
     },
     {
-      tierKey: 'contribution-1000',
-      minContribution: 1000,
+      tierKey: FACTION_STIPEND_BALANCE_CONFIG.tiers[4].tierKey,
+      minContribution: 800,
       label: '高阶供奉',
       rewards: [
         { kind: 'gold', quantity: 60, label: '金币' },
@@ -269,8 +285,8 @@ export const FACTION_STIPEND_CONFIG = {
       ],
     },
     {
-      tierKey: 'contribution-2000',
-      minContribution: 2000,
+      tierKey: FACTION_STIPEND_BALANCE_CONFIG.tiers[5].tierKey,
+      minContribution: 1000,
       label: '阵营重臣',
       rewards: [
         { kind: 'gold', quantity: 80, label: '金币' },

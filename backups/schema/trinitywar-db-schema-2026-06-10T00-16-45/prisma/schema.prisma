@@ -1,0 +1,1679 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AuthProvider {
+  WECHAT
+  DEV_FAKE
+}
+
+enum ArmyTrainingStatus {
+  QUEUED
+  FINISHED
+  CLAIMED
+  CANCELLED
+}
+
+enum FieldStatus {
+  LOCKED
+  EMPTY
+  GROWING
+  MATURE
+  WITHERED
+}
+
+enum TaskStatus {
+  IN_PROGRESS
+  COMPLETED
+  CLAIMED
+}
+
+enum DailyFactionTaskType {
+  ESSENCE_SUBMIT_BASIC
+  ESSENCE_SUBMIT_FOCUS
+  CONFLICT_RAID
+}
+
+enum RaidOrderMode {
+  SINGLE
+  BOUNTY
+}
+
+enum RaidOrderStatus {
+  CREATED
+  LOCKED
+  SETTLING
+  SETTLED
+  SETTLEMENT_FAILED
+  CANCELLED
+  BOUNTY_CREATED
+  BOUNTY_WAITING_PARTNER
+  BOUNTY_ACCEPTED
+  BOUNTY_EXPIRED
+}
+
+enum RaidAssetLockMode {
+  SOFT
+  HARD
+}
+
+enum RaidAssetLockStatus {
+  ACTIVE
+  RELEASED
+  CONSUMED
+  EXPIRED
+}
+
+enum RaidSettlementResult {
+  WIN
+  LOSS
+  DRAW
+  CANCELLED
+}
+
+enum BattleReportType {
+  ATTACK
+  DEFENSE
+  BOUNTY
+}
+
+enum SpiritRarity {
+  COMMON
+  RARE
+  LEGENDARY
+}
+
+enum SpiritRole {
+  ATTACK
+  BALANCED
+  HEALTH
+}
+
+enum SpiritElement {
+  METAL
+  WOOD
+  WATER
+  FIRE
+  EARTH
+}
+
+enum PlayerSpiritStatus {
+  ACTIVE
+  WOUNDED
+  RESTING
+  DISSOLVED
+}
+
+enum NotificationAudience {
+  GLOBAL
+  PLAYER
+}
+
+enum NotificationCategory {
+  SYSTEM
+  ANNOUNCEMENT
+  MAINTENANCE
+  REWARD
+  COMPENSATION
+}
+
+enum PlayerNotificationClaimStatus {
+  NONE
+  UNCLAIMED
+  CLAIMED
+  EXPIRED
+}
+
+enum SocialRelationType {
+  FRIEND
+  FOLLOWING
+  ENEMY
+  BLOCKED
+}
+
+enum SocialRelationStatus {
+  ACTIVE
+  PENDING
+  MUTED
+}
+
+enum SocialFeedType {
+  FRIEND_WATERED_FIELD
+  FRIEND_GUARDED_FIELD
+  FRIEND_REQUESTED
+  FRIEND_ACCEPTED
+  FRIEND_REJECTED
+  TEAM_CHALLENGE_INVITED
+  TEAM_CHALLENGE_ACCEPTED
+  ENEMY_RAIDED
+  REVENGE_AVAILABLE
+  FACTION_HELP_REQUESTED
+}
+
+enum SocialAssistType {
+  WATER_FIELD
+  HARVEST_FIELD
+  GUARD_FIELD
+  RECOVER_SPIRIT
+  FACTION_TASK_HELP
+}
+
+enum TeamChallengeStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  SETTLED
+}
+
+enum ShareAssistCampaignType {
+  WATER
+  FRIEND_INVITE
+}
+
+enum ShareAssistCampaignStatus {
+  ACTIVE
+  FULL
+  EXPIRED
+  CANCELLED
+}
+
+enum ShareAssistRecordAudience {
+  GUEST
+  PLAYER
+}
+
+enum ShareAssistRecordStatus {
+  CONFIRMED
+  BOUND
+  REWARDED
+  REJECTED
+}
+
+enum PlayerInviteRelationStatus {
+  PENDING_BIND
+  BOUND
+  TUTORIAL_COMPLETED
+  REWARDED
+  INVALID
+}
+
+model Player {
+  id               String    @id @default(cuid())
+  nickname         String
+  avatarUrl        String?   @map("avatar_url")
+  factionId        String?   @map("faction_id")
+  castleLevelCache Int       @default(1) @map("castle_level_cache")
+  lastLoginAt      DateTime? @map("last_login_at")
+  protectedUntil   DateTime? @map("protected_until")
+  stateVersion     Int       @default(1) @map("state_version")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  authIdentities          PlayerAuthIdentity[]
+  army                    PlayerArmy?
+  buildings               PlayerBuilding?
+  faction                 Faction?                    @relation("PlayerFaction", fields: [factionId], references: [id], onDelete: SetNull)
+  factionMembers          FactionMember[]
+  factionContributionLogs FactionContributionLog[]
+  walletChangeLogs        WalletChangeLog[]
+  buildingUpgradeLogs     BuildingUpgradeLog[]
+  fieldHarvestLogs        FieldHarvestLog[]
+  fieldSlots              PlayerFieldSlot[]
+  seedInventory           PlayerSeedInventory[]
+  plantResearch           PlayerPlantResearch[]
+  dailyFactionTasks       DailyFactionTask[]
+  essenceTransactionLogs  EssenceTransactionLog[]
+  spiritCodex             PlayerSpiritCodex[]
+  spiritFeedLogs          SpiritFeedLog[]
+  spiritBreakthroughLogs  SpiritBreakthroughLog[]
+  spiritTraitRollLogs     SpiritTraitRollLog[]
+  spiritShopPurchaseLogs  SpiritShopPurchaseLog[]
+  spiritAdRewardLogs      SpiritAdRewardLog[]
+  spiritResource          PlayerSpiritResource?
+  spiritSlots             PlayerSpiritSlot[]
+  farmBoard               PlayerFarmBoard?
+  raidMessagesAuthored    RaidOrderMessage[]          @relation("RaidOrderMessageAuthor")
+  raidMessagesReceived    RaidOrderMessage[]          @relation("RaidOrderMessageReceiver")
+  taskStates              PlayerDailyTaskState[]
+  taskRewardLogs          TaskRewardLog[]
+  idempotencyRecords      IdempotencyRecord[]
+  trainingQueues          ArmyTrainingQueue[]
+  wallet                  PlayerWallet?
+  ownedRaidTargetPools    RaidTargetPool[]            @relation("RaidTargetPoolOwner")
+  targetRaidTargetPools   RaidTargetPool[]            @relation("RaidTargetPoolTarget")
+  attackRaidOrders        RaidOrder[]                 @relation("RaidOrderAttacker")
+  defendRaidOrders        RaidOrder[]                 @relation("RaidOrderDefender")
+  raidAssetLocks          RaidAssetLock[]             @relation("RaidAssetLockDefender")
+  ownedBattleReports      BattleReport[]              @relation("BattleReportOwner")
+  opponentBattleReports   BattleReport[]              @relation("BattleReportOpponent")
+  notifications           PlayerNotification[]
+  landDeedProgress        PlayerLandDeedProgress[]
+  factionStipendStates    PlayerFactionStipendState[]
+  socialRelationsOwned    PlayerSocialRelation[]      @relation("SocialRelationOwner")
+  socialRelationsTargeted PlayerSocialRelation[]      @relation("SocialRelationTarget")
+  socialFeedsOwned        PlayerSocialFeed[]          @relation("SocialFeedOwner")
+  socialFeedsAuthored     PlayerSocialFeed[]          @relation("SocialFeedActor")
+  assistsGiven            PlayerAssistRecord[]        @relation("AssistHelper")
+  assistsReceived         PlayerAssistRecord[]        @relation("AssistTarget")
+  teamChallengesStarted   TeamChallenge[]             @relation("TeamChallengeInitiator")
+  teamChallengesAllied    TeamChallenge[]             @relation("TeamChallengeAlly")
+  teamChallengesTargeted  TeamChallenge[]             @relation("TeamChallengeTarget")
+  shareAssistCampaigns    ShareAssistCampaign[]       @relation("ShareAssistCampaignOwner")
+  shareAssistRecords      ShareAssistRecord[]         @relation("ShareAssistRecordHelper")
+  inviteRelationsSent     PlayerInviteRelation[]      @relation("InviteRelationInviter")
+  inviteRelationsReceived PlayerInviteRelation[]      @relation("InviteRelationInvited")
+  seasonStates            PlayerSeasonState[]
+  seasonSnapshots         PlayerSeasonSnapshot[]
+  seasonSignIns           PlayerSeasonSignIn[]
+  seasonActivities        PlayerSeasonActivity[]
+  seasonRewardGrants      PlayerSeasonRewardGrant[]
+  seasonAchievements      PlayerSeasonAchievement[]
+  robotActionLogs         RobotActionLog[]
+  robotSimSnapshots       RobotSimSnapshot[]
+
+  @@index([factionId])
+  @@index([lastLoginAt])
+  @@map("player")
+}
+
+model GameSeason {
+  seasonNumber Int      @id @map("season_number")
+  startsAt     DateTime @map("starts_at")
+  endsAt       DateTime @map("ends_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  playerSnapshots  PlayerSeasonSnapshot[]
+  factionSnapshots FactionSeasonSnapshot[]
+  playerSignIns    PlayerSeasonSignIn[]
+  playerActivities PlayerSeasonActivity[]
+  playerRewardGrants PlayerSeasonRewardGrant[]
+  playerAchievements PlayerSeasonAchievement[]
+
+  @@index([startsAt, endsAt])
+  @@map("game_season")
+}
+
+model PlayerSeasonState {
+  playerId             String   @map("player_id")
+  currentSeasonNumber  Int      @map("current_season_number")
+  lastResetSeasonNumber Int     @default(1) @map("last_reset_season_number")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@id([playerId])
+  @@index([currentSeasonNumber])
+  @@index([lastResetSeasonNumber])
+  @@map("player_season_state")
+}
+
+model PlayerSeasonSnapshot {
+  id                String   @id @default(cuid())
+  playerId          String   @map("player_id")
+  seasonNumber      Int      @map("season_number")
+  factionId         String?  @map("faction_id")
+  contributionScore Int      @default(0) @map("contribution_score")
+  signInDays        Int      @default(0) @map("sign_in_days")
+  loginDays         Int      @default(0) @map("login_days")
+  harvestCount      Int      @default(0) @map("harvest_count")
+  raidCount         Int      @default(0) @map("raid_count")
+  finalRank         Int?     @map("final_rank")
+  rewardTier        String?  @map("reward_tier")
+  snapshotJson      Json     @map("snapshot_json")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  player Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  faction Faction?   @relation(fields: [factionId], references: [id], onDelete: SetNull)
+  season GameSeason  @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+
+  @@unique([playerId, seasonNumber])
+  @@index([seasonNumber, contributionScore])
+  @@index([factionId, seasonNumber])
+  @@map("player_season_snapshot")
+}
+
+model PlayerSeasonSignIn {
+  id                  String   @id @default(cuid())
+  playerId            String   @map("player_id")
+  seasonNumber        Int      @map("season_number")
+  dayIndex            Int      @map("day_index")
+  rewardTianjiTalisman Int     @map("reward_tianji_talisman")
+  claimedAt           DateTime @default(now()) @map("claimed_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  player Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  season GameSeason  @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+
+  @@unique([playerId, seasonNumber, dayIndex])
+  @@index([playerId, seasonNumber])
+  @@index([seasonNumber, dayIndex])
+  @@map("player_season_sign_in")
+}
+
+model PlayerSeasonActivity {
+  id           String   @id @default(cuid())
+  playerId     String   @map("player_id")
+  seasonNumber Int      @map("season_number")
+  dateKey      String   @map("date_key")
+  firstSeenAt  DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt   DateTime @default(now()) @map("last_seen_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  player Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  season GameSeason  @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+
+  @@unique([playerId, seasonNumber, dateKey])
+  @@index([playerId, seasonNumber])
+  @@index([seasonNumber, dateKey])
+  @@map("player_season_activity")
+}
+
+model PlayerSeasonRewardGrant {
+  id                   String    @id @default(cuid())
+  playerId             String    @map("player_id")
+  seasonNumber         Int       @map("season_number")
+  rewardType           String    @map("reward_type")
+  rewardTier           String?   @map("reward_tier")
+  status               String    @default("generated")
+  notificationId       String?   @map("notification_id")
+  contributionSnapshot Int       @default(0) @map("contribution_snapshot")
+  signInDays           Int       @default(0) @map("sign_in_days")
+  loginDays            Int       @default(0) @map("login_days")
+  harvestCount         Int       @default(0) @map("harvest_count")
+  raidCount            Int       @default(0) @map("raid_count")
+  rewardJson           Json      @map("reward_json")
+  claimedAt            DateTime? @map("claimed_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  player Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  season GameSeason @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+  notification PlayerNotification? @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+  achievements PlayerSeasonAchievement[]
+
+  @@unique([playerId, seasonNumber, rewardType])
+  @@index([playerId, status])
+  @@index([seasonNumber, rewardType])
+  @@index([notificationId])
+  @@map("player_season_reward_grant")
+}
+
+model PlayerSeasonAchievement {
+  id                   String   @id @default(cuid())
+  playerId             String   @map("player_id")
+  seasonNumber         Int      @map("season_number")
+  domain               String
+  achievementKey       String   @map("achievement_key")
+  title                String
+  description          String
+  contributionSnapshot Int      @default(0) @map("contribution_snapshot")
+  statSnapshotJson     Json     @map("stat_snapshot_json")
+  rewardGrantId        String?  @map("reward_grant_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  season GameSeason @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+  rewardGrant PlayerSeasonRewardGrant? @relation(fields: [rewardGrantId], references: [id], onDelete: SetNull)
+
+  @@unique([playerId, seasonNumber, achievementKey])
+  @@index([playerId, seasonNumber, domain])
+  @@index([rewardGrantId])
+  @@map("player_season_achievement")
+}
+
+model FactionSeasonSnapshot {
+  id                String   @id @default(cuid())
+  factionId         String   @map("faction_id")
+  seasonNumber      Int      @map("season_number")
+  contributionScore Int      @default(0) @map("contribution_score")
+  memberCount       Int      @default(0) @map("member_count")
+  finalRank         Int?     @map("final_rank")
+  snapshotJson      Json     @map("snapshot_json")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  faction Faction    @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  season GameSeason  @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+
+  @@unique([factionId, seasonNumber])
+  @@index([seasonNumber, contributionScore])
+  @@map("faction_season_snapshot")
+}
+
+model PlayerAuthIdentity {
+  id             String       @id @default(cuid())
+  playerId       String       @map("player_id")
+  provider       AuthProvider
+  providerUserId String       @map("provider_user_id")
+  unionId        String?      @map("union_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([playerId])
+  @@map("player_auth_identity")
+}
+
+model Faction {
+  id                               String   @id @default(cuid())
+  code                             String
+  name                             String
+  treasuryGold                     Int      @default(0) @map("treasury_gold")
+  hourlyBaseDividend               Int      @default(0) @map("hourly_base_dividend")
+  hourlyContributionDividendPerTen Int      @default(0) @map("hourly_contribution_dividend_per_ten")
+  contributionScore                Int      @default(0) @map("contribution_score")
+  createdAt                        DateTime @default(now()) @map("created_at")
+  updatedAt                        DateTime @updatedAt @map("updated_at")
+
+  players                 Player[]                 @relation("PlayerFaction")
+  members                 FactionMember[]
+  factionContributionLogs FactionContributionLog[]
+  dailyFactionTasks       DailyFactionTask[]
+  playerSeasonSnapshots   PlayerSeasonSnapshot[]
+  factionSeasonSnapshots  FactionSeasonSnapshot[]
+
+  @@unique([code])
+  @@unique([name])
+  @@map("faction")
+}
+
+model FactionMember {
+  id                String   @id @default(cuid())
+  factionId         String   @map("faction_id")
+  playerId          String   @map("player_id")
+  contributionScore Int      @default(0) @map("contribution_score")
+  joinedAt          DateTime @default(now()) @map("joined_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  faction Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  player  Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([factionId, playerId])
+  @@index([playerId])
+  @@map("faction_member")
+}
+
+model PlayerLandDeedProgress {
+  id           String    @id @default(cuid())
+  playerId     String    @map("player_id")
+  deedKey      String    @map("deed_key")
+  status       String    @default("in_progress")
+  progressJson Json      @map("progress_json")
+  claimedAt    DateTime? @map("claimed_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, deedKey])
+  @@index([playerId, status])
+  @@map("player_land_deed_progress")
+}
+
+model PlayerFactionStipendState {
+  id                   String    @id @default(cuid())
+  playerId             String    @map("player_id")
+  dateKey              String    @map("date_key")
+  contributionSnapshot Int       @map("contribution_snapshot")
+  tierKey              String    @map("tier_key")
+  rewardJson           Json      @map("reward_json")
+  claimedAt            DateTime? @map("claimed_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, dateKey])
+  @@index([dateKey, claimedAt])
+  @@index([playerId, claimedAt])
+  @@map("player_faction_stipend_state")
+}
+
+model PlayerWallet {
+  playerId                     String    @id @map("player_id")
+  vaultGold                    Int       @default(0) @map("vault_gold")
+  vaultCapacity                Int       @default(0) @map("vault_capacity")
+  walletGold                   Int       @default(0) @map("wallet_gold")
+  walletCapacity               Int       @default(0) @map("wallet_capacity")
+  walletProtectedRatio         Int       @default(0) @map("wallet_protected_ratio")
+  pendingTaxGold               Int       @default(0) @map("pending_tax_gold")
+  pendingDividendGold          Int       @default(0) @map("pending_dividend_gold")
+  pendingRaidOverflowGold      Int       @default(0) @map("pending_raid_overflow_gold")
+  pendingRaidOverflowExpiresAt DateTime? @map("pending_raid_overflow_expires_at")
+  passiveSettledAt             DateTime? @map("passive_settled_at")
+  balanceVersion               Int       @default(1) @map("balance_version")
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  updatedAt                    DateTime  @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([pendingRaidOverflowExpiresAt])
+  @@map("player_wallet")
+}
+
+model PlayerBuilding {
+  playerId               String   @id @map("player_id")
+  castleLevel            Int      @default(1) @map("castle_level")
+  vaultLevel             Int      @default(1) @map("vault_level")
+  fieldSlotLevel         Int      @default(1) @map("field_slot_level")
+  populationLevel        Int      @default(1) @map("population_level")
+  watchtowerLevel        Int      @default(1) @map("watchtower_level")
+  protectionTechLevel    Int      @default(0) @map("protection_tech_level")
+  farmYieldTechLevel     Int      @default(0) @map("farm_yield_tech_level")
+  collectWindowTechLevel Int      @default(0) @map("collect_window_tech_level")
+  pendingClaimTechLevel  Int      @default(0) @map("pending_claim_tech_level")
+  buildingVersion        Int      @default(1) @map("building_version")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("player_building")
+}
+
+model PlayerArmy {
+  playerId       String   @id @map("player_id")
+  totalCount     Int      @default(0) @map("total_count")
+  availableCount Int      @default(0) @map("available_count")
+  frozenCount    Int      @default(0) @map("frozen_count")
+  woundedCount   Int      @default(0) @map("wounded_count")
+  capacity       Int      @default(0)
+  armyVersion    Int      @default(1) @map("army_version")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("player_army")
+}
+
+model ArmyTrainingQueue {
+  id            String             @id @default(cuid())
+  playerId      String             @map("player_id")
+  queuedCount   Int                @map("queued_count")
+  unitCostGold  Int                @map("unit_cost_gold")
+  totalCostGold Int                @map("total_cost_gold")
+  startedAt     DateTime           @map("started_at")
+  finishAt      DateTime           @map("finish_at")
+  status        ArmyTrainingStatus @default(QUEUED)
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, status])
+  @@index([finishAt])
+  @@map("army_training_queue")
+}
+
+model SeedDefinition {
+  id                   String   @id @default(cuid())
+  seedId               String   @map("seed_id")
+  label                String
+  rarity               String
+  sortOrder            Int      @default(0) @map("sort_order")
+  growSeconds          Int      @map("grow_seconds")
+  matureSeconds        Int      @map("mature_seconds")
+  collectWindowSeconds Int      @map("collect_window_seconds")
+  baseYieldGold        Int      @map("base_yield_gold")
+  harvestSeedReturn    Int      @default(0) @map("harvest_seed_return")
+  strategyNote         String?  @map("strategy_note")
+  lore                 String?
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  fieldSlots      PlayerFieldSlot[]
+  playerInventory PlayerSeedInventory[]
+  plantResearch   PlayerPlantResearch[]
+
+  @@unique([seedId])
+  @@index([rarity, sortOrder])
+  @@map("seed_definition")
+}
+
+model SpiritDefinition {
+  id                  String       @id @default(cuid())
+  spiritId            String       @map("spirit_id")
+  label               String
+  rarity              SpiritRarity
+  factionAffinity     String       @map("faction_affinity")
+  role                SpiritRole
+  shardName           String       @map("shard_name")
+  shardUnlockRequired Int          @default(100) @map("shard_unlock_required")
+  baseAttack          Int          @map("base_attack")
+  baseHp              Int          @map("base_hp")
+  growthAttack        Int          @map("growth_attack")
+  growthHp            Int          @map("growth_hp")
+  sortOrder           Int          @default(0) @map("sort_order")
+  lore                String?
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  codexEntries PlayerSpiritCodex[]
+  spiritSlots  PlayerSpiritSlot[]
+
+  @@unique([spiritId])
+  @@index([rarity, sortOrder])
+  @@map("spirit_definition")
+}
+
+model PlayerSpiritResource {
+  playerId                     String   @id @map("player_id")
+  spiritSoul                   Int      @default(0) @map("spirit_soul")
+  spiritRoot                   Int      @default(0) @map("spirit_root")
+  spiritMarrow                 Int      @default(0) @map("spirit_marrow")
+  spiritJade                   Int      @default(0) @map("spirit_jade")
+  ordinarySoul                 Int      @default(0) @map("ordinary_soul")
+  rareSoul                     Int      @default(0) @map("rare_soul")
+  legendarySoul                Int      @default(0) @map("legendary_soul")
+  tianjiTalisman               Int      @default(0) @map("tianji_talisman")
+  dailyStarterSeedClaimDateKey String?  @map("daily_starter_seed_claim_date_key")
+  dailyTianjiClaimDateKey      String?  @map("daily_tianji_claim_date_key")
+  dailySpiritSoulClaimDateKey  String?  @map("daily_spirit_soul_claim_date_key")
+  dailyRecoveryUsed            Int      @default(0) @map("daily_recovery_used")
+  dailyRecoveryDateKey         String?  @map("daily_recovery_date_key")
+  dailyIntelFreeUsed           Int      @default(0) @map("daily_intel_free_used")
+  dailyIntelTalismanUsed       Int      @default(0) @map("daily_intel_talisman_used")
+  dailyIntelDateKey            String?  @map("daily_intel_date_key")
+  resourceVersion              Int      @default(1) @map("resource_version")
+  createdAt                    DateTime @default(now()) @map("created_at")
+  updatedAt                    DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("player_spirit_resource")
+}
+
+model PlayerSpiritSlot {
+  id                 String             @id @default(cuid())
+  playerId           String             @map("player_id")
+  slotIndex          Int                @map("slot_index")
+  spiritDefinitionId String?            @map("spirit_definition_id")
+  isMain             Boolean            @default(false) @map("is_main")
+  level              Int                @default(1)
+  exp                Int                @default(0)
+  breakthroughStage  Int                @default(0) @map("breakthrough_stage")
+  satiatedUntil      DateTime?          @map("satiated_until")
+  lastExpSettledAt   DateTime?          @map("last_exp_settled_at")
+  element            SpiritElement?
+  currentHp          Int                @default(0) @map("current_hp")
+  maxHp              Int                @default(0) @map("max_hp")
+  status             PlayerSpiritStatus @default(ACTIVE)
+  acquiredAt         DateTime?          @map("acquired_at")
+  dissolvedAt        DateTime?          @map("dissolved_at")
+  slotVersion        Int                @default(1) @map("slot_version")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  player           Player                  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  spiritDefinition SpiritDefinition?       @relation(fields: [spiritDefinitionId], references: [id], onDelete: SetNull)
+  traits           PlayerSpiritTrait[]
+  feedLogs         SpiritFeedLog[]
+  breakthroughLogs SpiritBreakthroughLog[]
+  traitRollLogs    SpiritTraitRollLog[]
+
+  @@unique([playerId, slotIndex])
+  @@index([playerId, isMain])
+  @@index([spiritDefinitionId])
+  @@map("player_spirit_slot")
+}
+
+model PlayerSpiritTrait {
+  id           String    @id @default(cuid())
+  spiritSlotId String    @map("spirit_slot_id")
+  slotIndex    Int       @map("slot_index")
+  traitCode    String    @map("trait_code")
+  traitValue   Int       @map("trait_value")
+  sourceType   String    @map("source_type")
+  lockedAt     DateTime? @map("locked_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  spiritSlot PlayerSpiritSlot @relation(fields: [spiritSlotId], references: [id], onDelete: Cascade)
+
+  @@unique([spiritSlotId, slotIndex])
+  @@index([spiritSlotId])
+  @@index([traitCode])
+  @@map("player_spirit_trait")
+}
+
+model SpiritFeedLog {
+  id                    String    @id @default(cuid())
+  playerId              String    @map("player_id")
+  spiritSlotId          String    @map("spirit_slot_id")
+  actionType            String    @map("action_type")
+  feedCount             Int       @map("feed_count")
+  satiatedSecondsAdded  Int       @map("satiated_seconds_added")
+  immediateExpGain      Int       @map("immediate_exp_gain")
+  beforeSatiatedUntil   DateTime? @map("before_satiated_until")
+  afterSatiatedUntil    DateTime? @map("after_satiated_until")
+  requestIdempotencyKey String?   @map("request_idempotency_key")
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  player     Player           @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  spiritSlot PlayerSpiritSlot @relation(fields: [spiritSlotId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([spiritSlotId])
+  @@index([requestIdempotencyKey])
+  @@map("spirit_feed_log")
+}
+
+model SpiritBreakthroughLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  spiritSlotId          String   @map("spirit_slot_id")
+  fromStage             Int      @map("from_stage")
+  toStage               Int      @map("to_stage")
+  consumedSoulQuality   String   @map("consumed_soul_quality")
+  consumedSoulCount     Int      @map("consumed_soul_count")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player     Player           @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  spiritSlot PlayerSpiritSlot @relation(fields: [spiritSlotId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([spiritSlotId])
+  @@index([requestIdempotencyKey])
+  @@map("spirit_breakthrough_log")
+}
+
+model SpiritTraitRollLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  spiritSlotId          String   @map("spirit_slot_id")
+  mode                  String
+  lockedSlotIndex       Int?     @map("locked_slot_index")
+  targetSlotIndex       Int?     @map("target_slot_index")
+  targetTraitCode       String?  @map("target_trait_code")
+  consumedJson          Json     @map("consumed_json")
+  beforeTraitsJson      Json     @map("before_traits_json")
+  resultTraitsJson      Json     @map("result_traits_json")
+  candidateResultsJson  Json?    @map("candidate_results_json")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player     Player           @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  spiritSlot PlayerSpiritSlot @relation(fields: [spiritSlotId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([spiritSlotId])
+  @@index([requestIdempotencyKey])
+  @@map("spirit_trait_roll_log")
+}
+
+model SpiritShopPurchaseLog {
+  id                     String   @id @default(cuid())
+  playerId               String   @map("player_id")
+  itemId                 String   @map("item_id")
+  periodKey              String?  @map("period_key")
+  consumedTianjiTalisman Int      @map("consumed_tianji_talisman")
+  rewardJson             Json     @map("reward_json")
+  requestIdempotencyKey  String?  @map("request_idempotency_key")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, itemId, periodKey])
+  @@map("spirit_shop_purchase_log")
+}
+
+model SpiritAdRewardLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  dateKey               String   @map("date_key")
+  tianjiTalismanReward  Int      @map("tianji_talisman_reward")
+  bonusRewardJson       Json     @map("bonus_reward_json")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, dateKey])
+  @@map("spirit_ad_reward_log")
+}
+
+model PlayerSpiritCodex {
+  id                 String    @id @default(cuid())
+  playerId           String    @map("player_id")
+  spiritDefinitionId String    @map("spirit_definition_id")
+  hasSeen            Boolean   @default(false) @map("has_seen")
+  shardCount         Int       @default(0) @map("shard_count")
+  readyToCompose     Boolean   @default(false) @map("ready_to_compose")
+  ownedCurrent       Boolean   @default(false) @map("owned_current")
+  ownedEver          Boolean   @default(false) @map("owned_ever")
+  firstSeenAt        DateTime? @map("first_seen_at")
+  readyAt            DateTime? @map("ready_at")
+  lastOwnedAt        DateTime? @map("last_owned_at")
+  codexVersion       Int       @default(1) @map("codex_version")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  player           Player           @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  spiritDefinition SpiritDefinition @relation(fields: [spiritDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, spiritDefinitionId])
+  @@index([playerId, readyToCompose])
+  @@index([spiritDefinitionId])
+  @@map("player_spirit_codex")
+}
+
+model PlayerFarmBoard {
+  playerId     String    @id @map("player_id")
+  message      String    @default("")
+  boardVersion Int       @default(1) @map("board_version")
+  hiddenAt     DateTime? @map("hidden_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("player_farm_board")
+}
+
+model RaidMessageTemplate {
+  id         String   @id @default(cuid())
+  templateId String   @map("template_id")
+  text       String
+  sortOrder  Int      @default(0) @map("sort_order")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  raidMessages RaidOrderMessage[]
+
+  @@unique([templateId])
+  @@index([isActive, sortOrder])
+  @@map("raid_message_template")
+}
+
+model RaidOrderMessage {
+  id               String   @id @default(cuid())
+  raidOrderId      String   @unique @map("raid_order_id")
+  authorPlayerId   String   @map("author_player_id")
+  receiverPlayerId String   @map("receiver_player_id")
+  templateId       String   @map("template_id")
+  textSnapshot     String   @map("text_snapshot")
+  isHidden         Boolean  @default(false) @map("is_hidden")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  raidOrder RaidOrder           @relation(fields: [raidOrderId], references: [id], onDelete: Cascade)
+  author    Player              @relation("RaidOrderMessageAuthor", fields: [authorPlayerId], references: [id], onDelete: Cascade)
+  receiver  Player              @relation("RaidOrderMessageReceiver", fields: [receiverPlayerId], references: [id], onDelete: Cascade)
+  template  RaidMessageTemplate @relation(fields: [templateId], references: [templateId], onDelete: Restrict)
+
+  @@index([authorPlayerId, createdAt])
+  @@index([receiverPlayerId, createdAt])
+  @@index([templateId])
+  @@map("raid_order_message")
+}
+
+model SystemNotification {
+  id             String               @id @default(cuid())
+  audience       NotificationAudience
+  category       NotificationCategory @default(SYSTEM)
+  title          String
+  body           String
+  createdByAdmin String?              @map("created_by_admin")
+  startsAt       DateTime?            @map("starts_at")
+  expiresAt      DateTime?            @map("expires_at")
+  revokedAt      DateTime?            @map("revoked_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  playerNotifications PlayerNotification[]
+
+  @@index([audience, createdAt])
+  @@index([category, createdAt])
+  @@index([revokedAt])
+  @@map("system_notification")
+}
+
+model PlayerNotification {
+  id                   String                        @id @default(cuid())
+  playerId             String                        @map("player_id")
+  systemNotificationId String?                       @map("system_notification_id")
+  category             NotificationCategory          @default(SYSTEM)
+  titleSnapshot        String                        @map("title_snapshot")
+  bodySnapshot         String                        @map("body_snapshot")
+  attachmentJson       Json?                         @map("attachment_json")
+  claimStatus          PlayerNotificationClaimStatus @default(NONE) @map("claim_status")
+  readAt               DateTime?                     @map("read_at")
+  deletedAt            DateTime?                     @map("deleted_at")
+  claimedAt            DateTime?                     @map("claimed_at")
+  expiresAt            DateTime?                     @map("expires_at")
+  createdAt            DateTime                      @default(now()) @map("created_at")
+  updatedAt            DateTime                      @updatedAt @map("updated_at")
+
+  player             Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  systemNotification SystemNotification? @relation(fields: [systemNotificationId], references: [id], onDelete: SetNull)
+  seasonRewardGrants PlayerSeasonRewardGrant[]
+
+  @@index([playerId, deletedAt, createdAt])
+  @@index([playerId, readAt])
+  @@index([playerId, claimStatus])
+  @@index([systemNotificationId])
+  @@map("player_notification")
+}
+
+model PlayerSocialRelation {
+  id               String               @id @default(cuid())
+  playerId         String               @map("player_id")
+  targetPlayerId   String               @map("target_player_id")
+  relationType     SocialRelationType   @map("relation_type")
+  status           SocialRelationStatus @default(ACTIVE)
+  sourceType       String               @default("manual") @map("source_type")
+  intimacy         Int                  @default(0)
+  lastInteractedAt DateTime?            @map("last_interacted_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  player       Player @relation("SocialRelationOwner", fields: [playerId], references: [id], onDelete: Cascade)
+  targetPlayer Player @relation("SocialRelationTarget", fields: [targetPlayerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, targetPlayerId, relationType])
+  @@index([playerId, relationType, status])
+  @@index([targetPlayerId, relationType, status])
+  @@index([lastInteractedAt])
+  @@map("player_social_relation")
+}
+
+model PlayerSocialFeed {
+  id                String         @id @default(cuid())
+  playerId          String         @map("player_id")
+  actorPlayerId     String?        @map("actor_player_id")
+  feedType          SocialFeedType @map("feed_type")
+  relatedEntityType String?        @map("related_entity_type")
+  relatedEntityId   String?        @map("related_entity_id")
+  summary           String
+  metadataJson      Json?          @map("metadata_json")
+  isRead            Boolean        @default(false) @map("is_read")
+  expiresAt         DateTime?      @map("expires_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+
+  player Player  @relation("SocialFeedOwner", fields: [playerId], references: [id], onDelete: Cascade)
+  actor  Player? @relation("SocialFeedActor", fields: [actorPlayerId], references: [id], onDelete: SetNull)
+
+  @@index([playerId, isRead, createdAt])
+  @@index([playerId, feedType, createdAt])
+  @@index([actorPlayerId, createdAt])
+  @@index([expiresAt])
+  @@map("player_social_feed")
+}
+
+model PlayerAssistRecord {
+  id               String           @id @default(cuid())
+  helperPlayerId   String           @map("helper_player_id")
+  targetPlayerId   String           @map("target_player_id")
+  assistType       SocialAssistType @map("assist_type")
+  targetEntityType String?          @map("target_entity_type")
+  targetEntityId   String?          @map("target_entity_id")
+  effectValue      Int              @default(0) @map("effect_value")
+  intimacyGain     Int              @default(0) @map("intimacy_gain")
+  dateKey          String           @map("date_key")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  helperPlayer Player @relation("AssistHelper", fields: [helperPlayerId], references: [id], onDelete: Cascade)
+  targetPlayer Player @relation("AssistTarget", fields: [targetPlayerId], references: [id], onDelete: Cascade)
+
+  @@index([helperPlayerId, dateKey, assistType])
+  @@index([helperPlayerId, targetPlayerId, dateKey], map: "assist_pair_date_idx")
+  @@index([targetPlayerId, dateKey, assistType])
+  @@index([targetEntityType, targetEntityId])
+  @@map("player_assist_record")
+}
+
+model TeamChallenge {
+  id                     String              @id @default(cuid())
+  initiatorPlayerId      String              @map("initiator_player_id")
+  allyPlayerId           String              @map("ally_player_id")
+  targetPlayerId         String              @map("target_player_id")
+  status                 TeamChallengeStatus @default(PENDING)
+  initiatorPowerSnapshot Int                 @default(0) @map("initiator_power_snapshot")
+  allyPowerSnapshot      Int                 @default(0) @map("ally_power_snapshot")
+  targetPowerSnapshot    Int                 @default(0) @map("target_power_snapshot")
+  assistEfficiencyBps    Int                 @default(6000) @map("assist_efficiency_bps")
+  result                 String?
+  rewardJson             Json?               @map("reward_json")
+  expiresAt              DateTime            @map("expires_at")
+  createdAt              DateTime            @default(now()) @map("created_at")
+  settledAt              DateTime?           @map("settled_at")
+
+  initiator Player @relation("TeamChallengeInitiator", fields: [initiatorPlayerId], references: [id], onDelete: Cascade)
+  ally      Player @relation("TeamChallengeAlly", fields: [allyPlayerId], references: [id], onDelete: Cascade)
+  target    Player @relation("TeamChallengeTarget", fields: [targetPlayerId], references: [id], onDelete: Cascade)
+
+  @@index([initiatorPlayerId, status, createdAt])
+  @@index([allyPlayerId, status, createdAt])
+  @@index([targetPlayerId, createdAt])
+  @@index([expiresAt, status])
+  @@map("team_challenge")
+}
+
+model ShareAssistCampaign {
+  id                 String                    @id @default(cuid())
+  ownerPlayerId      String                    @map("owner_player_id")
+  campaignType       ShareAssistCampaignType   @map("campaign_type")
+  targetEntityType   String?                   @map("target_entity_type")
+  targetEntityId     String?                   @map("target_entity_id")
+  status             ShareAssistCampaignStatus @default(ACTIVE)
+  maxAssistCount     Int                       @default(3) @map("max_assist_count")
+  currentAssistCount Int                       @default(0) @map("current_assist_count")
+  expiresAt          DateTime                  @map("expires_at")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+
+  owner           Player                 @relation("ShareAssistCampaignOwner", fields: [ownerPlayerId], references: [id], onDelete: Cascade)
+  records         ShareAssistRecord[]
+  inviteRelations PlayerInviteRelation[]
+
+  @@index([ownerPlayerId, campaignType, status, createdAt])
+  @@index([expiresAt, status])
+  @@map("share_assist_campaign")
+}
+
+model ShareAssistRecord {
+  id               String                    @id @default(cuid())
+  campaignId       String                    @map("campaign_id")
+  helperPlayerId   String?                   @map("helper_player_id")
+  helperOpenidHash String?                   @map("helper_openid_hash")
+  helperDeviceHash String?                   @map("helper_device_hash")
+  helperAudience   ShareAssistRecordAudience @map("helper_audience")
+  status           ShareAssistRecordStatus   @default(CONFIRMED)
+  assistRecordId   String?                   @map("assist_record_id")
+  rewardClaimedAt  DateTime?                 @map("reward_claimed_at")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  boundAt          DateTime?                 @map("bound_at")
+
+  campaign     ShareAssistCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  helperPlayer Player?             @relation("ShareAssistRecordHelper", fields: [helperPlayerId], references: [id], onDelete: SetNull)
+
+  @@unique([campaignId, helperPlayerId])
+  @@unique([campaignId, helperOpenidHash])
+  @@unique([campaignId, helperDeviceHash])
+  @@index([campaignId, status, createdAt])
+  @@index([helperPlayerId, createdAt])
+  @@map("share_assist_record")
+}
+
+model PlayerInviteRelation {
+  id                String                     @id @default(cuid())
+  inviterPlayerId   String                     @map("inviter_player_id")
+  invitedPlayerId   String?                    @map("invited_player_id")
+  invitedOpenidHash String?                    @map("invited_openid_hash")
+  sourceCampaignId  String?                    @map("source_campaign_id")
+  status            PlayerInviteRelationStatus @default(PENDING_BIND)
+  createdAt         DateTime                   @default(now()) @map("created_at")
+  boundAt           DateTime?                  @map("bound_at")
+  rewardedAt        DateTime?                  @map("rewarded_at")
+
+  inviter       Player               @relation("InviteRelationInviter", fields: [inviterPlayerId], references: [id], onDelete: Cascade)
+  invitedPlayer Player?              @relation("InviteRelationInvited", fields: [invitedPlayerId], references: [id], onDelete: SetNull)
+  campaign      ShareAssistCampaign? @relation(fields: [sourceCampaignId], references: [id], onDelete: SetNull)
+
+  @@unique([inviterPlayerId, invitedPlayerId])
+  @@unique([inviterPlayerId, invitedOpenidHash])
+  @@index([inviterPlayerId, status, createdAt])
+  @@index([invitedPlayerId])
+  @@index([sourceCampaignId])
+  @@map("player_invite_relation")
+}
+
+model PlayerSeedInventory {
+  id               String    @id @default(cuid())
+  playerId         String    @map("player_id")
+  seedDefinitionId String    @map("seed_definition_id")
+  quantity         Int       @default(0)
+  inventoryVersion Int       @default(1) @map("inventory_version")
+  unlockedAt       DateTime? @map("unlocked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  player         Player         @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  seedDefinition SeedDefinition @relation(fields: [seedDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, seedDefinitionId])
+  @@index([playerId])
+  @@map("player_seed_inventory")
+}
+
+model PlayerPlantResearch {
+  id               String   @id @default(cuid())
+  playerId         String   @map("player_id")
+  seedDefinitionId String   @map("seed_definition_id")
+  discoveredAt     DateTime @default(now()) @map("discovered_at")
+  researchVersion  Int      @default(1) @map("research_version")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  player         Player         @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  seedDefinition SeedDefinition @relation(fields: [seedDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, seedDefinitionId])
+  @@index([playerId])
+  @@map("player_plant_research")
+}
+
+model PlayerFieldSlot {
+  id                    String      @id @default(cuid())
+  playerId              String      @map("player_id")
+  slotIndex             Int         @map("slot_index")
+  isUnlocked            Boolean     @default(false) @map("is_unlocked")
+  unlockCastleLevel     Int         @map("unlock_castle_level")
+  status                FieldStatus @default(LOCKED)
+  seedDefinitionId      String?     @map("seed_definition_id")
+  expectedEssenceYield  Int         @default(0) @map("expected_essence_yield")
+  stolenEssenceYield    Int         @default(0) @map("stolen_essence_yield")
+  harvestedEssenceYield Int         @default(0) @map("harvested_essence_yield")
+  lastStolenAt          DateTime?   @map("last_stolen_at")
+  investedGold          Int         @default(0) @map("invested_gold")
+  currentClaimableGold  Int         @default(0) @map("current_claimable_gold")
+  harvestedGoldTotal    Int         @default(0) @map("harvested_gold_total")
+  raidedGoldTotal       Int         @default(0) @map("raided_gold_total")
+  seedAt                DateTime?   @map("seed_at")
+  matureAt              DateTime?   @map("mature_at")
+  readyAt               DateTime?   @map("ready_at")
+  overripeAt            DateTime?   @map("overripe_at")
+  lastCalculatedAt      DateTime?   @map("last_calculated_at")
+  statusVersion         Int         @default(1) @map("status_version")
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+
+  player         Player            @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  seedDefinition SeedDefinition?   @relation(fields: [seedDefinitionId], references: [id], onDelete: SetNull)
+  harvestLogs    FieldHarvestLog[]
+  raidOrders     RaidOrder[]
+  raidAssetLocks RaidAssetLock[]
+
+  @@unique([playerId, slotIndex])
+  @@index([playerId, status])
+  @@index([matureAt])
+  @@index([readyAt])
+  @@index([overripeAt])
+  @@map("player_field_slot")
+}
+
+model PlayerDailyTaskState {
+  id          String     @id @default(cuid())
+  playerId    String     @map("player_id")
+  dateKey     String     @map("date_key")
+  taskId      String     @map("task_id")
+  progress    Int        @default(0)
+  target      Int
+  status      TaskStatus @default(IN_PROGRESS)
+  rewardGold  Int        @map("reward_gold")
+  actionScene String     @map("action_scene")
+  claimedAt   DateTime?  @map("claimed_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  player         Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  taskRewardLogs TaskRewardLog[]
+
+  @@unique([playerId, dateKey, taskId])
+  @@index([playerId, dateKey])
+  @@index([dateKey, status])
+  @@map("player_daily_task_state")
+}
+
+model TaskConfigOverride {
+  id                 String   @id @default(cuid())
+  taskGroup          String   @map("task_group")
+  taskId             String   @map("task_id")
+  title              String?
+  description        String?
+  targetCount        Int?     @map("target_count")
+  rewardGold         Int?     @map("reward_gold")
+  rewardContribution Int?     @map("reward_contribution")
+  isEnabled          Boolean  @default(true) @map("is_enabled")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@unique([taskGroup, taskId])
+  @@index([taskGroup, isEnabled])
+  @@map("task_config_override")
+}
+
+model WalletChangeLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  walletBucket          String   @map("wallet_bucket")
+  changeType            String   @map("change_type")
+  deltaGold             Int      @map("delta_gold")
+  beforeGold            Int      @map("before_gold")
+  afterGold             Int      @map("after_gold")
+  relatedEntityType     String?  @map("related_entity_type")
+  relatedEntityId       String?  @map("related_entity_id")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  note                  String?
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([requestIdempotencyKey])
+  @@index([changeType, createdAt])
+  @@map("wallet_change_log")
+}
+
+model AdminOperationAuditLog {
+  id             String   @id @default(cuid())
+  action         String
+  targetType     String   @map("target_type")
+  targetId       String   @map("target_id")
+  adminActor     String   @default("admin-console") @map("admin_actor")
+  reason         String
+  confirmText    String   @map("confirm_text")
+  metadataJson   Json?    @map("metadata_json")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
+  @@map("admin_operation_audit_log")
+}
+
+model RobotTestRun {
+  id                  String    @id @default(cuid())
+  name                String
+  mode                String
+  status              String    @default("RUNNING")
+  plannedRobotCount   Int       @default(0) @map("planned_robot_count")
+  successActionCount  Int       @default(0) @map("success_action_count")
+  failedActionCount   Int       @default(0) @map("failed_action_count")
+  summary             String?
+  startedAt           DateTime  @default(now()) @map("started_at")
+  finishedAt          DateTime? @map("finished_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  actionLogs   RobotActionLog[]
+  simSnapshots RobotSimSnapshot[]
+
+  @@index([status, startedAt])
+  @@index([mode, startedAt])
+  @@map("robot_test_run")
+}
+
+model RobotActionLog {
+  id                String   @id @default(cuid())
+  runId             String   @map("run_id")
+  robotKey          String   @map("robot_key")
+  robotRole         String   @map("robot_role")
+  playerId          String   @map("player_id")
+  actionName        String   @map("action_name")
+  status            String
+  durationMs        Int      @default(0) @map("duration_ms")
+  errorCode         String?  @map("error_code")
+  errorMessage      String?  @map("error_message")
+  requestSummaryJson Json?   @map("request_summary_json")
+  resultSummaryJson  Json?   @map("result_summary_json")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  run    RobotTestRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  player Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@index([robotKey, createdAt])
+  @@index([playerId, createdAt])
+  @@index([status, createdAt])
+  @@map("robot_action_log")
+}
+
+model RobotAutomationJob {
+  id                    String    @id @default(cuid())
+  name                  String
+  mode                  String
+  status                String    @default("RUNNING")
+  intervalSeconds       Int       @map("interval_seconds")
+  maxRounds             Int       @map("max_rounds")
+  hardErrorLimit        Int       @map("hard_error_limit")
+  completedRounds       Int       @default(0) @map("completed_rounds")
+  consecutiveHardErrors Int       @default(0) @map("consecutive_hard_errors")
+  lastRunId             String?   @map("last_run_id")
+  lastStatus            String?   @map("last_status")
+  lastError             String?   @map("last_error")
+  stopReason            String?   @map("stop_reason")
+  startedAt             DateTime  @default(now()) @map("started_at")
+  stoppedAt             DateTime? @map("stopped_at")
+  lastRunAt             DateTime? @map("last_run_at")
+  nextRunAt             DateTime? @map("next_run_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@index([mode, status, startedAt])
+  @@index([status, startedAt])
+  @@map("robot_automation_job")
+}
+
+model RobotAutomationConfig {
+  id                    String   @id @default(cuid())
+  mode                  String   @unique
+  enabled               Boolean  @default(false)
+  intervalSeconds       Int      @default(10) @map("interval_seconds")
+  maxRounds             Int      @default(20) @map("max_rounds")
+  hardErrorLimit        Int      @default(3) @map("hard_error_limit")
+  autoStartOnBoot       Boolean  @default(false) @map("auto_start_on_boot")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@index([enabled, mode])
+  @@map("robot_automation_config")
+}
+
+model RobotSimSnapshot {
+  id                  String   @id @default(cuid())
+  runId               String   @map("run_id")
+  mode                String
+  robotKey            String   @map("robot_key")
+  playerId            String   @map("player_id")
+  factionCode         String?  @map("faction_code")
+  vaultGold           Int      @default(0) @map("vault_gold")
+  walletGold          Int      @default(0) @map("wallet_gold")
+  contributionScore   Int      @default(0) @map("contribution_score")
+  spiritSoul          Int      @default(0) @map("spirit_soul")
+  ordinarySoul        Int      @default(0) @map("ordinary_soul")
+  rareSoul            Int      @default(0) @map("rare_soul")
+  legendarySoul       Int      @default(0) @map("legendary_soul")
+  mainSpiritLevel     Int?     @map("main_spirit_level")
+  mainSpiritStage     Int?     @map("main_spirit_stage")
+  armyTotal           Int      @default(0) @map("army_total")
+  armyAvailable       Int      @default(0) @map("army_available")
+  armyCapacity        Int      @default(0) @map("army_capacity")
+  queuedArmy          Int      @default(0) @map("queued_army")
+  matureFields        Int      @default(0) @map("mature_fields")
+  growingFields       Int      @default(0) @map("growing_fields")
+  emptyFields         Int      @default(0) @map("empty_fields")
+  successActionCount  Int      @default(0) @map("success_action_count")
+  blockedActionCount  Int      @default(0) @map("blocked_action_count")
+  failedActionCount   Int      @default(0) @map("failed_action_count")
+  actionSummaryJson   Json?    @map("action_summary_json")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  run    RobotTestRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  player Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([mode, createdAt])
+  @@index([playerId, createdAt])
+  @@index([robotKey, createdAt])
+  @@map("robot_sim_snapshot")
+}
+
+model BuildingUpgradeLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  buildingKey           String   @map("building_key")
+  oldLevel              Int      @map("old_level")
+  newLevel              Int      @map("new_level")
+  costGold              Int      @map("cost_gold")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([requestIdempotencyKey])
+  @@map("building_upgrade_log")
+}
+
+model FieldHarvestLog {
+  id              String   @id @default(cuid())
+  playerId        String   @map("player_id")
+  fieldSlotId     String   @map("field_slot_id")
+  seedId          String?  @map("seed_id")
+  collectMode     String   @map("collect_mode")
+  collectedGold   Int      @map("collected_gold")
+  overflowGold    Int      @map("overflow_gold")
+  rewardItemsJson Json?    @map("reward_items_json")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  player    Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  fieldSlot PlayerFieldSlot @relation(fields: [fieldSlotId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([playerId, seedId])
+  @@index([fieldSlotId])
+  @@map("field_harvest_log")
+}
+
+model FactionContributionLog {
+  id                String   @id @default(cuid())
+  factionId         String   @map("faction_id")
+  playerId          String   @map("player_id")
+  donatedGold       Int      @default(0) @map("donated_gold")
+  contributionDelta Int      @map("contribution_delta")
+  sourceType        String   @default("gold-donation") @map("source_type")
+  sourceId          String?  @map("source_id")
+  metadataJson      Json?    @map("metadata_json")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  faction Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  player  Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([factionId, createdAt])
+  @@index([playerId, createdAt])
+  @@map("faction_contribution_log")
+}
+
+model DailyFactionTask {
+  id                  String               @id @default(cuid())
+  playerId            String               @map("player_id")
+  factionId           String               @map("faction_id")
+  taskDate            String               @map("task_date")
+  taskType            DailyFactionTaskType @map("task_type")
+  requiredEssenceType String?              @map("required_essence_type")
+  requiredAmount      Int                  @map("required_amount")
+  progressAmount      Int                  @default(0) @map("progress_amount")
+  rewardContribution  Int                  @map("reward_contribution")
+  status              TaskStatus           @default(IN_PROGRESS)
+  generatedAt         DateTime             @default(now()) @map("generated_at")
+  completedAt         DateTime?            @map("completed_at")
+  refreshedFromTaskId String?              @map("refreshed_from_task_id")
+
+  player  Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  faction Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, taskDate, taskType])
+  @@index([playerId, taskDate, status])
+  @@index([factionId, taskDate])
+  @@map("daily_faction_task")
+}
+
+model EssenceTransactionLog {
+  id           String   @id @default(cuid())
+  playerId     String   @map("player_id")
+  essenceType  String   @map("essence_type")
+  delta        Int
+  reason       String
+  sourceId     String?  @map("source_id")
+  balanceAfter Int      @map("balance_after")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@index([essenceType, createdAt])
+  @@map("essence_transaction_log")
+}
+
+model TaskRewardLog {
+  id                    String   @id @default(cuid())
+  playerId              String   @map("player_id")
+  taskStateId           String?  @map("task_state_id")
+  taskId                String   @map("task_id")
+  rewardGold            Int      @map("reward_gold")
+  requestIdempotencyKey String?  @map("request_idempotency_key")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  player    Player                @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  taskState PlayerDailyTaskState? @relation(fields: [taskStateId], references: [id], onDelete: SetNull)
+
+  @@index([playerId, createdAt])
+  @@index([requestIdempotencyKey])
+  @@map("task_reward_log")
+}
+
+model IdempotencyRecord {
+  id                   String    @id @default(cuid())
+  playerId             String    @map("player_id")
+  endpointKey          String    @map("endpoint_key")
+  idempotencyKey       String    @map("idempotency_key")
+  requestHash          String    @map("request_hash")
+  status               String
+  responseSnapshotJson Json?     @map("response_snapshot_json")
+  businessEntityType   String?   @map("business_entity_type")
+  businessEntityId     String?   @map("business_entity_id")
+  expiresAt            DateTime? @map("expires_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, endpointKey, idempotencyKey])
+  @@index([expiresAt])
+  @@index([status, updatedAt])
+  @@map("idempotency_record")
+}
+
+model RaidTargetPool {
+  id                 String   @id @default(cuid())
+  ownerPlayerId      String   @map("owner_player_id")
+  targetPlayerId     String   @map("target_player_id")
+  slotIndex          Int      @map("slot_index")
+  targetSnapshotJson Json     @map("target_snapshot_json")
+  fieldSnapshotJson  Json?    @map("field_snapshot_json")
+  riskSnapshotJson   Json?    @map("risk_snapshot_json")
+  refreshBatchNo     Int      @map("refresh_batch_no")
+  expiresAt          DateTime @map("expires_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  ownerPlayer  Player      @relation("RaidTargetPoolOwner", fields: [ownerPlayerId], references: [id], onDelete: Cascade)
+  targetPlayer Player      @relation("RaidTargetPoolTarget", fields: [targetPlayerId], references: [id], onDelete: Cascade)
+  raidOrders   RaidOrder[]
+
+  @@unique([ownerPlayerId, targetPlayerId, slotIndex, refreshBatchNo])
+  @@index([ownerPlayerId, expiresAt])
+  @@index([ownerPlayerId, refreshBatchNo])
+  @@map("raid_target_pool")
+}
+
+model RaidOrder {
+  id                        String          @id @default(cuid())
+  attackerPlayerId          String          @map("attacker_player_id")
+  defenderPlayerId          String          @map("defender_player_id")
+  defenderFieldSlotId       String?         @map("defender_field_slot_id")
+  sourceTargetPoolId        String?         @map("source_target_pool_id")
+  mode                      RaidOrderMode
+  status                    RaidOrderStatus @default(CREATED)
+  dispatchedUnitCount       Int             @map("dispatched_unit_count")
+  frozenUnitSnapshot        Json            @map("frozen_unit_snapshot")
+  transportCapacitySnapshot Int             @map("transport_capacity_snapshot")
+  attackerSnapshotJson      Json            @map("attacker_snapshot_json")
+  defenderSnapshotJson      Json            @map("defender_snapshot_json")
+  dispatchedAt              DateTime        @map("dispatched_at")
+  settleAt                  DateTime        @map("settle_at")
+  settledAt                 DateTime?       @map("settled_at")
+  requestIdempotencyKey     String          @map("request_idempotency_key")
+  settlementVersion         Int             @default(1) @map("settlement_version")
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  attacker          Player            @relation("RaidOrderAttacker", fields: [attackerPlayerId], references: [id], onDelete: Cascade)
+  defender          Player            @relation("RaidOrderDefender", fields: [defenderPlayerId], references: [id], onDelete: Cascade)
+  defenderFieldSlot PlayerFieldSlot?  @relation(fields: [defenderFieldSlotId], references: [id], onDelete: SetNull)
+  sourceTargetPool  RaidTargetPool?   @relation(fields: [sourceTargetPoolId], references: [id], onDelete: SetNull)
+  assetLocks        RaidAssetLock[]
+  settlement        RaidSettlement?
+  battleReports     BattleReport[]
+  raidMessage       RaidOrderMessage?
+
+  @@unique([requestIdempotencyKey])
+  @@index([attackerPlayerId, status])
+  @@index([defenderPlayerId, status])
+  @@index([settleAt, status])
+  @@map("raid_order")
+}
+
+model RaidAssetLock {
+  id                String              @id @default(cuid())
+  raidOrderId       String              @map("raid_order_id")
+  defenderPlayerId  String              @map("defender_player_id")
+  assetType         String              @map("asset_type")
+  sourceEntityId    String?             @map("source_entity_id")
+  sourceFieldSlotId String?             @map("source_field_slot_id")
+  lockedGold        Int                 @default(0) @map("locked_gold")
+  lockedItemJson    Json?               @map("locked_item_json")
+  lockMode          RaidAssetLockMode   @map("lock_mode")
+  status            RaidAssetLockStatus @default(ACTIVE)
+  expiresAt         DateTime?           @map("expires_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  raidOrder       RaidOrder        @relation(fields: [raidOrderId], references: [id], onDelete: Cascade)
+  defenderPlayer  Player           @relation("RaidAssetLockDefender", fields: [defenderPlayerId], references: [id], onDelete: Cascade)
+  sourceFieldSlot PlayerFieldSlot? @relation(fields: [sourceFieldSlotId], references: [id], onDelete: SetNull)
+
+  @@index([raidOrderId])
+  @@index([defenderPlayerId, status])
+  @@index([expiresAt, status])
+  @@map("raid_asset_lock")
+}
+
+model RaidSettlement {
+  id                      String               @id @default(cuid())
+  raidOrderId             String               @unique @map("raid_order_id")
+  result                  RaidSettlementResult
+  lootGold                Int                  @default(0) @map("loot_gold")
+  depositedGold           Int                  @default(0) @map("deposited_gold")
+  overflowGold            Int                  @default(0) @map("overflow_gold")
+  temporaryClaimExpiresAt DateTime?            @map("temporary_claim_expires_at")
+  attackerLoss            Int                  @default(0) @map("attacker_loss")
+  defenderLoss            Int                  @default(0) @map("defender_loss")
+  rewardItemsJson         Json?                @map("reward_items_json")
+  battleReplayJson        Json?                @map("battle_replay_json")
+  reportSummary           String               @map("report_summary")
+  createdAt               DateTime             @default(now()) @map("created_at")
+
+  raidOrder RaidOrder @relation(fields: [raidOrderId], references: [id], onDelete: Cascade)
+
+  @@map("raid_settlement")
+}
+
+model BattleReport {
+  id               String               @id @default(cuid())
+  raidOrderId      String               @map("raid_order_id")
+  ownerPlayerId    String               @map("owner_player_id")
+  opponentPlayerId String               @map("opponent_player_id")
+  reportType       BattleReportType     @map("report_type")
+  result           RaidSettlementResult
+  title            String
+  summary          String
+  revengeAvailable Boolean              @default(false) @map("revenge_available")
+  revokedAt        DateTime?            @map("revoked_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+
+  raidOrder      RaidOrder @relation(fields: [raidOrderId], references: [id], onDelete: Cascade)
+  ownerPlayer    Player    @relation("BattleReportOwner", fields: [ownerPlayerId], references: [id], onDelete: Cascade)
+  opponentPlayer Player    @relation("BattleReportOpponent", fields: [opponentPlayerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerPlayerId, createdAt])
+  @@index([raidOrderId])
+  @@map("battle_report")
+}

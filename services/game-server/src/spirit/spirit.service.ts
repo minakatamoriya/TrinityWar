@@ -9,7 +9,7 @@ import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { grantFactionContribution } from '../faction/contribution.service.js';
-import { DAILY_TASK_CONFIG, getFactionAdvantageConfig } from '../lib/game-balance.js';
+import { DAILY_TASK_CONFIG, SPIRIT_BALANCE_CONFIG, getFactionAdvantageConfig } from '../lib/game-balance.js';
 import { applyFactionSpiritPassiveExpBonus, getFactionSpiritFeedDurationSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { STARTER_SPIRIT_IDS } from '../seed/seed-data/spirits.js';
@@ -966,6 +966,7 @@ export class SpiritService {
     playerId: string,
     request: ClientRecoverSpiritRequest,
     headerIdempotencyKey?: string,
+    now: Date = new Date(),
   ): Promise<ClientSpiritMutationResponse> {
     validateSlotRequest(request, 'slotIndex');
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
@@ -1037,7 +1038,8 @@ export class SpiritService {
         });
       }
 
-      const nextRecoveryUsed = getNextDailyRecoveryUsed(resource);
+      const dateKey = getLocalDateKey(now);
+      const nextRecoveryUsed = getNextDailyRecoveryUsed(resource, now);
       if (nextRecoveryUsed > SPIRIT_DAILY_RECOVERY_LIMIT) {
         throw new BusinessError({
           code: ErrorCode.Conflict,
@@ -1060,7 +1062,7 @@ export class SpiritService {
         data: {
           tianjiTalisman: talismanCost > 0 ? { decrement: talismanCost } : undefined,
           dailyRecoveryUsed: nextRecoveryUsed,
-          dailyRecoveryDateKey: getLocalDateKey(),
+          dailyRecoveryDateKey: dateKey,
           resourceVersion: { increment: 1 },
         },
       });
@@ -1943,7 +1945,8 @@ function getPassiveExpPerMinute(level: number, factionCode: FactionAdvantageCode
     baseExpPerMinute = 250;
   }
 
-  return applyFactionSpiritPassiveExpBonus(baseExpPerMinute, factionCode);
+  const tunedBaseExpPerMinute = Math.floor(baseExpPerMinute * SPIRIT_BALANCE_CONFIG.passiveExpRateBps / 10_000);
+  return applyFactionSpiritPassiveExpBonus(tunedBaseExpPerMinute, factionCode);
 }
 
 function settleSpiritProgress(slot: {
@@ -2322,8 +2325,8 @@ function getSpiritRefundSoul(level: number): number {
   return total;
 }
 
-function getEffectiveDailyRecoveryUsed(resource: { dailyRecoveryDateKey: string | null; dailyRecoveryUsed: number }): number {
-  return resource.dailyRecoveryDateKey === getLocalDateKey() ? resource.dailyRecoveryUsed : 0;
+function getEffectiveDailyRecoveryUsed(resource: { dailyRecoveryDateKey: string | null; dailyRecoveryUsed: number }, now: Date = new Date()): number {
+  return resource.dailyRecoveryDateKey === getLocalDateKey(now) ? resource.dailyRecoveryUsed : 0;
 }
 
 function getEffectiveDailyIntelFreeUsed(resource: { dailyIntelDateKey: string | null; dailyIntelFreeUsed: number }): number {
@@ -2334,8 +2337,8 @@ function getEffectiveDailyIntelTalismanUsed(resource: { dailyIntelDateKey: strin
   return resource.dailyIntelDateKey === getLocalDateKey() ? resource.dailyIntelTalismanUsed : 0;
 }
 
-function getNextDailyRecoveryUsed(resource: { dailyRecoveryDateKey: string | null; dailyRecoveryUsed: number }): number {
-  const currentUsed = getEffectiveDailyRecoveryUsed(resource);
+function getNextDailyRecoveryUsed(resource: { dailyRecoveryDateKey: string | null; dailyRecoveryUsed: number }, now: Date = new Date()): number {
+  const currentUsed = getEffectiveDailyRecoveryUsed(resource, now);
   return currentUsed + 1;
 }
 

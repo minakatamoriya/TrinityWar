@@ -199,6 +199,7 @@ export class RaidTargetService {
     targetId: string;
     requestIdempotencyKey?: string;
     armyVersion?: number;
+    skipReadModel?: boolean;
     skipQueue?: boolean;
     now?: Date;
   }): Promise<ClientRaidActionResponse> {
@@ -262,8 +263,12 @@ export class RaidTargetService {
       });
 
       if (existingOrder) {
-        const home = await this.clientReadService.getHomeSummary(input.playerId, client);
-        const scenes = await this.clientReadService.getSceneContent(input.playerId, client);
+        const [home, scenes] = input.skipReadModel
+          ? [undefined, undefined]
+          : await Promise.all([
+            this.clientReadService.getHomeSummary(input.playerId, client),
+            this.clientReadService.getSceneContent(input.playerId, client),
+          ]);
 
         return buildRaidActionResponse(existingOrder.id, existingOrder.settleAt, target, existingOrder.status, home, scenes);
       }
@@ -417,8 +422,12 @@ export class RaidTargetService {
         expiresAt: target.expiresAt,
       }, client);
 
-      const home = await this.clientReadService.getHomeSummary(input.playerId, client, now);
-      const scenes = await this.clientReadService.getSceneContent(input.playerId, client, now);
+      const [home, scenes] = input.skipReadModel
+        ? [undefined, undefined]
+        : await Promise.all([
+          this.clientReadService.getHomeSummary(input.playerId, client, now),
+          this.clientReadService.getSceneContent(input.playerId, client, now),
+        ]);
 
       return buildRaidActionResponse(raidOrder.id, settleAt, target, raidOrder.status, home, scenes);
     });
@@ -446,10 +455,7 @@ export class RaidTargetService {
             expiresAt: now,
           },
         });
-        const [home, scenes, order] = await Promise.all([
-          this.clientReadService.getHomeSummary(input.playerId, undefined, now),
-          this.clientReadService.getSceneContent(input.playerId, undefined, now),
-          this.prisma.db.raidOrder.findUnique({
+        const orderPromise = this.prisma.db.raidOrder.findUnique({
             where: { id: response.result.orderId },
             select: {
               id: true,
@@ -463,7 +469,19 @@ export class RaidTargetService {
                 },
               },
             },
-          }),
+          });
+
+        if (input.skipReadModel) {
+          const order = await orderPromise;
+          const home = {} as Awaited<ReturnType<ClientReadService['getHomeSummary']>>;
+          const scenes = {} as Awaited<ReturnType<ClientReadService['getSceneContent']>>;
+          return buildSettledRaidActionResponse(response.result.orderId, settlement, order, order?.defender.nickname ?? response.result.targetName, order?.defender.protectedUntil ?? null, home, scenes);
+        }
+
+        const [home, scenes, order] = await Promise.all([
+          this.clientReadService.getHomeSummary(input.playerId, undefined, now),
+          this.clientReadService.getSceneContent(input.playerId, undefined, now),
+          orderPromise,
         ]);
 
         return buildSettledRaidActionResponse(response.result.orderId, settlement, order, order?.defender.nickname ?? response.result.targetName, order?.defender.protectedUntil ?? null, home, scenes);

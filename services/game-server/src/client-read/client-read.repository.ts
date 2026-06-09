@@ -693,7 +693,7 @@ export class ClientReadRepository {
       },
     });
 
-    const battleReports = await client.battleReport.findMany({
+    const battleReportRows = await client.battleReport.findMany({
       where: {
         ownerPlayerId: playerId,
         revokedAt: null,
@@ -714,27 +714,36 @@ export class ClientReadRepository {
             nickname: true,
           },
         },
-        raidOrder: {
+      },
+    });
+    const raidOrders = await client.raidOrder.findMany({
+      where: {
+        id: { in: battleReportRows.map((report) => report.raidOrderId) },
+      },
+      select: {
+        id: true,
+        settlement: {
           select: {
-            settlement: {
-              select: {
-                lootGold: true,
-                attackerLoss: true,
-                defenderLoss: true,
-                rewardItemsJson: true,
-                battleReplayJson: true,
-              },
-            },
-            raidMessage: {
-              select: {
-                templateId: true,
-                textSnapshot: true,
-                isHidden: true,
-              },
-            },
+            lootGold: true,
+            attackerLoss: true,
+            defenderLoss: true,
+            rewardItemsJson: true,
+            battleReplayJson: true,
+          },
+        },
+        raidMessage: {
+          select: {
+            templateId: true,
+            textSnapshot: true,
+            isHidden: true,
           },
         },
       },
+    });
+    const raidOrdersById = new Map(raidOrders.map((order) => [order.id, order]));
+    const battleReports = battleReportRows.flatMap((report) => {
+      const raidOrder = raidOrdersById.get(report.raidOrderId);
+      return raidOrder ? [{ ...report, raidOrder }] : [];
     });
 
     return {

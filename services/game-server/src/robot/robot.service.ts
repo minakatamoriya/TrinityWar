@@ -9,7 +9,7 @@ import { SocialRelationStatus, SocialRelationType, type Prisma } from '@prisma/c
 import { AuthService } from '../auth/auth.service.js';
 import { ClientCommandService } from '../client-command/client-command.service.js';
 import { FieldLifecycleService } from '../client-read/field-lifecycle.service.js';
-import { BusinessError } from '../common/errors/index.js';
+import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RaidTargetService } from '../raid/raid-target.service.js';
 import { SocialService } from '../social/social.service.js';
@@ -31,6 +31,7 @@ import {
 
 type RobotRole = 'farmer' | 'spirit' | 'raid' | 'daily' | 'social' | 'sim';
 type RobotActionStatus = 'SUCCESS' | 'FAILED' | 'BLOCKED';
+type RobotErrorClassifier = (error: unknown) => RobotActionStatus | null | undefined;
 type FactionCode = 'human' | 'immortal' | 'demon';
 type RobotAutomationMode = 'daily-3' | 'social-3' | 'player-sim-v1' | 'season-sim-v1';
 type SeasonSimRunKind = 'single-day' | 'season';
@@ -534,23 +535,30 @@ export class RobotService implements OnApplicationBootstrap {
           continue;
         }
 
-        countStatus(await this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-raid-${raidRound}`, async () => {
-          const result = await this.runRaidAgainst(player.playerId, target.playerId, now);
-          player.sources.push(result.sourceSummary);
-          return {
-            actionName: 'raid-target',
-            resultSummary: {
-              ...result.resultSummary,
-              dayIndex,
-              raidRound,
-              simulatedAt: now.toISOString(),
-              defenderPlayerId: target.playerId,
-              defenderFactionCode: target.spec.factionCode,
-              defenderRobotKey: target.spec.robotKey,
-              defenderNickname: target.spec.nickname,
-            },
-          };
-        }));
+        countStatus(await this.runLoggedStep(
+          runId,
+          player.spec,
+          player.playerId,
+          `season-day-${dayIndex}-raid-${raidRound}`,
+          async () => {
+            const result = await this.runRaidAgainst(player.playerId, target.playerId, now, { restoreHpBeforeBattle: false });
+            player.sources.push(result.sourceSummary);
+            return {
+              actionName: 'raid-target',
+              resultSummary: {
+                ...result.resultSummary,
+                dayIndex,
+                raidRound,
+                simulatedAt: now.toISOString(),
+                defenderPlayerId: target.playerId,
+                defenderFactionCode: target.spec.factionCode,
+                defenderRobotKey: target.spec.robotKey,
+                defenderNickname: target.spec.nickname,
+              },
+            };
+          },
+          classifySeasonSimRaidError,
+        ));
         await delay(actionDelayMs);
         assertActive();
       }
@@ -1377,6 +1385,7 @@ export class RobotService implements OnApplicationBootstrap {
     playerId: string,
     actionName: string,
     action: () => Promise<RobotActionResult>,
+    classifyError?: RobotErrorClassifier,
   ): Promise<RobotActionStatus> {
     const startedAt = Date.now();
     try {
@@ -1392,19 +1401,26 @@ export class RobotService implements OnApplicationBootstrap {
       });
       return 'SUCCESS';
     } catch (error) {
-      const blocked = error instanceof RobotProgressionBlockError;
+      const classifiedStatus = classifyError?.(error);
+      const progressionBlocked = error instanceof RobotProgressionBlockError;
+      const blocked = progressionBlocked || classifiedStatus === 'BLOCKED';
+      const status: RobotActionStatus = classifiedStatus ?? (blocked ? 'BLOCKED' : 'FAILED');
       await this.createActionLog({
         runId,
         spec,
         playerId,
         actionName,
-        status: blocked ? 'BLOCKED' : 'FAILED',
+        status,
         durationMs: Date.now() - startedAt,
-        errorCode: blocked ? 'PROGRESSION_BLOCK' : resolveErrorCode(error),
+        errorCode: progressionBlocked ? 'PROGRESSION_BLOCK' : resolveErrorCode(error),
         errorMessage: resolveErrorMessage(error),
-        resultSummaryJson: blocked ? error.details : undefined,
+        resultSummaryJson: progressionBlocked
+          ? error.details
+          : blocked
+            ? buildBlockedErrorSummary(error)
+            : undefined,
       });
-      return blocked ? 'BLOCKED' : 'FAILED';
+      return status;
     }
   }
 
@@ -1692,10 +1708,19 @@ export class RobotService implements OnApplicationBootstrap {
     const logs = await this.prisma.db.robotActionLog.findMany({
       where: {
         runId,
-        resultSummaryJson: {
-          path: ['dayIndex'],
-          equals: context.dayIndex,
-        },
+        OR: [
+          {
+            resultSummaryJson: {
+              path: ['dayIndex'],
+              equals: context.dayIndex,
+            },
+          },
+          {
+            actionName: {
+              startsWith: `season-day-${context.dayIndex}-`,
+            },
+          },
+        ],
       },
       select: {
         playerId: true,
@@ -1844,6 +1869,7 @@ export class RobotService implements OnApplicationBootstrap {
       targetId: detail.targetId,
       armyVersion: army.armyVersion,
       requestIdempotencyKey: `robot-raid-${Date.now()}`,
+      skipReadModel: true,
       skipQueue: true,
     });
 
@@ -1967,11 +1993,18 @@ export class RobotService implements OnApplicationBootstrap {
     }
   }
 
-  private async runRaidAgainst(playerId: string, defenderPlayerId: string, now: Date = new Date()): Promise<RobotActionResult & { sourceSummary: string }> {
-    await Promise.all([
-      this.restoreMainSpiritHp(playerId),
-      this.restoreMainSpiritHp(defenderPlayerId),
-    ]);
+  private async runRaidAgainst(
+    playerId: string,
+    defenderPlayerId: string,
+    now: Date = new Date(),
+    options: { restoreHpBeforeBattle?: boolean } = {},
+  ): Promise<RobotActionResult & { sourceSummary: string }> {
+    if (options.restoreHpBeforeBattle ?? true) {
+      await Promise.all([
+        this.restoreMainSpiritHp(playerId),
+        this.restoreMainSpiritHp(defenderPlayerId),
+      ]);
+    }
     const targetId = await this.prepareRaidTargetFor(playerId, defenderPlayerId, now);
     const army = await this.prisma.db.playerArmy.findUniqueOrThrow({
       where: { playerId },
@@ -1982,10 +2015,12 @@ export class RobotService implements OnApplicationBootstrap {
       targetId,
       armyVersion: army.armyVersion,
       requestIdempotencyKey: `robot-daily-raid-${playerId}-${now.getTime()}`,
+      skipReadModel: true,
       skipQueue: true,
       now,
     });
     const sourceSummary = summarizeRaidRewards(result.result.rewards);
+    const battleResult = result.result.battleReplay?.result ?? null;
 
     return {
       actionName: 'raid-target',
@@ -2001,6 +2036,7 @@ export class RobotService implements OnApplicationBootstrap {
         attackerGainGold: result.result.goldLoot,
         defenderLostGold: result.result.goldLoot,
         netGoldDelta: 0,
+        battleResult,
         rewards: result.result.rewards,
       },
     };
@@ -2964,6 +3000,18 @@ class SeasonSimCancelledError extends Error {
   }
 }
 
+function classifySeasonSimRaidError(error: unknown): RobotActionStatus | null {
+  if (
+    error instanceof BusinessError
+    && error.code === ErrorCode.RaidNotAllowed
+    && error.message.includes('0 血')
+  ) {
+    return 'BLOCKED';
+  }
+
+  return null;
+}
+
 function createIdleLoopState(): RobotLoopState {
   return {
     running: false,
@@ -3048,6 +3096,8 @@ function summarizeSeasonSimResourceDeltas(logs: Array<{ actionName: string; stat
   stipendLegendarySoul: number;
   raidCount: number;
   raidWinCount: number;
+  raidLossCount: number;
+  raidDrawCount: number;
   feedCount: number;
 } {
   const summary = {
@@ -3060,6 +3110,8 @@ function summarizeSeasonSimResourceDeltas(logs: Array<{ actionName: string; stat
     stipendLegendarySoul: 0,
     raidCount: 0,
     raidWinCount: 0,
+    raidLossCount: 0,
+    raidDrawCount: 0,
     feedCount: 0,
   };
 
@@ -3077,7 +3129,14 @@ function summarizeSeasonSimResourceDeltas(logs: Array<{ actionName: string; stat
       summary.raidCount += 1;
       const goldLoot = Math.max(Number(result.goldLoot ?? 0), 0);
       summary.raidGoldIncome += goldLoot;
-      if (goldLoot > 0 || String(result.summary ?? '').toLowerCase().includes('win')) {
+      const battleResult = String(result.battleResult ?? '').toUpperCase();
+      if (battleResult === 'WIN') {
+        summary.raidWinCount += 1;
+      } else if (battleResult === 'LOSS') {
+        summary.raidLossCount += 1;
+      } else if (battleResult === 'DRAW') {
+        summary.raidDrawCount += 1;
+      } else if (goldLoot > 0 || String(result.summary ?? '').toLowerCase().includes('win')) {
         summary.raidWinCount += 1;
       }
     }
@@ -3435,6 +3494,8 @@ function createEmptyDayMetrics(): {
   feedCount: number;
   raidCount: number;
   raidWinCount: number;
+  raidLossCount: number;
+  raidDrawCount: number;
   attackerGainGold: number;
   defenderLostGold: number;
   netGoldDelta: number;
@@ -3452,6 +3513,8 @@ function createEmptyDayMetrics(): {
     feedCount: 0,
     raidCount: 0,
     raidWinCount: 0,
+    raidLossCount: 0,
+    raidDrawCount: 0,
     attackerGainGold: 0,
     defenderLostGold: 0,
     netGoldDelta: 0,
@@ -3534,8 +3597,12 @@ function applyDayActionMetrics(
   if (actionName === 'raid-target') {
     const gain = Math.max(Number(result.attackerGainGold ?? result.goldLoot ?? 0), 0);
     const defenderLoss = Math.max(Number(result.defenderLostGold ?? result.goldLoot ?? 0), 0);
+    const battleResult = String(result.battleResult ?? '').toUpperCase();
     add('raidCount', 1);
-    if (gain > 0 || String(result.summary ?? '').toLowerCase().includes('win')) add('raidWinCount', 1);
+    if (battleResult === 'WIN') add('raidWinCount', 1);
+    else if (battleResult === 'LOSS') add('raidLossCount', 1);
+    else if (battleResult === 'DRAW') add('raidDrawCount', 1);
+    else if (gain > 0 || String(result.summary ?? '').toLowerCase().includes('win')) add('raidWinCount', 1);
     add('attackerGainGold', gain);
     add('netGoldDelta', gain);
     const defenderPlayerId = String(result.defenderPlayerId ?? '');
@@ -3950,6 +4017,14 @@ function resolveErrorMessage(error: unknown): string {
     return error.message;
   }
   return String(error);
+}
+
+function buildBlockedErrorSummary(error: unknown): Record<string, unknown> {
+  return {
+    reason: 'business_rule_blocked',
+    errorCode: resolveErrorCode(error),
+    errorMessage: resolveErrorMessage(error),
+  };
 }
 
 function buildIssueExportMarkdown(

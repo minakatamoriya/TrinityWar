@@ -6,11 +6,13 @@ This directory is split by backup purpose. Only schema-only backups should be co
 
 Use this when you only need the current local database structure:
 
+- `schema/trinitywar-db-schema-2026-06-10T00-16-45/`
+- `schema/trinitywar-db-schema-2026-06-10T00-16-45.zip`
 - `schema/trinitywar-db-schema-2026-06-09T10-38-58/`
 - `schema/trinitywar-db-schema-2026-06-09T10-38-58.zip`
 - `schema/trinitywar-db-schema-2026-06-09T17-04-46.zip`
 
-The latest backup was created from the local PostgreSQL database `trinitywar` on 2026-06-09 after the robot season simulation checks. It includes Prisma schema, Prisma migrations, and a PostgreSQL schema-only dump. It does not include table data.
+The latest backup was created from the local PostgreSQL database `trinitywar` on 2026-06-10 before continuing office development. It includes Prisma schema, Prisma migrations, and a PostgreSQL schema-only dump. It does not include table data.
 
 Validation summary:
 
@@ -19,7 +21,8 @@ Validation summary:
 - Latest migration: `056_robot_sim_snapshots`.
 - Local migrations: 56.
 - Public base tables: 66.
-- `_prisma_migrations` rows: 60, including 4 rolled-back historical rows.
+- `_prisma_migrations` rows: 64, including 4 rolled-back historical rows.
+- The PostgreSQL schema dump was checked for data import statements; no `COPY` or `INSERT INTO` rows were found.
 
 ## Directory Layout
 
