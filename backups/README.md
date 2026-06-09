@@ -8,8 +8,9 @@ Use this when you only need the current local database structure:
 
 - `schema/trinitywar-db-schema-2026-06-09T10-38-58/`
 - `schema/trinitywar-db-schema-2026-06-09T10-38-58.zip`
+- `schema/trinitywar-db-schema-2026-06-09T17-04-46.zip`
 
-It was created from the local PostgreSQL database `trinitywar` on 2026-06-09. It includes Prisma schema, Prisma migrations, and a PostgreSQL schema-only dump. It does not include table data.
+The latest backup was created from the local PostgreSQL database `trinitywar` on 2026-06-09 after the robot season simulation checks. It includes Prisma schema, Prisma migrations, and a PostgreSQL schema-only dump. It does not include table data.
 
 Validation summary:
 

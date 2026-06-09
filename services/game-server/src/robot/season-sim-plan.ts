@@ -31,7 +31,7 @@ export const SEASON_SIM_FARM_CYCLE_HOURS = 3;
 export const SEASON_SIM_RAIDS_PER_DAY = 3;
 export const SEASON_SIM_DEFAULT_TOTAL_DAYS = 28;
 export const SEASON_SIM_DEFAULT_START_AT = new Date('2026-06-08T00:00:00+08:00');
-export const SEASON_SIM_DEFAULT_ACTION_DELAY_MS = 250;
+export const SEASON_SIM_DEFAULT_ACTION_DELAY_MS = 0;
 
 export function buildSeasonSimDayPlan(): SeasonSimDayPlan {
   const farmCycleHours = Array.from({ length: SEASON_SIM_FARM_CYCLES_PER_DAY }, (_, index) => (

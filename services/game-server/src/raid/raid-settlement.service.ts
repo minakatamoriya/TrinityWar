@@ -54,10 +54,10 @@ export class RaidSettlementService {
         });
       }
 
-      if (!raidOrder.attacker.wallet || !raidOrder.attacker.army) {
+      if (!raidOrder.attacker.wallet) {
         throw new BusinessError({
           code: ErrorCode.NotFound,
-          message: 'Attacker wallet or army state not found.',
+          message: 'Attacker wallet state not found.',
           statusCode: 404,
         });
       }
@@ -79,9 +79,6 @@ export class RaidSettlementService {
         suppressRandomRewards: readTutorialTarget(raidOrder.defenderSnapshotJson),
       });
       const nextVaultGold = raidOrder.attacker.wallet.vaultGold + settlementResult.depositedGold;
-      const attackerUnitLoss = 0;
-      const unitsReturned = raidOrder.dispatchedUnitCount;
-
       await this.applyDefenderLootConsumption(client, raidOrder, settlementResult.lootGold, now);
       const defenderProtectedUntil = new Date(now.getTime() + 60 * 60 * 1000);
 
@@ -122,16 +119,6 @@ export class RaidSettlementService {
       await client.player.update({
         where: { id: raidOrder.defenderPlayerId },
         data: { protectedUntil: defenderProtectedUntil },
-      });
-
-      await client.playerArmy.update({
-        where: { playerId: raidOrder.attackerPlayerId },
-        data: {
-          totalCount: { decrement: attackerUnitLoss },
-          availableCount: { increment: unitsReturned },
-          frozenCount: { decrement: raidOrder.dispatchedUnitCount },
-          armyVersion: { increment: 1 },
-        },
       });
 
       if (settlementResult.depositedGold > 0) {
@@ -269,49 +256,76 @@ export class RaidSettlementService {
     }
 
     const deductionPlan = buildDefenderFieldDeductionPlan(raidOrder);
-    if (deductionPlan.length <= 0) {
-      return;
+    if (deductionPlan.length > 0) {
+      const fieldStateMap = new Map(
+        (await client.playerFieldSlot.findMany({
+          where: {
+            playerId: raidOrder.defenderPlayerId,
+            id: { in: deductionPlan.map((entry) => entry.fieldId) },
+          },
+          select: {
+            id: true,
+            currentClaimableGold: true,
+          },
+        })).map((field) => [field.id, field]),
+      );
+
+      for (const entry of deductionPlan) {
+        if (remainingLoot <= 0) {
+          break;
+        }
+
+        const field = fieldStateMap.get(entry.fieldId);
+        if (!field) {
+          continue;
+        }
+
+        const actualDeduction = Math.min(field.currentClaimableGold, entry.requestedGold, remainingLoot);
+        if (actualDeduction <= 0) {
+          continue;
+        }
+
+        await client.playerFieldSlot.update({
+          where: { id: entry.fieldId },
+          data: {
+            currentClaimableGold: { decrement: actualDeduction },
+            raidedGoldTotal: { increment: actualDeduction },
+            lastCalculatedAt: now,
+          },
+        });
+
+        field.currentClaimableGold -= actualDeduction;
+        remainingLoot -= actualDeduction;
+      }
     }
 
-    const fieldStateMap = new Map(
-      (await client.playerFieldSlot.findMany({
-        where: {
-          playerId: raidOrder.defenderPlayerId,
-          id: { in: deductionPlan.map((entry) => entry.fieldId) },
-        },
-        select: {
-          id: true,
-          currentClaimableGold: true,
-        },
-      })).map((field) => [field.id, field]),
-    );
-
-    for (const entry of deductionPlan) {
-      if (remainingLoot <= 0) {
-        break;
-      }
-
-      const field = fieldStateMap.get(entry.fieldId);
-      if (!field) {
-        continue;
-      }
-
-      const actualDeduction = Math.min(field.currentClaimableGold, entry.requestedGold, remainingLoot);
-      if (actualDeduction <= 0) {
-        continue;
-      }
-
-      await client.playerFieldSlot.update({
-        where: { id: entry.fieldId },
-        data: {
-          currentClaimableGold: { decrement: actualDeduction },
-          raidedGoldTotal: { increment: actualDeduction },
-          lastCalculatedAt: now,
-        },
+    if (remainingLoot > 0) {
+      const defenderWallet = await client.playerWallet.findUnique({
+        where: { playerId: raidOrder.defenderPlayerId },
+        select: { vaultGold: true },
       });
-
-      field.currentClaimableGold -= actualDeduction;
-      remainingLoot -= actualDeduction;
+      const vaultDeduction = Math.min(defenderWallet?.vaultGold ?? 0, remainingLoot);
+      if (vaultDeduction > 0) {
+        await client.playerWallet.update({
+          where: { playerId: raidOrder.defenderPlayerId },
+          data: {
+            vaultGold: { decrement: vaultDeduction },
+            balanceVersion: { increment: 1 },
+          },
+        });
+        await this.auditService.createWalletChangeLog(client, {
+          playerId: raidOrder.defenderPlayerId,
+          walletBucket: 'vault',
+          changeType: 'raid-settlement',
+          deltaGold: -vaultDeduction,
+          beforeGold: defenderWallet?.vaultGold ?? 0,
+          afterGold: (defenderWallet?.vaultGold ?? 0) - vaultDeduction,
+          relatedEntityType: 'raid-order',
+          relatedEntityId: raidOrder.id,
+          requestIdempotencyKey: raidOrder.requestIdempotencyKey,
+          note: 'Raid settlement deducted defender vault gold.',
+        });
+      }
     }
   }
 
@@ -413,7 +427,7 @@ export class RaidSettlementService {
     await this.prisma.transaction(async (client) => {
       const raidOrder = await this.raidRepository.findRaidOrderForSettlement(raidOrderId, client);
 
-      if (!raidOrder || raidOrder.settlement || !raidOrder.attacker.army) {
+      if (!raidOrder || raidOrder.settlement) {
         return;
       }
 
@@ -425,7 +439,7 @@ export class RaidSettlementService {
         });
       }
 
-      const releasableUnits = Math.min(raidOrder.attacker.army.frozenCount, raidOrder.dispatchedUnitCount);
+      const releasableUnits = Math.min(raidOrder.attacker.army?.frozenCount ?? 0, raidOrder.dispatchedUnitCount);
       if (releasableUnits > 0) {
         await client.playerArmy.update({
           where: { playerId: raidOrder.attackerPlayerId },

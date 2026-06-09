@@ -25,6 +25,7 @@ import { RaidRepository } from './raid.repository.js';
 
 const RAID_INTEL_FREE_LIMIT = 3;
 const RAID_INTEL_TALISMAN_LIMIT = 3;
+const RAID_WALLET_EXPOSURE_RATIO = 0.05;
 
 @Injectable()
 export class RaidTargetService {
@@ -244,28 +245,12 @@ export class RaidTargetService {
         },
       });
 
-      if (!currentArmy) {
-        throw new BusinessError({
-          code: ErrorCode.NotFound,
-          message: 'Player army state not found.',
-          statusCode: 404,
-        });
-      }
-
-      if (typeof input.armyVersion === 'number' && input.armyVersion !== currentArmy.armyVersion) {
+      if (currentArmy && typeof input.armyVersion === 'number' && input.armyVersion !== currentArmy.armyVersion) {
         throw new BusinessError({
           code: ErrorCode.StateVersionConflict,
           message: 'armyVersion conflict.',
           statusCode: 409,
           details: { expected: input.armyVersion, actual: currentArmy.armyVersion },
-        });
-      }
-
-      if (currentArmy.availableCount <= 0) {
-        throw new BusinessError({
-          code: ErrorCode.InsufficientArmy,
-          message: 'Insufficient army for raid.',
-          statusCode: 409,
         });
       }
 
@@ -373,7 +358,7 @@ export class RaidTargetService {
         });
       }
 
-      const nextDispatchedCount = Math.max(1, Math.min(currentArmy.availableCount, 10));
+      const nextDispatchedCount = 1;
       const settleAt = now;
       const frozenUnitSnapshot = { dispatchedCount: nextDispatchedCount };
       const lockedGold = resolveLockedGold(target, primaryField);
@@ -390,8 +375,8 @@ export class RaidTargetService {
         transportCapacitySnapshot: nextDispatchedCount * 10,
         attackerSnapshotJson: {
           playerId: input.playerId,
-          availableCount: currentArmy.availableCount,
-          frozenCount: currentArmy.frozenCount,
+          availableCount: currentArmy?.availableCount ?? 0,
+          frozenCount: currentArmy?.frozenCount ?? 0,
           mainSpirit: buildSpiritBattleSnapshot(attackerMainSpirit),
         },
         defenderSnapshotJson: {
@@ -408,14 +393,14 @@ export class RaidTargetService {
         sourceTargetPool: { connect: { id: target.id } },
       }, client);
 
-      await client.playerArmy.update({
-        where: { playerId: input.playerId },
-        data: {
-          availableCount: { decrement: nextDispatchedCount },
-          frozenCount: { increment: nextDispatchedCount },
-          armyVersion: { increment: 1 },
-        },
-      });
+      if (currentArmy) {
+        await client.playerArmy.update({
+          where: { playerId: input.playerId },
+          data: {
+            armyVersion: { increment: 1 },
+          },
+        });
+      }
 
       await this.raidRepository.createRaidAssetLock({
         raidOrder: { connect: { id: raidOrder.id } },
@@ -1292,6 +1277,8 @@ function resolveLockedGold(
   const snapshotGold = Number((target.targetSnapshotJson as { raidableGold?: number }).raidableGold ?? 0);
   const fieldGold = primaryField?.currentClaimableGold ?? 0;
   const totalFieldGold = target.targetPlayer.fieldSlots.reduce((sum, field) => sum + Math.max(field.currentClaimableGold, 0), 0);
+  const vaultGold = Math.max(Number(target.targetPlayer.wallet?.vaultGold ?? 0), 0);
+  const walletExposureGold = Math.floor(vaultGold * RAID_WALLET_EXPOSURE_RATIO);
 
-  return Math.max(Math.floor(fieldGold || snapshotGold || totalFieldGold), 0);
+  return Math.max(Math.floor(fieldGold || snapshotGold || totalFieldGold), walletExposureGold, 0);
 }

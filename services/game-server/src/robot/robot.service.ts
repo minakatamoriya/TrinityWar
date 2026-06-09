@@ -81,6 +81,7 @@ interface SeasonSimPlayerState {
 }
 
 interface SeasonSimSessionState {
+  jobId: string;
   runId: string;
   runKind: SeasonSimRunKind;
   clock: ReturnType<typeof createSeasonSimClock>;
@@ -94,6 +95,7 @@ interface SeasonSimSessionState {
   nextRunAt: string | null;
   stoppedAt: string | null;
   stopReason: string | null;
+  stopRequested: boolean;
   lastStatus: string | null;
   lastSummary: Record<string, unknown> | null;
   totalSuccessActionCount: number;
@@ -428,6 +430,7 @@ export class RobotService implements OnApplicationBootstrap {
     players: Array<{ spec: RobotSpec; playerId: string; sources: string[] }>,
     dayIndex: number,
     actionDelayMs = 0,
+    assertActive: () => void = () => {},
   ): Promise<{
     successActionCount: number;
     failedActionCount: number;
@@ -444,13 +447,17 @@ export class RobotService implements OnApplicationBootstrap {
       if (status === 'BLOCKED') blockedCount += 1;
     };
 
+    assertActive();
     const dayDateKey = clock.dateKey();
     await this.settleSeasonSimPlayers(players, clock.now());
+    assertActive();
 
     for (let cycle = 1; cycle <= SEASON_SIM_FARM_CYCLES_PER_DAY; cycle += 1) {
+      assertActive();
       const now = clock.now();
-      for (const player of players) {
-        countStatus(await this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-farm-cycle-${cycle}`, async () => {
+      const statuses = await Promise.all(players.map(async (player) => {
+        assertActive();
+        return this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-farm-cycle-${cycle}`, async () => {
           const result = await this.runSimFarmCycle(player.playerId, now);
           return {
             actionName: 'season-farm-cycle',
@@ -461,17 +468,20 @@ export class RobotService implements OnApplicationBootstrap {
               simulatedAt: now.toISOString(),
             },
           };
-        }));
-        await delay(actionDelayMs);
-      }
+        });
+      }));
+      statuses.forEach(countStatus);
+      await delay(actionDelayMs);
+      assertActive();
       if (cycle < SEASON_SIM_FARM_CYCLES_PER_DAY) {
         clock.advanceHours(SEASON_SIM_FARM_CYCLE_HOURS);
       }
     }
 
-    for (const player of players) {
+    const stipendStatuses = await Promise.all(players.map(async (player) => {
+      assertActive();
       const now = clock.now();
-      countStatus(await this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-claim-faction-stipend`, async () => {
+      return this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-claim-faction-stipend`, async () => {
         const result = await this.claimFactionStipendForRobot(player.playerId, now, dayDateKey);
         player.sources.push(result.sourceSummary);
         return {
@@ -483,13 +493,16 @@ export class RobotService implements OnApplicationBootstrap {
             dateKey: dayDateKey,
           },
         };
-      }));
-      await delay(actionDelayMs);
-    }
+      });
+    }));
+    stipendStatuses.forEach(countStatus);
+    await delay(actionDelayMs);
+    assertActive();
 
-    for (const player of players) {
+    const spiritStatuses = await Promise.all(players.map(async (player) => {
+      assertActive();
       const now = clock.now();
-      countStatus(await this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-spirit-growth`, async () => {
+      return this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-spirit-growth`, async () => {
         const result = await this.runDailySpiritGrowth(player.playerId, player.sources, { blockOnBreakthrough: false, feedWhenPossible: true }, now);
         return {
           actionName: result.actionName,
@@ -499,13 +512,17 @@ export class RobotService implements OnApplicationBootstrap {
             simulatedAt: now.toISOString(),
           },
         };
-      }));
-      await delay(actionDelayMs);
-    }
+      });
+    }));
+    spiritStatuses.forEach(countStatus);
+    await delay(actionDelayMs);
+    assertActive();
 
     for (let raidRound = 1; raidRound <= SEASON_SIM_RAIDS_PER_DAY; raidRound += 1) {
+      assertActive();
       const now = clock.now();
       for (let index = 0; index < players.length; index += 1) {
+        assertActive();
         const player = players[index];
         const target = findSeasonSimRaidTarget(players, index, raidRound);
         if (!target) {
@@ -513,6 +530,7 @@ export class RobotService implements OnApplicationBootstrap {
             this.runSimNoCrossFactionRaidTarget(player.playerId)
           )));
           await delay(actionDelayMs);
+          assertActive();
           continue;
         }
 
@@ -534,10 +552,12 @@ export class RobotService implements OnApplicationBootstrap {
           };
         }));
         await delay(actionDelayMs);
+        assertActive();
       }
       clock.advanceHours(1);
     }
 
+    assertActive();
     await this.recordSeasonSimDaySnapshots(runId, players, {
       dayIndex,
       simulatedAt: clock.now(),
@@ -601,6 +621,7 @@ export class RobotService implements OnApplicationBootstrap {
     const actionDelayMs = payload.actionDelayMs;
     const startAt = payload.startAt ?? SEASON_SIM_DEFAULT_START_AT;
     const clock = createSeasonSimClock(startAt);
+    await this.markInterruptedAutomationJobs();
     const run = await this.prisma.db.robotTestRun.create({
       data: {
         name: '勤奋玩家赛季模拟 v1',
@@ -609,18 +630,56 @@ export class RobotService implements OnApplicationBootstrap {
       },
     });
 
+    const job = await this.prisma.db.robotAutomationJob.create({
+      data: {
+        name: getAutomationModeName(SEASON_SIM_V1_MODE),
+        mode: SEASON_SIM_V1_MODE,
+        status: 'RUNNING',
+        intervalSeconds,
+        maxRounds: totalDays,
+        hardErrorLimit: 1,
+      },
+    });
+
     const players: SeasonSimPlayerState[] = [];
-    for (const spec of PLAYER_SIM_SPECS) {
-      const login = await this.authService.devLogin({
-        providerUserId: spec.robotKey,
-        nickname: spec.nickname,
-        factionCode: spec.factionCode,
-      });
-      await this.preparePlayerSimRobot(spec, login.player.id, clock.now());
-      players.push({ spec, playerId: login.player.id, sources: [] });
+    try {
+      for (const spec of PLAYER_SIM_SPECS) {
+        const login = await this.authService.devLogin({
+          providerUserId: spec.robotKey,
+          nickname: spec.nickname,
+          factionCode: spec.factionCode,
+        });
+        await this.preparePlayerSimRobot(spec, login.player.id, clock.now());
+        await this.topUpSeasonSimSpiritBreakthroughMaterials(login.player.id);
+        players.push({ spec, playerId: login.player.id, sources: [] });
+      }
+    } catch (error) {
+      const message = resolveErrorMessage(error);
+      await Promise.all([
+        this.prisma.db.robotAutomationJob.update({
+          where: { id: job.id },
+          data: {
+            status: 'FAILED',
+            lastError: message,
+            stopReason: message,
+            stoppedAt: new Date(),
+            nextRunAt: null,
+          },
+        }),
+        this.prisma.db.robotTestRun.update({
+          where: { id: run.id },
+          data: {
+            status: 'FAILED',
+            summary: `season sim failed before first day: ${message}`,
+            finishedAt: new Date(),
+          },
+        }),
+      ]);
+      throw error;
     }
 
     this.seasonSimSession = {
+      jobId: job.id,
       runId: run.id,
       runKind,
       clock,
@@ -634,6 +693,7 @@ export class RobotService implements OnApplicationBootstrap {
       nextRunAt: null,
       stoppedAt: null,
       stopReason: null,
+      stopRequested: false,
       lastStatus: null,
       lastSummary: null,
       totalSuccessActionCount: 0,
@@ -667,6 +727,7 @@ export class RobotService implements OnApplicationBootstrap {
     const progress = buildSeasonSimProgress(this.seasonSimSession.totalDays, this.seasonSimSession.currentDayIndex);
     return {
       running: true,
+      jobId: this.seasonSimSession.jobId,
       runId: this.seasonSimSession.runId,
       runKind: this.seasonSimSession.runKind,
       totalDays: this.seasonSimSession.totalDays,
@@ -681,6 +742,7 @@ export class RobotService implements OnApplicationBootstrap {
       nextRunAt: this.seasonSimSession.nextRunAt,
       stoppedAt: this.seasonSimSession.stoppedAt,
       stopReason: this.seasonSimSession.stopReason,
+      stopRequested: this.seasonSimSession.stopRequested,
       lastStatus: this.seasonSimSession.lastStatus,
       lastSummary: this.seasonSimSession.lastSummary,
       totalSuccessActionCount: this.seasonSimSession.totalSuccessActionCount,
@@ -856,6 +918,7 @@ export class RobotService implements OnApplicationBootstrap {
       void this.runSeasonSimTick();
     }, delayMs);
     this.seasonSimTimer.unref?.();
+    void this.persistSeasonSimSessionState();
   }
 
   private async runLoopTick(): Promise<void> {
@@ -905,7 +968,14 @@ export class RobotService implements OnApplicationBootstrap {
     try {
       session.nextRunAt = null;
       const dayIndex = session.currentDayIndex + 1;
-      const dayResult = await this.runSeasonSimDay(session.runId, session.clock, session.players, dayIndex, session.actionDelayMs);
+      const dayResult = await this.runSeasonSimDay(
+        session.runId,
+        session.clock,
+        session.players,
+        dayIndex,
+        session.actionDelayMs,
+        () => this.assertSeasonSimSessionActive(session),
+      );
       if (this.seasonSimSession !== session) {
         return;
       }
@@ -932,6 +1002,7 @@ export class RobotService implements OnApplicationBootstrap {
           summary: `season sim running: day ${dayIndex} / ${session.totalDays}, date ${dayResult.dateKey}, success ${dayResult.successActionCount}, hard errors ${dayResult.failedActionCount}, blocked ${dayResult.blockedActionCount}.`,
         },
       });
+      await this.persistSeasonSimSessionState();
 
       session.lastStatus = session.lastStatus ?? 'SUCCESS';
 
@@ -942,6 +1013,10 @@ export class RobotService implements OnApplicationBootstrap {
       shouldScheduleNextTick = true;
     } catch (error) {
       if (this.seasonSimSession !== session) {
+        return;
+      }
+      if (error instanceof SeasonSimCancelledError) {
+        await this.finishSeasonSimSession(session.stopReason ?? error.message, 'STOPPED');
         return;
       }
       session.lastStatus = 'FAILED';
@@ -974,6 +1049,7 @@ export class RobotService implements OnApplicationBootstrap {
     session.nextRunAt = null;
     session.stopReason = reason;
     session.lastStatus = status;
+    await this.persistSeasonSimSessionState(status);
     await this.prisma.db.robotTestRun.update({
       where: { id: session.runId },
       data: {
@@ -989,10 +1065,24 @@ export class RobotService implements OnApplicationBootstrap {
   }
 
   private async stopSeasonSimSession(reason: string): Promise<void> {
-    if (!this.seasonSimSession) {
+    const session = this.seasonSimSession;
+    if (!session) {
+      return;
+    }
+    session.stopRequested = true;
+    session.stopReason = reason;
+    session.nextRunAt = null;
+    if (this.seasonSimTickRunning) {
+      await this.persistSeasonSimSessionState('STOPPING');
       return;
     }
     await this.finishSeasonSimSession(reason, 'STOPPED');
+  }
+
+  private assertSeasonSimSessionActive(session: SeasonSimSessionState): void {
+    if (this.seasonSimSession !== session || session.stopRequested) {
+      throw new SeasonSimCancelledError(session.stopReason ?? 'season simulation stopped');
+    }
   }
 
   private runAutomationMode(mode: RobotAutomationMode): Promise<Record<string, unknown>> {
@@ -1191,11 +1281,11 @@ export class RobotService implements OnApplicationBootstrap {
       rule: {
         name: '勤奋玩家赛季模拟 v1',
         robots: '人界 3 / 仙界 3 / 魔界 3，共 9 名勤奋玩家机器人',
-        clock: 'Sim clock advances by day. Default season length is 28 days. Each start resets the 9 sim robots.',
-        dailyFlow: 'Daily flow: settle fields -> farm cycles -> claim faction stipend -> feed/grow spirit -> cross-faction raids.',
-        raidRelation: 'Each robot raids cross-faction targets 3 times per day. Raid settlement uses the real raid service and defender gold is deducted by business rules.',
-        factionBuffs: 'Faction buffs are handled by existing services: human farming, immortal spirit growth, demon battle/raid.',
-        dataPolicy: 'Each simulated day writes snapshots and action logs for gold, spirit, materials, fields, success, failure, and blockers.',
+        clock: `模拟时钟按天推进，默认赛季长度为 ${SEASON_SIM_DEFAULT_TOTAL_DAYS} 天；每次开始都会重置 9 个模拟机器人。`,
+        dailyFlow: '每日流程：收田 -> 农田循环 -> 领取阵营俸禄 -> 喂养/成长灵宠 -> 跨阵营掠夺。',
+        raidRelation: '每个机器人每天跨阵营掠夺 3 次；结算直接走真实掠夺服务，防守方金币按业务规则扣减。',
+        factionBuffs: '阵营 BUFF 由既有服务处理：人界种田、仙界灵宠成长、魔界战斗/掠夺。',
+        dataPolicy: '每个模拟日都会写入金币、灵宠、材料、田地、成功、失败、阻塞的快照和动作日志。',
       },
       status: {
         state: displayState,
@@ -1956,28 +2046,6 @@ export class RobotService implements OnApplicationBootstrap {
       throw new Error('No main spirit available for daily robot.');
     }
 
-    const satiatedRemainingSeconds = mainSlot.satiatedRemainingSeconds ?? 0;
-    if (options.feedWhenPossible && Number(state.spiritRoot ?? 0) >= 10 && satiatedRemainingSeconds < 2 * 60 * 60) {
-      const result = await this.spiritService.feedSpirit(playerId, {
-        slotIndex: mainSlot.slotIndex,
-        actionType: 'feed_once',
-        slotVersion: mainSlot.slotVersion,
-        resourceVersion: state.resourceVersion,
-        requestIdempotencyKey: `robot-feed-spirit-${playerId}-${Date.now()}`,
-      }, undefined, now);
-      return {
-        actionName: 'feed-spirit',
-        resultSummary: {
-          summary: result.summary,
-          level: result.spirit.mainSlot?.level ?? mainSlot.level,
-          exp: result.spirit.mainSlot?.exp ?? mainSlot.exp,
-          spiritRoot: result.spirit.spiritRoot ?? null,
-          satiatedRemainingSeconds: result.spirit.mainSlot?.satiatedRemainingSeconds ?? null,
-          sources: sourceSummaries,
-        },
-      };
-    }
-
     const requirement = state.breakthroughRequirement;
     if (mainSlot.isAtBreakthroughNode && requirement) {
       if (!requirement.canBreakthrough) {
@@ -2011,6 +2079,28 @@ export class RobotService implements OnApplicationBootstrap {
           summary: result.summary,
           stage: requirement.stage,
           consumed: `${requirement.label} x${requirement.required}`,
+          sources: sourceSummaries,
+        },
+      };
+    }
+
+    const satiatedRemainingSeconds = mainSlot.satiatedRemainingSeconds ?? 0;
+    if (options.feedWhenPossible && Number(state.spiritRoot ?? 0) >= 10 && satiatedRemainingSeconds < 2 * 60 * 60) {
+      const result = await this.spiritService.feedSpirit(playerId, {
+        slotIndex: mainSlot.slotIndex,
+        actionType: 'feed_once',
+        slotVersion: mainSlot.slotVersion,
+        resourceVersion: state.resourceVersion,
+        requestIdempotencyKey: `robot-feed-spirit-${playerId}-${Date.now()}`,
+      }, undefined, now);
+      return {
+        actionName: 'feed-spirit',
+        resultSummary: {
+          summary: result.summary,
+          level: result.spirit.mainSlot?.level ?? mainSlot.level,
+          exp: result.spirit.mainSlot?.exp ?? mainSlot.exp,
+          spiritRoot: result.spirit.spiritRoot ?? null,
+          satiatedRemainingSeconds: result.spirit.mainSlot?.satiatedRemainingSeconds ?? null,
           sources: sourceSummaries,
         },
       };
@@ -2188,10 +2278,7 @@ export class RobotService implements OnApplicationBootstrap {
       const matureAt = new Date(now - 5 * 60 * 1000);
 
       await Promise.all([
-        client.robotActionLog.deleteMany({ where: { playerId } }),
-        client.robotSimSnapshot.deleteMany({ where: { playerId } }),
-        client.playerFactionStipendState.deleteMany({ where: { playerId } }),
-        client.factionContributionLog.deleteMany({ where: { playerId } }),
+        this.resetPlayerSimRunArtifacts(client, playerId),
         client.factionMember.updateMany({
           where: { playerId },
           data: { contributionScore: 0 },
@@ -2368,6 +2455,75 @@ export class RobotService implements OnApplicationBootstrap {
     });
   }
 
+  private async resetPlayerSimRunArtifacts(client: Prisma.TransactionClient, playerId: string): Promise<void> {
+    await client.playerSeasonAchievement.deleteMany({ where: { playerId } });
+    await client.playerSeasonRewardGrant.deleteMany({ where: { playerId } });
+    await client.playerDailyTaskState.deleteMany({ where: { playerId } });
+    await client.raidTargetPool.deleteMany({
+      where: {
+        OR: [
+          { ownerPlayerId: playerId },
+          { targetPlayerId: playerId },
+        ],
+      },
+    });
+    await client.raidOrder.deleteMany({
+      where: {
+        OR: [
+          { attackerPlayerId: playerId },
+          { defenderPlayerId: playerId },
+        ],
+      },
+    });
+
+    await Promise.all([
+      client.robotActionLog.deleteMany({ where: { playerId } }),
+      client.robotSimSnapshot.deleteMany({ where: { playerId } }),
+      client.playerFactionStipendState.deleteMany({ where: { playerId } }),
+      client.factionContributionLog.deleteMany({ where: { playerId } }),
+      client.walletChangeLog.deleteMany({ where: { playerId } }),
+      client.fieldHarvestLog.deleteMany({ where: { playerId } }),
+      client.spiritFeedLog.deleteMany({ where: { playerId } }),
+      client.spiritBreakthroughLog.deleteMany({ where: { playerId } }),
+      client.spiritTraitRollLog.deleteMany({ where: { playerId } }),
+      client.spiritShopPurchaseLog.deleteMany({ where: { playerId } }),
+      client.spiritAdRewardLog.deleteMany({ where: { playerId } }),
+      client.playerSeasonSignIn.deleteMany({ where: { playerId } }),
+      client.playerSeasonActivity.deleteMany({ where: { playerId } }),
+      client.playerSeasonSnapshot.deleteMany({ where: { playerId } }),
+      client.dailyFactionTask.deleteMany({ where: { playerId } }),
+      client.essenceTransactionLog.deleteMany({ where: { playerId } }),
+      client.taskRewardLog.deleteMany({ where: { playerId } }),
+      client.idempotencyRecord.deleteMany({ where: { playerId } }),
+      client.playerNotification.deleteMany({ where: { playerId } }),
+      client.playerSocialFeed.deleteMany({
+        where: {
+          OR: [
+            { playerId },
+            { actorPlayerId: playerId },
+          ],
+        },
+      }),
+      client.playerAssistRecord.deleteMany({
+        where: {
+          OR: [
+            { helperPlayerId: playerId },
+            { targetPlayerId: playerId },
+          ],
+        },
+      }),
+      client.teamChallenge.deleteMany({
+        where: {
+          OR: [
+            { initiatorPlayerId: playerId },
+            { allyPlayerId: playerId },
+            { targetPlayerId: playerId },
+          ],
+        },
+      }),
+    ]);
+  }
+
   private async prepareBasicResources(
     client: Prisma.TransactionClient,
     playerId: string,
@@ -2526,6 +2682,24 @@ export class RobotService implements OnApplicationBootstrap {
     });
   }
 
+  private async topUpSeasonSimSpiritBreakthroughMaterials(playerId: string): Promise<void> {
+    await this.prisma.db.playerSpiritResource.upsert({
+      where: { playerId },
+      create: {
+        playerId,
+        ordinarySoul: 17,
+        rareSoul: 30,
+        legendarySoul: 8,
+      },
+      update: {
+        ordinarySoul: { set: 17 },
+        rareSoul: { set: 30 },
+        legendarySoul: { set: 8 },
+        resourceVersion: { increment: 1 },
+      },
+    });
+  }
+
   private async prepareRaidTarget(ownerPlayerId: string): Promise<string> {
     const targetLogin = await this.authService.devLogin({
       providerUserId: ROBOT_RAID_TARGET_KEY,
@@ -2662,21 +2836,58 @@ export class RobotService implements OnApplicationBootstrap {
     });
   }
 
+  private async persistSeasonSimSessionState(statusOverride?: string): Promise<void> {
+    const session = this.seasonSimSession;
+    if (!session) {
+      return;
+    }
+
+    await this.prisma.db.robotAutomationJob.update({
+      where: { id: session.jobId },
+      data: {
+        status: statusOverride ?? 'RUNNING',
+        intervalSeconds: session.intervalSeconds,
+        maxRounds: session.totalDays,
+        hardErrorLimit: 1,
+        completedRounds: session.currentDayIndex,
+        consecutiveHardErrors: session.totalFailedActionCount,
+        lastRunId: session.runId,
+        lastStatus: session.lastStatus,
+        lastError: typeof session.lastSummary?.['error'] === 'string' ? session.lastSummary['error'] : null,
+        stopReason: session.stopReason,
+        stoppedAt: session.stoppedAt ? new Date(session.stoppedAt) : null,
+        lastRunAt: session.lastDayAt ? new Date(session.lastDayAt) : null,
+        nextRunAt: session.nextRunAt ? new Date(session.nextRunAt) : null,
+      },
+    });
+  }
+
   private async markInterruptedAutomationJobs(): Promise<void> {
-    if (this.loopState.running) {
+    if (this.loopState.running || this.seasonSimSession) {
       return;
     }
 
     await this.prisma.db.robotAutomationJob.updateMany({
       where: {
-        mode: { in: [DAILY_3_MODE, SOCIAL_3_MODE, PLAYER_SIM_V1_MODE] },
-        status: 'RUNNING',
+        mode: { in: [DAILY_3_MODE, SOCIAL_3_MODE, PLAYER_SIM_V1_MODE, SEASON_SIM_V1_MODE] },
+        status: { in: ['RUNNING', 'STOPPING'] },
       },
       data: {
         status: 'INTERRUPTED',
         stopReason: '服务重启，进程内循环状态已丢失',
         stoppedAt: new Date(),
         nextRunAt: null,
+      },
+    });
+    await this.prisma.db.robotTestRun.updateMany({
+      where: {
+        mode: SEASON_SIM_V1_MODE,
+        status: 'RUNNING',
+      },
+      data: {
+        status: 'INTERRUPTED',
+        summary: 'season sim interrupted: service restarted and in-memory session was lost.',
+        finishedAt: new Date(),
       },
     });
   }
@@ -2743,6 +2954,13 @@ class RobotProgressionBlockError extends Error {
   constructor(message: string, readonly details: Record<string, unknown>) {
     super(message);
     this.name = 'RobotProgressionBlockError';
+  }
+}
+
+class SeasonSimCancelledError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SeasonSimCancelledError';
   }
 }
 
