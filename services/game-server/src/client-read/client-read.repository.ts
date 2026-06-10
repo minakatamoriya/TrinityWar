@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { ArmyTrainingStatus, DailyFactionTaskType, FieldStatus, Prisma, PrismaClient, TaskStatus } from '@prisma/client';
+import type { FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 import { getFieldReadyAt } from '../lib/field-timing.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { AdminTaskConfigRecord } from '../task-config/task-config.service.js';
@@ -761,7 +762,9 @@ export class ClientReadRepository {
       trainingQueues: player.trainingQueues,
       fieldSlots: player.fieldSlots.map((field) => ({
         ...field,
-        readyAt: field.seedDefinition ? getFieldReadyAt(field, field.seedDefinition.seedId, now) : null,
+        readyAt: field.seedDefinition
+          ? getFieldReadyAt(field, field.seedDefinition.seedId, now, (player.faction?.code ?? null) as FactionAdvantageCode)
+          : null,
       })),
       seedInventory: player.seedInventory,
       plantUnlockMetrics: {

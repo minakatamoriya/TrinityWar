@@ -4,12 +4,11 @@ import type { FieldStatus } from '@prisma/client';
 import {
   GAME_BALANCE,
   getCastleExtensionLevelConfig,
-  getFactionAdvantageConfig,
   getCastleExtensionTrack,
   getFactionStipendTier,
   getLandDeedConfig,
 } from '../lib/game-balance.js';
-import { getFactionFarmCollectWindowSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
+import { getCurrentFactionAdvantageConfig, getFactionFarmCollectWindowSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 import {
   addSeconds,
   getCultivationSeconds,
@@ -450,7 +449,7 @@ export class SceneContentAssembler {
     scene: 'farm' | 'spirit' | 'raid',
   ): ClientSceneContentResponse['farm']['advantage'] {
     const factionCode = readModel.player.factionCode;
-    const config = getFactionAdvantageConfig(factionCode);
+    const config = getCurrentFactionAdvantageConfig((factionCode ?? null) as FactionAdvantageCode);
 
     if (!config) {
       return undefined;
@@ -459,21 +458,21 @@ export class SceneContentAssembler {
     if (factionCode === 'human' && scene === 'farm') {
       return {
         ...config,
-        summary: '\u4eba\u754c\u4f18\u52bf\uff1a\u519c\u573a\u7ecf\u8425\u66f4\u7a33\uff0c\u6210\u719f\u540e\u53ef\u76f4\u63a5\u6536\u53d6\u6536\u76ca\u3002',
+        summary: config.summary,
       };
     }
 
     if (factionCode === 'immortal' && scene === 'spirit') {
       return {
         ...config,
-        summary: `\u4ed9\u754c\u4f18\u52bf\uff1a\u7075\u5ba0\u6302\u673a +${formatNumber(config.modifiers.spiritPassiveExpBonusPercent)}%\uff0c\u6295\u5582\u540e\u57f9\u80b2\u52a0\u901f +${formatNumber(config.modifiers.spiritFeedDurationBonusPercent)}%`,
+        summary: config.summary,
       };
     }
 
     if (factionCode === 'demon' && scene === 'raid') {
       return {
         ...config,
-        summary: `\u9b54\u754c\u4f18\u52bf\uff1a\u6218\u6597\u4f24\u5bb3 +${formatNumber(config.modifiers.battleAttackBonusPercent)}%\uff0c\u6218\u540e\u56de\u8840 ${formatNumber(config.modifiers.battlePostRecoveryLostHpPercent)}%`,
+        summary: config.summary,
       };
     }
 
@@ -621,10 +620,11 @@ function getFieldTiming(
   }
 
   if (field.status === 'GROWING') {
+    const factionCode = (readModel.player.factionCode ?? null) as FactionAdvantageCode;
     return {
-      totalSeconds: getCultivationSeconds(field.seedDefinition.seedId),
+      totalSeconds: getCultivationSeconds(field.seedDefinition.seedId, factionCode),
       remainingSeconds: getRemainingSeconds(
-        field.readyAt ?? getFieldReadyAt(field, field.seedDefinition.seedId, now),
+        field.readyAt ?? getFieldReadyAt(field, field.seedDefinition.seedId, now, factionCode),
         now,
       ),
     };

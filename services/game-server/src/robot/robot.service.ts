@@ -1391,7 +1391,7 @@ export class RobotService implements OnApplicationBootstrap {
           };
         }),
         raidRelation: '每个机器人每天跨阵营掠夺 3 次；结算直接走真实掠夺服务，防守方金币按业务规则扣减。',
-        factionBuffs: '赛季模拟默认不启用阵营优势；需要专项验证时再通过 factionRuleSet=current 开启。',
+        factionBuffs: '后台赛季模拟入口默认使用 factionRuleSet=v0.2；接口仍可传 none / legacy / v0.2 切换阵营规则。',
         dataPolicy: '每个模拟日都会写入金币、灵宠、材料、田地、成功、失败、阻塞的快照和动作日志。',
       },
       status: {
@@ -3306,7 +3306,15 @@ function parseSeasonSimLoopPayload(body: unknown): { startAt?: Date; totalDays: 
 }
 
 function parseFactionAdvantageRuleSet(value: unknown): FactionAdvantageRuleSet {
-  return value === 'current' ? 'current' : 'none';
+  if (value === 'v0.2') {
+    return 'v0.2';
+  }
+
+  if (value === 'legacy' || value === 'current') {
+    return 'legacy';
+  }
+
+  return 'none';
 }
 
 function summarizeSeasonSimResourceDeltas(logs: Array<{ actionName: string; status: string; resultSummaryJson: Prisma.JsonValue | null }>): {
@@ -3937,10 +3945,10 @@ function buildDayReportValidation(report: ReturnType<typeof createEmptyDayReport
 }
 
 function getFactionBuffExplanation(factionCode: string): string {
-  if (factionCode === 'human') return 'Baseline: faction advantage disabled by default; compare farm output only after enabling it.';
-  if (factionCode === 'immortal') return 'Baseline: faction advantage disabled by default; compare spirit growth only after enabling it.';
-  if (factionCode === 'demon') return 'Baseline: faction advantage disabled by default; compare raid output only after enabling it.';
-  return 'Unknown faction: no faction advantage explanation matched.';
+  if (factionCode === 'human') return 'v0.2: harvest gold +10%, trait roll gold cost -10%, defense loot loss -20%.';
+  if (factionCode === 'immortal') return 'v0.2: harvest spirit root +10%, passive exp +10%, defense main spirit max HP +5%.';
+  if (factionCode === 'demon') return 'v0.2: crop mature time -10%, breakthrough soul cost -10%, raid attack +6% only when attacking.';
+  return 'No faction advantage explanation matched.';
 }
 
 function buildSeasonSimActivityProfileSummary(): Array<Record<string, unknown>> {
@@ -4208,53 +4216,57 @@ async function upsertRobotFriendPair(
   }
 
   await Promise.all([
-    client.playerSocialRelation.upsert({
-      where: {
-        playerId_targetPlayerId_relationType: {
-          playerId: input.firstPlayerId,
-          targetPlayerId: input.secondPlayerId,
-          relationType: SocialRelationType.FRIEND,
-        },
-      },
-      create: {
-        playerId: input.firstPlayerId,
-        targetPlayerId: input.secondPlayerId,
-        relationType: SocialRelationType.FRIEND,
-        status: SocialRelationStatus.ACTIVE,
-        sourceType: input.sourceType,
-        intimacy: 20,
-        lastInteractedAt: input.now,
-      },
-      update: {
-        status: SocialRelationStatus.ACTIVE,
-        sourceType: input.sourceType,
-        lastInteractedAt: input.now,
-      },
+    setRobotFriendRelation(client, {
+      playerId: input.firstPlayerId,
+      targetPlayerId: input.secondPlayerId,
+      sourceType: input.sourceType,
+      now: input.now,
     }),
-    client.playerSocialRelation.upsert({
-      where: {
-        playerId_targetPlayerId_relationType: {
-          playerId: input.secondPlayerId,
-          targetPlayerId: input.firstPlayerId,
-          relationType: SocialRelationType.FRIEND,
-        },
-      },
-      create: {
-        playerId: input.secondPlayerId,
-        targetPlayerId: input.firstPlayerId,
-        relationType: SocialRelationType.FRIEND,
-        status: SocialRelationStatus.ACTIVE,
-        sourceType: input.sourceType,
-        intimacy: 20,
-        lastInteractedAt: input.now,
-      },
-      update: {
-        status: SocialRelationStatus.ACTIVE,
-        sourceType: input.sourceType,
-        lastInteractedAt: input.now,
-      },
+    setRobotFriendRelation(client, {
+      playerId: input.secondPlayerId,
+      targetPlayerId: input.firstPlayerId,
+      sourceType: input.sourceType,
+      now: input.now,
     }),
   ]);
+}
+
+async function setRobotFriendRelation(
+  client: Prisma.TransactionClient,
+  input: {
+    playerId: string;
+    targetPlayerId: string;
+    sourceType: string;
+    now: Date;
+  },
+): Promise<void> {
+  const relationWhere = {
+    playerId: input.playerId,
+    targetPlayerId: input.targetPlayerId,
+    relationType: SocialRelationType.FRIEND,
+  };
+  const updated = await client.playerSocialRelation.updateMany({
+    where: relationWhere,
+    data: {
+      status: SocialRelationStatus.ACTIVE,
+      sourceType: input.sourceType,
+      lastInteractedAt: input.now,
+    },
+  });
+
+  if (updated.count > 0) {
+    return;
+  }
+
+  await client.playerSocialRelation.create({
+    data: {
+      ...relationWhere,
+      status: SocialRelationStatus.ACTIVE,
+      sourceType: input.sourceType,
+      intimacy: 20,
+      lastInteractedAt: input.now,
+    },
+  });
 }
 
 function mapActionLog(log: {

@@ -9,8 +9,15 @@ import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { grantFactionContribution } from '../faction/contribution.service.js';
-import { DAILY_TASK_CONFIG, SPIRIT_BALANCE_CONFIG, getFactionAdvantageConfig } from '../lib/game-balance.js';
-import { applyFactionSpiritPassiveExpBonus, getFactionSpiritFeedDurationSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
+import { DAILY_TASK_CONFIG, SPIRIT_BALANCE_CONFIG, SPIRIT_ROOT_ECONOMY_CONFIG } from '../lib/game-balance.js';
+import {
+  applyFactionSpiritBreakthroughSoulCost,
+  applyFactionSpiritPassiveExpBonus,
+  applyFactionSpiritTraitRollGoldCost,
+  getCurrentFactionAdvantageConfig,
+  getFactionSpiritFeedDurationSeconds,
+  type FactionAdvantageCode,
+} from '../lib/faction-advantage-formulas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { STARTER_SPIRIT_IDS } from '../seed/seed-data/spirits.js';
 import { TaskConfigService } from '../task-config/task-config.service.js';
@@ -22,9 +29,6 @@ const SPIRIT_DAILY_TALISMAN_RECOVERY_LIMIT = 3;
 const SPIRIT_DAILY_RECOVERY_LIMIT = SPIRIT_DAILY_FREE_RECOVERY_LIMIT + SPIRIT_DAILY_TALISMAN_RECOVERY_LIMIT;
 const SPIRIT_DISSOLVE_REFUND_RATIO = 0.35;
 const SPIRIT_LEVEL_EXP_REQUIRED = 10_000;
-const SPIRIT_ROOT_PER_SATIATED_HOUR = 5;
-const SPIRIT_FEED_ONCE_SECONDS = 2 * 60 * 60;
-const SPIRIT_SATIATED_EXP_BONUS_BPS = 5000;
 const SPIRIT_AD_DAILY_LIMIT = 3;
 const SPIRIT_AD_TALISMAN_REWARD = 5;
 const SPIRIT_SHOP_ITEMS: ClientSpiritShopItem[] = [
@@ -396,8 +400,8 @@ export class SpiritService {
       const factionCode = toFactionAdvantageCode(resource.player?.faction?.code);
       const settled = settleSpiritProgress(slot, now, factionCode);
       const satiatedRemainingSeconds = Math.max(Math.floor(((settled.satiatedUntil?.getTime() ?? now.getTime()) - now.getTime()) / 1000), 0);
-      const satiatedSecondsAdded = getFactionSpiritFeedDurationSeconds(SPIRIT_FEED_ONCE_SECONDS, factionCode);
-      const feedCount = Math.ceil(SPIRIT_FEED_ONCE_SECONDS / 3600 * SPIRIT_ROOT_PER_SATIATED_HOUR);
+      const satiatedSecondsAdded = getFactionSpiritFeedDurationSeconds(SPIRIT_ROOT_ECONOMY_CONFIG.feed.accelerateSecondsPerFeed, factionCode);
+      const feedCount = SPIRIT_ROOT_ECONOMY_CONFIG.feed.rootCostPerFeed;
 
       if (resource.spiritRoot < feedCount) {
         throw new BusinessError({ code: ErrorCode.Conflict, message: 'Insufficient spirit root.', statusCode: 409 });
@@ -438,7 +442,7 @@ export class SpiritService {
       });
       await this.recordDailyTaskProgress(client, playerId, 'feed-spirit', 1, now);
 
-      const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 已安排 2 小时自动加速。', now);
+      const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ` 已安排 ${formatAccelerateDuration(satiatedSecondsAdded)}自动加速。`, now);
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
     });
@@ -508,7 +512,8 @@ export class SpiritService {
       assertVersion('resourceVersion', request.resourceVersion, resource.resourceVersion);
       assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
 
-      const settled = settleSpiritProgress(slot, now, toFactionAdvantageCode(resource.player?.faction?.code));
+      const factionCode = toFactionAdvantageCode(resource.player?.faction?.code);
+      const settled = settleSpiritProgress(slot, now, factionCode);
       const targetStage = request.targetStage ?? getBreakthroughStageForLevel(settled.level);
       const expectedStage = getBreakthroughStageForLevel(settled.level);
       if (expectedStage === null || targetStage !== expectedStage || settled.breakthroughStage >= expectedStage) {
@@ -520,15 +525,16 @@ export class SpiritService {
         throw new BusinessError({ code: ErrorCode.BadRequest, message: 'Unsupported breakthrough stage.', statusCode: 400 });
       }
 
+      const soulCost = applyFactionSpiritBreakthroughSoulCost(cost.count, factionCode);
       const currentSoul = getSoulCount(resource, cost.quality);
-      if (currentSoul < cost.count) {
+      if (currentSoul < soulCost) {
         throw new BusinessError({ code: ErrorCode.Conflict, message: 'Insufficient spirit soul for breakthrough.', statusCode: 409 });
       }
 
       await client.playerSpiritResource.update({
         where: { playerId },
         data: {
-          [getSoulField(cost.quality)]: { decrement: cost.count },
+          [getSoulField(cost.quality)]: { decrement: soulCost },
           resourceVersion: { increment: 1 },
         },
       });
@@ -550,7 +556,7 @@ export class SpiritService {
           fromStage: slot.breakthroughStage,
           toStage: expectedStage,
           consumedSoulQuality: cost.quality,
-          consumedSoulCount: cost.count,
+          consumedSoulCount: soulCost,
           requestIdempotencyKey: idempotencyKey ?? null,
         },
       });
@@ -594,6 +600,15 @@ export class SpiritService {
             spiritMarrow: true,
             spiritJade: true,
             resourceVersion: true,
+            player: {
+              select: {
+                faction: {
+                  select: {
+                    code: true,
+                  },
+                },
+              },
+            },
           },
         }),
         client.playerWallet.findUnique({
@@ -638,7 +653,12 @@ export class SpiritService {
         throw new BusinessError({ code: ErrorCode.BadRequest, message: 'No unlocked trait slots.', statusCode: 400 });
       }
 
-      const cost = getRollCost(request.mode);
+      const factionCode = toFactionAdvantageCode(resource.player?.faction?.code);
+      const baseCost = getRollCost(request.mode);
+      const cost = {
+        ...baseCost,
+        gold: applyFactionSpiritTraitRollGoldCost(baseCost.gold, factionCode),
+      };
       if (resource.spiritMarrow < cost.marrow || resource.spiritJade < cost.jade) {
         throw new BusinessError({ code: ErrorCode.Conflict, message: 'Insufficient trait roll materials.', statusCode: 409 });
       }
@@ -1780,7 +1800,7 @@ function buildSpiritState(
     slots: mappedSlots,
     codex: mappedCodex,
     readyToCompose: mappedCodex.filter((entry) => entry.readyToCompose),
-    factionAdvantage: getFactionAdvantageConfig(toFactionAdvantageCode(resource.factionCode)) ?? undefined,
+    factionAdvantage: getCurrentFactionAdvantageConfig(toFactionAdvantageCode(resource.factionCode)) ?? undefined,
     breakthroughRequirement: buildBreakthroughRequirement(mainSlot, resource),
     shop: {
       items: buildShopItemsForState(shopPurchases),
@@ -1833,6 +1853,7 @@ function buildBreakthroughRequirement(
     return null;
   }
 
+  const required = applyFactionSpiritBreakthroughSoulCost(cost.count, toFactionAdvantageCode(resource.factionCode));
   const owned = getSoulCount(resource, cost.quality);
 
   return {
@@ -1840,9 +1861,9 @@ function buildBreakthroughRequirement(
     level: slot.level,
     quality: cost.quality,
     label: getSoulQualityLabel(cost.quality),
-    required: cost.count,
+    required,
     owned,
-    canBreakthrough: owned >= cost.count,
+    canBreakthrough: owned >= required,
   };
 }
 
@@ -1986,7 +2007,7 @@ function settleSpiritProgress(slot: {
   const normalSeconds = Math.max(elapsedSeconds - satiatedSeconds, 0);
   const passiveExpPerMinute = getPassiveExpPerMinute(slot.level, factionCode);
   const normalExpGain = Math.floor(passiveExpPerMinute * normalSeconds / 60);
-  const satiatedExpGain = Math.floor(passiveExpPerMinute * satiatedSeconds * (10_000 + SPIRIT_SATIATED_EXP_BONUS_BPS) / 10_000 / 60);
+  const satiatedExpGain = Math.floor(passiveExpPerMinute * satiatedSeconds * (10_000 + SPIRIT_ROOT_ECONOMY_CONFIG.feed.expBonusBps) / 10_000 / 60);
   const expGain = normalExpGain + satiatedExpGain;
   return applyExpGain({ ...normalizedSlot, lastExpSettledAt: now }, expGain);
 }
@@ -2348,6 +2369,17 @@ function getSpiritRecoveryTalismanCost(nextRecoveryUsed: number): number {
   }
 
   return nextRecoveryUsed - SPIRIT_DAILY_FREE_RECOVERY_LIMIT;
+}
+
+function formatAccelerateDuration(seconds: number): string {
+  const safeSeconds = Math.max(Math.floor(seconds), 0);
+  if (safeSeconds > 0 && safeSeconds % 3600 === 0) {
+    return `${safeSeconds / 3600} 小时`;
+  }
+  if (safeSeconds > 0 && safeSeconds % 60 === 0) {
+    return `${safeSeconds / 60} 分钟`;
+  }
+  return `${safeSeconds} 秒`;
 }
 
 function assertVersion(label: string, expected: number | undefined, actual: number, options?: { allowStale?: boolean }): void {

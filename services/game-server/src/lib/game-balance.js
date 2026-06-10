@@ -213,6 +213,26 @@ export const SPIRIT_BALANCE_CONFIG = {
   passiveExpRateBps: 1300,
 };
 
+export const SPIRIT_ROOT_ECONOMY_CONFIG = {
+  feed: {
+    accelerateSecondsPerFeed: 2 * 60 * 60,
+    rootCostPerFeed: 20,
+    expBonusBps: 5000,
+  },
+  farmHarvest: {
+    commonRootRewardMin: 5,
+    commonRootRewardMax: 10,
+  },
+  stipendRootRewards: {
+    'contribution-0': 10,
+    'contribution-100': 18,
+    'contribution-300': 25,
+    'contribution-600': 35,
+    'contribution-800': 45,
+    'contribution-1000': 60,
+  },
+};
+
 
 export const FACTION_STIPEND_BALANCE_CONFIG = {
   tiers: [
@@ -235,7 +255,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '基础俸禄',
       rewards: [
         { kind: 'gold', quantity: 20, label: '金币' },
-        { kind: 'spirit-root', quantity: 20, label: '灵根' },
+        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-0'], label: '灵根' },
         { kind: 'ordinary-soul', quantity: 5, label: '普通兽魂' },
       ],
     },
@@ -245,7 +265,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '小有供奉',
       rewards: [
         { kind: 'gold', quantity: 30, label: '金币' },
-        { kind: 'spirit-root', quantity: 35, label: '灵根' },
+        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-100'], label: '灵根' },
         { kind: 'ordinary-soul', quantity: 10, label: '普通兽魂' },
       ],
     },
@@ -255,7 +275,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '稳定供奉',
       rewards: [
         { kind: 'gold', quantity: 40, label: '金币' },
-        { kind: 'spirit-root', quantity: 50, label: '灵根' },
+        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-300'], label: '灵根' },
         { kind: 'spirit-marrow', quantity: 2, label: '灵髓' },
         { kind: 'rare-soul', quantity: 2, label: '稀有兽魂' },
         { kind: 'ordinary-soul', quantity: 8, label: '普通兽魂' },
@@ -267,7 +287,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '阵营骨干',
       rewards: [
         { kind: 'gold', quantity: 50, label: '金币' },
-        { kind: 'spirit-root', quantity: 70, label: '灵根' },
+        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-600'], label: '灵根' },
         { kind: 'spirit-marrow', quantity: 4, label: '灵髓' },
         { kind: 'rare-soul', quantity: 6, label: '稀有兽魂' },
       ],
@@ -278,7 +298,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '高阶供奉',
       rewards: [
         { kind: 'gold', quantity: 60, label: '金币' },
-        { kind: 'spirit-root', quantity: 90, label: '灵根' },
+        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-800'], label: '灵根' },
         { kind: 'spirit-marrow', quantity: 6, label: '灵髓' },
         { kind: 'spirit-jade', quantity: 1, label: '灵玉' },
         { kind: 'rare-soul', quantity: 10, label: '稀有兽魂' },
@@ -290,7 +310,7 @@ export const FACTION_STIPEND_CONFIG = {
       label: '阵营重臣',
       rewards: [
         { kind: 'gold', quantity: 80, label: '金币' },
-        { kind: 'spirit-root', quantity: 120, label: '灵根' },
+        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-1000'], label: '灵根' },
         { kind: 'spirit-marrow', quantity: 8, label: '灵髓' },
         { kind: 'spirit-jade', quantity: 2, label: '灵玉' },
         { kind: 'legendary-soul', quantity: 2, label: '传说兽魂' },
@@ -299,7 +319,7 @@ export const FACTION_STIPEND_CONFIG = {
   ],
 };
 
-export const FACTION_ADVANTAGE_CONFIG = {
+export const FACTION_ADVANTAGE_LEGACY_CONFIG = {
   human: {
     factionCode: 'human',
     factionName: '人界',
@@ -313,10 +333,17 @@ export const FACTION_ADVANTAGE_CONFIG = {
     modifiers: {
       farmMatureYieldBonusPercent: 5,
       farmCollectWindowBonusPercent: 20,
+      farmMatureSecondsReductionPercent: 0,
+      farmHarvestSpiritRootBonusPercent: 0,
+      spiritTraitRollGoldCostReductionPercent: 0,
+      spiritBreakthroughSoulCostReductionPercent: 0,
       spiritPassiveExpBonusPercent: 0,
       spiritFeedDurationBonusPercent: 0,
+      battleDefenseLootLossReductionPercent: 0,
+      battleDefenseMainSpiritMaxHpBonusPercent: 0,
       battleAttackBonusPercent: 0,
       battlePostRecoveryLostHpPercent: 0,
+      battleAttackBonusAppliesToRaidAttackOnly: false,
     },
   },
   immortal: {
@@ -332,10 +359,17 @@ export const FACTION_ADVANTAGE_CONFIG = {
     modifiers: {
       farmMatureYieldBonusPercent: 0,
       farmCollectWindowBonusPercent: 0,
+      farmMatureSecondsReductionPercent: 0,
+      farmHarvestSpiritRootBonusPercent: 0,
+      spiritTraitRollGoldCostReductionPercent: 0,
+      spiritBreakthroughSoulCostReductionPercent: 0,
       spiritPassiveExpBonusPercent: 10,
       spiritFeedDurationBonusPercent: 25,
+      battleDefenseLootLossReductionPercent: 0,
+      battleDefenseMainSpiritMaxHpBonusPercent: 0,
       battleAttackBonusPercent: 0,
       battlePostRecoveryLostHpPercent: 0,
+      battleAttackBonusAppliesToRaidAttackOnly: false,
     },
   },
   demon: {
@@ -351,13 +385,103 @@ export const FACTION_ADVANTAGE_CONFIG = {
     modifiers: {
       farmMatureYieldBonusPercent: 0,
       farmCollectWindowBonusPercent: 0,
+      farmMatureSecondsReductionPercent: 0,
+      farmHarvestSpiritRootBonusPercent: 0,
+      spiritTraitRollGoldCostReductionPercent: 0,
+      spiritBreakthroughSoulCostReductionPercent: 0,
       spiritPassiveExpBonusPercent: 0,
       spiritFeedDurationBonusPercent: 0,
+      battleDefenseLootLossReductionPercent: 0,
+      battleDefenseMainSpiritMaxHpBonusPercent: 0,
       battleAttackBonusPercent: 5,
       battlePostRecoveryLostHpPercent: 20,
+      battleAttackBonusAppliesToRaidAttackOnly: false,
     },
   },
 };
+
+export const FACTION_ADVANTAGE_V02_CONFIG = {
+  human: {
+    factionCode: 'human',
+    factionName: '人界',
+    title: '稳定经营',
+    summary: '收成更高，洗练更省金币，被掠夺时损失更少，适合稳定经营。',
+    details: [
+      '成熟收获金币 +10%',
+      '灵宠洗练金币消耗 -10%',
+      '防守战中资源损失 -20%',
+    ],
+    modifiers: {
+      farmMatureYieldBonusPercent: 10,
+      farmCollectWindowBonusPercent: 20,
+      farmMatureSecondsReductionPercent: 0,
+      farmHarvestSpiritRootBonusPercent: 0,
+      spiritTraitRollGoldCostReductionPercent: 10,
+      spiritBreakthroughSoulCostReductionPercent: 0,
+      spiritPassiveExpBonusPercent: 0,
+      spiritFeedDurationBonusPercent: 0,
+      battleDefenseLootLossReductionPercent: 20,
+      battleDefenseMainSpiritMaxHpBonusPercent: 0,
+      battleAttackBonusPercent: 0,
+      battlePostRecoveryLostHpPercent: 0,
+      battleAttackBonusAppliesToRaidAttackOnly: true,
+    },
+  },
+  immortal: {
+    factionCode: 'immortal',
+    factionName: '仙界',
+    title: '高效修行',
+    summary: '灵根更多，灵宠成长更快，防守时主战灵宠气血更稳。',
+    details: [
+      '收菜获得灵根 +10%',
+      '挂机经验 +10%',
+      '防守战中主战灵宠最大 HP +5%',
+    ],
+    modifiers: {
+      farmMatureYieldBonusPercent: 0,
+      farmCollectWindowBonusPercent: 0,
+      farmMatureSecondsReductionPercent: 0,
+      farmHarvestSpiritRootBonusPercent: 10,
+      spiritTraitRollGoldCostReductionPercent: 0,
+      spiritBreakthroughSoulCostReductionPercent: 0,
+      spiritPassiveExpBonusPercent: 10,
+      spiritFeedDurationBonusPercent: 0,
+      battleDefenseLootLossReductionPercent: 0,
+      battleDefenseMainSpiritMaxHpBonusPercent: 5,
+      battleAttackBonusPercent: 0,
+      battlePostRecoveryLostHpPercent: 0,
+      battleAttackBonusAppliesToRaidAttackOnly: true,
+    },
+  },
+  demon: {
+    factionCode: 'demon',
+    factionName: '魔界',
+    title: '主动进攻',
+    summary: '灵田成熟更快，主动进攻更强，灵宠突破更省兽魂。',
+    details: [
+      '作物成熟时间 -10%',
+      '灵宠突破兽魂消耗 -10%',
+      '主动 raid 攻击 +6%，无战后回血',
+    ],
+    modifiers: {
+      farmMatureYieldBonusPercent: 0,
+      farmCollectWindowBonusPercent: 0,
+      farmMatureSecondsReductionPercent: 10,
+      farmHarvestSpiritRootBonusPercent: 0,
+      spiritTraitRollGoldCostReductionPercent: 0,
+      spiritBreakthroughSoulCostReductionPercent: 10,
+      spiritPassiveExpBonusPercent: 0,
+      spiritFeedDurationBonusPercent: 0,
+      battleDefenseLootLossReductionPercent: 0,
+      battleDefenseMainSpiritMaxHpBonusPercent: 0,
+      battleAttackBonusPercent: 6,
+      battlePostRecoveryLostHpPercent: 0,
+      battleAttackBonusAppliesToRaidAttackOnly: true,
+    },
+  },
+};
+
+export const FACTION_ADVANTAGE_CONFIG = FACTION_ADVANTAGE_LEGACY_CONFIG;
 
 export const TERRITORY_TECH_TRACKS = {
   protectionTech: {
@@ -741,12 +865,20 @@ export function getFactionStipendTier(factionContribution) {
     .find((tier) => contribution >= tier.minContribution) ?? FACTION_STIPEND_CONFIG.tiers[0] ?? null;
 }
 
-export function getFactionAdvantageConfig(factionCode) {
+export function getFactionAdvantageConfig(factionCode, ruleSet = 'legacy') {
   if (!factionCode) {
     return null;
   }
 
-  return FACTION_ADVANTAGE_CONFIG[factionCode] ?? null;
+  if (ruleSet === 'none') {
+    return null;
+  }
+
+  if (ruleSet === 'v0.2') {
+    return FACTION_ADVANTAGE_V02_CONFIG[factionCode] ?? null;
+  }
+
+  return FACTION_ADVANTAGE_LEGACY_CONFIG[factionCode] ?? null;
 }
 
 export function getDailyTaskRewardBudget(week) {

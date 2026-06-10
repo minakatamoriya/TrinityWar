@@ -41,10 +41,17 @@ export interface ClientSpiritDefinition {
 export interface ClientFactionAdvantageModifiers {
   farmMatureYieldBonusPercent: number;
   farmCollectWindowBonusPercent: number;
+  farmMatureSecondsReductionPercent: number;
+  farmHarvestSpiritRootBonusPercent: number;
+  spiritTraitRollGoldCostReductionPercent: number;
+  spiritBreakthroughSoulCostReductionPercent: number;
   spiritPassiveExpBonusPercent: number;
   spiritFeedDurationBonusPercent: number;
+  battleDefenseLootLossReductionPercent: number;
+  battleDefenseMainSpiritMaxHpBonusPercent: number;
   battleAttackBonusPercent: number;
   battlePostRecoveryLostHpPercent: number;
+  battleAttackBonusAppliesToRaidAttackOnly: boolean;
 }
 
 export interface ClientFactionAdvantagePanel {

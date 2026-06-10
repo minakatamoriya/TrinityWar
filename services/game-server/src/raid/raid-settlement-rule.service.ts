@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { areFactionAdvantagesEnabled, getFactionBattleAttackMultiplier } from '../lib/faction-advantage-formulas.js';
+import {
+  applyFactionRaidDefenseLootLossReduction,
+  areFactionAdvantagesEnabled,
+  getCurrentFactionAdvantageConfig,
+  getFactionBattleAttackMultiplier,
+  getFactionBattleDefenseMainSpiritMaxHpMultiplier,
+} from '../lib/faction-advantage-formulas.js';
 
 type RaidOutcomeTier = 'perfect_win' | 'major_win' | 'minor_win' | 'draw' | 'minor_loss' | 'major_loss' | 'perfect_loss';
 type Element = 'METAL' | 'WOOD' | 'WATER' | 'FIRE' | 'EARTH';
@@ -83,8 +89,8 @@ const TIER_CONFIG: Record<RaidOutcomeTier, {
 @Injectable()
 export class RaidSettlementRuleService {
   calculate(input: RaidSettlementRuleInput): RaidSettlementRuleResult {
-    const attackerPanel = buildPanel(input.attackerSpirit, input.attackerFactionName);
-    const defenderPanel = buildPanel(input.defenderSpirit, input.defenderFactionName);
+    const attackerPanel = buildPanel(input.attackerSpirit, input.attackerFactionName, 'attacker');
+    const defenderPanel = buildPanel(input.defenderSpirit, input.defenderFactionName, 'defender');
     const battle = resolveSingleClash(attackerPanel, defenderPanel);
     const attackerRatio = battle.attackerHpAfter / Math.max(battle.attackerMaxHp, 1);
     const defenderRatio = battle.defenderHpAfter / Math.max(battle.defenderMaxHp, 1);
@@ -92,7 +98,8 @@ export class RaidSettlementRuleService {
     const tier = resolveTier(battle.result, scoreDeltaRatio);
     const config = TIER_CONFIG[tier];
     const lockedGold = Math.max(Math.floor(input.lockedGold), 0);
-    const lootGold = Math.min(lockedGold, Math.floor(lockedGold * config.goldRatio));
+    const rawLootGold = Math.min(lockedGold, Math.floor(lockedGold * config.goldRatio));
+    const lootGold = applyFactionRaidDefenseLootLossReduction(rawLootGold, normalizeFaction(input.defenderFactionName));
     const depositedGold = lootGold;
     const attackerNextHp = input.attackerSpirit ? clampHpForPersistence(battle.attackerHpAfter, input.attackerSpirit.maxHp) : null;
     const defenderNextHp = input.defenderSpirit ? clampHpForPersistence(battle.defenderHpAfter, input.defenderSpirit.maxHp) : null;
@@ -161,7 +168,7 @@ type BattleHealthStatus = {
   attackCoefficient: number;
 };
 
-function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string | null): SpiritPanel {
+function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string | null, side: 'attacker' | 'defender'): SpiritPanel {
   if (!snapshot) {
     return {
       label: '守备灵宠',
@@ -178,10 +185,18 @@ function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string |
   const levelDelta = Math.max(snapshot.level - 1, 0);
   let attack = snapshot.spiritDefinition.baseAttack + levelDelta * snapshot.spiritDefinition.growthAttack * rarityMultiplier;
   let maxHp = snapshot.spiritDefinition.baseHp + levelDelta * snapshot.spiritDefinition.growthHp * rarityMultiplier;
+  let currentHpMultiplier = 1;
   const faction = normalizeFaction(snapshot.spiritDefinition.factionAffinity);
   const playerFaction = normalizeFaction(factionName);
+  const playerFactionConfig = getCurrentFactionAdvantageConfig(playerFaction);
 
-  if (areFactionAdvantagesEnabled() && faction && faction === playerFaction) {
+  if (playerFactionConfig?.modifiers.battleAttackBonusAppliesToRaidAttackOnly) {
+    if (side === 'defender') {
+      currentHpMultiplier = getFactionBattleDefenseMainSpiritMaxHpMultiplier(playerFaction);
+      maxHp *= currentHpMultiplier;
+    }
+    attack *= getFactionBattleAttackMultiplier(playerFaction, { isRaidAttack: side === 'attacker' });
+  } else if (areFactionAdvantagesEnabled() && faction && faction === playerFaction) {
     if (faction === 'immortal') {
       maxHp *= 1.08;
     } else if (faction === 'human') {
@@ -194,8 +209,9 @@ function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string |
   const traits = buildTraitTotals(snapshot.traits ?? []);
   attack *= 1 + traits.claw / 100;
   maxHp *= 1 + traits.thickSkin / 100;
-  const currentHp = Math.min(Math.max(snapshot.currentHp, 0), Math.max(snapshot.maxHp, 1));
-  const healthStatus = resolveBattleHealthStatus(currentHp, snapshot.maxHp);
+  const effectiveSnapshotMaxHp = Math.max(snapshot.maxHp * currentHpMultiplier, 1);
+  const currentHp = Math.min(Math.max(snapshot.currentHp * currentHpMultiplier, 0), effectiveSnapshotMaxHp);
+  const healthStatus = resolveBattleHealthStatus(currentHp, effectiveSnapshotMaxHp);
   attack *= healthStatus.attackCoefficient;
 
   return {

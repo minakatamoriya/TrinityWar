@@ -24,7 +24,11 @@ import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { grantFactionContribution } from '../faction/contribution.service.js';
 import { DAILY_TASK_CONFIG, GAME_BALANCE, getFactionStipendTier, getSeedStageGold } from '../lib/game-balance.js';
-import { getFactionFarmMatureYieldMultiplier, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
+import {
+  applyFactionFarmHarvestSpiritRootBonus,
+  getFactionFarmMatureYieldMultiplier,
+  type FactionAdvantageCode,
+} from '../lib/faction-advantage-formulas.js';
 import { buildFieldReadyAtUpdate, getCultivationSeconds } from '../lib/field-timing.js';
 import { getVaultCapacityGain } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -293,6 +297,11 @@ export class ClientCommandService {
       const playerState = await client.player.findUnique({
         where: { id: input.playerId },
         select: {
+          faction: {
+            select: {
+              code: true,
+            },
+          },
           wallet: {
             select: {
               vaultGold: true,
@@ -596,6 +605,11 @@ export class ClientCommandService {
       const playerState = await client.player.findUnique({
         where: { id: input.playerId },
         select: {
+          faction: {
+            select: {
+              code: true,
+            },
+          },
           wallet: {
             select: {
               vaultGold: true,
@@ -646,7 +660,9 @@ export class ClientCommandService {
       assertVersion('fieldVersion', input.request.fieldVersion, field.statusVersion);
       assertVersion('walletVersion', input.request.walletVersion, playerState.wallet.balanceVersion);
 
+      const factionCode = toFactionAdvantageCode(playerState.faction?.code);
       const resolution = this.fieldCommandRuleService.resolveCollectField(field, playerState.wallet, input.request);
+      const rewards = applyFactionCollectRewardBonuses(resolution.rewards, factionCode);
 
       await client.playerFieldSlot.update({
         where: { id: field.id },
@@ -694,8 +710,8 @@ export class ClientCommandService {
         });
       }
 
-      await applySeedCollectRewards(client, input.playerId, resolution.rewards);
-      await applySpiritCropRewards(client, input.playerId, resolution.rewards);
+      await applySeedCollectRewards(client, input.playerId, rewards);
+      await applySpiritCropRewards(client, input.playerId, rewards);
 
       await this.auditService.createFieldHarvestLog(client, {
         playerId: input.playerId,
@@ -704,7 +720,7 @@ export class ClientCommandService {
         collectMode: input.request.collectMode,
         collectedGold: resolution.collectedGold,
         overflowGold: resolution.overflowGold,
-        rewardItemsJson: resolution.rewards as unknown as Prisma.InputJsonValue,
+        rewardItemsJson: rewards as unknown as Prisma.InputJsonValue,
       });
 
       if (
@@ -736,7 +752,7 @@ export class ClientCommandService {
         result: {
           collectedGold: resolution.collectedGold,
           overflowGold: resolution.overflowGold,
-          rewards: resolution.rewards,
+          rewards,
         },
       };
 
@@ -859,7 +875,8 @@ export class ClientCommandService {
         });
       }
 
-      const readyAt = addSeconds(now, getCultivationSeconds(seedDefinition.seedId));
+      const factionCode = toFactionAdvantageCode(field.player?.faction?.code);
+      const readyAt = addSeconds(now, getCultivationSeconds(seedDefinition.seedId, factionCode));
       await client.playerFieldSlot.update({
         where: { id: field.id },
         data: {
@@ -2400,6 +2417,22 @@ function sumRewardQuantity(rewards: ClientFactionStipendReward[], kind: ClientFa
 function formatRewardSummary(rewards: ClientFactionStipendReward[]): string {
   const summary = rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('\u3001');
   return summary || '\u6682\u65e0\u5956\u52b1';
+}
+
+function applyFactionCollectRewardBonuses(
+  rewards: ClientCollectRewardItem[],
+  factionCode: FactionAdvantageCode,
+): ClientCollectRewardItem[] {
+  return rewards.map((reward) => {
+    if (reward.kind !== 'spirit-root') {
+      return reward;
+    }
+
+    return {
+      ...reward,
+      quantity: applyFactionFarmHarvestSpiritRootBonus(reward.quantity, factionCode),
+    };
+  });
 }
 
 async function applySpiritCropRewards(

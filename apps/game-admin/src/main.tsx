@@ -42,6 +42,7 @@ import './styles.css';
 const PLAYER_SEARCH_PAGE_SIZE = 10;
 const PLAYER_RAID_PAGE_SIZE = 10;
 const ATTACHMENT_NOTIFICATION_CONFIRM_TEXT = 'SEND_ATTACHMENT_NOTIFICATION';
+const ROBOT_SEASON_FACTION_RULE_SET = 'v0.2';
 
 function escapeHtml(value: string): string {
   return value
@@ -266,7 +267,10 @@ function App(): JSX.Element {
   };
 
   const runRobotSeasonSimV1Day = async (): Promise<void> => {
-    const result = await run('robot-season-day', () => adminFetch<AdminRecord>('/robots/season-sim-v1/day', jsonRequest('POST', { actionDelayMs: 250 })));
+    const result = await run('robot-season-day', () => adminFetch<AdminRecord>('/robots/season-sim-v1/day', jsonRequest('POST', {
+      actionDelayMs: 250,
+      factionRuleSet: ROBOT_SEASON_FACTION_RULE_SET,
+    })));
     if (result) {
       await loadRobotDashboard();
     }
@@ -294,7 +298,10 @@ function App(): JSX.Element {
   };
 
   const startRobotSeasonSimV1Loop = async (input: { intervalSeconds: number; totalDays: number; actionDelayMs?: number }): Promise<void> => {
-    const result = await run('robot-season-loop-start', () => adminFetch<AdminRecord>('/robots/season-sim-v1/loop/start', jsonRequest('POST', input)));
+    const result = await run('robot-season-loop-start', () => adminFetch<AdminRecord>('/robots/season-sim-v1/loop/start', jsonRequest('POST', {
+      ...input,
+      factionRuleSet: ROBOT_SEASON_FACTION_RULE_SET,
+    })));
     if (result) {
       await loadRobotDashboard();
     }

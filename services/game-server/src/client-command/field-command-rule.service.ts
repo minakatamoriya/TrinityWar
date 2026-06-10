@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { ClientCollectFieldRequest, ClientCollectRewardItem } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
+import { SPIRIT_ROOT_ECONOMY_CONFIG } from '../lib/game-balance.js';
 
 export interface FieldStateForCollect {
   id: string;
@@ -108,7 +109,10 @@ function buildSpiritCropReward(rarity: string): ClientCollectRewardItem {
     kind: 'spirit-root',
     seedId: 'spirit-root',
     label: '灵根',
-    quantity: randomIntInclusive(5, 10),
+    quantity: randomIntInclusive(
+      SPIRIT_ROOT_ECONOMY_CONFIG.farmHarvest.commonRootRewardMin,
+      SPIRIT_ROOT_ECONOMY_CONFIG.farmHarvest.commonRootRewardMax,
+    ),
   };
 }
 

@@ -172,7 +172,7 @@ function settleField(
 
   while (true) {
     if (status === 'GROWING') {
-      const targetReadyAt = getFieldReadyAt(field, seedId, now);
+      const targetReadyAt = getFieldReadyAt(field, seedId, now, factionCode);
 
       if (nowMs < targetReadyAt.getTime()) {
         break;
