@@ -23,7 +23,8 @@ import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { grantFactionContribution } from '../faction/contribution.service.js';
-import { DAILY_TASK_CONFIG, GAME_BALANCE, getFactionAdvantageConfig, getFactionStipendTier, getSeedStageGold } from '../lib/game-balance.js';
+import { DAILY_TASK_CONFIG, GAME_BALANCE, getFactionStipendTier, getSeedStageGold } from '../lib/game-balance.js';
+import { getFactionFarmMatureYieldMultiplier, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 import { buildFieldReadyAtUpdate, getCultivationSeconds } from '../lib/field-timing.js';
 import { getVaultCapacityGain } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -2133,13 +2134,16 @@ function getCultivationStageGold(
   factionCode: string | null,
 ): number {
   const base = getSeedStageGold(seedId, stage);
-  const config = getFactionAdvantageConfig(factionCode);
   if (stage !== 'mature') {
     return base;
   }
 
-  const multiplier = 1 + ((config?.modifiers.farmMatureYieldBonusPercent ?? 0) / 100);
+  const multiplier = getFactionFarmMatureYieldMultiplier(toFactionAdvantageCode(factionCode));
   return Math.round(base * multiplier);
+}
+
+function toFactionAdvantageCode(value: string | null | undefined): FactionAdvantageCode {
+  return value === 'human' || value === 'immortal' || value === 'demon' ? value : null;
 }
 
 function addSeconds(source: Date, seconds: number): Date {

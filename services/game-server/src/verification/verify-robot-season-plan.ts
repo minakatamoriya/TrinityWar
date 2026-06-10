@@ -1,6 +1,5 @@
 import {
-  SEASON_SIM_FARM_CYCLE_HOURS,
-  SEASON_SIM_FARM_CYCLES_PER_DAY,
+  SEASON_SIM_ACTIVITY_PROFILES,
   SEASON_SIM_RAIDS_PER_DAY,
   buildSeasonSimDayPlan,
   buildSeasonSimProgress,
@@ -13,27 +12,34 @@ import {
 } from '../robot/season-sim-plan.js';
 
 const players = [
-  { playerId: 'sim-human-001', spec: { factionCode: 'human' } },
-  { playerId: 'sim-human-002', spec: { factionCode: 'human' } },
-  { playerId: 'sim-human-003', spec: { factionCode: 'human' } },
-  { playerId: 'sim-immortal-001', spec: { factionCode: 'immortal' } },
-  { playerId: 'sim-immortal-002', spec: { factionCode: 'immortal' } },
-  { playerId: 'sim-immortal-003', spec: { factionCode: 'immortal' } },
-  { playerId: 'sim-demon-001', spec: { factionCode: 'demon' } },
-  { playerId: 'sim-demon-002', spec: { factionCode: 'demon' } },
-  { playerId: 'sim-demon-003', spec: { factionCode: 'demon' } },
+  { playerId: 'sim-human-001', spec: { factionCode: 'human', activityProfileKey: 'low' as const } },
+  { playerId: 'sim-human-002', spec: { factionCode: 'human', activityProfileKey: 'standard' as const } },
+  { playerId: 'sim-human-003', spec: { factionCode: 'human', activityProfileKey: 'high' as const } },
+  { playerId: 'sim-immortal-001', spec: { factionCode: 'immortal', activityProfileKey: 'low' as const } },
+  { playerId: 'sim-immortal-002', spec: { factionCode: 'immortal', activityProfileKey: 'standard' as const } },
+  { playerId: 'sim-immortal-003', spec: { factionCode: 'immortal', activityProfileKey: 'high' as const } },
+  { playerId: 'sim-demon-001', spec: { factionCode: 'demon', activityProfileKey: 'low' as const } },
+  { playerId: 'sim-demon-002', spec: { factionCode: 'demon', activityProfileKey: 'standard' as const } },
+  { playerId: 'sim-demon-003', spec: { factionCode: 'demon', activityProfileKey: 'high' as const } },
 ];
 
 function main(): void {
-  const plan = buildSeasonSimDayPlan();
-  assertEqual(plan.farmCycleHours.length, SEASON_SIM_FARM_CYCLES_PER_DAY, 'farm cycle count');
-  assertEqual(plan.farmCycleHours[1] - plan.farmCycleHours[0], SEASON_SIM_FARM_CYCLE_HOURS, 'farm cycle interval');
-  assertEqual(plan.raidRoundHours.length, SEASON_SIM_RAIDS_PER_DAY, 'raid round count');
-  assertEqual(plan.stipendHour, 21, 'stipend hour');
-  assertEqual(plan.spiritGrowthHour, 21, 'spirit growth hour');
-  assertEqual(plan.snapshotHour, 24, 'snapshot hour');
-  assertEqual(getSeasonSimExpectedActionsPerPlayer(), 13, 'expected actions per player');
-  assertEqual(getSeasonSimExpectedActionCount(players.length), 117, 'expected total actions');
+  const lowPlan = buildSeasonSimDayPlan('low');
+  const standardPlan = buildSeasonSimDayPlan('standard');
+  const highPlan = buildSeasonSimDayPlan('high');
+  assertEqual(lowPlan.farmVisitHours.length, SEASON_SIM_ACTIVITY_PROFILES.low.loginHours.length, 'low farm visit count');
+  assertEqual(standardPlan.farmVisitHours.length, SEASON_SIM_ACTIVITY_PROFILES.standard.loginHours.length, 'standard farm visit count');
+  assertEqual(highPlan.farmVisitHours.length, SEASON_SIM_ACTIVITY_PROFILES.high.loginHours.length, 'high farm visit count');
+  assertEqual(standardPlan.raidRoundHours.length, SEASON_SIM_RAIDS_PER_DAY, 'standard raid round count');
+  assertEqual(standardPlan.socialAssistHours[0], 8, 'standard early social assist hour');
+  assertEqual(standardPlan.socialAssistHours[1], 22, 'standard late social assist hour');
+  assertEqual(standardPlan.stipendHour, 22, 'standard stipend hour');
+  assertEqual(standardPlan.spiritGrowthHour, 22, 'standard spirit growth hour');
+  assertEqual(standardPlan.snapshotHour, 24, 'snapshot hour');
+  assertEqual(getSeasonSimExpectedActionsPerPlayer('low'), 9, 'low expected actions per player');
+  assertEqual(getSeasonSimExpectedActionsPerPlayer('standard'), 11, 'standard expected actions per player');
+  assertEqual(getSeasonSimExpectedActionsPerPlayer('high'), 12, 'high expected actions per player');
+  assertEqual(getSeasonSimExpectedActionCount(players), 96, 'expected total actions');
   assertEqual(buildSeasonSimProgress(28, 0).progressPercent, 0, 'season progress before day 1');
   assertEqual(buildSeasonSimProgress(28, 14).progressPercent, 50, 'season progress mid season');
   assertEqual(buildSeasonSimProgress(28, 28).remainingDays, 0, 'season progress after day 28');
@@ -63,11 +69,19 @@ function main(): void {
 
   console.log(JSON.stringify({
     ok: true,
-    plan,
+    plans: {
+      low: lowPlan,
+      standard: standardPlan,
+      high: highPlan,
+    },
     expected: {
       players: players.length,
-      actionsPerPlayer: getSeasonSimExpectedActionsPerPlayer(),
-      totalActions: getSeasonSimExpectedActionCount(players.length),
+      actionsByProfile: {
+        low: getSeasonSimExpectedActionsPerPlayer('low'),
+        standard: getSeasonSimExpectedActionsPerPlayer('standard'),
+        high: getSeasonSimExpectedActionsPerPlayer('high'),
+      },
+      totalActions: getSeasonSimExpectedActionCount(players),
     },
     assignments,
   }, null, 2));

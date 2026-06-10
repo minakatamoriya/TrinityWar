@@ -459,8 +459,9 @@ export class SocialService {
     };
   }
 
-  async waterField(playerId: string, request: ClientSocialWaterFieldRequest): Promise<ClientSocialAssistResponse> {
+  async waterField(playerId: string, request: ClientSocialWaterFieldRequest, options: { now?: Date } = {}): Promise<ClientSocialAssistResponse> {
     const result = await this.prisma.transaction(async (client) => {
+      const now = options.now ?? new Date();
       await this.assertPlayerExists(client, playerId);
       await this.assertPlayerExists(client, request.targetPlayerId);
 
@@ -468,14 +469,14 @@ export class SocialService {
         throw this.invalidRequest('Cannot assist your own field.');
       }
       await this.assertActiveFriendRelation(client, playerId, request.targetPlayerId);
-      await this.fieldLifecycleService.settlePlayerFields(client, request.targetPlayerId);
+      await this.fieldLifecycleService.settlePlayerFields(client, request.targetPlayerId, now);
 
-      const dateKey = getLocalDateKey();
+      const dateKey = getLocalDateKey(now);
       const wateredField = await this.applyWaterFieldAssist(client, {
         helperPlayerId: playerId,
         targetPlayerId: request.targetPlayerId,
         fieldSlotId: request.fieldSlotId,
-        now: new Date(),
+        now,
       });
 
       const assist = await client.playerAssistRecord.create({
@@ -486,6 +487,7 @@ export class SocialService {
           targetEntityType: 'field_slot',
           targetEntityId: wateredField.fieldSlotId,
           effectValue: wateredField.shortenedSeconds,
+          createdAt: now,
           intimacyGain: await this.calculateDailyFriendIntimacyGain(client, {
             playerId,
             targetPlayerId: request.targetPlayerId,
@@ -558,7 +560,9 @@ export class SocialService {
   async visitFriendFields(
     playerId: string,
     request: ClientSocialHarvestFieldPreviewRequest,
+    options: { now?: Date } = {},
   ): Promise<ClientSocialFriendFieldVisitResponse> {
+    const now = options.now ?? new Date();
     await this.assertPlayerExists(this.prisma.db, playerId);
     const target = await this.assertPlayerExists(this.prisma.db, request.targetPlayerId);
 
@@ -566,7 +570,7 @@ export class SocialService {
       throw this.invalidRequest('Cannot visit your own field through friend assist.');
     }
     await this.assertActiveFriendRelation(this.prisma.db, playerId, request.targetPlayerId);
-    await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, request.targetPlayerId);
+    await this.fieldLifecycleService.settlePlayerFields(this.prisma.db, request.targetPlayerId, now);
 
     const fields = await this.prisma.db.playerFieldSlot.findMany({
       where: { playerId: request.targetPlayerId },
@@ -579,7 +583,7 @@ export class SocialService {
     return {
       app: APP_NAME,
       friend: this.mapPlayer(target),
-      fields: fields.map((field) => this.mapFriendVisitField(field, new Date(), wateredFieldIds.has(field.id), harvestedFieldIds.has(field.id))),
+      fields: fields.map((field) => this.mapFriendVisitField(field, now, wateredFieldIds.has(field.id), harvestedFieldIds.has(field.id))),
       ruleText: '一键助力会自动处理当前可助力田地：成长中浇水，成熟后采摘；枯萎田暂时不能助力，采摘不影响好友收成。',
     };
   }
@@ -607,8 +611,9 @@ export class SocialService {
     };
   }
 
-  async harvestField(playerId: string, request: ClientSocialHarvestFieldRequest): Promise<ClientSocialAssistResponse> {
+  async harvestField(playerId: string, request: ClientSocialHarvestFieldRequest, options: { now?: Date } = {}): Promise<ClientSocialAssistResponse> {
     const result = await this.prisma.transaction(async (client) => {
+      const now = options.now ?? new Date();
       const helper = await this.assertPlayerExists(client, playerId);
       const target = await this.assertPlayerExists(client, request.targetPlayerId);
 
@@ -616,9 +621,9 @@ export class SocialService {
         throw this.invalidRequest('Cannot harvest your own field through friend assist.');
       }
       await this.assertActiveFriendRelation(client, playerId, request.targetPlayerId);
-      await this.fieldLifecycleService.settlePlayerFields(client, request.targetPlayerId);
+      await this.fieldLifecycleService.settlePlayerFields(client, request.targetPlayerId, now);
 
-      const dateKey = getLocalDateKey();
+      const dateKey = getLocalDateKey(now);
 
       const harvestedField = await this.resolveHarvestableField(client, request.targetPlayerId, request.fieldSlotId);
       if (!harvestedField) {
@@ -666,6 +671,7 @@ export class SocialService {
           targetEntityType: 'field_slot',
           targetEntityId: harvestResult.fieldSlotId,
           effectValue: harvestResult.rewardGold,
+          createdAt: now,
           intimacyGain: await this.calculateDailyFriendIntimacyGain(client, {
             playerId,
             targetPlayerId: request.targetPlayerId,

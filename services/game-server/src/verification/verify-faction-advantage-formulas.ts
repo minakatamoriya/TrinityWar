@@ -6,6 +6,7 @@ import {
   getFactionFarmMatureYieldMultiplier,
   getFactionFarmCollectWindowSeconds,
   getFactionSpiritFeedDurationSeconds,
+  runWithFactionAdvantageRuleSet,
 } from '../lib/faction-advantage-formulas.js';
 
 function main(): void {
@@ -26,6 +27,15 @@ function main(): void {
   assert.equal(getFactionBattleAttackMultiplier('human'), 1);
   assert.equal(applyFactionBattlePostRecovery(40, 100, 'demon'), 52);
   assert.equal(applyFactionBattlePostRecovery(40, 100, 'human'), 40);
+
+  runWithFactionAdvantageRuleSet('none', () => {
+    assert.equal(getFactionFarmMatureYieldMultiplier('human'), 1);
+    assert.equal(getFactionFarmCollectWindowSeconds(1800, 600, 'human'), 2400);
+    assert.equal(applyFactionSpiritPassiveExpBonus(5000, 'immortal'), 5000);
+    assert.equal(getFactionSpiritFeedDurationSeconds(2 * 60 * 60, 'immortal'), 7200);
+    assert.equal(getFactionBattleAttackMultiplier('demon'), 1);
+    assert.equal(applyFactionBattlePostRecovery(40, 100, 'demon'), 40);
+  });
 
   console.log('verify:faction-advantages passed');
 }

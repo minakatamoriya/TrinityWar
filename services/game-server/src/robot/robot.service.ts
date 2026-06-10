@@ -14,18 +14,19 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { RaidTargetService } from '../raid/raid-target.service.js';
 import { SocialService } from '../social/social.service.js';
 import { SpiritService } from '../spirit/spirit.service.js';
+import { runWithFactionAdvantageRuleSet, type FactionAdvantageRuleSet } from '../lib/faction-advantage-formulas.js';
 import { createSeasonSimClock } from './season-sim-clock.js';
 import {
   SEASON_SIM_DEFAULT_ACTION_DELAY_MS,
   SEASON_SIM_DEFAULT_START_AT,
   SEASON_SIM_DEFAULT_TOTAL_DAYS,
-  SEASON_SIM_FARM_CYCLE_HOURS,
-  SEASON_SIM_FARM_CYCLES_PER_DAY,
-  SEASON_SIM_RAIDS_PER_DAY,
+  SEASON_SIM_ACTIVITY_PROFILES,
+  type SeasonSimActivityProfileKey,
   buildSeasonSimProgress,
   evaluateRobotLoopStartBoundary,
   evaluateSeasonSimStartBoundary,
   findSeasonSimRaidTarget,
+  getSeasonSimActivityProfile,
   getSeasonSimExpectedActionsPerPlayer,
 } from './season-sim-plan.js';
 
@@ -41,6 +42,7 @@ interface RobotSpec {
   role: RobotRole;
   nickname: string;
   factionCode: FactionCode;
+  activityProfileKey?: SeasonSimActivityProfileKey;
 }
 
 interface RobotActionResult {
@@ -89,6 +91,7 @@ interface SeasonSimSessionState {
   totalDays: number;
   intervalSeconds: number;
   actionDelayMs: number;
+  factionRuleSet: FactionAdvantageRuleSet;
   currentDayIndex: number;
   players: SeasonSimPlayerState[];
   startedAt: string;
@@ -104,6 +107,13 @@ interface SeasonSimSessionState {
   totalBlockedActionCount: number;
 }
 
+type SeasonSimDayEvent =
+  | { kind: 'social'; hour: number; order: number; profileKey: SeasonSimActivityProfileKey; socialRound: number; players: SeasonSimPlayerState[] }
+  | { kind: 'farm'; hour: number; order: number; profileKey: SeasonSimActivityProfileKey; farmVisit: number; players: SeasonSimPlayerState[] }
+  | { kind: 'stipend'; hour: number; order: number; profileKey: SeasonSimActivityProfileKey; players: SeasonSimPlayerState[] }
+  | { kind: 'spirit'; hour: number; order: number; profileKey: SeasonSimActivityProfileKey; players: SeasonSimPlayerState[] }
+  | { kind: 'raid'; hour: number; order: number; profileKey: SeasonSimActivityProfileKey; raidRound: number; players: SeasonSimPlayerState[] };
+
 const ROBOT_SPECS: RobotSpec[] = [
   { robotKey: 'robot-farmer-001', role: 'farmer', nickname: 'Robot Farmer 01', factionCode: 'human' },
   { robotKey: 'robot-spirit-001', role: 'spirit', nickname: 'Robot Spirit 01', factionCode: 'immortal' },
@@ -117,15 +127,15 @@ const DAILY_ROBOT_SPECS: RobotSpec[] = [
 ];
 
 const PLAYER_SIM_SPECS: RobotSpec[] = [
-  { robotKey: 'sim-human-001', role: 'sim', nickname: '人界勤奋玩家001', factionCode: 'human' },
-  { robotKey: 'sim-human-002', role: 'sim', nickname: '人界勤奋玩家002', factionCode: 'human' },
-  { robotKey: 'sim-human-003', role: 'sim', nickname: '人界勤奋玩家003', factionCode: 'human' },
-  { robotKey: 'sim-immortal-001', role: 'sim', nickname: '仙界勤奋玩家001', factionCode: 'immortal' },
-  { robotKey: 'sim-immortal-002', role: 'sim', nickname: '仙界勤奋玩家002', factionCode: 'immortal' },
-  { robotKey: 'sim-immortal-003', role: 'sim', nickname: '仙界勤奋玩家003', factionCode: 'immortal' },
-  { robotKey: 'sim-demon-001', role: 'sim', nickname: '魔界勤奋玩家001', factionCode: 'demon' },
-  { robotKey: 'sim-demon-002', role: 'sim', nickname: '魔界勤奋玩家002', factionCode: 'demon' },
-  { robotKey: 'sim-demon-003', role: 'sim', nickname: '魔界勤奋玩家003', factionCode: 'demon' },
+  { robotKey: 'sim-human-001', role: 'sim', nickname: '人界低活跃玩家001', factionCode: 'human', activityProfileKey: 'low' },
+  { robotKey: 'sim-human-002', role: 'sim', nickname: '人界标准活跃玩家002', factionCode: 'human', activityProfileKey: 'standard' },
+  { robotKey: 'sim-human-003', role: 'sim', nickname: '人界高活跃玩家003', factionCode: 'human', activityProfileKey: 'high' },
+  { robotKey: 'sim-immortal-001', role: 'sim', nickname: '仙界低活跃玩家001', factionCode: 'immortal', activityProfileKey: 'low' },
+  { robotKey: 'sim-immortal-002', role: 'sim', nickname: '仙界标准活跃玩家002', factionCode: 'immortal', activityProfileKey: 'standard' },
+  { robotKey: 'sim-immortal-003', role: 'sim', nickname: '仙界高活跃玩家003', factionCode: 'immortal', activityProfileKey: 'high' },
+  { robotKey: 'sim-demon-001', role: 'sim', nickname: '魔界低活跃玩家001', factionCode: 'demon', activityProfileKey: 'low' },
+  { robotKey: 'sim-demon-002', role: 'sim', nickname: '魔界标准活跃玩家002', factionCode: 'demon', activityProfileKey: 'standard' },
+  { robotKey: 'sim-demon-003', role: 'sim', nickname: '魔界高活跃玩家003', factionCode: 'demon', activityProfileKey: 'high' },
 ];
 
 const ROBOT_SPEC_BY_KEY = new Map(
@@ -423,6 +433,7 @@ export class RobotService implements OnApplicationBootstrap {
       intervalSeconds: 0,
       actionDelayMs: payload.actionDelayMs,
       startAt: payload.startAt,
+      factionRuleSet: payload.factionRuleSet,
     });
   }
   private async runSeasonSimDay(
@@ -450,139 +461,193 @@ export class RobotService implements OnApplicationBootstrap {
 
     assertActive();
     const dayDateKey = clock.dateKey();
-    await this.settleSeasonSimPlayers(players, clock.now());
+    const dayStart = clock.now();
+    await this.settleSeasonSimPlayers(players, dayStart);
     assertActive();
 
-    for (let cycle = 1; cycle <= SEASON_SIM_FARM_CYCLES_PER_DAY; cycle += 1) {
+    const events = buildSeasonSimDayEvents(players);
+    for (const event of events) {
       assertActive();
-      const now = clock.now();
-      const statuses = await Promise.all(players.map(async (player) => {
-        assertActive();
-        return this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-farm-cycle-${cycle}`, async () => {
-          const result = await this.runSimFarmCycle(player.playerId, now);
-          return {
-            actionName: 'season-farm-cycle',
-            resultSummary: {
-              ...result.resultSummary,
-              dayIndex,
-              cycle,
-              simulatedAt: now.toISOString(),
-            },
-          };
+      const now = getSeasonSimDayHour(dayStart, event.hour);
+      if (event.kind === 'social') {
+        const socialStatuses = await this.runSeasonSimFriendAssistRound(runId, event.players, players, {
+          dayIndex,
+          socialRound: event.socialRound,
+          now,
+          dateKey: dayDateKey,
+          assertActive,
         });
-      }));
-      statuses.forEach(countStatus);
-      await delay(actionDelayMs);
-      assertActive();
-      if (cycle < SEASON_SIM_FARM_CYCLES_PER_DAY) {
-        clock.advanceHours(SEASON_SIM_FARM_CYCLE_HOURS);
-      }
-    }
-
-    const stipendStatuses = await Promise.all(players.map(async (player) => {
-      assertActive();
-      const now = clock.now();
-      return this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-claim-faction-stipend`, async () => {
-        const result = await this.claimFactionStipendForRobot(player.playerId, now, dayDateKey);
-        player.sources.push(result.sourceSummary);
-        return {
-          actionName: 'claim-faction-stipend',
-          resultSummary: {
-            ...result.resultSummary,
-            dayIndex,
-            simulatedAt: now.toISOString(),
-            dateKey: dayDateKey,
-          },
-        };
-      });
-    }));
-    stipendStatuses.forEach(countStatus);
-    await delay(actionDelayMs);
-    assertActive();
-
-    const spiritStatuses = await Promise.all(players.map(async (player) => {
-      assertActive();
-      const now = clock.now();
-      return this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-spirit-growth`, async () => {
-        const result = await this.runDailySpiritGrowth(player.playerId, player.sources, { blockOnBreakthrough: false, feedWhenPossible: true }, now);
-        return {
-          actionName: result.actionName,
-          resultSummary: {
-            ...result.resultSummary,
-            dayIndex,
-            simulatedAt: now.toISOString(),
-          },
-        };
-      });
-    }));
-    spiritStatuses.forEach(countStatus);
-    await delay(actionDelayMs);
-    assertActive();
-
-    for (let raidRound = 1; raidRound <= SEASON_SIM_RAIDS_PER_DAY; raidRound += 1) {
-      assertActive();
-      const now = clock.now();
-      for (let index = 0; index < players.length; index += 1) {
-        assertActive();
-        const player = players[index];
-        const target = findSeasonSimRaidTarget(players, index, raidRound);
-        if (!target) {
-          countStatus(await this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-raid-${raidRound}`, async () => (
-            this.runSimNoCrossFactionRaidTarget(player.playerId)
-          )));
-          await delay(actionDelayMs);
+        socialStatuses.forEach(countStatus);
+      } else if (event.kind === 'farm') {
+        const statuses = await Promise.all(event.players.map(async (player) => {
           assertActive();
-          continue;
-        }
-
-        countStatus(await this.runLoggedStep(
-          runId,
-          player.spec,
-          player.playerId,
-          `season-day-${dayIndex}-raid-${raidRound}`,
-          async () => {
-            const result = await this.runRaidAgainst(player.playerId, target.playerId, now, { restoreHpBeforeBattle: false });
-            player.sources.push(result.sourceSummary);
+          return this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-farm-cycle-${event.farmVisit}`, async () => {
+            const result = await this.runSimFarmCycle(player.playerId, now);
             return {
-              actionName: 'raid-target',
+              actionName: 'season-farm-cycle',
               resultSummary: {
                 ...result.resultSummary,
                 dayIndex,
-                raidRound,
+                cycle: event.farmVisit,
+                farmVisit: event.farmVisit,
+                activityProfileKey: event.profileKey,
+                activityProfileLabel: getSeasonSimActivityProfile(event.profileKey).label,
                 simulatedAt: now.toISOString(),
-                defenderPlayerId: target.playerId,
-                defenderFactionCode: target.spec.factionCode,
-                defenderRobotKey: target.spec.robotKey,
-                defenderNickname: target.spec.nickname,
               },
             };
-          },
-          classifySeasonSimRaidError,
-        ));
-        await delay(actionDelayMs);
-        assertActive();
+          });
+        }));
+        statuses.forEach(countStatus);
+      } else if (event.kind === 'stipend') {
+        const stipendStatuses = await Promise.all(event.players.map(async (player) => {
+          assertActive();
+          return this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-claim-faction-stipend`, async () => {
+            const result = await this.claimFactionStipendForRobot(player.playerId, now, dayDateKey);
+            player.sources.push(result.sourceSummary);
+            return {
+              actionName: 'claim-faction-stipend',
+              resultSummary: {
+                ...result.resultSummary,
+                dayIndex,
+                activityProfileKey: event.profileKey,
+                activityProfileLabel: getSeasonSimActivityProfile(event.profileKey).label,
+                simulatedAt: now.toISOString(),
+                dateKey: dayDateKey,
+              },
+            };
+          });
+        }));
+        stipendStatuses.forEach(countStatus);
+      } else if (event.kind === 'spirit') {
+        const spiritStatuses = await Promise.all(event.players.map(async (player) => {
+          assertActive();
+          return this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-spirit-growth`, async () => {
+            const result = await this.runDailySpiritGrowth(player.playerId, player.sources, { blockOnBreakthrough: false, feedWhenPossible: true }, now);
+            return {
+              actionName: result.actionName,
+              resultSummary: {
+                ...result.resultSummary,
+                dayIndex,
+                activityProfileKey: event.profileKey,
+                activityProfileLabel: getSeasonSimActivityProfile(event.profileKey).label,
+                simulatedAt: now.toISOString(),
+              },
+            };
+          });
+        }));
+        spiritStatuses.forEach(countStatus);
+      } else if (event.kind === 'raid') {
+        for (const player of event.players) {
+          assertActive();
+          const playerIndex = players.findIndex((item) => item.playerId === player.playerId);
+          const target = findSeasonSimRaidTarget(players, playerIndex, event.raidRound);
+          if (!target) {
+            countStatus(await this.runLoggedStep(runId, player.spec, player.playerId, `season-day-${dayIndex}-raid-${event.raidRound}`, async () => (
+              this.runSimNoCrossFactionRaidTarget(player.playerId)
+            )));
+            await delay(actionDelayMs);
+            assertActive();
+            continue;
+          }
+
+          countStatus(await this.runLoggedStep(
+            runId,
+            player.spec,
+            player.playerId,
+            `season-day-${dayIndex}-raid-${event.raidRound}`,
+            async () => {
+              const result = await this.runRaidAgainst(player.playerId, target.playerId, now, { restoreHpAfterBattle: true });
+              player.sources.push(result.sourceSummary);
+              return {
+                actionName: 'raid-target',
+                resultSummary: {
+                  ...result.resultSummary,
+                  dayIndex,
+                  raidRound: event.raidRound,
+                  activityProfileKey: event.profileKey,
+                  activityProfileLabel: getSeasonSimActivityProfile(event.profileKey).label,
+                  simulatedAt: now.toISOString(),
+                  defenderPlayerId: target.playerId,
+                  defenderFactionCode: target.spec.factionCode,
+                  defenderRobotKey: target.spec.robotKey,
+                  defenderNickname: target.spec.nickname,
+                },
+              };
+            },
+            classifySeasonSimRaidError,
+          ));
+          await delay(actionDelayMs);
+          assertActive();
+        }
       }
-      clock.advanceHours(1);
+      await delay(actionDelayMs);
+      assertActive();
     }
 
     assertActive();
     await this.recordSeasonSimDaySnapshots(runId, players, {
       dayIndex,
-      simulatedAt: clock.now(),
+      simulatedAt: getSeasonSimDayHour(dayStart, 24),
       dateKey: dayDateKey,
     });
+    clock.advanceDays(1);
 
     return {
       successActionCount: successCount,
       failedActionCount: failedCount,
       blockedActionCount: blockedCount,
       dateKey: dayDateKey,
-      simulatedAt: clock.now().toISOString(),
+      simulatedAt: getSeasonSimDayHour(dayStart, 24).toISOString(),
     };
   }
 
   async startDaily3Loop(body: unknown): Promise<Record<string, unknown>> {
     return this.startLoopForMode(DAILY_3_MODE, parseLoopStartPayload(body));
+  }
+
+  private async runSeasonSimFriendAssistRound(
+    runId: string,
+    helpers: Array<{ spec: RobotSpec; playerId: string }>,
+    allPlayers: Array<{ spec: RobotSpec; playerId: string }>,
+    context: {
+      dayIndex: number;
+      socialRound: number;
+      now: Date;
+      dateKey: string;
+      assertActive: () => void;
+    },
+  ): Promise<RobotActionStatus[]> {
+    return Promise.all(helpers.map(async (player) => {
+      context.assertActive();
+      const target = findNextFriendAssistTarget(allPlayers, player.playerId);
+      return this.runLoggedStep(
+        runId,
+        player.spec,
+        player.playerId,
+        `season-day-${context.dayIndex}-friend-field-assist-${context.socialRound}`,
+        async () => {
+          if (!target) {
+            return this.runSimNoFriendAssistTarget(player.playerId);
+          }
+          const result = await this.runFriendFieldAssist(player.playerId, target.playerId, context.now);
+          return {
+            actionName: result.actionName,
+            resultSummary: {
+              ...result.resultSummary,
+              dayIndex: context.dayIndex,
+              socialRound: context.socialRound,
+              activityProfileKey: player.spec.activityProfileKey,
+              activityProfileLabel: getSeasonSimActivityProfile(player.spec.activityProfileKey).label,
+              simulatedAt: context.now.toISOString(),
+              dateKey: context.dateKey,
+              targetRobotKey: target.spec.robotKey,
+              targetFactionCode: target.spec.factionCode,
+              targetNickname: target.spec.nickname,
+            },
+          };
+        },
+      );
+    }));
   }
 
   async startSocial3Loop(body: unknown): Promise<Record<string, unknown>> {
@@ -600,7 +665,7 @@ export class RobotService implements OnApplicationBootstrap {
 
   private async startSeasonSimV1Session(
     runKind: SeasonSimRunKind,
-    payload: { startAt?: Date; totalDays: number; intervalSeconds: number; actionDelayMs: number },
+    payload: { startAt?: Date; totalDays: number; intervalSeconds: number; actionDelayMs: number; factionRuleSet: FactionAdvantageRuleSet },
   ): Promise<Record<string, unknown>> {
     const boundary = evaluateSeasonSimStartBoundary({
       loopRunning: this.loopState.running,
@@ -627,6 +692,7 @@ export class RobotService implements OnApplicationBootstrap {
     const totalDays = payload.totalDays;
     const intervalSeconds = payload.intervalSeconds;
     const actionDelayMs = payload.actionDelayMs;
+    const factionRuleSet = payload.factionRuleSet;
     const startAt = payload.startAt ?? SEASON_SIM_DEFAULT_START_AT;
     const clock = createSeasonSimClock(startAt);
     await this.markInterruptedAutomationJobs();
@@ -661,6 +727,7 @@ export class RobotService implements OnApplicationBootstrap {
         await this.topUpSeasonSimSpiritBreakthroughMaterials(login.player.id);
         players.push({ spec, playerId: login.player.id, sources: [] });
       }
+      await this.prepareSocialFriendLinks(players, clock.now(), 'robot-season-sim-v1');
     } catch (error) {
       const message = resolveErrorMessage(error);
       await Promise.all([
@@ -694,6 +761,7 @@ export class RobotService implements OnApplicationBootstrap {
       totalDays,
       intervalSeconds,
       actionDelayMs,
+      factionRuleSet,
       currentDayIndex: 0,
       players,
       startedAt: new Date().toISOString(),
@@ -741,6 +809,7 @@ export class RobotService implements OnApplicationBootstrap {
       totalDays: this.seasonSimSession.totalDays,
       intervalSeconds: this.seasonSimSession.intervalSeconds,
       actionDelayMs: this.seasonSimSession.actionDelayMs,
+      factionRuleSet: this.seasonSimSession.factionRuleSet,
       currentDayIndex: this.seasonSimSession.currentDayIndex,
       completedDays: progress.completedDays,
       remainingDays: progress.remainingDays,
@@ -976,13 +1045,16 @@ export class RobotService implements OnApplicationBootstrap {
     try {
       session.nextRunAt = null;
       const dayIndex = session.currentDayIndex + 1;
-      const dayResult = await this.runSeasonSimDay(
-        session.runId,
-        session.clock,
-        session.players,
-        dayIndex,
-        session.actionDelayMs,
-        () => this.assertSeasonSimSessionActive(session),
+      const dayResult = await runWithFactionAdvantageRuleSet(
+        session.factionRuleSet,
+        () => this.runSeasonSimDay(
+          session.runId,
+          session.clock,
+          session.players,
+          dayIndex,
+          session.actionDelayMs,
+          () => this.assertSeasonSimSessionActive(session),
+        ),
       );
       if (this.seasonSimSession !== session) {
         return;
@@ -994,6 +1066,7 @@ export class RobotService implements OnApplicationBootstrap {
         dayIndex,
         dateKey: dayResult.dateKey,
         simulatedAt: dayResult.simulatedAt,
+        factionRuleSet: session.factionRuleSet,
         successActionCount: dayResult.successActionCount,
         failedActionCount: dayResult.failedActionCount,
         blockedActionCount: dayResult.blockedActionCount,
@@ -1216,11 +1289,23 @@ export class RobotService implements OnApplicationBootstrap {
     });
     const latestRun = runs[0] ?? null;
     const latestRunLogWhere = latestRun ? { runId: latestRun.id } : {};
-    const [latestSnapshots, latestRunLogs] = latestRun
+    const [latestSnapshots, latestRunLogs, latestRunRecentLogs] = latestRun
       ? await Promise.all([
         this.prisma.db.robotSimSnapshot.findMany({
           where: { runId: latestRun.id },
           orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.db.robotActionLog.findMany({
+          where: latestRunLogWhere,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            player: {
+              select: {
+                nickname: true,
+                faction: { select: { code: true, name: true } },
+              },
+            },
+          },
         }),
         this.prisma.db.robotActionLog.findMany({
           where: latestRunLogWhere,
@@ -1236,7 +1321,7 @@ export class RobotService implements OnApplicationBootstrap {
           },
         }),
       ])
-      : [[], logs];
+      : [[], logs, logs];
     const latestStats = buildRobotRunStats(latestSnapshots);
     const latestDayReports = buildRobotDayReports(latestRunLogs, latestSnapshots);
     const latestRunIssueGroups = latestRun
@@ -1288,11 +1373,25 @@ export class RobotService implements OnApplicationBootstrap {
     return {
       rule: {
         name: '勤奋玩家赛季模拟 v1',
-        robots: '人界 3 / 仙界 3 / 魔界 3，共 9 名勤奋玩家机器人',
+        robots: '人界 3 / 仙界 3 / 魔界 3，共 9 名机器人；每个阵营各含低活跃、标准活跃、高活跃 1 名。',
         clock: `模拟时钟按天推进，默认赛季长度为 ${SEASON_SIM_DEFAULT_TOTAL_DAYS} 天；每次开始都会重置 9 个模拟机器人。`,
-        dailyFlow: '每日流程：收田 -> 农田循环 -> 领取阵营俸禄 -> 喂养/成长灵宠 -> 跨阵营掠夺。',
+        dailyFlow: '每日流程按活跃度档位执行：上线时收种；首次/末次上线做好友互助；末次上线领取俸禄、养宠并跨阵营掠夺。',
+        activityProfiles: buildSeasonSimActivityProfileSummary(),
+        activityMatrix: PLAYER_SIM_SPECS.map((spec) => {
+          const profile = getSeasonSimActivityProfile(spec.activityProfileKey);
+          return {
+            robotKey: spec.robotKey,
+            nickname: spec.nickname,
+            factionCode: spec.factionCode,
+            factionName: getFactionLabel(spec.factionCode),
+            activityProfileKey: profile.key,
+            activityProfileLabel: profile.label,
+            loginHours: profile.loginHours,
+            expectedActionCount: getSeasonSimExpectedActionsPerPlayer(profile.key),
+          };
+        }),
         raidRelation: '每个机器人每天跨阵营掠夺 3 次；结算直接走真实掠夺服务，防守方金币按业务规则扣减。',
-        factionBuffs: '阵营 BUFF 由既有服务处理：人界种田、仙界灵宠成长、魔界战斗/掠夺。',
+        factionBuffs: '赛季模拟默认不启用阵营优势；需要专项验证时再通过 factionRuleSet=current 开启。',
         dataPolicy: '每个模拟日都会写入金币、灵宠、材料、田地、成功、失败、阻塞的快照和动作日志。',
       },
       status: {
@@ -1331,7 +1430,7 @@ export class RobotService implements OnApplicationBootstrap {
         })),
       },
       recentActions: {
-        items: latestRunLogs.map(mapActionLog),
+        items: latestRunRecentLogs.map(mapActionLog),
       },
       recentErrors: {
         items: errors.map(mapActionLog),
@@ -1884,8 +1983,11 @@ export class RobotService implements OnApplicationBootstrap {
     };
   }
 
-  private async prepareSocialFriendLinks(players: Array<{ playerId: string }>): Promise<RobotActionResult> {
-    const now = new Date();
+  private async prepareSocialFriendLinks(
+    players: Array<{ playerId: string }>,
+    now = new Date(),
+    sourceType = 'robot-social-3',
+  ): Promise<RobotActionResult> {
     await this.prisma.db.$transaction(async (client) => {
       for (let index = 0; index < players.length; index += 1) {
         const first = players[index];
@@ -1893,7 +1995,7 @@ export class RobotService implements OnApplicationBootstrap {
         await upsertRobotFriendPair(client, {
           firstPlayerId: first.playerId,
           secondPlayerId: second.playerId,
-          sourceType: 'robot-social-3',
+          sourceType,
           now,
         });
       }
@@ -1908,15 +2010,16 @@ export class RobotService implements OnApplicationBootstrap {
     };
   }
 
-  private async runFriendFieldAssist(helperPlayerId: string, targetPlayerId: string): Promise<RobotActionResult> {
-    const visit = await this.socialService.visitFriendFields(helperPlayerId, { targetPlayerId });
+  private async runFriendFieldAssist(helperPlayerId: string, targetPlayerId: string, now: Date = new Date()): Promise<RobotActionResult> {
+    const visit = await this.socialService.visitFriendFields(helperPlayerId, { targetPlayerId }, { now });
     const harvestField = visit.fields.find((field) => field.canHarvest);
     if (harvestField) {
       const result = await this.socialService.harvestField(helperPlayerId, {
         targetPlayerId,
         fieldSlotId: harvestField.fieldSlotId,
         requestIdempotencyKey: `robot-social-harvest-${helperPlayerId}-${Date.now()}`,
-      });
+      }, { now });
+      const rewardGold = sumRewardQuantity(result.rewards, 'gold');
       return {
         actionName: 'friend-field-assist',
         resultSummary: {
@@ -1924,6 +2027,8 @@ export class RobotService implements OnApplicationBootstrap {
           assistType: result.assist.assistType,
           targetPlayerId,
           fieldSlotId: harvestField.fieldSlotId,
+          rewardGold,
+          intimacyGain: result.intimacyGain ?? 0,
           rewards: result.rewards,
         },
       };
@@ -1935,7 +2040,7 @@ export class RobotService implements OnApplicationBootstrap {
         targetPlayerId,
         fieldSlotId: waterField.fieldSlotId,
         requestIdempotencyKey: `robot-social-water-${helperPlayerId}-${Date.now()}`,
-      });
+      }, { now });
       return {
         actionName: 'friend-field-assist',
         resultSummary: {
@@ -1943,14 +2048,35 @@ export class RobotService implements OnApplicationBootstrap {
           assistType: result.assist.assistType,
           targetPlayerId,
           fieldSlotId: waterField.fieldSlotId,
+          shortenedSeconds: result.field?.shortenedSeconds ?? result.assist.effectValue ?? 0,
+          intimacyGain: result.intimacyGain ?? 0,
         },
       };
     }
 
-    throw new RobotProgressionBlockError('friend has no assistable field right now', {
-      reason: 'no_friend_field_assist_available',
-      targetPlayerId,
-    });
+    return {
+      actionName: 'friend-field-assist',
+      resultSummary: {
+        summary: 'friend has no assistable field right now; skipped social assist.',
+        assistType: 'none',
+        targetPlayerId,
+        reason: 'no_friend_field_assist_available',
+        visitedFieldCount: visit.fields.length,
+        availableFieldCount: visit.fields.filter((field) => field.nextAction).length,
+      },
+    };
+  }
+
+  private async runSimNoFriendAssistTarget(playerId: string): Promise<RobotActionResult> {
+    return {
+      actionName: 'friend-field-assist',
+      resultSummary: {
+        summary: 'no friend assist target available; skipped social assist.',
+        assistType: 'none',
+        playerId,
+        reason: 'no_friend_assist_target',
+      },
+    };
   }
 
   private async claimFactionStipendForRobot(playerId: string, now: Date = new Date(), dateKey?: string): Promise<RobotActionResult & { sourceSummary: string }> {
@@ -1997,7 +2123,7 @@ export class RobotService implements OnApplicationBootstrap {
     playerId: string,
     defenderPlayerId: string,
     now: Date = new Date(),
-    options: { restoreHpBeforeBattle?: boolean } = {},
+    options: { restoreHpBeforeBattle?: boolean; restoreHpAfterBattle?: boolean } = {},
   ): Promise<RobotActionResult & { sourceSummary: string }> {
     if (options.restoreHpBeforeBattle ?? true) {
       await Promise.all([
@@ -2019,6 +2145,12 @@ export class RobotService implements OnApplicationBootstrap {
       skipQueue: true,
       now,
     });
+    if (options.restoreHpAfterBattle ?? false) {
+      await Promise.all([
+        this.restoreMainSpiritHp(playerId),
+        this.restoreMainSpiritHp(defenderPlayerId),
+      ]);
+    }
     const sourceSummary = summarizeRaidRewards(result.result.rewards);
     const battleResult = result.result.battleReplay?.result ?? null;
 
@@ -3061,19 +3193,105 @@ function findNextCrossFactionPlayer<T extends { spec: RobotSpec; playerId: strin
   return null;
 }
 
-function parseSeasonSimDayPayload(body: unknown): { startAt?: Date; actionDelayMs: number } {
+function buildSeasonSimDayEvents(players: SeasonSimPlayerState[]): SeasonSimDayEvent[] {
+  const groupedPlayers = new Map<SeasonSimActivityProfileKey, SeasonSimPlayerState[]>();
+  for (const player of players) {
+    const profile = getSeasonSimActivityProfile(player.spec.activityProfileKey);
+    const items = groupedPlayers.get(profile.key) ?? [];
+    items.push(player);
+    groupedPlayers.set(profile.key, items);
+  }
+
+  const events: SeasonSimDayEvent[] = [];
+  for (const [profileKey, profilePlayers] of groupedPlayers) {
+    const profile = getSeasonSimActivityProfile(profileKey);
+    const firstLoginHour = profile.loginHours[0] ?? 0;
+    const lastLoginHour = profile.loginHours[profile.loginHours.length - 1] ?? firstLoginHour;
+    profile.socialAssistHours.forEach((hour, index) => {
+      events.push({
+        kind: 'social',
+        hour,
+        order: hour === firstLoginHour && index === 0 ? 10 : 45,
+        profileKey,
+        socialRound: index + 1,
+        players: profilePlayers,
+      });
+    });
+    profile.loginHours.forEach((hour, index) => {
+      events.push({
+        kind: 'farm',
+        hour,
+        order: 20,
+        profileKey,
+        farmVisit: index + 1,
+        players: profilePlayers,
+      });
+    });
+    events.push({ kind: 'stipend', hour: lastLoginHour, order: 30, profileKey, players: profilePlayers });
+    events.push({ kind: 'spirit', hour: lastLoginHour, order: 40, profileKey, players: profilePlayers });
+    for (let raidRound = 1; raidRound <= profile.raidCount; raidRound += 1) {
+      events.push({
+        kind: 'raid',
+        hour: lastLoginHour,
+        order: 50 + raidRound,
+        profileKey,
+        raidRound,
+        players: profilePlayers,
+      });
+    }
+  }
+
+  return events.sort((left, right) => (
+    left.hour - right.hour
+    || left.order - right.order
+    || left.profileKey.localeCompare(right.profileKey)
+  ));
+}
+
+function getSeasonSimDayHour(dayStart: Date, hour: number): Date {
+  return new Date(dayStart.getTime() + Math.max(Math.floor(hour), 0) * 60 * 60 * 1000);
+}
+
+function findNextFriendAssistTarget<T extends { playerId: string }>(players: T[], currentPlayerId: string): T | null {
+  const currentIndex = players.findIndex((player) => player.playerId === currentPlayerId);
+  const current = players[currentIndex];
+  if (!current || players.length <= 1) {
+    return null;
+  }
+
+  for (let offset = 1; offset < players.length; offset += 1) {
+    const candidate = players[(currentIndex + offset) % players.length];
+    if (candidate && candidate.playerId !== current.playerId) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function sumRewardQuantity(rewards: Array<{ kind?: unknown; quantity?: unknown }> | undefined, kind: string): number {
+  if (!Array.isArray(rewards)) {
+    return 0;
+  }
+  return rewards.reduce((sum, reward) => (
+    reward.kind === kind ? sum + Math.max(Number(reward.quantity ?? 0), 0) : sum
+  ), 0);
+}
+
+function parseSeasonSimDayPayload(body: unknown): { startAt?: Date; actionDelayMs: number; factionRuleSet: FactionAdvantageRuleSet } {
   const record = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
   const startAtText = typeof record.startAt === 'string' ? record.startAt.trim() : '';
   const actionDelayMs = parseBoundedInteger(record.actionDelayMs, SEASON_SIM_DEFAULT_ACTION_DELAY_MS, 0, 5000);
+  const factionRuleSet = parseFactionAdvantageRuleSet(record.factionRuleSet);
   if (!startAtText) {
-    return { actionDelayMs };
+    return { actionDelayMs, factionRuleSet };
   }
 
   const startAt = new Date(startAtText);
-  return Number.isNaN(startAt.getTime()) ? { actionDelayMs } : { startAt, actionDelayMs };
+  return Number.isNaN(startAt.getTime()) ? { actionDelayMs, factionRuleSet } : { startAt, actionDelayMs, factionRuleSet };
 }
 
-function parseSeasonSimLoopPayload(body: unknown): { startAt?: Date; totalDays: number; intervalSeconds: number; actionDelayMs: number } {
+function parseSeasonSimLoopPayload(body: unknown): { startAt?: Date; totalDays: number; intervalSeconds: number; actionDelayMs: number; factionRuleSet: FactionAdvantageRuleSet } {
   const record = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
   const startAtText = typeof record.startAt === 'string' ? record.startAt.trim() : '';
   const startAt = startAtText ? new Date(startAtText) : undefined;
@@ -3083,7 +3301,12 @@ function parseSeasonSimLoopPayload(body: unknown): { startAt?: Date; totalDays: 
     totalDays: parseBoundedInteger(record.totalDays ?? record.maxRounds, SEASON_SIM_DEFAULT_TOTAL_DAYS, 1, 365),
     intervalSeconds: parseBoundedInteger(record.intervalSeconds, 1, 0, 3600),
     actionDelayMs: parseBoundedInteger(record.actionDelayMs, 0, 0, 5000),
+    factionRuleSet: parseFactionAdvantageRuleSet(record.factionRuleSet),
   };
+}
+
+function parseFactionAdvantageRuleSet(value: unknown): FactionAdvantageRuleSet {
+  return value === 'current' ? 'current' : 'none';
 }
 
 function summarizeSeasonSimResourceDeltas(logs: Array<{ actionName: string; status: string; resultSummaryJson: Prisma.JsonValue | null }>): {
@@ -3098,6 +3321,12 @@ function summarizeSeasonSimResourceDeltas(logs: Array<{ actionName: string; stat
   raidWinCount: number;
   raidLossCount: number;
   raidDrawCount: number;
+  socialHarvestCount: number;
+  socialWaterCount: number;
+  socialNoopCount: number;
+  socialGoldIncome: number;
+  socialShortenedSeconds: number;
+  socialIntimacyGain: number;
   feedCount: number;
 } {
   const summary = {
@@ -3112,6 +3341,12 @@ function summarizeSeasonSimResourceDeltas(logs: Array<{ actionName: string; stat
     raidWinCount: 0,
     raidLossCount: 0,
     raidDrawCount: 0,
+    socialHarvestCount: 0,
+    socialWaterCount: 0,
+    socialNoopCount: 0,
+    socialGoldIncome: 0,
+    socialShortenedSeconds: 0,
+    socialIntimacyGain: 0,
     feedCount: 0,
   };
 
@@ -3151,6 +3386,19 @@ function summarizeSeasonSimResourceDeltas(logs: Array<{ actionName: string; stat
         if (kind === 'rare-soul') summary.stipendRareSoul += quantity;
         if (kind === 'legendary-soul') summary.stipendLegendarySoul += quantity;
       }
+    }
+    if (log.actionName.includes('friend-field-assist')) {
+      const assistType = String(result.assistType ?? '');
+      if (assistType === 'harvest_field') {
+        summary.socialHarvestCount += 1;
+        summary.socialGoldIncome += Math.max(Number(result.rewardGold ?? 0), 0);
+      } else if (assistType === 'water_field') {
+        summary.socialWaterCount += 1;
+        summary.socialShortenedSeconds += Math.max(Number(result.shortenedSeconds ?? 0), 0);
+      } else {
+        summary.socialNoopCount += 1;
+      }
+      summary.socialIntimacyGain += Math.max(Number(result.intimacyGain ?? 0), 0);
     }
     if (log.actionName.includes('spirit-growth') || log.actionName.includes('feed-spirit')) {
       if (String(result.summary ?? '').includes('加速') || String(result.summary ?? '').toLowerCase().includes('buff')) {
@@ -3492,6 +3740,12 @@ function createEmptyDayMetrics(): {
   stipendRareSoul: number;
   stipendLegendarySoul: number;
   feedCount: number;
+  socialHarvestCount: number;
+  socialWaterCount: number;
+  socialNoopCount: number;
+  socialGoldIncome: number;
+  socialShortenedSeconds: number;
+  socialIntimacyGain: number;
   raidCount: number;
   raidWinCount: number;
   raidLossCount: number;
@@ -3511,6 +3765,12 @@ function createEmptyDayMetrics(): {
     stipendRareSoul: 0,
     stipendLegendarySoul: 0,
     feedCount: 0,
+    socialHarvestCount: 0,
+    socialWaterCount: 0,
+    socialNoopCount: 0,
+    socialGoldIncome: 0,
+    socialShortenedSeconds: 0,
+    socialIntimacyGain: 0,
     raidCount: 0,
     raidWinCount: 0,
     raidLossCount: 0,
@@ -3545,18 +3805,26 @@ function createEmptyPlayerDayMetrics(playerId: string, robotKey: string, faction
   nickname: string;
   factionCode: string;
   factionName: string;
+  activityProfileKey: string;
+  activityProfileLabel: string;
+  expectedActionCount: number;
   actionCount: number;
   actions: Record<string, number>;
   issues: Array<Record<string, unknown>>;
   endState: Record<string, unknown> | null;
 } {
   const factionCode = String(factionCodeValue ?? ROBOT_SPEC_BY_KEY.get(robotKey)?.factionCode ?? 'unknown');
+  const spec = ROBOT_SPEC_BY_KEY.get(robotKey);
+  const profile = getSeasonSimActivityProfile(spec?.activityProfileKey);
   return {
     playerId,
     robotKey,
-    nickname: ROBOT_SPEC_BY_KEY.get(robotKey)?.nickname ?? robotKey,
+    nickname: spec?.nickname ?? robotKey,
     factionCode,
     factionName: getFactionLabel(factionCode) ?? '未知阵营',
+    activityProfileKey: profile.key,
+    activityProfileLabel: profile.label,
+    expectedActionCount: getSeasonSimExpectedActionsPerPlayer(profile.key),
     actionCount: 0,
     actions: {},
     issues: [],
@@ -3594,6 +3862,21 @@ function applyDayActionMetrics(
   if (actionName === 'feed-spirit') {
     add('feedCount', 1);
   }
+  if (actionName === 'friend-field-assist') {
+    const assistType = String(result.assistType ?? '');
+    if (assistType === 'harvest_field') {
+      const rewardGold = Math.max(Number(result.rewardGold ?? 0), 0);
+      add('socialHarvestCount', 1);
+      add('socialGoldIncome', rewardGold);
+      add('netGoldDelta', rewardGold);
+    } else if (assistType === 'water_field') {
+      add('socialWaterCount', 1);
+      add('socialShortenedSeconds', Math.max(Number(result.shortenedSeconds ?? 0), 0));
+    } else {
+      add('socialNoopCount', 1);
+    }
+    add('socialIntimacyGain', Math.max(Number(result.intimacyGain ?? 0), 0));
+  }
   if (actionName === 'raid-target') {
     const gain = Math.max(Number(result.attackerGainGold ?? result.goldLoot ?? 0), 0);
     const defenderLoss = Math.max(Number(result.defenderLostGold ?? result.goldLoot ?? 0), 0);
@@ -3622,13 +3905,13 @@ function applyDayActionMetrics(
 function buildDayReportValidation(report: ReturnType<typeof createEmptyDayReport>): Record<string, unknown> {
   const issues: Array<Record<string, unknown>> = [];
   const expectedPlayers = PLAYER_SIM_SPECS.length;
-  const expectedActionCount = getSeasonSimExpectedActionsPerPlayer();
+  const expectedActionCount = PLAYER_SIM_SPECS.reduce((sum, spec) => sum + getSeasonSimExpectedActionsPerPlayer(spec.activityProfileKey), 0);
   if (report.snapshotCount !== expectedPlayers) {
     issues.push({ code: 'SNAPSHOT_COUNT_MISMATCH', message: `快照数量 ${report.snapshotCount} / ${expectedPlayers}` });
   }
   for (const player of Object.values(report.playersById)) {
-    if (player.actionCount !== expectedActionCount) {
-      issues.push({ code: 'PLAYER_ACTION_COUNT_MISMATCH', robotKey: player.robotKey, message: `${player.nickname} action count ${player.actionCount} / ${expectedActionCount}` });
+    if (player.actionCount !== player.expectedActionCount) {
+      issues.push({ code: 'PLAYER_ACTION_COUNT_MISMATCH', robotKey: player.robotKey, message: `${player.nickname} action count ${player.actionCount} / ${player.expectedActionCount}` });
     }
     const endState = player.endState ?? {};
     for (const key of ['vaultGold', 'walletGold']) {
@@ -3654,10 +3937,22 @@ function buildDayReportValidation(report: ReturnType<typeof createEmptyDayReport
 }
 
 function getFactionBuffExplanation(factionCode: string): string {
-  if (factionCode === 'human') return 'Human buff: compare farmGoldIncome.';
-  if (factionCode === 'immortal') return 'Immortal buff: compare feedCount and end-of-day spirit state.';
-  if (factionCode === 'demon') return 'Demon buff: compare raidWinCount and attackerGainGold.';
-  return 'Unknown faction: no buff explanation matched.';
+  if (factionCode === 'human') return 'Baseline: faction advantage disabled by default; compare farm output only after enabling it.';
+  if (factionCode === 'immortal') return 'Baseline: faction advantage disabled by default; compare spirit growth only after enabling it.';
+  if (factionCode === 'demon') return 'Baseline: faction advantage disabled by default; compare raid output only after enabling it.';
+  return 'Unknown faction: no faction advantage explanation matched.';
+}
+
+function buildSeasonSimActivityProfileSummary(): Array<Record<string, unknown>> {
+  return Object.values(SEASON_SIM_ACTIVITY_PROFILES).map((profile) => ({
+    key: profile.key,
+    label: profile.label,
+    description: profile.description,
+    loginHours: profile.loginHours,
+    socialAssistHours: profile.socialAssistHours,
+    raidCount: profile.raidCount,
+    expectedActionCount: getSeasonSimExpectedActionsPerPlayer(profile.key),
+  }));
 }
 
 function toPlainRecord(value: Prisma.JsonValue | null): Record<string, unknown> {
@@ -3700,6 +3995,8 @@ function buildRobotRunStats(snapshots: Array<{
   const totals = createEmptyRobotStatsTotals();
   const byFaction: Record<string, ReturnType<typeof createEmptyRobotStatsTotals> & { factionCode: string; factionName: string }> = {};
   const players = latestSnapshots.map((snapshot) => {
+    const spec = ROBOT_SPEC_BY_KEY.get(snapshot.robotKey);
+    const profile = getSeasonSimActivityProfile(spec?.activityProfileKey);
     const totalsForFaction = byFaction[snapshot.factionCode ?? 'unknown'] ?? {
       factionCode: snapshot.factionCode ?? 'unknown',
       factionName: getFactionLabel(snapshot.factionCode) ?? '未知阵营',
@@ -3711,9 +4008,12 @@ function buildRobotRunStats(snapshots: Array<{
 
     return {
       robotKey: snapshot.robotKey,
-      nickname: ROBOT_SPEC_BY_KEY.get(snapshot.robotKey)?.nickname ?? snapshot.robotKey,
+      nickname: spec?.nickname ?? snapshot.robotKey,
       factionCode: snapshot.factionCode,
       factionName: getFactionLabel(snapshot.factionCode) ?? '未知阵营',
+      activityProfileKey: profile.key,
+      activityProfileLabel: profile.label,
+      expectedActionCount: getSeasonSimExpectedActionsPerPlayer(profile.key),
       vaultGold: snapshot.vaultGold,
       walletGold: snapshot.walletGold,
       contributionScore: snapshot.contributionScore,

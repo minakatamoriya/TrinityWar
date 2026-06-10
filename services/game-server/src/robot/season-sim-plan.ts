@@ -1,17 +1,32 @@
 export interface SeasonSimPlayerLike {
   spec: {
     factionCode: string;
+    activityProfileKey?: SeasonSimActivityProfileKey;
   };
   playerId?: string;
 }
 
+export type SeasonSimActivityProfileKey = 'low' | 'standard' | 'high' | 'extreme';
+
+export interface SeasonSimActivityProfile {
+  key: SeasonSimActivityProfileKey;
+  label: string;
+  description: string;
+  loginHours: number[];
+  socialAssistHours: number[];
+  raidCount: number;
+}
+
 export interface SeasonSimDayPlan {
-  farmCycleHours: number[];
+  profileKey: SeasonSimActivityProfileKey;
+  profileLabel: string;
+  farmVisitHours: number[];
   stipendHour: number;
   spiritGrowthHour: number;
+  socialAssistHours: number[];
   raidRoundHours: number[];
   snapshotHour: number;
-  expectedActionsPerPlayer: number;
+  expectedActions: number;
 }
 
 export interface SeasonSimProgress {
@@ -26,35 +41,83 @@ export type RobotLoopBoundary =
   | { ok: true; alreadyRunning: true; reason: 'loop already running' | 'season simulation already running' }
   | { ok: false; blocked: true; reason: 'season simulation is running' | 'another robot loop is running' };
 
-export const SEASON_SIM_FARM_CYCLES_PER_DAY = 8;
-export const SEASON_SIM_FARM_CYCLE_HOURS = 3;
+export const SEASON_SIM_SOCIAL_ASSISTS_PER_DAY = 2;
 export const SEASON_SIM_RAIDS_PER_DAY = 3;
 export const SEASON_SIM_DEFAULT_TOTAL_DAYS = 28;
 export const SEASON_SIM_DEFAULT_START_AT = new Date('2026-06-08T00:00:00+08:00');
 export const SEASON_SIM_DEFAULT_ACTION_DELAY_MS = 0;
+export const SEASON_SIM_DEFAULT_ACTIVITY_PROFILE_KEY: SeasonSimActivityProfileKey = 'standard';
 
-export function buildSeasonSimDayPlan(): SeasonSimDayPlan {
-  const farmCycleHours = Array.from({ length: SEASON_SIM_FARM_CYCLES_PER_DAY }, (_, index) => (
-    index * SEASON_SIM_FARM_CYCLE_HOURS
-  ));
-  const lastFarmHour = farmCycleHours[farmCycleHours.length - 1] ?? 0;
+export const SEASON_SIM_ACTIVITY_PROFILES: Record<SeasonSimActivityProfileKey, SeasonSimActivityProfile> = {
+  low: {
+    key: 'low',
+    label: '低活跃',
+    description: '每天 2 次上线，适合普通轻度玩家基线。',
+    loginHours: [9, 21],
+    socialAssistHours: [9, 21],
+    raidCount: SEASON_SIM_RAIDS_PER_DAY,
+  },
+  standard: {
+    key: 'standard',
+    label: '标准活跃',
+    description: '每天 4 次上线，作为真实勤奋玩家主基线。',
+    loginHours: [8, 12, 18, 22],
+    socialAssistHours: [8, 22],
+    raidCount: SEASON_SIM_RAIDS_PER_DAY,
+  },
+  high: {
+    key: 'high',
+    label: '高活跃',
+    description: '每天 5 次上线，观察高频但非准点玩家收益。',
+    loginHours: [7, 11, 15, 19, 22],
+    socialAssistHours: [7, 22],
+    raidCount: SEASON_SIM_RAIDS_PER_DAY,
+  },
+  extreme: {
+    key: 'extreme',
+    label: '极限准点',
+    description: '每天 8 次准点上线，仅用于压力测试。',
+    loginHours: [0, 3, 6, 9, 12, 15, 18, 21],
+    socialAssistHours: [0, 21],
+    raidCount: SEASON_SIM_RAIDS_PER_DAY,
+  },
+};
+
+export function getSeasonSimActivityProfile(key: SeasonSimActivityProfileKey | undefined): SeasonSimActivityProfile {
+  return SEASON_SIM_ACTIVITY_PROFILES[key ?? SEASON_SIM_DEFAULT_ACTIVITY_PROFILE_KEY] ?? SEASON_SIM_ACTIVITY_PROFILES[SEASON_SIM_DEFAULT_ACTIVITY_PROFILE_KEY];
+}
+
+export function buildSeasonSimDayPlan(profileKey: SeasonSimActivityProfileKey = SEASON_SIM_DEFAULT_ACTIVITY_PROFILE_KEY): SeasonSimDayPlan {
+  const profile = getSeasonSimActivityProfile(profileKey);
+  const lastLoginHour = profile.loginHours[profile.loginHours.length - 1] ?? 0;
 
   return {
-    farmCycleHours,
-    stipendHour: lastFarmHour,
-    spiritGrowthHour: lastFarmHour,
-    raidRoundHours: Array.from({ length: SEASON_SIM_RAIDS_PER_DAY }, (_, index) => lastFarmHour + index),
-    snapshotHour: lastFarmHour + SEASON_SIM_RAIDS_PER_DAY,
-    expectedActionsPerPlayer: getSeasonSimExpectedActionsPerPlayer(),
+    profileKey: profile.key,
+    profileLabel: profile.label,
+    farmVisitHours: profile.loginHours,
+    stipendHour: lastLoginHour,
+    spiritGrowthHour: lastLoginHour,
+    socialAssistHours: profile.socialAssistHours,
+    raidRoundHours: Array.from({ length: profile.raidCount }, () => lastLoginHour),
+    snapshotHour: 24,
+    expectedActions: getSeasonSimExpectedActionsForProfile(profile.key),
   };
 }
 
-export function getSeasonSimExpectedActionsPerPlayer(): number {
-  return SEASON_SIM_FARM_CYCLES_PER_DAY + 1 + 1 + SEASON_SIM_RAIDS_PER_DAY;
+export function getSeasonSimExpectedActionsForProfile(profileKey: SeasonSimActivityProfileKey | undefined): number {
+  const profile = getSeasonSimActivityProfile(profileKey);
+  return profile.loginHours.length + 1 + 1 + profile.socialAssistHours.length + profile.raidCount;
 }
 
-export function getSeasonSimExpectedActionCount(playerCount: number): number {
-  return Math.max(Math.floor(playerCount), 0) * getSeasonSimExpectedActionsPerPlayer();
+export function getSeasonSimExpectedActionsPerPlayer(profileKey: SeasonSimActivityProfileKey | undefined = SEASON_SIM_DEFAULT_ACTIVITY_PROFILE_KEY): number {
+  return getSeasonSimExpectedActionsForProfile(profileKey);
+}
+
+export function getSeasonSimExpectedActionCount(players: number | SeasonSimPlayerLike[]): number {
+  if (Array.isArray(players)) {
+    return players.reduce((sum, player) => sum + getSeasonSimExpectedActionsForProfile(player.spec.activityProfileKey), 0);
+  }
+  return Math.max(Math.floor(players), 0) * getSeasonSimExpectedActionsPerPlayer();
 }
 
 export function buildSeasonSimProgress(totalDays: number, currentDayIndex: number): SeasonSimProgress {
@@ -115,6 +178,11 @@ export function findSeasonSimRaidTarget<T extends SeasonSimPlayerLike>(
     return null;
   }
 
+  const raidCount = getSeasonSimActivityProfile(current.spec.activityProfileKey).raidCount;
+  if (raidRound > raidCount) {
+    return null;
+  }
+
   const candidates = players.filter((candidate, index) => (
     index !== currentIndex
     && candidate.playerId !== current.playerId
@@ -132,7 +200,8 @@ export function validateSeasonSimRaidTargets(players: SeasonSimPlayerLike[]): Ar
 
   for (let index = 0; index < players.length; index += 1) {
     const player = players[index];
-    for (let raidRound = 1; raidRound <= SEASON_SIM_RAIDS_PER_DAY; raidRound += 1) {
+    const raidCount = getSeasonSimActivityProfile(player.spec.activityProfileKey).raidCount;
+    for (let raidRound = 1; raidRound <= raidCount; raidRound += 1) {
       const target = findSeasonSimRaidTarget(players, index, raidRound);
       if (!target) {
         issues.push({

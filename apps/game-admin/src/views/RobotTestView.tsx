@@ -102,6 +102,8 @@ export function RobotTestView(props: {
   const consoleRef = useRef<HTMLDivElement | null>(null);
 
   const rule = props.dashboard?.rule ?? {};
+  const activityProfiles = toRecordArray(rule.activityProfiles);
+  const activityMatrix = toRecordArray(rule.activityMatrix);
   const stats = toRecord(props.dashboard?.stats);
   const statTotals = toRecord(stats.totals);
   const factionStats = toRecordArray(stats.byFaction);
@@ -417,6 +419,7 @@ export function RobotTestView(props: {
               {playerStats.map((item) => (
                 <article key={stringValue(item.robotKey, '')}>
                   <strong>{stringValue(item.nickname, item.robotKey ? String(item.robotKey) : '-')}（{stringValue(item.factionName, getFactionLabel(item.factionCode))}）</strong>
+                  <span>活跃度 {stringValue(item.activityProfileLabel, '-')}，预期动作 {stringValue(item.expectedActionCount, '-')} 次/日</span>
                   <span>金库 {stringValue(item.vaultGold, '0')}，灵宠 Lv.{stringValue(item.mainSpiritLevel, '-')}，阶段 {stringValue(item.mainSpiritStage, '-')}</span>
                 </article>
               ))}
@@ -459,6 +462,8 @@ export function RobotTestView(props: {
                 <RuleItem label="种田收入" value={stringValue(selectedDayTotals.farmGoldIncome, '0')} />
                 <RuleItem label="俸禄领取" value={`${stringValue(selectedDayTotals.stipendClaimCount, '0')} 次`} />
                 <RuleItem label="投喂次数" value={stringValue(selectedDayTotals.feedCount, '0')} />
+                <RuleItem label="好友互助" value={`采摘 ${stringValue(selectedDayTotals.socialHarvestCount, '0')} / 浇水 ${stringValue(selectedDayTotals.socialWaterCount, '0')} / 空转 ${stringValue(selectedDayTotals.socialNoopCount, '0')}`} />
+                <RuleItem label="互助收益" value={`${stringValue(selectedDayTotals.socialGoldIncome, '0')} 金币 / ${stringValue(selectedDayTotals.socialShortenedSeconds, '0')} 秒`} />
                 <RuleItem label="掠夺" value={`${stringValue(selectedDayTotals.raidWinCount, '0')} 胜 / ${stringValue(selectedDayTotals.raidCount, '0')} 次`} />
                 <RuleItem label="A 掠夺收入" value={stringValue(selectedDayTotals.attackerGainGold, '0')} />
                 <RuleItem label="B 防守损失" value={stringValue(selectedDayTotals.defenderLostGold, '0')} />
@@ -471,6 +476,7 @@ export function RobotTestView(props: {
                     <strong>{stringValue(item.factionName, getFactionLabel(item.factionCode))}</strong>
                     <span>{stringValue(item.buffExplanation, '-')}</span>
                     <span>种田 {stringValue(item.farmGoldIncome, '0')}，掠夺收入 {stringValue(item.attackerGainGold, '0')}，防守损失 {stringValue(item.defenderLostGold, '0')}</span>
+                    <span>互助采摘 {stringValue(item.socialHarvestCount, '0')}，浇水 {stringValue(item.socialWaterCount, '0')}，收益 {stringValue(item.socialGoldIncome, '0')}</span>
                     <span>灵根 {stringValue(item.stipendSpiritRoot, '0')}，普通/稀有/传说兽魂 {stringValue(item.stipendOrdinarySoul, '0')} / {stringValue(item.stipendRareSoul, '0')} / {stringValue(item.stipendLegendarySoul, '0')}</span>
                   </article>
                 ))}
@@ -480,6 +486,7 @@ export function RobotTestView(props: {
                   <article key={stringValue(item.playerId, '')}>
                     <strong>{stringValue(item.nickname, item.robotKey ? String(item.robotKey) : '-')}（{stringValue(item.factionName, getFactionLabel(item.factionCode))}）</strong>
                     <span>种田 {stringValue(item.farmGoldIncome, '0')}，掠夺 +{stringValue(item.attackerGainGold, '0')} / -{stringValue(item.defenderLostGold, '0')}，净 {stringValue(item.netGoldDelta, '0')}</span>
+                    <span>互助采摘 {stringValue(item.socialHarvestCount, '0')}，浇水 {stringValue(item.socialWaterCount, '0')}，空转 {stringValue(item.socialNoopCount, '0')}</span>
                     <span>动作 {stringValue(item.actionCount, '0')} 次，成功 {stringValue(item.successActionCount, '0')}，卡点 {stringValue(item.blockedActionCount, '0')}，失败 {stringValue(item.failedActionCount, '0')}</span>
                     <span>日末灵宠 Lv.{stringValue(toRecord(item.endState).mainSpiritLevel, '-')}，金库 {stringValue(toRecord(item.endState).vaultGold, '0')}</span>
                   </article>
@@ -690,6 +697,29 @@ export function RobotTestView(props: {
             <RuleItem key={item.key} label={item.label} value={item.value} />
           ))}
         </div>
+        {activityProfiles.length > 0 ? (
+          <div className="robot-day-subgrid">
+            {activityProfiles.map((profile) => (
+              <article key={stringValue(profile.key, '')}>
+                <strong>{stringValue(profile.label, '-')}</strong>
+                <span>{stringValue(profile.description, '-')}</span>
+                <span>上线 {formatHourList(profile.loginHours)}，互助 {formatHourList(profile.socialAssistHours)}</span>
+                <span>掠夺 {stringValue(profile.raidCount, '0')} 次，预期动作 {stringValue(profile.expectedActionCount, '0')} 次/日</span>
+              </article>
+            ))}
+          </div>
+        ) : null}
+        {activityMatrix.length > 0 ? (
+          <div className="robot-player-stats">
+            {activityMatrix.map((item) => (
+              <article key={stringValue(item.robotKey, '')}>
+                <strong>{stringValue(item.nickname, item.robotKey ? String(item.robotKey) : '-')}（{stringValue(item.factionName, getFactionLabel(item.factionCode))}）</strong>
+                <span>活跃度 {stringValue(item.activityProfileLabel, '-')}，上线 {formatHourList(item.loginHours)}</span>
+                <span>预期动作 {stringValue(item.expectedActionCount, '0')} 次/日</span>
+              </article>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className="panel">
@@ -1058,6 +1088,17 @@ function formatDateTime(value: unknown): string {
     second: '2-digit',
     hour12: false,
   }).format(date);
+}
+
+function formatHourList(value: unknown): string {
+  if (!Array.isArray(value)) {
+    return '-';
+  }
+  const hours = value
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item))
+    .map((item) => `${String(Math.floor(item)).padStart(2, '0')}:00`);
+  return hours.length > 0 ? hours.join(' / ') : '-';
 }
 
 function formatTime(value: unknown): string {
