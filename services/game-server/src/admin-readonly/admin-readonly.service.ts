@@ -1816,7 +1816,9 @@ function parseSeedDefinitionPayload(body: unknown, requireAll: boolean): Record<
   copyIntegerField(payload, record, 'matureSeconds', requireAll, 1);
   copyIntegerField(payload, record, 'collectWindowSeconds', requireAll, 0);
   copyIntegerField(payload, record, 'baseYieldGold', requireAll, 0);
-  copyIntegerField(payload, record, 'harvestSeedReturn', requireAll, 0);
+  if (requireAll) {
+    payload.harvestSeedReturn = 0;
+  }
   copyNullableStringField(payload, record, 'strategyNote', requireAll);
   copyNullableStringField(payload, record, 'lore', requireAll);
 

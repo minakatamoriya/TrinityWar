@@ -70,7 +70,6 @@ const fieldLabels: Record<string, string> = {
   matureSeconds: '成熟秒数',
   collectWindowSeconds: '可收窗口秒数',
   baseYieldGold: '基础产金',
-  harvestSeedReturn: '兼容返还',
   strategyNote: '策略说明',
   upgradeCost: '升级消耗',
   cumulativeCost: '累计消耗',

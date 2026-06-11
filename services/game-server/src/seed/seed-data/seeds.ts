@@ -7,13 +7,13 @@ export interface SeedDefinitionSeedData {
   matureSeconds: number;
   collectWindowSeconds: number;
   baseYieldGold: number;
-  harvestSeedReturn: number;
   strategyNote: string;
   lore: string;
 }
 
 const hour = 60 * 60;
 const defaultCollectWindowSeconds = 30 * 60;
+const longCollectWindowSeconds = 24 * hour;
 
 export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
   {
@@ -25,7 +25,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 10,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 50,
-    harvestSeedReturn: 0,
     strategyNote: '新手教程种，十秒完成第一轮收获，用来串起种田、灵宠和首次掠夺。',
     lore: '只在开荒时授予的一枚灵芽，破土极快，适合新人理解第一轮经营。',
   },
@@ -38,7 +37,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 3 * hour,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 200,
-    harvestSeedReturn: 2,
     strategyNote: '标准稳收基准种，适合新玩家理解成熟和枯萎收益。',
     lore: '田野间最常见的灵粮，穗头泛淡青光泽，脱壳后熬粥清香回甘。',
   },
@@ -51,7 +49,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 30 * 60,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 200,
-    harvestSeedReturn: 2,
     strategyNote: '半小时快收种，适合碎片时间上线后迅速完成一轮收益。',
     lore: '稻芒起势极快，晨起沾露便能成势，半个时辰内就能完成一轮收益。',
   },
@@ -60,12 +57,11 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     label: '凝露草',
     rarity: 'common',
     sortOrder: 30,
-    growSeconds: 1.5 * hour + 0.5 * hour,
-    matureSeconds: 2 * hour,
-    collectWindowSeconds: defaultCollectWindowSeconds,
-    baseYieldGold: 140,
-    harvestSeedReturn: 1,
-    strategyNote: '短线抢收种，适合高频上线卡成熟。',
+    growSeconds: 10 * hour,
+    matureSeconds: 10 * hour,
+    collectWindowSeconds: longCollectWindowSeconds,
+    baseYieldGold: 800,
+    strategyNote: '长线安睡种，10 小时成熟，24 小时内不枯萎，适合睡前或上班前规划。',
     lore: '叶尖常凝夜露，晨时如泪珠滚落，有清心明目之效。',
   },
   {
@@ -77,7 +73,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 3 * hour,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 300,
-    harvestSeedReturn: 2,
     strategyNote: '高折损高回报种，高收益波动很强。',
     lore: '花瓣薄如蝉翼，嫣红带紫纹，采摘时指尖会传来短暂刺痛。',
   },
@@ -90,7 +85,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 4.5 * hour,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 220,
-    harvestSeedReturn: 2,
     strategyNote: '低频保值种，错过窗口也不容易血亏。',
     lore: '纯白无瑕，瓣如凝脂，生于清澈浅塘。',
   },
@@ -103,7 +97,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 3.5 * hour,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 230,
-    harvestSeedReturn: 2,
     strategyNote: '稳健中速种，方便不想极端卡点的玩家切换。',
     lore: '竹节映月生辉，夜风吹过时会留下淡淡银影。',
   },
@@ -116,7 +109,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 3.5 * hour,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 360,
-    harvestSeedReturn: 3,
     strategyNote: '高收益种，用来制造“等还是收”的核心博弈。',
     lore: '藤蔓天生细密纹路，如牵机阵法，常被低阶阵法师采作材料。',
   },
@@ -129,7 +121,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 4 * hour,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 480,
-    harvestSeedReturn: 2,
     strategyNote: '回种保值种，服务上线不稳但不想亏的玩家。',
     lore: '草叶卷曲如初春嫩芽，折断后会迅速渗出淡绿汁液。',
   },
@@ -142,7 +133,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 3.5 * hour,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 760,
-    harvestSeedReturn: 3,
     strategyNote: '高成熟收益种，适合高活跃和高风险偏好的玩家。',
     lore: '只在高寒雪山顶的月圆之夜盛开，花瓣冰白带银纹。',
   },
@@ -155,7 +145,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 5 * hour,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 620,
-    harvestSeedReturn: 2,
     strategyNote: '长周期高保值种，适合赛季后段稳定囤种和慢收策略。',
     lore: '松针坚韧如弦，枝干久经风霜仍能蓄住灵气。',
   },
@@ -168,7 +157,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 5.5 * hour,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 880,
-    harvestSeedReturn: 2,
     strategyNote: '后期抽水种，适合作为强回收和高价值诱盗目标。',
     lore: '果壳灰黑，纹理难辨，成熟时会散出浑浊灵雾。',
   },
@@ -181,7 +169,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 4 * hour,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 1200,
-    harvestSeedReturn: 3,
     strategyNote: '高风险斩杀种，高收益与高失败代价都很极端。',
     lore: '细丝似藤非藤，传说能斩断心魔，也会牵出旧念。',
   },
@@ -194,7 +181,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 6 * hour,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 1200,
-    harvestSeedReturn: 2,
     strategyNote: '长周期隐性暴利种，适合赛季后段高投入慢兑现。',
     lore: '叶影如水面倒映，近看却空无一物。',
   },
@@ -207,7 +193,6 @@ export const SEED_DEFINITION_SEEDS: SeedDefinitionSeedData[] = [
     matureSeconds: 5 * hour,
     collectWindowSeconds: defaultCollectWindowSeconds,
     baseYieldGold: 1600,
-    harvestSeedReturn: 3,
     strategyNote: '极限成熟回种种，负责把终局上线卡点收益推到天花板。',
     lore: '通体漆黑，夜里发出微弱青光，能照亮脚下三尺的地气。',
   },

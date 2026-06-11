@@ -122,8 +122,8 @@ const SEED_LEVEL_CONFIG = {
   ninglucao: {
     label: '凝露草',
     rarity: 'common',
-    stageGold: { growing: 100, mature: 140, withered: 40 },
-    growthSeconds: 7200,
+    stageGold: { growing: 100, mature: 800, withered: 400 },
+    growthSeconds: 36000,
   },
   suixinhua: {
     label: '碎心花',

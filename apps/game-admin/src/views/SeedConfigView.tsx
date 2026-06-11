@@ -21,7 +21,6 @@ export function SeedConfigView(props: ConfigViewProps): JSX.Element {
           { label: '成长秒', key: 'growSeconds' },
           { label: '成熟秒', key: 'matureSeconds' },
           { label: '基础产金', key: 'baseYieldGold' },
-          { label: '兼容返还', key: 'harvestSeedReturn' },
         ]}
       />
       {props.isEditorOpen ? (

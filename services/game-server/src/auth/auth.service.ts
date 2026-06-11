@@ -756,7 +756,6 @@ async function ensureSeedDefinitionsExist(
         matureSeconds: seed.matureSeconds,
         collectWindowSeconds: seed.collectWindowSeconds,
         baseYieldGold: seed.baseYieldGold,
-        harvestSeedReturn: seed.harvestSeedReturn,
         strategyNote: seed.strategyNote,
         lore: seed.lore,
       },
