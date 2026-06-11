@@ -1335,3 +1335,415 @@
 [server]   address: '127.0.0.1',
 [server]   port: 4000
 [server] }
+[server] 00:58:46 [tsx] rerunning
+c{"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestFactory","msg":"Starting Nest application..."}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AppModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ConfigModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PrismaModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuditModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SeasonModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SystemModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"LoggingModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"IdempotencyModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"TaskConfigModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"CommonModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuthModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PlayerModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ShareAssistModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"NotificationModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SocialModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"RobotModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientReadModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"RaidModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SpiritModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientCommandModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AdminReadonlyModule dependencies initialized"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"AuthController {/api/client/auth}:"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/auth/dev-login, POST} route"}
+[server] {"level":30,"time":1781197128249,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"PlayerController {/api/client}:"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/me, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/profile/farm-board, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/profile/farm-board, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientReadController {/api/client}:"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/bootstrap, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/home-summary, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/season/sign-in, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/season/rewards, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/scene-content, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientCommandController {/api/client/actions}:"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-pending, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-daily-task, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-season-sign-in, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/refresh-raid-targets, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-starter-seeds, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/collect-field, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/start-cultivation, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/recruit-army, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/upgrade-building, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/faction-donate, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/submit-faction-task, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/unlock-plant, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-faction-stipend, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/reset-demo-state, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"NotificationClientController {/api/client/notifications}:"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/notifications, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/notifications/unread-count, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/notifications/:notificationId/read, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/notifications/:notificationId/claim, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/notifications/:notificationId, DELETE} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"NotificationAdminController {/api/admin}:"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/notifications, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/notifications/global, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/notifications, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/notifications, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"RaidController {/api/client}:"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/raid-targets/:targetId, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/raid-targets/:targetId/deep-intel, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/raid-target, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/raid-orders/:orderId/message, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/raid-orders/:orderId/battle-replay, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"SocialController {/api/client/social}:"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/summary, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/feed, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friends, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/following, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/enemies, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/follow, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friend-request, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friend-request/:id/accept, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friend-request/:id/reject, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friend/:targetPlayerId, DELETE} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/assist/water-field, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friends/:targetPlayerId/fields, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friends/:targetPlayerId/harvest-preview, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/assist/harvest-field, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/team-challenge, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/team-challenge/:id/accept, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/team-challenge/:id/reject, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"SpiritController {/api/client/spirit}:"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/buy-soul, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/upgrade, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/feed, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/breakthrough, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/roll-traits, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/resolve-roll, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/shop/buy, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/shop/ad-reward, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/set-main, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/recover, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/dissolve, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/compose, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ShareAssistController {/api}:"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/share-assist/campaigns, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/share-assist/invite-tutorial-complete, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/public/share-assist/campaigns/:id, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/public/share-assist/campaigns/:id/assist, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"AdminReadonlyController {/api/admin}:"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/overview, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/system/status, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/audit-logs, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/dashboard, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/daily-3/automation-config, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/daily-3/automation-config, PATCH} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/social-3/automation-config, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/social-3/automation-config, PATCH} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/player-sim-v1/automation-config, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/player-sim-v1/automation-config, PATCH} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/season-sim-v1/automation-config, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/season-sim-v1/automation-config, PATCH} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/smoke, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/daily-3, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/social-3, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/player-sim-v1, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/season-sim-v1/day, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/daily-3/loop/start, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/social-3/loop/start, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/player-sim-v1/loop/start, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/season-sim-v1/loop/start, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/daily-3/loop/stop, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/season-sim-v1/loop/stop, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/errors, DELETE} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/current, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/:seasonNumber/player-snapshots, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/:seasonNumber/faction-snapshots, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/:seasonNumber/reward-summary, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/:seasonNumber/reward-grants, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/:seasonNumber/rewards/preview, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/:seasonNumber/achievements, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/seeds, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/seeds, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/seeds/:seedId, PATCH} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/seeds/:seedId, DELETE} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/spirits, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/spirits, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/spirits/:spiritId, PATCH} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/spirits/:spiritId, DELETE} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/castle-levels, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/tasks, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/share-assist/campaigns, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/share-assist/records, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/share-assist/invite-relations, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/tasks/:taskGroup/:taskId, PATCH} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/search, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/overview, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/resources/adjust, POST} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/season-state, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/season-history, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/season-rewards, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId, DELETE} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/wallet-logs, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/building-logs, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/field-logs, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/orders, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/raid/orders/:orderId, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"SystemController {/api/health}:"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/health, GET} route"}
+[server] {"level":30,"time":1781197128250,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestApplication","msg":"Nest application successfully started"}
+[server] {"level":30,"time":1781197128251,"pid":27956,"hostname":"DESKTOP-IMD5ASL","name":"game-server","host":"127.0.0.1","port":4000,"msg":"game server started"}
+[server] 01:26:19 [tsx] restarting
+[server] cgame server failed to start Error: listen EADDRINUSE: address already in use 127.0.0.1:4000
+[server]     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+[server]     at listenInCluster (node:net:1965:12)
+[server]     at doListen (node:net:2139:7)
+[server]     at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+[server]   code: 'EADDRINUSE',
+[server]   errno: -4091,
+[server]   syscall: 'listen',
+[server]   address: '127.0.0.1',
+[server]   port: 4000
+[server] }
+[server] 01:28:05 [tsx] rerunning
+[server] cprisma:error 
+[server] Invalid `prisma.playerPlantResearch.upsert()` invocation:
+[server] 
+[server] 
+[server] Error occurred during query execution:
+[server] ConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "42P10", message: "没有匹配ON CONFLICT说明的唯一或者排除约束", severity: "错误", detail: None, column: None, hint: None }), transient: false })
+[server] game server failed to start Error: listen EADDRINUSE: address already in use 127.0.0.1:4000
+[server]     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+[server]     at listenInCluster (node:net:1965:12)
+[server]     at doListen (node:net:2139:7)
+[server]     at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+[server]   code: 'EADDRINUSE',
+[server]   errno: -4091,
+[server]   syscall: 'listen',
+[server]   address: '127.0.0.1',
+[server]   port: 4000
+[server] }
+[server] 01:28:22 [tsx] rerunning
+[server] cgame server failed to start Error: listen EADDRINUSE: address already in use 127.0.0.1:4000
+[server]     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+[server]     at listenInCluster (node:net:1965:12)
+[server]     at doListen (node:net:2139:7)
+[server]     at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+[server]   code: 'EADDRINUSE',
+[server]   errno: -4091,
+[server]   syscall: 'listen',
+[server]   address: '127.0.0.1',
+[server]   port: 4000
+[server] }
+[server] 01:29:08 [tsx] rerunning
+[server] cgame server failed to start Error: listen EADDRINUSE: address already in use 127.0.0.1:4000
+[server]     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+[server]     at listenInCluster (node:net:1965:12)
+[server]     at doListen (node:net:2139:7)
+[server]     at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+[server]   code: 'EADDRINUSE',
+[server]   errno: -4091,
+[server]   syscall: 'listen',
+[server]   address: '127.0.0.1',
+[server]   port: 4000
+[server] }
+[server] 01:43:17 [tsx] rerunning
+c{"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestFactory","msg":"Starting Nest application..."}
+[server] {"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AppModule dependencies initialized"}
+[server] {"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ConfigModule dependencies initialized"}
+[server] {"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PrismaModule dependencies initialized"}
+[server] {"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuditModule dependencies initialized"}
+[server] {"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SeasonModule dependencies initialized"}
+[server] {"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SystemModule dependencies initialized"}
+[server] {"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"LoggingModule dependencies initialized"}
+[server] {"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"IdempotencyModule dependencies initialized"}
+[server] {"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"TaskConfigModule dependencies initialized"}
+[server] {"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"CommonModule dependencies initialized"}
+[server] {"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AuthModule dependencies initialized"}
+[server] {"level":30,"time":1781199799455,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"PlayerModule dependencies initialized"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ShareAssistModule dependencies initialized"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"NotificationModule dependencies initialized"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SocialModule dependencies initialized"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"RobotModule dependencies initialized"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientReadModule dependencies initialized"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"RaidModule dependencies initialized"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"SpiritModule dependencies initialized"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"ClientCommandModule dependencies initialized"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"InstanceLoader","msg":"AdminReadonlyModule dependencies initialized"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"AuthController {/api/client/auth}:"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/auth/dev-login, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"PlayerController {/api/client}:"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/me, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/profile/farm-board, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/profile/farm-board, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientReadController {/api/client}:"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/bootstrap, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/home-summary, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/season/sign-in, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/season/rewards, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/scene-content, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ClientCommandController {/api/client/actions}:"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-pending, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-daily-task, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-season-sign-in, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/refresh-raid-targets, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-starter-seeds, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/collect-field, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/start-cultivation, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/recruit-army, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/upgrade-building, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/faction-donate, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/submit-faction-task, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/unlock-plant, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/claim-faction-stipend, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/reset-demo-state, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"NotificationClientController {/api/client/notifications}:"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/notifications, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/notifications/unread-count, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/notifications/:notificationId/read, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/notifications/:notificationId/claim, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/notifications/:notificationId, DELETE} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"NotificationAdminController {/api/admin}:"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/notifications, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/notifications/global, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/notifications, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/notifications, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"RaidController {/api/client}:"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/raid-targets/:targetId, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/raid-targets/:targetId/deep-intel, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/actions/raid-target, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/raid-orders/:orderId/message, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/raid-orders/:orderId/battle-replay, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"SocialController {/api/client/social}:"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/summary, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/feed, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friends, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/following, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/enemies, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/follow, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friend-request, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friend-request/:id/accept, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friend-request/:id/reject, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friend/:targetPlayerId, DELETE} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/assist/water-field, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friends/:targetPlayerId/fields, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/friends/:targetPlayerId/harvest-preview, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/assist/harvest-field, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/team-challenge, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/team-challenge/:id/accept, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/social/team-challenge/:id/reject, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"SpiritController {/api/client/spirit}:"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/buy-soul, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/upgrade, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/feed, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/breakthrough, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/roll-traits, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/resolve-roll, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/shop/buy, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/shop/ad-reward, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/set-main, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/recover, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/dissolve, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/spirit/compose, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"ShareAssistController {/api}:"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/share-assist/campaigns, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/client/share-assist/invite-tutorial-complete, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/public/share-assist/campaigns/:id, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/public/share-assist/campaigns/:id/assist, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"AdminReadonlyController {/api/admin}:"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/overview, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/system/status, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/audit-logs, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/dashboard, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/daily-3/automation-config, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/daily-3/automation-config, PATCH} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/social-3/automation-config, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/social-3/automation-config, PATCH} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/player-sim-v1/automation-config, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/player-sim-v1/automation-config, PATCH} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/season-sim-v1/automation-config, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/season-sim-v1/automation-config, PATCH} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/smoke, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/daily-3, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/social-3, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/player-sim-v1, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/season-sim-v1/day, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/daily-3/loop/start, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/social-3/loop/start, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/player-sim-v1/loop/start, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/season-sim-v1/loop/start, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/daily-3/loop/stop, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/season-sim-v1/loop/stop, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/robots/errors, DELETE} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/current, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/:seasonNumber/player-snapshots, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/:seasonNumber/faction-snapshots, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/:seasonNumber/reward-summary, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/:seasonNumber/reward-grants, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/:seasonNumber/rewards/preview, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/seasons/:seasonNumber/achievements, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/seeds, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/seeds, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/seeds/:seedId, PATCH} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/seeds/:seedId, DELETE} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/spirits, GET} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/spirits, POST} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/spirits/:spiritId, PATCH} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/spirits/:spiritId, DELETE} route"}
+[server] {"level":30,"time":1781199799456,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/castle-levels, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/tasks, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/share-assist/campaigns, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/share-assist/records, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/share-assist/invite-relations, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/config/tasks/:taskGroup/:taskId, PATCH} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/search, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/overview, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/resources/adjust, POST} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/season-state, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/season-history, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/season-rewards, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId, DELETE} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/wallet-logs, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/building-logs, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/field-logs, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/players/:playerId/orders, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/admin/raid/orders/:orderId, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RoutesResolver","msg":"SystemController {/api/health}:"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"RouterExplorer","msg":"Mapped {/api/health, GET} route"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","context":"NestApplication","msg":"Nest application successfully started"}
+[server] {"level":30,"time":1781199799457,"pid":17020,"hostname":"DESKTOP-IMD5ASL","name":"game-server","host":"127.0.0.1","port":4000,"msg":"game server started"}
+[server] 01:43:34 [tsx] restarting
+[server] cgame server failed to start Error: listen EADDRINUSE: address already in use 127.0.0.1:4000
+[server]     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+[server]     at listenInCluster (node:net:1965:12)
+[server]     at doListen (node:net:2139:7)
+[server]     at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+[server]   code: 'EADDRINUSE',
+[server]   errno: -4091,
+[server]   syscall: 'listen',
+[server]   address: '127.0.0.1',
+[server]   port: 4000
+[server] }
+[server] 01:44:53 [tsx] rerunning
+[server] cgame server failed to start Error: listen EADDRINUSE: address already in use 127.0.0.1:4000
+[server]     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+[server]     at listenInCluster (node:net:1965:12)
+[server]     at doListen (node:net:2139:7)
+[server]     at processTicksAndRejections (node:internal/process/task_queues:83:21) {
+[server]   code: 'EADDRINUSE',
+[server]   errno: -4091,
+[server]   syscall: 'listen',
+[server]   address: '127.0.0.1',
+[server]   port: 4000
+[server] }
