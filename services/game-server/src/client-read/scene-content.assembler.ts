@@ -318,13 +318,13 @@ export class SceneContentAssembler {
         inventory.seedDefinition.sortOrder,
       );
       const baseUnlocked = requirement.harvestRequired <= 0 && requirement.contributionRequired <= 0;
-      const discovered = unlocked || baseUnlocked || inventory.seedDefinition.plantResearch.length > 0 || harvestCount >= Math.max(requirement.harvestRequired, 1);
+      const discovered = unlocked || baseUnlocked || inventory.seedDefinition.plantResearch.length > 0;
       const essenceQuantity = Math.max(inventory.quantity, 0);
-      const canUnlock = discovered
-        && !unlocked
-        && !baseUnlocked
-        && harvestCount >= requirement.harvestRequired
+      const requirementsMet = harvestCount >= requirement.harvestRequired
         && contribution >= requirement.contributionRequired;
+      const canUnlock = !unlocked
+        && !baseUnlocked
+        && requirementsMet;
 
       return {
         plantType: inventory.seedDefinition.seedId,

@@ -71,6 +71,8 @@
   type ClientSocialRelationMutationResponse,
   type ClientSocialSummaryResponse,
   type ClientSocialWaterFieldRequest,
+  type ClientResolveSpiritTraitRollRequest,
+  type ClientRollSpiritTraitsResponse,
   type ClientRollSpiritTraitsRequest,
   type ClientUpgradeBuildingRequest,
   type ClientUpgradeSpiritRequest,
@@ -1775,9 +1777,26 @@ export async function breakthroughSpirit(input: ClientBreakthroughSpiritRequest)
   };
 }
 
-export async function rollSpiritTraits(input: ClientRollSpiritTraitsRequest): Promise<ClientSpiritMutationResponse> {
+export async function rollSpiritTraits(input: ClientRollSpiritTraitsRequest): Promise<ClientRollSpiritTraitsResponse> {
   const idempotencyKey = buildIdempotencyKey('spirit-roll-traits');
-  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/roll-traits`, {
+  const response = await fetchJson<ClientRollSpiritTraitsResponse>(`${CLIENT_API_PREFIX}/spirit/roll-traits`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ ...input, requestIdempotencyKey: idempotencyKey }),
+  });
+
+  return {
+    ...response,
+    spirit: cloneSpiritState(response.spirit),
+  };
+}
+
+export async function resolveSpiritTraitRoll(input: ClientResolveSpiritTraitRollRequest): Promise<ClientSpiritMutationResponse> {
+  const idempotencyKey = buildIdempotencyKey('spirit-resolve-trait-roll');
+  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/resolve-roll`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

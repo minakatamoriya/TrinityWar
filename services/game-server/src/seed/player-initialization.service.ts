@@ -306,6 +306,10 @@ export class PlayerInitializationService {
     now: Date,
     resetExisting: boolean,
   ): Promise<void> {
+    if (resetExisting) {
+      await client.playerPlantResearch.deleteMany({ where: { playerId } });
+    }
+
     for (const seedDefinition of seedDefinitions) {
       const entry = inventory[seedDefinition.seedId] ?? { quantity: 0, unlocked: false };
 
@@ -331,6 +335,23 @@ export class PlayerInitializationService {
           }
           : {},
       });
+
+      if (entry.unlocked) {
+        await client.playerPlantResearch.upsert({
+          where: {
+            playerId_seedDefinitionId: {
+              playerId,
+              seedDefinitionId: seedDefinition.id,
+            },
+          },
+          create: {
+            playerId,
+            seedDefinitionId: seedDefinition.id,
+            discoveredAt: now,
+          },
+          update: {},
+        });
+      }
     }
   }
 

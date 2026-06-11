@@ -1470,13 +1470,13 @@ export class AdminReadonlyService {
       })),
       seedInventory: {
         unlockedSeedIds: player.seedInventory
-          .filter((item) => item.unlockedAt || item.quantity > 0)
+          .filter((item) => item.unlockedAt)
           .map((item) => item.seedDefinition.seedId),
         items: player.seedInventory.map((item) => normalizeDates({
           seedId: item.seedDefinition.seedId,
           label: item.seedDefinition.label,
           sortOrder: item.seedDefinition.sortOrder,
-          unlocked: Boolean(item.unlockedAt || item.quantity > 0),
+          unlocked: Boolean(item.unlockedAt),
           quantity: item.quantity,
           inventoryVersion: item.inventoryVersion,
           unlockedAt: item.unlockedAt,

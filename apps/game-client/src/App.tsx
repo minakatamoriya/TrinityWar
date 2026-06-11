@@ -16,6 +16,7 @@ import type {
   ClientFarmBoardState,
   ClientSpiritElement,
   ClientSpiritRollMode,
+  ClientRollSpiritTraitsResponse,
   ClientSpiritTraitCode,
   ClientSpiritState,
   ClientSeasonRewardsResponse,
@@ -23,7 +24,7 @@ import type {
   HomeSummaryResponse,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, claimFactionStipend, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, recoverSpirit, refreshRaidTargets, resetDemoExperimentState, revealRaidTargetDeepIntel, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, claimFactionStipend, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, recoverSpirit, refreshRaidTargets, resetDemoExperimentState, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import type { SocialRelationFilter, SocialTabKey } from './ui/scenes/SocialScene';
 import type { ShareAssistAudience } from './ui/share/ShareAssistPage';
@@ -1248,13 +1249,14 @@ function App(): JSX.Element {
     slotIndex: number,
     slotVersion: number,
     mode: ClientSpiritRollMode,
-    options: { lockedSlotIndex?: number; targetSlotIndex?: number; targetTraitCode?: ClientSpiritTraitCode } = {},
-  ): Promise<void> => {
+    options: { targetSlotIndex?: number } = {},
+  ): Promise<ClientRollSpiritTraitsResponse | null> => {
     const actionKey = `spirit:roll:${slotIndex}:${mode}`;
     if (!spiritState) {
-      return;
+      return null;
     }
 
+    let rollPreview: ClientRollSpiritTraitsResponse | null = null;
     await runPendingAction(actionKey, async () => {
       try {
         const result = await rollSpiritTraits({
@@ -1267,10 +1269,36 @@ function App(): JSX.Element {
         });
         applySpiritMutationResult(result);
         showToast(result.summary, 'success');
+        rollPreview = result;
       } catch {
         showToast('当前无法洗练词条，请确认材料是否足够。', 'error');
       }
     });
+    return rollPreview;
+  };
+
+  const handleResolveSpiritTraitRollAction = async (
+    rollLogId: string,
+    selectedTraitCode: ClientSpiritTraitCode | null,
+    slotVersion: number,
+  ): Promise<boolean> => {
+    const actionKey = `spirit:resolve-roll:${rollLogId}`;
+    let resolved = false;
+    await runPendingAction(actionKey, async () => {
+      try {
+        const result = await resolveSpiritTraitRoll({
+          rollLogId,
+          selectedTraitCode,
+          slotVersion,
+        });
+        applySpiritMutationResult(result);
+        showToast(result.summary, 'success');
+        resolved = true;
+      } catch {
+        showToast('当前无法确认洗练结果，请刷新后重试。', 'error');
+      }
+    });
+    return resolved;
   };
 
   const handleBuySpiritShopItemAction = async (itemId: string): Promise<void> => {
@@ -2294,9 +2322,8 @@ function App(): JSX.Element {
             onRequestFriend={(targetPlayerId) => {
               void social.requestFriend(targetPlayerId);
             }}
-            onRollSpiritTraits={(slotIndex, slotVersion, mode, options) => {
-              void handleRollSpiritTraitsAction(slotIndex, slotVersion, mode, options);
-            }}
+            onResolveSpiritTraitRoll={handleResolveSpiritTraitRollAction}
+            onRollSpiritTraits={handleRollSpiritTraitsAction}
             onSetMainSpirit={(slotIndex, slotVersion) => {
               void handleSetMainSpiritAction(slotIndex, slotVersion);
             }}

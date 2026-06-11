@@ -7,6 +7,7 @@ import type {
   ClientDissolveSpiritRequest,
   ClientFeedSpiritRequest,
   ClientRecoverSpiritRequest,
+  ClientResolveSpiritTraitRollRequest,
   ClientRollSpiritTraitsRequest,
   ClientSetMainSpiritRequest,
   ClientUpgradeSpiritRequest,
@@ -71,12 +72,17 @@ export class BreakthroughSpiritRequestDto implements ClientBreakthroughSpiritReq
 export class RollSpiritTraitsRequestDto implements ClientRollSpiritTraitsRequest {
   slotIndex!: number;
   mode!: ClientRollSpiritTraitsRequest['mode'];
-  lockedSlotIndex?: number;
-  targetSlotIndex?: number;
-  targetTraitCode?: ClientRollSpiritTraitsRequest['targetTraitCode'];
+  targetSlotIndex!: number;
   slotVersion?: number;
   walletVersion?: number;
   resourceVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export class ResolveSpiritTraitRollRequestDto implements ClientResolveSpiritTraitRollRequest {
+  rollLogId!: string;
+  selectedTraitCode?: ClientResolveSpiritTraitRollRequest['selectedTraitCode'];
+  slotVersion?: number;
   requestIdempotencyKey?: string;
 }
 

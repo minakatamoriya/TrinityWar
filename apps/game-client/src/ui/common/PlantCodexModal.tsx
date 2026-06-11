@@ -48,7 +48,9 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
     onUnlockPlant,
   } = props;
   const selectedResearch = selectedPlant.research;
-  const discovered = selectedPlant.unlocked || selectedResearch?.discovered || (selectedPlant.quantity ?? 0) > 0;
+  const discovered = isPlantDiscovered(selectedPlant);
+  const identityVisible = isPlantIdentityVisible(selectedPlant);
+  const selectedPlantName = identityVisible ? selectedPlant.name : '未知灵植';
   const canUnlock = Boolean(selectedResearch?.canUnlock && onUnlockPlant);
   const selectedStatusLabel = selectedPlant.unlocked
     ? '已解锁'
@@ -73,17 +75,18 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
             </div>
             <div className="seed-codex-icon-grid">
               {group.plants.map((plant) => {
-                const plantDiscovered = plant.unlocked || plant.research?.discovered || (plant.quantity ?? 0) > 0;
+                const plantDiscovered = isPlantDiscovered(plant);
+                const plantIdentityVisible = isPlantIdentityVisible(plant);
 
                 return (
                   <button
-                    aria-label={plantDiscovered ? plant.name : `${plant.name}，未解锁`}
+                    aria-label={plantIdentityVisible ? plant.name : `${group.label}未发现灵植`}
                     className={`seed-codex-icon ${plantDiscovered ? 'is-unlocked' : 'is-locked'} ${plant.id === selectedPlant.id ? 'is-selected' : ''}`}
                     key={plant.id}
                     onClick={() => onSelectPlant(plant.id)}
                     type="button"
                   >
-                    <span>{plantDiscovered ? plant.name.slice(0, 2) : '？？'}</span>
+                    <span>{plantIdentityVisible ? plant.name.slice(0, 2) : '？？'}</span>
                   </button>
                 );
               })}
@@ -96,7 +99,7 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
             <div className="seed-codex-detail-head">
               <div>
                 <p className="eyebrow">{groups.find((group) => group.rarity === selectedPlant.rarity)?.label ?? ''}</p>
-                <h3>{selectedPlant.name}</h3>
+                <h3>{selectedPlantName}</h3>
               </div>
               <span className="task-state-badge">{selectedStatusLabel}</span>
             </div>
@@ -120,6 +123,7 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
             {!selectedPlant.unlocked && selectedResearch ? (
               <div className="seed-codex-strategy">
                 <strong>解锁条件</strong>
+                <p>{formatPlantUnlockRequirement(selectedResearch, formatNumber)}</p>
                 <PlantUnlockRequirementRows research={selectedResearch} formatNumber={formatNumber} />
                 <button
                   className="primary-button"
@@ -135,6 +139,14 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
         </section>
     </FullScreenToolShell>
   );
+}
+
+function isPlantDiscovered(plant: PlantCodexItem): boolean {
+  return plant.unlocked || Boolean(plant.research?.discovered);
+}
+
+function isPlantIdentityVisible(plant: PlantCodexItem): boolean {
+  return isPlantDiscovered(plant);
 }
 
 function formatPlantUnlockRequirement(

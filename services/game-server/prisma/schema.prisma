@@ -805,6 +805,9 @@ model SpiritTraitRollLog {
   beforeTraitsJson      Json     @map("before_traits_json")
   resultTraitsJson      Json     @map("result_traits_json")
   candidateResultsJson  Json?    @map("candidate_results_json")
+  status                String   @default("APPLIED")
+  selectedTraitCode     String?  @map("selected_trait_code")
+  resolvedAt            DateTime? @map("resolved_at")
   requestIdempotencyKey String?  @map("request_idempotency_key")
   createdAt             DateTime @default(now()) @map("created_at")
 

@@ -17,9 +17,9 @@ export interface LocalFarmFieldPresentation {
 export function buildLocalPlantResearchState(plantType: string, unlocked: boolean, essenceOwned: number): ClientPlantResearchState {
   return {
     plantType,
-    discovered: unlocked || essenceOwned > 0,
+    discovered: unlocked,
     unlocked,
-    status: unlocked ? 'unlocked' : essenceOwned > 0 ? 'discovered' : 'undiscovered',
+    status: unlocked ? 'unlocked' : 'undiscovered',
     essenceRequired: 0,
     essenceOwned,
     harvestRequired: 0,

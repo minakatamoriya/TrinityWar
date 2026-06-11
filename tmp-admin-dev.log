@@ -1,0 +1,16 @@
+
+> trinitywar-workspace@0.1.0 dev:admin
+> npm run dev --workspace @trinitywar/game-admin
+
+
+> @trinitywar/game-admin@0.1.0 dev
+> vite --host 127.0.0.1 --port 6002
+
+
+  [32m[1mVITE[22m v4.5.14[39m  [2mready in [0m[1m254[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m6002[22m/[39m
+[2m00:42:29[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.tsx, /src/views/SeasonView.tsx[22m
+[2m00:42:29[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.tsx, /src/views/SeasonView.tsx[22m
+[2m00:42:29[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/main.tsx[22m Could not Fast Refresh ("true" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m00:42:29[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/main.tsx[22m Could not Fast Refresh ("true" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports

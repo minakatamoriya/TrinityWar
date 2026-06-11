@@ -24,8 +24,59 @@ export type ClientSpiritTraitCode =
   | 'counter'
   | 'lifesteal'
   | 'tenacity';
-export type ClientSpiritRollMode = 'basic' | 'advanced' | 'ultimate' | 'batch_basic';
+export type ClientSpiritActiveRollMode = 'basic' | 'normal' | 'advanced';
+export type ClientSpiritRollMode = ClientSpiritActiveRollMode;
 export type ClientSpiritFeedActionType = 'feed_once' | 'fill_full';
+
+export interface ClientSpiritTraitRollRule {
+  mode: ClientSpiritActiveRollMode;
+  label: string;
+  badge: string;
+  summary: string;
+  confirmLabel: string;
+  unlockBreakthroughStage: number;
+  unlockLevel: number;
+  candidateCount: number;
+  cost: { marrow: number; jade: number; gold: number };
+}
+
+export const CLIENT_SPIRIT_TRAIT_ROLL_RULES: Record<ClientSpiritActiveRollMode, ClientSpiritTraitRollRule> = {
+  basic: {
+    mode: 'basic',
+    label: '金币重铸',
+    badge: '全随机',
+    summary: '只消耗金币，随机覆盖全部已解锁词条。',
+    confirmLabel: '金币重铸',
+    unlockBreakthroughStage: 1,
+    unlockLevel: 10,
+    candidateCount: 0,
+    cost: { marrow: 0, jade: 0, gold: 1000 },
+  },
+  normal: {
+    mode: 'normal',
+    label: '灵髓洗练',
+    badge: '1 个结果',
+    summary: '选择 1 个槽位，随机出 1 个候选。',
+    confirmLabel: '灵髓洗练',
+    unlockBreakthroughStage: 2,
+    unlockLevel: 20,
+    candidateCount: 1,
+    cost: { marrow: 5, jade: 0, gold: 500 },
+  },
+  advanced: {
+    mode: 'advanced',
+    label: '灵玉洗练',
+    badge: '3 选 1',
+    summary: '选择 1 个槽位，随机出 3 个候选。',
+    confirmLabel: '灵玉洗练',
+    unlockBreakthroughStage: 3,
+    unlockLevel: 30,
+    candidateCount: 3,
+    cost: { marrow: 0, jade: 1, gold: 1000 },
+  },
+};
+
+export const CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER: ClientSpiritActiveRollMode[] = ['basic', 'normal', 'advanced'];
 
 export interface ClientSpiritDefinition {
   spiritId: string;
@@ -35,7 +86,39 @@ export interface ClientSpiritDefinition {
   role: ClientSpiritRole;
   shardName: string;
   shardUnlockRequired: number;
+  baseAttack: number;
+  baseHp: number;
+  growthAttack: number;
+  growthHp: number;
   lore: string | null;
+}
+
+export interface ClientSpiritInnateTrait {
+  spiritId: string;
+  label: string;
+  description: string;
+  effects: Array<{
+    stat: 'attack' | 'maxHp';
+    valueType: 'percent';
+    value: number;
+  }>;
+}
+
+export const CLIENT_SPIRIT_INNATE_TRAITS: Record<string, ClientSpiritInnateTrait> = {
+  canglang: {
+    spiritId: 'canglang',
+    label: '苍狼本能',
+    description: '攻击 +4%',
+    effects: [{ stat: 'attack', valueType: 'percent', value: 4 }],
+  },
+};
+
+export function getClientSpiritInnateTrait(spiritId: string | null | undefined): ClientSpiritInnateTrait | null {
+  if (!spiritId) {
+    return null;
+  }
+
+  return CLIENT_SPIRIT_INNATE_TRAITS[spiritId] ?? null;
 }
 
 export interface ClientFactionAdvantageModifiers {
@@ -212,6 +295,26 @@ export interface ClientSpiritMutationResponse {
   scenes: ClientSceneContentResponse;
 }
 
+export interface ClientSpiritTraitRollCandidate {
+  traitCode: ClientSpiritTraitCode;
+  label: string;
+  description: string;
+  value: number;
+}
+
+export interface ClientSpiritTraitRollPreview {
+  rollLogId: string;
+  slotIndex: number;
+  targetSlotIndex: number;
+  mode: ClientSpiritActiveRollMode;
+  currentTrait: ClientSpiritTraitRollCandidate | null;
+  candidates: ClientSpiritTraitRollCandidate[];
+}
+
+export interface ClientRollSpiritTraitsResponse extends ClientSpiritMutationResponse {
+  traitRoll?: ClientSpiritTraitRollPreview;
+}
+
 export interface ClientFarmBoardState {
   farmBoardMessage: string;
   farmBoardUpdatedAt: string | null;
@@ -331,12 +434,17 @@ export interface ClientBreakthroughSpiritRequest {
 export interface ClientRollSpiritTraitsRequest {
   slotIndex: number;
   mode: ClientSpiritRollMode;
-  lockedSlotIndex?: number;
   targetSlotIndex?: number;
-  targetTraitCode?: ClientSpiritTraitCode;
   slotVersion?: number;
   walletVersion?: number;
   resourceVersion?: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientResolveSpiritTraitRollRequest {
+  rollLogId: string;
+  selectedTraitCode?: ClientSpiritTraitCode | null;
+  slotVersion?: number;
   requestIdempotencyKey?: string;
 }
 

@@ -1,7 +1,7 @@
 ﻿import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { PlayerSpiritStatus, Prisma, PrismaClient, SpiritElement, SpiritRarity, SpiritRole } from '@prisma/client';
-import { APP_NAME, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientRecoverSpiritRequest, type ClientRollSpiritTraitsRequest, type ClientSetMainSpiritRequest, type ClientSpiritCodexEntry, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritStatus, type ClientSpiritSlot, type ClientSpiritDefinition, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
+import { APP_NAME, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientRecoverSpiritRequest, type ClientResolveSpiritTraitRollRequest, type ClientRollSpiritTraitsRequest, type ClientRollSpiritTraitsResponse, type ClientSetMainSpiritRequest, type ClientSpiritCodexEntry, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritStatus, type ClientSpiritSlot, type ClientSpiritDefinition, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
 import { AuditService } from '../audit/audit.service.js';
 import { DailyTaskLifecycleService } from '../client-read/daily-task-lifecycle.service.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
@@ -21,6 +21,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { STARTER_SPIRIT_IDS } from '../seed/seed-data/spirits.js';
 import { TaskConfigService } from '../task-config/task-config.service.js';
+import { getTraitDefinition, isActiveTraitRollMode, rollFullRandomTraits, rollTraitCandidates, SPIRIT_TRAIT_DEFINITIONS, SPIRIT_TRAIT_ROLL_RULES, toTraitRollCandidate } from './spirit-trait-roll-rules.js';
 
 const SPIRIT_SOUL_GOLD_PRICE = 100;
 const SPIRIT_MAX_LEVEL = 50;
@@ -47,17 +48,6 @@ const SPIRIT_BREAKTHROUGH_COSTS: Record<number, { quality: 'ordinary' | 'rare' |
   4: { quality: 'rare', count: 20 },
   5: { quality: 'legendary', count: 8 },
 };
-
-const SPIRIT_TRAIT_DEFINITIONS: Array<{ code: ClientSpiritTraitCode; label: string; value: number; description: string }> = [
-  { code: 'claw', label: '利爪', value: 10, description: '攻击 +10%' },
-  { code: 'thick_skin', label: '厚皮', value: 10, description: '生命 +10%' },
-  { code: 'crit', label: '暴击', value: 6, description: '暴击率 +6%' },
-  { code: 'crit_damage', label: '爆伤', value: 20, description: '暴击伤害 +20%' },
-  { code: 'dodge', label: '闪避', value: 5, description: '闪避率 +5%' },
-  { code: 'counter', label: '反击', value: 10, description: '受击 +10% 概率反击，造成 50% 伤害' },
-  { code: 'lifesteal', label: '吸血', value: 10, description: '造成伤害的 10% 回复自身' },
-  { code: 'tenacity', label: '韧性', value: 10, description: '受暴击时伤害降低 10%' },
-];
 
 type SpiritReadResource = {
   playerId: string;
@@ -572,25 +562,26 @@ export class SpiritService {
     playerId: string,
     request: ClientRollSpiritTraitsRequest,
     headerIdempotencyKey?: string,
-  ): Promise<ClientSpiritMutationResponse> {
+  ): Promise<ClientRollSpiritTraitsResponse> {
     validateRollSpiritTraitsRequest(request);
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
     return this.prisma.transaction(async (client) => {
+      if (!isActiveTraitRollMode(request.mode)) {
+        throwBadRequest('mode must be basic, normal, or advanced.');
+      }
       const requestHash = hashRequest({
         endpoint: 'roll-traits',
         slotIndex: request.slotIndex,
         mode: request.mode,
-        lockedSlotIndex: request.lockedSlotIndex ?? null,
         targetSlotIndex: request.targetSlotIndex ?? null,
-        targetTraitCode: request.targetTraitCode ?? null,
         slotVersion: request.slotVersion ?? null,
         walletVersion: request.walletVersion ?? null,
         resourceVersion: request.resourceVersion ?? null,
       });
       const idempotencyRecord = await this.prepareIdempotencyRecord(client, playerId, 'spirit-roll-traits', idempotencyKey, requestHash);
       if (idempotencyRecord?.status === 'completed' && idempotencyRecord.responseSnapshotJson) {
-        return idempotencyRecord.responseSnapshotJson as unknown as ClientSpiritMutationResponse;
+        return idempotencyRecord.responseSnapshotJson as unknown as ClientRollSpiritTraitsResponse;
       }
 
       const [resource, wallet, slot] = await Promise.all([
@@ -652,9 +643,16 @@ export class SpiritService {
       if (unlockedSlots <= 0) {
         throw new BusinessError({ code: ErrorCode.BadRequest, message: 'No unlocked trait slots.', statusCode: 400 });
       }
+      if (request.mode !== 'basic' && (typeof request.targetSlotIndex !== 'number' || request.targetSlotIndex < 1 || request.targetSlotIndex > unlockedSlots)) {
+        throwBadRequest('targetSlotIndex must refer to an unlocked trait slot.');
+      }
 
       const factionCode = toFactionAdvantageCode(resource.player?.faction?.code);
-      const baseCost = getRollCost(request.mode);
+      const rollRule = SPIRIT_TRAIT_ROLL_RULES[request.mode];
+      if (slot.breakthroughStage < rollRule.unlockBreakthroughStage) {
+        throw new BusinessError({ code: ErrorCode.BadRequest, message: 'Trait roll mode is not unlocked.', statusCode: 400 });
+      }
+      const baseCost = rollRule.cost;
       const cost = {
         ...baseCost,
         gold: applyFactionSpiritTraitRollGoldCost(baseCost.gold, factionCode),
@@ -667,37 +665,6 @@ export class SpiritService {
       }
 
       const beforeTraits = normalizeTraitRows(slot.traits);
-      const candidates: Array<Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }>> = [];
-      let resultTraits: Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }>;
-
-      if (request.mode === 'batch_basic') {
-        for (let index = 0; index < 10; index += 1) {
-          candidates.push(randomTraits(unlockedSlots, true));
-        }
-        resultTraits = candidates[0] ?? randomTraits(unlockedSlots, true);
-      } else if (request.mode === 'advanced') {
-        if (typeof request.lockedSlotIndex !== 'number') {
-          throwBadRequest('lockedSlotIndex is required for advanced roll.');
-        }
-        const lockedTrait = beforeTraits.find((trait) => trait.slotIndex === request.lockedSlotIndex);
-        if (!lockedTrait) {
-          throwBadRequest('lockedSlotIndex must refer to an unlocked existing trait.');
-        }
-        resultTraits = randomTraits(unlockedSlots, true).map((trait) => (trait.slotIndex === lockedTrait.slotIndex ? lockedTrait : trait));
-      } else if (request.mode === 'ultimate') {
-        if (typeof request.targetSlotIndex !== 'number' || !request.targetTraitCode) {
-          throwBadRequest('targetSlotIndex and targetTraitCode are required for ultimate roll.');
-        }
-        if (request.targetSlotIndex < 1 || request.targetSlotIndex > unlockedSlots) {
-          throwBadRequest('targetSlotIndex must refer to an unlocked trait slot.');
-        }
-        assertKnownTraitCode(request.targetTraitCode);
-        resultTraits = mergeWithExistingTraits(beforeTraits, unlockedSlots).map((trait) =>
-          trait.slotIndex === request.targetSlotIndex ? { slotIndex: trait.slotIndex, traitCode: request.targetTraitCode as ClientSpiritTraitCode } : trait,
-        );
-      } else {
-        resultTraits = randomTraits(unlockedSlots, true);
-      }
 
       await client.playerSpiritResource.update({
         where: { playerId },
@@ -728,35 +695,79 @@ export class SpiritService {
           note: `Roll spirit traits in ${request.mode} mode.`,
         });
       }
-      await client.playerSpiritTrait.deleteMany({ where: { spiritSlotId: slot.id } });
-      for (const trait of resultTraits) {
-        const definition = getTraitDefinition(trait.traitCode);
-        await client.playerSpiritTrait.create({
+      if (request.mode === 'basic') {
+        const resultTraits = rollFullRandomTraits(unlockedSlots);
+        await client.playerSpiritTrait.deleteMany({ where: { spiritSlotId: slot.id } });
+        for (const trait of resultTraits) {
+          const definition = getTraitDefinition(trait.traitCode);
+          await client.playerSpiritTrait.create({
+            data: {
+              spiritSlotId: slot.id,
+              slotIndex: trait.slotIndex,
+              traitCode: definition.code,
+              traitValue: definition.value,
+              sourceType: 'roll',
+            },
+          });
+        }
+        await client.playerSpiritSlot.update({
+          where: { id: slot.id },
+          data: { slotVersion: { increment: 1 } },
+        });
+        await client.spiritTraitRollLog.create({
           data: {
+            playerId,
             spiritSlotId: slot.id,
-            slotIndex: trait.slotIndex,
-            traitCode: definition.code,
-            traitValue: definition.value,
-            sourceType: 'roll',
+            mode: request.mode,
+            lockedSlotIndex: null,
+            targetSlotIndex: null,
+            targetTraitCode: null,
+            consumedJson: cost as unknown as Prisma.InputJsonValue,
+            beforeTraitsJson: beforeTraits as unknown as Prisma.InputJsonValue,
+            resultTraitsJson: resultTraits as unknown as Prisma.InputJsonValue,
+            candidateResultsJson: resultTraits as unknown as Prisma.InputJsonValue,
+            status: 'APPLIED',
+            selectedTraitCode: null,
+            resolvedAt: new Date(),
+            requestIdempotencyKey: idempotencyKey ?? null,
           },
         });
+        const contributionConfig = await this.taskConfigService.getDailyFactionTaskConfig('spirit-roll-traits', client);
+        if (contributionConfig?.isEnabled && contributionConfig.rewardContribution > 0) {
+          await grantFactionContribution(client, {
+            playerId,
+            contribution: contributionConfig.rewardContribution,
+            sourceType: 'spirit-roll-traits',
+            sourceId: slot.id,
+            metadata: {
+              mode: request.mode,
+            },
+          });
+        }
+        const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 金币重铸已完成。');
+        await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
+        return response;
       }
-      await client.playerSpiritSlot.update({
-        where: { id: slot.id },
-        data: { slotVersion: { increment: 1 } },
-      });
-      await client.spiritTraitRollLog.create({
+
+      const targetSlotIndex = request.targetSlotIndex;
+      if (typeof targetSlotIndex !== 'number') {
+        throwBadRequest('targetSlotIndex must refer to an unlocked trait slot.');
+      }
+      const currentTrait = beforeTraits.find((trait) => trait.slotIndex === targetSlotIndex) ?? null;
+      const candidates = rollTraitCandidates(request.mode, currentTrait?.traitCode ?? null);
+      const rollLog = await client.spiritTraitRollLog.create({
         data: {
           playerId,
           spiritSlotId: slot.id,
           mode: request.mode,
-          lockedSlotIndex: request.lockedSlotIndex ?? null,
-          targetSlotIndex: request.targetSlotIndex ?? null,
-          targetTraitCode: request.targetTraitCode ?? null,
+          lockedSlotIndex: null,
+          targetSlotIndex,
+          targetTraitCode: null,
           consumedJson: cost as unknown as Prisma.InputJsonValue,
           beforeTraitsJson: beforeTraits as unknown as Prisma.InputJsonValue,
-          resultTraitsJson: resultTraits as unknown as Prisma.InputJsonValue,
-          candidateResultsJson: request.mode === 'batch_basic' ? candidates as unknown as Prisma.InputJsonValue : undefined,
+          resultTraitsJson: beforeTraits as unknown as Prisma.InputJsonValue,
+          candidateResultsJson: candidates as unknown as Prisma.InputJsonValue,
+          status: 'PENDING',
           requestIdempotencyKey: idempotencyKey ?? null,
         },
       });
@@ -773,8 +784,129 @@ export class SpiritService {
         });
       }
 
-      const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 词条已洗练。');
+      const mutationResponse = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 洗练候选已生成。');
+      const response: ClientRollSpiritTraitsResponse = {
+        ...mutationResponse,
+        traitRoll: {
+          rollLogId: rollLog.id,
+          slotIndex: request.slotIndex,
+          targetSlotIndex,
+          mode: request.mode,
+          currentTrait: currentTrait ? toTraitRollCandidate(currentTrait.traitCode) : null,
+          candidates,
+        },
+      };
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
+      return response;
+    });
+  }
+
+  async resolveSpiritTraitRoll(
+    playerId: string,
+    request: ClientResolveSpiritTraitRollRequest,
+    headerIdempotencyKey?: string,
+  ): Promise<ClientSpiritMutationResponse> {
+    validateResolveSpiritTraitRollRequest(request);
+    const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
+
+    return this.prisma.transaction(async (client) => {
+      const requestHash = hashRequest({
+        endpoint: 'resolve-trait-roll',
+        rollLogId: request.rollLogId,
+        selectedTraitCode: request.selectedTraitCode ?? null,
+        slotVersion: request.slotVersion ?? null,
+      });
+      const idempotencyRecord = await this.prepareIdempotencyRecord(client, playerId, 'spirit-resolve-trait-roll', idempotencyKey, requestHash);
+      if (idempotencyRecord?.status === 'completed' && idempotencyRecord.responseSnapshotJson) {
+        return idempotencyRecord.responseSnapshotJson as unknown as ClientSpiritMutationResponse;
+      }
+
+      const rollLog = await client.spiritTraitRollLog.findUnique({
+        where: { id: request.rollLogId },
+        select: {
+          id: true,
+          playerId: true,
+          spiritSlotId: true,
+          mode: true,
+          targetSlotIndex: true,
+          beforeTraitsJson: true,
+          candidateResultsJson: true,
+          status: true,
+          spiritSlot: {
+            select: {
+              id: true,
+              slotIndex: true,
+              slotVersion: true,
+              spiritDefinition: { select: { label: true } },
+            },
+          },
+        },
+      });
+      if (!rollLog || rollLog.playerId !== playerId) {
+        throw new BusinessError({ code: ErrorCode.NotFound, message: 'Trait roll not found.', statusCode: 404 });
+      }
+      if (rollLog.status !== 'PENDING') {
+        throw new BusinessError({ code: ErrorCode.Conflict, message: 'Trait roll has already been resolved.', statusCode: 409 });
+      }
+      if (!rollLog.targetSlotIndex || !rollLog.spiritSlot) {
+        throwBadRequest('Invalid trait roll log.');
+      }
+
+      assertVersion('slotVersion', request.slotVersion, rollLog.spiritSlot.slotVersion);
+      const candidates = parseTraitRollCandidates(rollLog.candidateResultsJson);
+      const selectedTraitCode = request.selectedTraitCode ?? null;
+      if (selectedTraitCode) {
+        if (!candidates.some((candidate) => candidate.traitCode === selectedTraitCode)) {
+          throwBadRequest('selectedTraitCode must be one of the roll candidates.');
+        }
+      }
+
+      const beforeTraits = parseTraitRows(rollLog.beforeTraitsJson);
+      let resultTraits = beforeTraits;
+      if (selectedTraitCode) {
+        const definition = getTraitDefinition(selectedTraitCode);
+        await client.playerSpiritTrait.upsert({
+          where: {
+            spiritSlotId_slotIndex: {
+              spiritSlotId: rollLog.spiritSlotId,
+              slotIndex: rollLog.targetSlotIndex,
+            },
+          },
+          create: {
+            spiritSlotId: rollLog.spiritSlotId,
+            slotIndex: rollLog.targetSlotIndex,
+            traitCode: definition.code,
+            traitValue: definition.value,
+            sourceType: 'roll',
+          },
+          update: {
+            traitCode: definition.code,
+            traitValue: definition.value,
+            sourceType: 'roll',
+          },
+        });
+        await client.playerSpiritSlot.update({
+          where: { id: rollLog.spiritSlotId },
+          data: { slotVersion: { increment: 1 } },
+        });
+        resultTraits = mergeTraitRows(beforeTraits, { slotIndex: rollLog.targetSlotIndex, traitCode: definition.code });
+      }
+
+      await client.spiritTraitRollLog.update({
+        where: { id: rollLog.id },
+        data: {
+          status: selectedTraitCode ? 'APPLIED' : 'KEPT',
+          selectedTraitCode,
+          resolvedAt: new Date(),
+          resultTraitsJson: resultTraits as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      const summary = selectedTraitCode
+        ? (rollLog.spiritSlot.spiritDefinition?.label ?? '灵宠') + ' 词条已替换。'
+        : (rollLog.spiritSlot.spiritDefinition?.label ?? '灵宠') + ' 已保留原词条。';
+      const response = await this.buildSpiritMutationResponse(client, playerId, summary);
+      await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', rollLog.spiritSlotId);
       return response;
     });
   }
@@ -1505,6 +1637,10 @@ export class SpiritService {
               role: true,
               shardName: true,
               shardUnlockRequired: true,
+              baseAttack: true,
+              baseHp: true,
+              growthAttack: true,
+              growthHp: true,
               lore: true,
               sortOrder: true,
             },
@@ -1730,6 +1866,10 @@ function buildSpiritState(
       role: SpiritRole;
       shardName: string;
       shardUnlockRequired: number;
+      baseAttack: number;
+      baseHp: number;
+      growthAttack: number;
+      growthHp: number;
       lore: string | null;
       sortOrder: number;
     };
@@ -1822,6 +1962,10 @@ function toClientDefinition(definition: {
   role: SpiritRole;
   shardName: string;
   shardUnlockRequired: number;
+  baseAttack: number;
+  baseHp: number;
+  growthAttack: number;
+  growthHp: number;
   lore: string | null;
 }): ClientSpiritDefinition {
   return {
@@ -1832,6 +1976,10 @@ function toClientDefinition(definition: {
     role: definition.role.toLowerCase() as ClientSpiritDefinition['role'],
     shardName: definition.shardName,
     shardUnlockRequired: definition.shardUnlockRequired,
+    baseAttack: definition.baseAttack,
+    baseHp: definition.baseHp,
+    growthAttack: definition.growthAttack,
+    growthHp: definition.growthHp,
     lore: definition.lore,
   };
 }
@@ -2045,20 +2193,6 @@ function applyExpGain(state: {
   };
 }
 
-function getRollCost(mode: ClientRollSpiritTraitsRequest['mode']): { marrow: number; jade: number; gold: number } {
-  switch (mode) {
-    case 'advanced':
-      return { marrow: 10, jade: 1, gold: 1000 };
-    case 'ultimate':
-      return { marrow: 20, jade: 5, gold: 0 };
-    case 'batch_basic':
-      return { marrow: 50, jade: 0, gold: 5000 };
-    case 'basic':
-    default:
-      return { marrow: 5, jade: 0, gold: 500 };
-  }
-}
-
 function normalizeTraitRows(traits: SpiritReadTrait[]): Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> {
   return traits
     .sort((left, right) => left.slotIndex - right.slotIndex)
@@ -2068,45 +2202,59 @@ function normalizeTraitRows(traits: SpiritReadTrait[]): Array<{ slotIndex: numbe
     }));
 }
 
-function randomTraits(unlockedSlots: number, allowDuplicate: boolean): Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> {
-  const usedCodes = new Set<string>();
-  const result: Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> = [];
-  for (let slotIndex = 1; slotIndex <= unlockedSlots; slotIndex += 1) {
-    const definition = randomTraitDefinition(allowDuplicate, usedCodes);
-    usedCodes.add(definition.code);
-    result.push({ slotIndex, traitCode: definition.code });
-  }
-  return result;
-}
-
-function mergeWithExistingTraits(
-  traits: Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }>,
-  unlockedSlots: number,
-): Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> {
-  const merged: Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> = [];
-  for (let slotIndex = 1; slotIndex <= unlockedSlots; slotIndex += 1) {
-    merged.push(traits.find((trait) => trait.slotIndex === slotIndex) ?? { slotIndex, traitCode: 'claw' });
-  }
-  return merged;
-}
-
 function randomTraitDefinition(allowDuplicate: boolean, usedCodes: Set<string>) {
   const pool = allowDuplicate ? SPIRIT_TRAIT_DEFINITIONS : SPIRIT_TRAIT_DEFINITIONS.filter((definition) => !usedCodes.has(definition.code));
   return pool[Math.floor(Math.random() * pool.length)] ?? SPIRIT_TRAIT_DEFINITIONS[0];
 }
 
-function getTraitDefinition(code: string) {
-  const definition = SPIRIT_TRAIT_DEFINITIONS.find((trait) => trait.code === code);
-  if (!definition) {
-    return SPIRIT_TRAIT_DEFINITIONS[0];
+function parseTraitRows(value: Prisma.JsonValue): Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> {
+  if (!Array.isArray(value)) {
+    return [];
   }
-  return definition;
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const row = item as { slotIndex?: unknown; traitCode?: unknown };
+      if (typeof row.slotIndex !== 'number' || typeof row.traitCode !== 'string') {
+        return null;
+      }
+      return {
+        slotIndex: row.slotIndex,
+        traitCode: getTraitDefinition(row.traitCode).code,
+      };
+    })
+    .filter((item): item is { slotIndex: number; traitCode: ClientSpiritTraitCode } => Boolean(item));
 }
 
-function assertKnownTraitCode(code: string): void {
-  if (!SPIRIT_TRAIT_DEFINITIONS.some((trait) => trait.code === code)) {
-    throwBadRequest('Unknown targetTraitCode.');
+function parseTraitRollCandidates(value: Prisma.JsonValue): ReturnType<typeof rollTraitCandidates> {
+  if (!Array.isArray(value)) {
+    return [];
   }
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const row = item as { traitCode?: unknown };
+      if (typeof row.traitCode !== 'string') {
+        return null;
+      }
+      return toTraitRollCandidate(row.traitCode);
+    })
+    .filter((item): item is ReturnType<typeof rollTraitCandidates>[number] => Boolean(item));
+}
+
+function mergeTraitRows(
+  traits: Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }>,
+  nextTrait: { slotIndex: number; traitCode: ClientSpiritTraitCode },
+): Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> {
+  const merged = traits.filter((trait) => trait.slotIndex !== nextTrait.slotIndex);
+  merged.push(nextTrait);
+  return merged.sort((left, right) => left.slotIndex - right.slotIndex);
 }
 
 function getSoulField(quality: 'ordinary' | 'rare' | 'legendary'): 'ordinarySoul' | 'rareSoul' | 'legendarySoul' {
@@ -2222,15 +2370,23 @@ function validateBreakthroughSpiritRequest(request: ClientBreakthroughSpiritRequ
 
 function validateRollSpiritTraitsRequest(request: ClientRollSpiritTraitsRequest): void {
   validateSlotRequest(request, 'slotIndex');
-  if (!['basic', 'advanced', 'ultimate', 'batch_basic'].includes(String(request.mode))) {
-    throwBadRequest('mode must be basic, advanced, ultimate, or batch_basic.');
+  if (!isActiveTraitRollMode(String(request.mode))) {
+    throwBadRequest('mode must be basic, normal, or advanced.');
   }
-  if (request.lockedSlotIndex !== undefined && (!Number.isInteger(request.lockedSlotIndex) || request.lockedSlotIndex <= 0)) {
-    throwBadRequest('lockedSlotIndex must be a positive integer.');
-  }
-  if (request.targetSlotIndex !== undefined && (!Number.isInteger(request.targetSlotIndex) || request.targetSlotIndex <= 0)) {
+  if (request.mode !== 'basic' && (!Number.isInteger(request.targetSlotIndex) || Number(request.targetSlotIndex) <= 0)) {
     throwBadRequest('targetSlotIndex must be a positive integer.');
   }
+}
+
+function validateResolveSpiritTraitRollRequest(request: ClientResolveSpiritTraitRollRequest): void {
+  const body = assertRequestBody(request);
+  if (typeof body.rollLogId !== 'string' || body.rollLogId.trim().length <= 0) {
+    throwBadRequest('rollLogId is required.');
+  }
+  if (body.selectedTraitCode !== undefined && body.selectedTraitCode !== null && typeof body.selectedTraitCode !== 'string') {
+    throwBadRequest('selectedTraitCode must be a string or null.');
+  }
+  assertOptionalNumber(body.slotVersion, 'slotVersion');
 }
 
 function validateBuyShopItemRequest(request: ClientBuySpiritShopItemRequest): void {

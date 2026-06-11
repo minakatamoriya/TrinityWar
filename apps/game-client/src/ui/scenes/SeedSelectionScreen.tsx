@@ -54,8 +54,13 @@ function formatNumber(value: number): string {
 
 export function SeedSelectionScreen(props: SeedSelectionScreenProps): JSX.Element {
   const { availableFieldCount, fieldCode, seedGroups, selectedSeedId, onClose, onSelect, onConfirm, onConfirmAll, confirming, confirmingAll } = props;
-  const selectedSeed = seedGroups.flatMap((group) => group.seeds).find((seed) => seed.id === selectedSeedId) ?? null;
+  const rawSelectedSeed = seedGroups.flatMap((group) => group.seeds).find((seed) => seed.id === selectedSeedId) ?? null;
+  const selectedSeed = rawSelectedSeed
+    ? { ...rawSelectedSeed, name: isSeedIdentityVisible(rawSelectedSeed) ? rawSelectedSeed.name : '未知灵植' }
+    : null;
   const selectedSeedReady = Boolean(selectedSeed?.unlocked);
+  const selectedSeedIdentityVisible = selectedSeed ? isSeedIdentityVisible(selectedSeed) : false;
+  const selectedSeedName = selectedSeedIdentityVisible && selectedSeed ? selectedSeed.name : '未知灵植';
   const busy = confirming || confirmingAll;
 
   return (
@@ -74,7 +79,9 @@ export function SeedSelectionScreen(props: SeedSelectionScreenProps): JSX.Elemen
               <strong>{group.label}</strong>
             </div>
             <div className="seed-codex-icon-grid">
-              {group.seeds.map((seed) => {
+              {group.seeds.map((seedOption) => {
+                const seed = { ...seedOption, unlocked: isSeedIdentityVisible(seedOption) };
+
                 return (
                   <button
                     aria-pressed={seed.id === selectedSeedId}
@@ -97,7 +104,7 @@ export function SeedSelectionScreen(props: SeedSelectionScreenProps): JSX.Elemen
               <div className="seed-codex-detail-head">
                 <div>
                   <p className="eyebrow">{seedGroups.find((group) => group.rarity === selectedSeed.rarity)?.label ?? ''}</p>
-                  <h3>{selectedSeed.name}</h3>
+                  <h3>{selectedSeedName}</h3>
                 </div>
                 <span className="task-state-badge">{selectedSeed.unlocked ? '已解锁' : selectedSeed.research?.canUnlock ? '可解锁' : '未解锁'}</span>
               </div>
@@ -152,6 +159,14 @@ export function SeedSelectionScreen(props: SeedSelectionScreenProps): JSX.Elemen
       </div>
     </FullScreenToolShell>
   );
+}
+
+function isSeedDiscovered(seed: SeedOption): boolean {
+  return seed.unlocked || Boolean(seed.research?.discovered);
+}
+
+function isSeedIdentityVisible(seed: SeedOption): boolean {
+  return isSeedDiscovered(seed);
 }
 
 function formatPlantUnlockRequirement(research: ClientPlantResearchState): string {

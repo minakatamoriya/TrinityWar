@@ -4115,6 +4115,94 @@ button {
   box-shadow: 0 0 0 1px rgba(215, 245, 127, 0.18), 0 0 26px rgba(215, 245, 127, 0.18);
 }
 
+.spirit-pet-card-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(112px, 136px));
+  gap: 8px;
+  justify-content: start;
+}
+
+.spirit-pet-card-actions .primary-button,
+.spirit-pet-card-actions .ghost-button {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.spirit-overview-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.spirit-attribute-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.spirit-attribute-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 248, 234, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 248, 234, 0.04);
+}
+
+.spirit-attribute-card span,
+.spirit-attribute-card small {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.spirit-attribute-card strong {
+  display: block;
+  margin: 4px 0 3px;
+  color: var(--text-primary);
+  font-size: 22px;
+  line-height: 1.05;
+}
+
+.spirit-bonus-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.spirit-bonus-list {
+  display: grid;
+  gap: 8px;
+}
+
+.spirit-bonus-row {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 248, 234, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 248, 234, 0.035);
+}
+
+.spirit-bonus-row.is-muted {
+  opacity: 0.72;
+}
+
+.spirit-bonus-row strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.spirit-bonus-row span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .spirit-stage-art {
   display: grid;
   place-items: center;
@@ -4257,8 +4345,53 @@ button.spirit-element-chip {
   font-size: 12px;
 }
 
+.spirit-progress-head > span {
+  flex: 0 0 auto;
+}
+
+.spirit-progress-head-side {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
 .spirit-progress-head strong {
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-primary);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spirit-progress-action-button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  max-width: 118px;
+  padding: 5px 9px;
+  overflow: hidden;
+  border: 1px solid rgba(243, 181, 111, 0.24);
+  border-radius: 999px;
+  background: rgba(243, 181, 111, 0.14);
+  color: #ffe2b7;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+  white-space: nowrap;
+}
+
+.spirit-progress-action-button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.spirit-progress-action-button:not(:disabled):hover {
+  transform: translateY(-1px);
 }
 
 .spirit-progress-track,
@@ -4448,6 +4581,7 @@ button.spirit-element-chip {
 }
 
 .spirit-pet-detail-card .spirit-stage-card,
+.spirit-pet-detail-card .spirit-pet-card-actions,
 .spirit-pet-detail-card .spirit-live-hint {
   flex: 0 0 auto;
 }
@@ -4514,6 +4648,333 @@ button.spirit-element-chip {
   display: grid;
   align-content: start;
   gap: 10px;
+}
+
+.trait-roll-current {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 248, 234, 0.08);
+  background: rgba(255, 248, 234, 0.035);
+}
+
+.trait-roll-current-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trait-roll-current-head strong {
+  font-size: 13px;
+}
+
+.trait-roll-current-head span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.trait-roll-current-slot {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 58px) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.trait-roll-current-slot > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(216, 255, 183, 0.12);
+  color: #d8ffb7;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.trait-roll-current-slot strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trait-roll-current-slot small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trait-roll-current-slot.is-locked {
+  opacity: 0.62;
+}
+
+.trait-roll-current-slot.is-locked > span {
+  background: rgba(255, 248, 234, 0.08);
+  color: var(--text-secondary);
+}
+
+.trait-roll-workflow {
+  display: grid;
+  gap: 10px;
+}
+
+.trait-roll-resource-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.trait-roll-resource-bar span {
+  min-width: 0;
+  padding: 7px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  background: rgba(255, 248, 234, 0.05);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.trait-roll-step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trait-roll-step-head span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(243, 181, 111, 0.16);
+  color: #ffe0b2;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.trait-roll-step-head strong {
+  font-size: 13px;
+}
+
+.trait-roll-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.trait-roll-plan {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  width: 100%;
+  min-height: 84px;
+  padding: 9px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  background: rgba(255, 248, 234, 0.045);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.trait-roll-plan.is-selected {
+  border-color: rgba(216, 255, 183, 0.55);
+  background: rgba(216, 255, 183, 0.08);
+  box-shadow: 0 0 0 3px rgba(216, 255, 183, 0.08);
+}
+
+.trait-roll-plan.is-locked {
+  opacity: 0.56;
+}
+
+.trait-roll-plan-head {
+  display: grid;
+  gap: 4px;
+}
+
+.trait-roll-plan strong {
+  font-size: 12px;
+}
+
+.trait-roll-plan small {
+  justify-self: start;
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(243, 181, 111, 0.14);
+  color: #ffe0b2;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.trait-roll-plan em {
+  color: #d8ffb7;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.trait-roll-setup-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(243, 181, 111, 0.22);
+  background: rgba(18, 21, 27, 0.58);
+}
+
+.trait-roll-mode-summary,
+.trait-roll-setup-panel p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.trait-roll-setup-block {
+  display: grid;
+  gap: 8px;
+}
+
+.trait-roll-step-label {
+  color: #ffe0b2;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.trait-roll-slot-grid,
+.trait-roll-choice-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.trait-roll-slot-grid {
+  grid-template-columns: 1fr;
+}
+
+.trait-roll-choice-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.trait-roll-slot-button,
+.trait-roll-choice-button {
+  min-height: 40px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  background: rgba(255, 248, 234, 0.05);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.trait-roll-slot-button.is-selected,
+.trait-roll-choice-button.is-selected {
+  border-color: rgba(243, 181, 111, 0.58);
+  background: rgba(243, 181, 111, 0.12);
+  color: #ffe0b2;
+}
+
+.trait-roll-selection-note {
+  color: #d8ffb7 !important;
+  font-weight: 800;
+}
+
+.trait-roll-confirm-button {
+  margin-top: 0;
+  min-height: 44px;
+}
+
+.trait-roll-result-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.trait-roll-candidate-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.trait-roll-candidate-button {
+  display: grid;
+  gap: 4px;
+  min-height: 48px;
+  padding: 10px 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(216, 255, 183, 0.2);
+  background: rgba(216, 255, 183, 0.07);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.trait-roll-candidate-button strong {
+  font-size: 13px;
+}
+
+.trait-roll-candidate-button span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.trait-roll-keep-button {
+  width: 100%;
+  min-height: 40px;
+}
+
+.trait-roll-warning-panel {
+  display: grid;
+  gap: 10px;
+  padding: 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(210, 91, 63, 0.36);
+  background: rgba(210, 91, 63, 0.08);
+}
+
+.trait-roll-warning-panel strong {
+  color: #ffe0b2;
+  font-size: 13px;
+}
+
+.trait-roll-warning-panel p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.trait-roll-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.trait-roll-checkbox-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: #d8ffb7;
+}
+
+.trait-roll-warning-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .spirit-pet-tab-panel .spirit-pet-action-grid {

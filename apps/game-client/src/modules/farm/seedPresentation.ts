@@ -40,7 +40,7 @@ export function buildSeedGroups(input: {
       .filter((seed) => seed.rarity === rarity)
       .sort(compareSeedCatalogItems)
       .map((seed) => {
-        const unlocked = input.unlockedSeedIds.includes(seed.id);
+        const unlocked = input.unlockedSeedIds.includes(seed.id) || seed.unlockedByDefault;
         const quantity = input.seedInventory[seed.id] ?? 0;
         const research = buildSeedResearchState(seed, input.plantResearchState[seed.id], unlocked, quantity);
 
@@ -63,12 +63,17 @@ function buildSeedResearchState(
   const localResearch = buildLocalPlantResearchState(seed.id, unlocked, quantity);
   const requirement = getSeedUnlockRequirement(seed);
   const research = remoteResearch ?? localResearch;
+  const harvestRequired = (research.harvestRequired ?? 0) > 0 ? research.harvestRequired ?? 0 : requirement.harvestRequired;
+  const contributionRequired = research.contributionRequired > 0 ? research.contributionRequired : requirement.contributionRequired;
 
   return {
     ...research,
-    harvestRequired: research.harvestRequired ?? requirement.harvestRequired,
+    discovered: unlocked || research.discovered,
+    unlocked,
+    status: unlocked ? 'unlocked' : research.status,
+    harvestRequired,
     harvestOwned: research.harvestOwned ?? 0,
-    contributionRequired: research.contributionRequired || requirement.contributionRequired,
+    contributionRequired,
     contributionOwned: research.contributionOwned ?? 0,
   };
 }

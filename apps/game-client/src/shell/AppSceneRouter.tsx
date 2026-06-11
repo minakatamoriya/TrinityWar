@@ -11,6 +11,7 @@ import type {
   ClientSocialRelationItem,
   ClientSocialSummaryResponse,
   ClientSpiritElement,
+  ClientRollSpiritTraitsResponse,
   ClientSpiritRollMode,
   ClientSpiritState,
   ClientSpiritTraitCode,
@@ -97,8 +98,9 @@ interface AppSceneRouterProps {
     slotIndex: number,
     slotVersion: number,
     mode: ClientSpiritRollMode,
-    options?: { lockedSlotIndex?: number; targetSlotIndex?: number; targetTraitCode?: ClientSpiritTraitCode },
-  ) => void;
+    options?: { targetSlotIndex?: number },
+  ) => Promise<ClientRollSpiritTraitsResponse | null>;
+  onResolveSpiritTraitRoll: (rollLogId: string, selectedTraitCode: ClientSpiritTraitCode | null, slotVersion: number) => Promise<boolean>;
   onSetMainSpirit: (slotIndex: number, slotVersion: number) => void;
   onToggleFollowTarget: (target: ClientRaidTarget) => void;
   onTransferFaction: (factionName: string) => void;
@@ -168,6 +170,7 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
     onRefreshSocial,
     onRejectFriendRequest,
     onRequestFriend,
+    onResolveSpiritTraitRoll,
     onRollSpiritTraits,
     onSetMainSpirit,
     onToggleFollowTarget,
@@ -224,8 +227,10 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
           onFeed={onFeedSpirit}
           onBreakthrough={onBreakthroughSpirit}
           onRollTraits={onRollSpiritTraits}
+          onResolveTraitRoll={onResolveSpiritTraitRoll}
           playerFaction={home.factionName}
           spirit={spiritState}
+          vaultGold={vaultGold}
         />
       ) : null}
 

@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type {
+  ClientSpiritTraitRollRule,
   ClientSpiritCodexEntry,
   ClientSpiritElement,
   ClientFactionAdvantagePanel,
   ClientSpiritRarity,
   ClientSpiritRole,
+  ClientRollSpiritTraitsResponse,
+  ClientSpiritActiveRollMode,
   ClientSpiritRollMode,
   ClientSpiritSlot,
   ClientSpiritState,
   ClientSpiritTraitCode,
+  ClientSpiritTraitRollPreview,
 } from '@trinitywar/shared';
+import { CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER, CLIENT_SPIRIT_TRAIT_ROLL_RULES, getClientSpiritInnateTrait } from '@trinitywar/shared';
 import type { TutorialArmyUiRules } from '../../tutorial/tutorialFlow';
 import { FullScreenToolShell } from '../common/ModalShell';
 
@@ -18,6 +23,7 @@ interface ArmySceneProps {
   advantage?: ClientFactionAdvantagePanel;
   playerFaction: string;
   spirit: ClientSpiritState;
+  vaultGold: number;
   busy: boolean;
   uiRules: TutorialArmyUiRules;
   onSetMain: (slotIndex: number, slotVersion: number) => void;
@@ -30,13 +36,14 @@ interface ArmySceneProps {
     slotIndex: number,
     slotVersion: number,
     mode: ClientSpiritRollMode,
-    options?: { lockedSlotIndex?: number; targetSlotIndex?: number; targetTraitCode?: ClientSpiritTraitCode },
-  ) => void;
+    options?: { targetSlotIndex?: number },
+  ) => Promise<ClientRollSpiritTraitsResponse | null>;
+  onResolveTraitRoll: (rollLogId: string, selectedTraitCode: ClientSpiritTraitCode | null, slotVersion: number) => Promise<boolean>;
 }
 
 type DisplayRarity = '普通' | '稀有' | '传说';
 type DisplayElement = '金' | '木' | '水' | '火' | '土';
-type SpiritPetActionTab = 'overview' | 'growth' | 'breakthrough' | 'traits' | 'manage';
+type SpiritPetActionTab = 'overview' | 'growth' | 'breakthrough' | 'traits';
 type SpiritComposeStep = 'choose-spirit' | 'choose-element';
 
 const elementChoices: Array<{ value: ClientSpiritElement; label: DisplayElement }> = [
@@ -58,27 +65,65 @@ const DAILY_TALISMAN_RECOVERY_LIMIT = 3;
 const MAX_QUICK_RECOVERY_PER_DAY = DAILY_FREE_RECOVERY_LIMIT + DAILY_TALISMAN_RECOVERY_LIMIT;
 const SPIRIT_MAX_LEVEL = 50;
 const STARTER_SPIRIT_IDS = ['canglang', 'linglu', 'qingyuan'];
-const traitChoices: Array<{ code: ClientSpiritTraitCode; label: string }> = [
-  { code: 'claw', label: '利爪' },
-  { code: 'thick_skin', label: '厚皮' },
-  { code: 'crit', label: '暴击' },
-  { code: 'crit_damage', label: '爆伤' },
-  { code: 'dodge', label: '闪避' },
-  { code: 'counter', label: '反击' },
-  { code: 'lifesteal', label: '吸血' },
-  { code: 'tenacity', label: '韧性' },
-];
+const traitRollPlans: ClientSpiritTraitRollRule[] = CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER.map((mode) => CLIENT_SPIRIT_TRAIT_ROLL_RULES[mode]);
 
 const petActionTabs: Array<{ key: SpiritPetActionTab; label: string }> = [
   { key: 'overview', label: '基础' },
   { key: 'growth', label: '成长' },
   { key: 'breakthrough', label: '突破' },
   { key: 'traits', label: '洗点' },
-  { key: 'manage', label: '管理' },
 ];
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value);
+}
+
+function getTraitRollGoldCost(baseGold: number, advantage?: ClientFactionAdvantagePanel): number {
+  const reductionPercent = advantage?.modifiers.spiritTraitRollGoldCostReductionPercent ?? 0;
+  return Math.ceil(Math.max(baseGold, 0) * (1 - reductionPercent / 100));
+}
+
+function formatTraitRollCost(cost: { marrow: number; jade: number; gold: number }, goldCost: number): string {
+  const parts: string[] = [];
+  if (cost.marrow > 0) {
+    parts.push(`灵髓 ${cost.marrow}`);
+  }
+  if (cost.jade > 0) {
+    parts.push(`灵玉 ${cost.jade}`);
+  }
+  if (goldCost > 0) {
+    parts.push(`金币 ${formatNumber(goldCost)}`);
+  }
+  return parts.join(' · ');
+}
+
+function getTraitSlotDisplay(slot: ClientSpiritSlot, slotIndex: number): string {
+  const trait = slot.traits?.find((item) => item.slotIndex === slotIndex);
+  return trait ? `${slotIndex}号 ${trait.label}` : `${slotIndex}号 空词条`;
+}
+
+function getSpiritRarityGrowthMultiplier(rarity: ClientSpiritRarity, level: number): number {
+  if (rarity === 'legendary') {
+    return level <= 10 ? 0.9 : level <= 30 ? 1.02 : 1.18;
+  }
+  if (rarity === 'rare') {
+    return level <= 10 ? 0.96 : level <= 30 ? 1.06 : 1.08;
+  }
+  return level <= 30 ? 1 : 0.92;
+}
+
+function getSpiritAttackAtLevel(definition: ClientSpiritCodexEntry['definition'], level: number): number {
+  const levelDelta = Math.max(level - 1, 0);
+  const rarityMultiplier = getSpiritRarityGrowthMultiplier(definition.rarity, level);
+  return Math.round(definition.baseAttack + levelDelta * definition.growthAttack * rarityMultiplier);
+}
+
+function getTraitBonusSummary(slot: ClientSpiritSlot): string {
+  const traits = slot.traits ?? [];
+  if (traits.length <= 0) {
+    return '暂无洗点词条加成';
+  }
+  return traits.map((trait) => trait.description).join(' · ');
 }
 
 function formatDuration(seconds: number): string {
@@ -444,11 +489,6 @@ function getRecoveryPlan(dailyRecoveryUsed: number): {
   };
 }
 
-function getRecoveryStatusText(plan: ReturnType<typeof getRecoveryPlan>, isFullHp: boolean): string {
-  const nextCost = plan.nextTalismanCost > 0 ? ` / 下次消耗 ${plan.nextTalismanCost} 天机符` : '';
-  return `${isFullHp ? '已满血 / ' : ''}免费恢复剩余 ${plan.freeRemaining} 次 / 天机符恢复剩余 ${plan.talismanRemaining} 次${nextCost}`;
-}
-
 function getRecoveryButtonText(plan: ReturnType<typeof getRecoveryPlan>): string {
   if (plan.freeRemaining > 0) {
     return '免费恢复';
@@ -519,16 +559,19 @@ function SpiritStageCard(props: {
 }
 
 export function ArmyScene(props: ArmySceneProps): JSX.Element {
-  const { advantage, playerFaction, spirit, busy, uiRules, onSetMain, onRecover, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits } = props;
+  const { advantage, playerFaction, spirit, vaultGold, busy, uiRules, onSetMain, onRecover, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits, onResolveTraitRoll } = props;
   const [codexOpen, setCodexOpen] = useState(false);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [selectedCodexSpiritId, setSelectedCodexSpiritId] = useState<string | null>(() => spirit.codex.find((entry) => isDiscovered(entry))?.spiritId ?? spirit.codex[0]?.spiritId ?? null);
   const [selectedComposeSpiritId, setSelectedComposeSpiritId] = useState<string>(() => spirit.readyToCompose.find((entry) => !entry.ownedCurrent)?.spiritId ?? '');
   const [composeElement, setComposeElement] = useState<ClientSpiritElement>('wood');
   const [composeStep, setComposeStep] = useState<SpiritComposeStep>('choose-spirit');
-  const [lockedTraitSlot, setLockedTraitSlot] = useState(1);
   const [targetTraitSlot, setTargetTraitSlot] = useState(1);
-  const [targetTraitCode, setTargetTraitCode] = useState<ClientSpiritTraitCode>('crit');
+  const [selectedTraitRollMode, setSelectedTraitRollMode] = useState<ClientSpiritActiveRollMode>('basic');
+  const [pendingTraitRoll, setPendingTraitRoll] = useState<ClientSpiritTraitRollPreview | null>(null);
+  const [goldReforgeConfirmOpen, setGoldReforgeConfirmOpen] = useState(false);
+  const [goldReforgeSkipChecked, setGoldReforgeSkipChecked] = useState(false);
+  const [goldReforgeSkipForSession, setGoldReforgeSkipForSession] = useState(false);
   const [selectedPetTab, setSelectedPetTab] = useState<SpiritPetActionTab>('overview');
   const [liveNowMs, setLiveNowMs] = useState(() => Date.now());
   const [expFloat, setExpFloat] = useState<{ id: number; text: string } | null>(null);
@@ -575,11 +618,66 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const selectedComposeElementLabel = getElementLabel(composeElement) || '木';
   const availableTianjiTalisman = spirit.tianjiTalisman;
   const recoveryPlan = getRecoveryPlan(spirit.dailyRecoveryUsed);
+  const selectedSlotIsOnlyOwnedSpirit = occupiedCount <= 1;
+  const selectedSlotCanDissolve = selectedSlot ? !selectedSlot.isMain && !selectedSlotIsOnlyOwnedSpirit : false;
+  const selectedSlotDissolveLabel = selectedSlot?.isMain
+    ? selectedSlotIsOnlyOwnedSpirit
+      ? '唯一灵宠不可解散'
+      : '先更换主位'
+    : '解散（返还 35% 兽魂）';
+  const selectedSlotCanFeed = selectedSlot
+    ? selectedSlot.level < SPIRIT_MAX_LEVEL
+      && !selectedSlot.isAtBreakthroughNode
+      && (spirit.spiritRoot ?? 0) >= 10
+    : false;
+  const selectedSlotFeedLabel = !selectedSlot
+    ? '投喂 10 灵根'
+    : selectedSlot.level >= SPIRIT_MAX_LEVEL
+    ? '已满级'
+    : selectedSlot.isAtBreakthroughNode
+    ? '待突破'
+    : (spirit.spiritRoot ?? 0) < 10
+    ? '灵根不足'
+    : '投喂 10 灵根';
+  const selectedSlotAttack = selectedSlot && selectedSlotEntry ? getSpiritAttackAtLevel(selectedSlotEntry.definition, selectedSlot.level) : 0;
+  const selectedSlotInnateTrait = getClientSpiritInnateTrait(selectedSlot?.spiritId);
+  const selectedSlotFactionName = selectedSlotEntry ? getFactionLabel(selectedSlotEntry.definition.factionAffinity) : '';
+  const selectedSlotSameFaction = selectedSlotFactionName === playerFaction;
+  const selectedSlotFactionStatusText = selectedSlotEntry
+    ? selectedSlotSameFaction
+      ? `已触发 ${getFactionBonusLabel(selectedSlotFactionName)}`
+      : `未触发，当前阵营为${playerFaction}`
+    : '';
+  const selectedTraitRollPlan = traitRollPlans.find((plan) => plan.mode === selectedTraitRollMode) ?? traitRollPlans[0];
+  const selectedTraitRollGoldCost = getTraitRollGoldCost(selectedTraitRollPlan.cost.gold, advantage);
+  const unlockedTraitSlotCount = selectedSlot?.unlockedTraitSlots ?? 0;
+  const selectedBreakthroughStage = selectedSlot?.breakthroughStage ?? 0;
+  const selectedTraitRollHasSlots = unlockedTraitSlotCount > 0;
+  const selectedTraitRollUnlocked = selectedBreakthroughStage >= selectedTraitRollPlan.unlockBreakthroughStage;
+  const selectedTraitRollHasMaterials = (spirit.spiritMarrow ?? 0) >= selectedTraitRollPlan.cost.marrow
+    && (spirit.spiritJade ?? 0) >= selectedTraitRollPlan.cost.jade
+    && vaultGold >= selectedTraitRollGoldCost;
+  const selectedTraitRollDisabled = busy || !selectedTraitRollHasSlots || !selectedTraitRollUnlocked || !selectedTraitRollHasMaterials || Boolean(pendingTraitRoll);
+  const selectedTraitRollNeedsSlot = selectedTraitRollPlan.mode !== 'basic';
+  const selectedTraitRollOptions = selectedTraitRollNeedsSlot ? { targetSlotIndex: targetTraitSlot } : undefined;
   const codexGroups = codexRarityGroups.map((group) => ({
     ...group,
     pets: spirit.codex.filter((entry) => entry.definition.rarity === group.rarity),
   }));
   const isLevelFlashActive = Date.now() - levelFlashToken < 700;
+  const runSelectedTraitRoll = async (): Promise<void> => {
+    if (!selectedSlot) {
+      return;
+    }
+
+    const result = await onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, selectedTraitRollPlan.mode, selectedTraitRollOptions);
+    if (result?.traitRoll) {
+      setPendingTraitRoll(result.traitRoll);
+    } else {
+      setPendingTraitRoll(null);
+    }
+  };
+
   useEffect(() => {
     if (!selectedSlot?.spiritId) {
       previousSelectedSlotRef.current = selectedSlot ?? null;
@@ -618,6 +716,32 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
     setSelectedPetTab('overview');
     setComposeStep('choose-spirit');
   }, [selectedSlotIndex]);
+
+  useEffect(() => {
+    const unlockedSlots = selectedSlot?.unlockedTraitSlots ?? 0;
+    if (unlockedSlots <= 0) {
+      setTargetTraitSlot(1);
+      setSelectedTraitRollMode('basic');
+      setPendingTraitRoll(null);
+      setGoldReforgeConfirmOpen(false);
+      return;
+    }
+
+    setTargetTraitSlot((current) => Math.min(Math.max(current, 1), unlockedSlots));
+    setPendingTraitRoll(null);
+    setGoldReforgeConfirmOpen(false);
+  }, [selectedSlot?.slotIndex, selectedSlot?.unlockedTraitSlots]);
+
+  useEffect(() => {
+    setGoldReforgeConfirmOpen(false);
+  }, [selectedTraitRollMode]);
+
+  useEffect(() => {
+    const fallbackPlan = traitRollPlans.find((plan) => selectedBreakthroughStage >= plan.unlockBreakthroughStage) ?? traitRollPlans[0];
+    if (selectedBreakthroughStage < selectedTraitRollPlan.unlockBreakthroughStage) {
+      setSelectedTraitRollMode(fallbackPlan.mode);
+    }
+  }, [selectedBreakthroughStage, selectedTraitRollPlan.unlockBreakthroughStage]);
 
   useEffect(() => {
     if (!expFloat) {
@@ -775,11 +899,20 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                     phase={getPhaseForLevel(selectedSlot.level)}
                     rarity={getRarityLabel(selectedSlotEntry.definition.rarity)}
                   />
+                  <div className="spirit-pet-card-actions">
+                    {!selectedSlot.isMain ? (
+                      <button className="primary-button" disabled={busy} onClick={() => onSetMain(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">设为主位</button>
+                    ) : null}
+                    <button className="ghost-button" disabled={busy || !selectedSlotCanDissolve} onClick={() => onDissolve(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">{selectedSlotDissolveLabel}</button>
+                  </div>
                   {resumeHint ? <p className="spirit-live-hint">{resumeHint.text}</p> : null}
                   <div className="spirit-progress-block">
                     <div className="spirit-progress-head">
                       <span>{'\u8840\u91cf'}</span>
-                      <strong>{getHealthText(selectedSlot)}</strong>
+                      <div className="spirit-progress-head-side">
+                        <strong>{getHealthText(selectedSlot)}</strong>
+                        <button className="secondary-button spirit-progress-action-button" disabled={busy || getHealthRatio(selectedSlot) >= 100 || recoveryPlan.totalRemaining <= 0 || availableTianjiTalisman < recoveryPlan.nextTalismanCost} onClick={() => onRecover(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">{getRecoveryButtonText(recoveryPlan)}</button>
+                      </div>
                     </div>
                     <div className="spirit-progress-track" aria-hidden="true">
                       <div className="spirit-progress-fill spirit-progress-fill-health" style={{ width: `${getHealthRatio(selectedSlot)}%` }} />
@@ -788,13 +921,16 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                   <div className="spirit-progress-block spirit-progress-block-live">
                     <div className="spirit-progress-head">
                       <span>{'\u7ecf\u9a8c'}</span>
-                      <strong>
-                        {selectedSlot.level >= SPIRIT_MAX_LEVEL
-                          ? '已封顶'
-                          : selectedSlot.isAtBreakthroughNode
-                          ? '\u5f85\u7a81\u7834'
-                          : `${formatNumber(selectedSlot.exp)} / ${formatNumber(Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1))} \u00b7 ${Math.floor(getExpProgressPercent(selectedSlot))}%`}
-                      </strong>
+                      <div className="spirit-progress-head-side">
+                        <strong>
+                          {selectedSlot.level >= SPIRIT_MAX_LEVEL
+                            ? '已封顶'
+                            : selectedSlot.isAtBreakthroughNode
+                            ? '\u5f85\u7a81\u7834'
+                            : `${formatNumber(selectedSlot.exp)} / ${formatNumber(Math.max(selectedSlot.currentLevelExpRequired ?? 1, 1))} \u00b7 ${Math.floor(getExpProgressPercent(selectedSlot))}%`}
+                        </strong>
+                        <button className="secondary-button spirit-progress-action-button" disabled={busy || !selectedSlotCanFeed} onClick={() => onFeed(selectedSlot.slotIndex, selectedSlot.slotVersion, 'feed_once')} type="button">{selectedSlotFeedLabel}</button>
+                      </div>
                     </div>
                     <div className="spirit-progress-track" aria-hidden="true">
                       <div className="spirit-progress-fill" style={{ width: `${getExpProgressPercent(selectedSlot)}%` }} />
@@ -817,18 +953,54 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                   </div>
                   <div className="spirit-pet-tab-panel" role="tabpanel">
                     {selectedPetTab === 'overview' ? (
-                      <>
-                        <div className="seed-codex-stats">
-                          <div className="seed-codex-stat-row"><strong>稀有度</strong><span>{getRarityLabel(selectedSlotEntry.definition.rarity)}</span></div>
-                          <div className="seed-codex-stat-row"><strong>阵营加成</strong><span>{getFactionLabel(selectedSlotEntry.definition.factionAffinity) === playerFaction ? `已触发 ${getFactionBonusLabel(getFactionLabel(selectedSlotEntry.definition.factionAffinity))}` : `未触发，当前阵营为${playerFaction}`}</span></div>
-                          <div className="seed-codex-stat-row"><strong>升级方式</strong><span>挂机经验自动升级</span></div>
-                          <div className="seed-codex-stat-row"><strong>突破材料</strong><span>只消耗普通/稀有/传说兽魂</span></div>
-                          <div className="seed-codex-stat-row"><strong>天机符</strong><span>{formatNumber(availableTianjiTalisman)}</span></div>
-                          <div className="seed-codex-stat-row"><strong>当前血量</strong><span>{getHealthText(selectedSlot)}</span></div>
-                          <div className="seed-codex-stat-row"><strong>当前状态</strong><span>{getHealthStatus(selectedSlot)}</span></div>
-                          <div className="seed-codex-stat-row"><strong>恢复情况</strong><span>{getRecoveryStatusText(recoveryPlan, getHealthRatio(selectedSlot) >= 100)}</span></div>
+                      <section className="spirit-overview-panel">
+                        <div className="spirit-attribute-grid">
+                          <div className="spirit-attribute-card">
+                            <span>攻击</span>
+                            <strong>{formatNumber(selectedSlotAttack)}</strong>
+                            <small>当前等级基础攻击</small>
+                          </div>
+                          <div className="spirit-attribute-card">
+                            <span>血量</span>
+                            <strong>{formatNumber(selectedSlot.maxHp)}</strong>
+                            <small>{getHealthText(selectedSlot)} · {getHealthStatus(selectedSlot)}</small>
+                          </div>
                         </div>
-                      </>
+
+                        <div className="spirit-bonus-panel">
+                          <div className="panel-head">
+                            <h4>特性</h4>
+                            <span className="soft-tag">先天</span>
+                          </div>
+                          <div className={`spirit-bonus-row${selectedSlotInnateTrait ? '' : ' is-muted'}`}>
+                            <strong>{selectedSlotInnateTrait?.label ?? '特性待开放'}</strong>
+                            <span>{selectedSlotInnateTrait?.description ?? '后续会接入每只灵宠的专属特性'}</span>
+                          </div>
+                        </div>
+
+                        <div className="spirit-bonus-panel">
+                          <div className="panel-head">
+                            <h4>加成</h4>
+                            <span className="soft-tag">Buff</span>
+                          </div>
+                          <div className="spirit-bonus-list">
+                            <div className={`spirit-bonus-row${selectedSlotSameFaction ? '' : ' is-muted'}`}>
+                              <strong>阵营加成</strong>
+                              <span>{selectedSlotFactionName} · {selectedSlotFactionStatusText}</span>
+                            </div>
+                            <div className="spirit-bonus-row">
+                              <strong>词条加成</strong>
+                              <span>{getTraitBonusSummary(selectedSlot)}</span>
+                            </div>
+                            {advantage?.details.map((detail) => (
+                              <div className="spirit-bonus-row" key={detail}>
+                                <strong>{advantage.factionName}</strong>
+                                <span>{detail}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </section>
                     ) : null}
                     {selectedPetTab === 'growth' ? (
                       <section className="spirit-growth-panel">
@@ -845,9 +1017,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                           <div className="seed-codex-stat-row"><strong>每次投喂</strong><span>固定消耗 10 灵根，追加 2 小时自动加速，可重复叠加</span></div>
                         </div>
                         {selectedSlot.isAtBreakthroughNode ? <p className="panel-text">突破后会立刻恢复挂机。投喂现在只负责续上自动加速，不再瞬间增加经验。</p> : <p className="panel-text">灵根只负责续上自动加速，经验按时间持续增长。粮食快用完时再来补就行。</p>}
-                        <div className="spirit-pet-action-grid">
-                          <button className="secondary-button" disabled={busy || (spirit.spiritRoot ?? 0) < 10} onClick={() => onFeed(selectedSlot.slotIndex, selectedSlot.slotVersion, 'feed_once')} type="button">投喂 10 灵根</button>
-                        </div>
                       </section>
                     ) : null}
                     {selectedPetTab === 'breakthrough' ? (
@@ -868,61 +1037,188 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                     ) : null}
                     {selectedPetTab === 'traits' ? (
                       <section className="spirit-growth-panel">
-                        <div className="panel-head">
-                          <h4>词条洗练</h4>
-                          <span className="soft-tag">重复叠加不衰减</span>
-                        </div>
-                        <div className="task-list">
+                        <div className="trait-roll-current">
+                          <div className="trait-roll-current-head">
+                            <strong>当前词条</strong>
+                            <span>重复叠加</span>
+                          </div>
                           {Array.from({ length: 5 }, (_, index) => index + 1).map((slotIndex) => {
                             const trait = selectedSlot.traits?.find((item) => item.slotIndex === slotIndex);
                             const unlocked = slotIndex <= (selectedSlot.unlockedTraitSlots ?? 0);
                             const unlockLevel = slotIndex * 10;
                             const breakthroughLevel = unlockLevel - 1;
                             return (
-                              <div className={`task-row spirit-trait-row${trait?.sourceType === 'natural' ? ' is-natural' : ''}`} key={slotIndex}>
-                                <span className="task-index">{slotIndex}</span>
-                                <div>
-                                  <div className="task-row-head">
-                                    <strong>{trait ? trait.label : unlocked ? '待洗练' : `Lv.${breakthroughLevel} 突破解锁`}</strong>
-                                    <span className="task-state-badge">{unlocked ? '已解锁' : '未解锁'}</span>
-                                  </div>
-                                  <p>{trait?.description ?? (unlocked ? '洗练后生成词条' : `达到 Lv.${breakthroughLevel} 满经验并完成突破后解锁`)}</p>
-                                </div>
+                              <div className={`trait-roll-current-slot${unlocked ? '' : ' is-locked'}`} key={slotIndex}>
+                                <span>{slotIndex}</span>
+                                <strong>{trait ? trait.label : unlocked ? '待洗' : `Lv.${breakthroughLevel}`}</strong>
+                                <small>{trait?.description ?? (unlocked ? '可洗练' : '突破开')}</small>
                               </div>
                             );
                           })}
                         </div>
                         {(selectedSlot.unlockedTraitSlots ?? 0) <= 0 ? <p className="panel-text">第一个词条会在 Lv.9 满经验完成突破后随机生成。</p> : null}
-                        <div className="spirit-element-picker">
-                          {Array.from({ length: selectedSlot.unlockedTraitSlots ?? 0 }, (_, index) => index + 1).map((slotIndex) => (
-                            <button className={`spirit-element-chip ${lockedTraitSlot === slotIndex ? ' is-selected' : ''}`} key={`lock-${slotIndex}`} onClick={() => setLockedTraitSlot(slotIndex)} type="button">锁 {slotIndex}</button>
-                          ))}
-                        </div>
-                        <div className="spirit-element-picker">
-                          {Array.from({ length: selectedSlot.unlockedTraitSlots ?? 0 }, (_, index) => index + 1).map((slotIndex) => (
-                            <button className={`spirit-element-chip ${targetTraitSlot === slotIndex ? ' is-selected' : ''}`} key={`target-${slotIndex}`} onClick={() => setTargetTraitSlot(slotIndex)} type="button">槽 {slotIndex}</button>
-                          ))}
-                        </div>
-                        <div className="spirit-element-picker">
-                          {traitChoices.map((trait) => (
-                            <button className={`spirit-element-chip ${targetTraitCode === trait.code ? ' is-selected' : ''}`} key={trait.code} onClick={() => setTargetTraitCode(trait.code)} type="button">{trait.label}</button>
-                          ))}
-                        </div>
-                        <div className="spirit-pet-action-grid">
-                          <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 5} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'basic')} type="button">基础洗练 5 灵髓 + 金币</button>
-                          <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 50} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'batch_basic')} type="button">连续洗练 10 次</button>
-                          <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 10 || (spirit.spiritJade ?? 0) < 1} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'advanced', { lockedSlotIndex: lockedTraitSlot })} type="button">高级洗练 锁 1 条</button>
-                          <button className="secondary-button" disabled={busy || (selectedSlot.unlockedTraitSlots ?? 0) <= 0 || (spirit.spiritMarrow ?? 0) < 20 || (spirit.spiritJade ?? 0) < 5} onClick={() => onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'ultimate', { targetSlotIndex: targetTraitSlot, targetTraitCode })} type="button">终极洗练 定向</button>
+                        <div className="trait-roll-workflow">
+                          <div className="trait-roll-resource-bar">
+                            <span>灵髓 {formatNumber(spirit.spiritMarrow ?? 0)}</span>
+                            <span>灵玉 {formatNumber(spirit.spiritJade ?? 0)}</span>
+                            <span>金币 {formatNumber(vaultGold)}</span>
+                          </div>
+                          <div className="trait-roll-step-head">
+                            <span>1</span>
+                            <strong>选择方式</strong>
+                          </div>
+                          <div className="trait-roll-plan-grid" role="radiogroup" aria-label="洗练方式">
+                            {traitRollPlans.map((plan) => {
+                              const goldCost = getTraitRollGoldCost(plan.cost.gold, advantage);
+                              const isSelected = selectedTraitRollMode === plan.mode;
+                              const isUnlocked = selectedBreakthroughStage >= plan.unlockBreakthroughStage;
+                              return (
+                                <button
+                                  aria-checked={isSelected}
+                                  className={`trait-roll-plan${isSelected ? ' is-selected' : ''}${isUnlocked ? '' : ' is-locked'}`}
+                                  disabled={!isUnlocked || Boolean(pendingTraitRoll)}
+                                  key={plan.mode}
+                                  onClick={() => setSelectedTraitRollMode(plan.mode)}
+                                  role="radio"
+                                  type="button"
+                                >
+                                  <span className="trait-roll-plan-head">
+                                    <strong>{plan.label}</strong>
+                                    <small>{isUnlocked ? plan.badge : `Lv.${plan.unlockLevel} 开`}</small>
+                                  </span>
+                                  <em>{formatTraitRollCost(plan.cost, goldCost)}</em>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="trait-roll-setup-panel">
+                            <div className="trait-roll-step-head">
+                              <span>2</span>
+                              <strong>{selectedTraitRollNeedsSlot ? '选择槽位' : '确认范围'}</strong>
+                            </div>
+                            <p className="trait-roll-mode-summary">{selectedTraitRollPlan.summary}</p>
+                            {selectedTraitRollNeedsSlot ? (
+                              <div className="trait-roll-slot-grid">
+                                {Array.from({ length: selectedSlot.unlockedTraitSlots ?? 0 }, (_, index) => index + 1).map((slotIndex) => (
+                                  <button
+                                    className={`trait-roll-slot-button${targetTraitSlot === slotIndex ? ' is-selected' : ''}`}
+                                    disabled={Boolean(pendingTraitRoll)}
+                                    key={`target-${slotIndex}`}
+                                    onClick={() => setTargetTraitSlot(slotIndex)}
+                                    type="button"
+                                  >
+                                    {getTraitSlotDisplay(selectedSlot, slotIndex)}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="trait-roll-selection-note">将立即重洗全部已解锁词条，不生成保留候选。</p>
+                            )}
+                            {pendingTraitRoll ? (
+                              <div className="trait-roll-result-panel">
+                                <div className="trait-roll-step-head">
+                                  <span>3</span>
+                                  <strong>选择结果</strong>
+                                </div>
+                                <p className="trait-roll-selection-note">
+                                  原词条：{pendingTraitRoll.currentTrait?.label ?? '空词条'}
+                                </p>
+                                <div className="trait-roll-candidate-grid">
+                                  {pendingTraitRoll.candidates.map((candidate) => (
+                                    <button
+                                      className="trait-roll-candidate-button"
+                                      disabled={busy}
+                                      key={candidate.traitCode}
+                                      onClick={async () => {
+                                        const resolved = await onResolveTraitRoll(pendingTraitRoll.rollLogId, candidate.traitCode, selectedSlot.slotVersion);
+                                        if (resolved) {
+                                          setPendingTraitRoll(null);
+                                        }
+                                      }}
+                                      type="button"
+                                    >
+                                      <strong>{candidate.label}</strong>
+                                      <span>{candidate.description}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                                <button
+                                  className="secondary-button trait-roll-keep-button"
+                                  disabled={busy}
+                                  onClick={async () => {
+                                    const resolved = await onResolveTraitRoll(pendingTraitRoll.rollLogId, null, selectedSlot.slotVersion);
+                                    if (resolved) {
+                                      setPendingTraitRoll(null);
+                                    }
+                                  }}
+                                  type="button"
+                                >
+                                  保留原词条
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="trait-roll-step-head">
+                                  <span>3</span>
+                                  <strong>{selectedTraitRollNeedsSlot ? '生成候选' : '执行洗练'}</strong>
+                                </div>
+                                {goldReforgeConfirmOpen && selectedTraitRollPlan.mode === 'basic' ? (
+                                  <div className="trait-roll-warning-panel">
+                                    <strong>确认金币重铸</strong>
+                                    <p>金币重铸会随机替换全部已解锁词条，已洗好的词条也会被覆盖。</p>
+                                    <label className="trait-roll-checkbox-row">
+                                      <input
+                                        checked={goldReforgeSkipChecked}
+                                        onChange={(event) => setGoldReforgeSkipChecked(event.currentTarget.checked)}
+                                        type="checkbox"
+                                      />
+                                      <span>本次登录不再提示</span>
+                                    </label>
+                                    <div className="trait-roll-warning-actions">
+                                      <button className="secondary-button" onClick={() => setGoldReforgeConfirmOpen(false)} type="button">取消</button>
+                                      <button
+                                        className="primary-button"
+                                        disabled={busy}
+                                        onClick={async () => {
+                                          if (goldReforgeSkipChecked) {
+                                            setGoldReforgeSkipForSession(true);
+                                          }
+                                          setGoldReforgeConfirmOpen(false);
+                                          await runSelectedTraitRoll();
+                                        }}
+                                        type="button"
+                                      >
+                                        重铸全部
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : null}
+                                <button
+                                  className="primary-button spirit-full-button trait-roll-confirm-button"
+                                  disabled={selectedTraitRollDisabled}
+                                  onClick={async () => {
+                                    if (selectedTraitRollPlan.mode === 'basic' && !goldReforgeSkipForSession) {
+                                      setGoldReforgeConfirmOpen(true);
+                                      return;
+                                    }
+                                    await runSelectedTraitRoll();
+                                  }}
+                                  type="button"
+                                >
+                                  {selectedTraitRollHasSlots
+                                    ? !selectedTraitRollUnlocked
+                                      ? `Lv.${selectedTraitRollPlan.unlockLevel} 开放${selectedTraitRollPlan.label}`
+                                      : selectedTraitRollHasMaterials
+                                      ? selectedTraitRollPlan.confirmLabel
+                                      : `资源不足：需要 ${formatTraitRollCost(selectedTraitRollPlan.cost, selectedTraitRollGoldCost)}`
+                                    : '暂无可洗练词条槽'}
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </section>
-                    ) : null}
-                    {selectedPetTab === 'manage' ? (
-                      <div className="spirit-pet-action-grid">
-                        <button className="primary-button" disabled={busy || selectedSlot.isMain} onClick={() => onSetMain(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">设为主位</button>
-                        <button className="secondary-button" disabled type="button">挂机升级中</button>
-                        <button className="secondary-button" disabled={busy || getHealthRatio(selectedSlot) >= 100 || recoveryPlan.totalRemaining <= 0 || availableTianjiTalisman < recoveryPlan.nextTalismanCost} onClick={() => onRecover(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">{getRecoveryButtonText(recoveryPlan)}</button>
-                        <button className="ghost-button" disabled={busy || selectedSlot.isMain} onClick={() => onDissolve(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">解散（返还 35% 兽魂）</button>
-                      </div>
                     ) : null}
                   </div>
                 </>

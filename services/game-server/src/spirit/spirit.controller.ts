@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Headers, Inject, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import type { ClientSpiritMutationResponse, ClientSpiritStateResponse } from '@trinitywar/shared';
+import type { ClientRollSpiritTraitsResponse, ClientSpiritMutationResponse, ClientSpiritStateResponse } from '@trinitywar/shared';
 import { AuthPlaceholderGuard } from '../auth/auth-placeholder.guard.js';
 import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
@@ -14,6 +14,7 @@ import {
   DissolveSpiritRequestDto,
   FeedSpiritRequestDto,
   RecoverSpiritRequestDto,
+  ResolveSpiritTraitRollRequestDto,
   RollSpiritTraitsRequestDto,
   SetMainSpiritRequestDto,
   UpgradeSpiritRequestDto,
@@ -114,12 +115,29 @@ export class SpiritController {
     @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
     @Body() body: RollSpiritTraitsRequestDto,
     @Headers('x-idempotency-key') idempotencyKey?: string,
-  ): Promise<ClientSpiritMutationResponse> {
+  ): Promise<ClientRollSpiritTraitsResponse> {
     if (!currentPlayer) {
       throw createUnauthorizedError('Current player context is required.');
     }
 
     return this.spiritService.rollSpiritTraits(currentPlayer.playerId, body, idempotencyKey);
+  }
+
+  @Post('resolve-roll')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: ResolveSpiritTraitRollRequestDto })
+  @ApiOkResponse({ description: 'Resolve a pending spirit trait roll.' })
+  async resolveSpiritTraitRoll(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: ResolveSpiritTraitRollRequestDto,
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ): Promise<ClientSpiritMutationResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.spiritService.resolveSpiritTraitRoll(currentPlayer.playerId, body, idempotencyKey);
   }
 
   @Post('shop/buy')
@@ -231,6 +249,7 @@ defineRouteParamTypes(SpiritController.prototype, 'upgradeSpirit', [Object, Obje
 defineRouteParamTypes(SpiritController.prototype, 'feedSpirit', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'breakthroughSpirit', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'rollSpiritTraits', [Object, Object, String]);
+defineRouteParamTypes(SpiritController.prototype, 'resolveSpiritTraitRoll', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'buySpiritShopItem', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'claimSpiritAdReward', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'setMainSpirit', [Object, Object, String]);

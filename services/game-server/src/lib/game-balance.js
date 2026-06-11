@@ -324,7 +324,7 @@ export const FACTION_ADVANTAGE_LEGACY_CONFIG = {
     factionCode: 'human',
     factionName: '人界',
     title: '种田更强',
-    summary: '成熟收益更高，可收窗口更长，适合稳定经营。',
+    summary: '人界优势：成熟收益更高，可收窗口更长，适合稳定经营。',
     details: [
       '可收窗口 +20%',
       '成熟收益 +5%',
@@ -350,7 +350,7 @@ export const FACTION_ADVANTAGE_LEGACY_CONFIG = {
     factionCode: 'immortal',
     factionName: '仙界',
     title: '灵宠更强',
-    summary: '挂机经验更高，投喂后培育更快，适合围绕主宠持续培养。',
+    summary: '仙界优势：挂机经验更高，投喂后培育更快，适合围绕主宠持续培养。',
     details: [
       '挂机经验 +10%',
       '投喂后培育加速 +25%',
@@ -376,7 +376,7 @@ export const FACTION_ADVANTAGE_LEGACY_CONFIG = {
     factionCode: 'demon',
     factionName: '魔界',
     title: '战斗更强',
-    summary: '战斗伤害更高，战后恢复更强，适合主动战斗。',
+    summary: '魔界优势：战斗伤害更高，战后恢复更强，适合主动战斗。',
     details: [
       '战斗伤害 +5%',
       '战后恢复已损生命 20%',

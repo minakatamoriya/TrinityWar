@@ -124,12 +124,12 @@ export class ClientReadService {
       const unlocked = (inventoryEntry?.unlockedAt ?? null) !== null;
       const unlockRequirement = getPlantUnlockRequirement(seedDefinition.seedId, seedDefinition.rarity, seedDefinition.sortOrder);
       const baseUnlocked = unlockRequirement.harvestRequired <= 0 && unlockRequirement.contributionRequired <= 0;
-      const discovered = unlocked || baseUnlocked || Boolean(seedDefinition.plantResearch[0]?.discoveredAt) || harvestCount >= Math.max(unlockRequirement.harvestRequired, 1);
-      const canUnlock = discovered
-        && !unlocked
-        && !baseUnlocked
-        && harvestCount >= unlockRequirement.harvestRequired
+      const discovered = unlocked || baseUnlocked || Boolean(seedDefinition.plantResearch[0]?.discoveredAt);
+      const requirementsMet = harvestCount >= unlockRequirement.harvestRequired
         && contribution >= unlockRequirement.contributionRequired;
+      const canUnlock = !unlocked
+        && !baseUnlocked
+        && requirementsMet;
 
       seedInventory[seedDefinition.seedId] = quantity;
       plantResearch[seedDefinition.seedId] = {
