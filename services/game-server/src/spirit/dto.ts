@@ -72,7 +72,11 @@ export class BreakthroughSpiritRequestDto implements ClientBreakthroughSpiritReq
 export class RollSpiritTraitsRequestDto implements ClientRollSpiritTraitsRequest {
   slotIndex!: number;
   mode!: ClientRollSpiritTraitsRequest['mode'];
-  targetSlotIndex!: number;
+  targetSlotIndex?: number;
+  material?: ClientRollSpiritTraitsRequest['material'];
+  candidateCount?: number;
+  lockedTraitSlotIndexes?: number[];
+  excludeCandidateIds?: string[];
   slotVersion?: number;
   walletVersion?: number;
   resourceVersion?: number;

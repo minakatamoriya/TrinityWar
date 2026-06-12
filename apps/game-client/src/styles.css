@@ -4731,7 +4731,7 @@ button.spirit-element-chip {
 
 .trait-roll-resource-bar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -4866,6 +4866,11 @@ button.spirit-element-chip {
   grid-template-columns: 1fr;
 }
 
+.trait-roll-lock-grid {
+  display: grid;
+  gap: 8px;
+}
+
 .trait-roll-choice-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -4887,6 +4892,49 @@ button.spirit-element-chip {
   border-color: rgba(243, 181, 111, 0.58);
   background: rgba(243, 181, 111, 0.12);
   color: #ffe0b2;
+}
+
+.trait-roll-lock-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  background: rgba(255, 248, 234, 0.05);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.trait-roll-lock-button span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trait-roll-lock-button small {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 248, 234, 0.08);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.trait-roll-lock-button.is-selected {
+  border-color: rgba(216, 255, 183, 0.55);
+  background: rgba(216, 255, 183, 0.08);
+}
+
+.trait-roll-lock-button.is-selected small {
+  background: rgba(216, 255, 183, 0.14);
+  color: #d8ffb7;
 }
 
 .trait-roll-selection-note {

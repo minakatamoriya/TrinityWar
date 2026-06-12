@@ -15,6 +15,7 @@ import type {
   ClientSpiritRollMode,
   ClientSpiritState,
   ClientSpiritTraitCode,
+  ClientSpiritTraitRollMaterial,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
 import type { ClientViewModel } from '../api';
@@ -98,7 +99,13 @@ interface AppSceneRouterProps {
     slotIndex: number,
     slotVersion: number,
     mode: ClientSpiritRollMode,
-    options?: { targetSlotIndex?: number },
+    options?: {
+      candidateCount?: number;
+      excludeCandidateIds?: string[];
+      lockedTraitSlotIndexes?: number[];
+      material?: ClientSpiritTraitRollMaterial;
+      targetSlotIndex?: number;
+    },
   ) => Promise<ClientRollSpiritTraitsResponse | null>;
   onResolveSpiritTraitRoll: (rollLogId: string, selectedTraitCode: ClientSpiritTraitCode | null, slotVersion: number) => Promise<boolean>;
   onSetMainSpirit: (slotIndex: number, slotVersion: number) => void;

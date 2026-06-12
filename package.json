@@ -8,11 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -n client,admin,server -c cyan,green,yellow \"npm run dev --workspace @trinitywar/game-client\" \"npm run dev --workspace @trinitywar/game-admin\" \"npm run dev --workspace @trinitywar/game-server\"",
-    "dev:game": "concurrently -n client,server -c cyan,yellow \"npm run dev --workspace @trinitywar/game-client\" \"npm run dev --workspace @trinitywar/game-server\"",
+    "dev": "npm run build:shared && concurrently -n client,admin,server -c cyan,green,yellow \"npm run dev --workspace @trinitywar/game-client\" \"npm run dev --workspace @trinitywar/game-admin\" \"npm run dev --workspace @trinitywar/game-server\"",
+    "dev:game": "npm run build:shared && concurrently -n client,server -c cyan,yellow \"npm run dev --workspace @trinitywar/game-client\" \"npm run dev --workspace @trinitywar/game-server\"",
     "dev:client": "npm run dev --workspace @trinitywar/game-client",
     "dev:admin": "npm run dev --workspace @trinitywar/game-admin",
-    "dev:server": "npm run dev --workspace @trinitywar/game-server",
+    "dev:server": "npm run build:shared && npm run dev --workspace @trinitywar/game-server",
     "build:shared": "npm run build --workspace @trinitywar/shared",
     "build": "npm run build:shared && npm run build --workspace @trinitywar/game-client && npm run build --workspace @trinitywar/game-admin && npm run build --workspace @trinitywar/game-server",
     "build:client": "npm run build:shared && npm run build --workspace @trinitywar/game-client",

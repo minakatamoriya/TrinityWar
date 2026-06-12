@@ -23,6 +23,7 @@
     "verify:raid-worker": "tsx src/verification/verify-raid-worker.ts",
     "verify:notifications": "tsx src/verification/verify-notification-flow.ts",
     "verify:spirit-flow": "tsx src/verification/verify-spirit-flow.ts",
+    "verify:spirit-trait-roll": "tsx src/verification/verify-spirit-trait-roll.ts",
     "verify:raid-social": "tsx src/verification/verify-raid-social-flow.ts",
     "verify:admin-boundary": "tsx src/verification/verify-admin-boundary.ts",
     "verify:admin-dangerous-audit": "tsx src/verification/verify-admin-dangerous-audit.ts",

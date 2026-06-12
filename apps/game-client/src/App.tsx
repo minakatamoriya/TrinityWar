@@ -18,6 +18,7 @@ import type {
   ClientSpiritRollMode,
   ClientRollSpiritTraitsResponse,
   ClientSpiritTraitCode,
+  ClientSpiritTraitRollMaterial,
   ClientSpiritState,
   ClientSeasonRewardsResponse,
   ClientSeasonSignInState,
@@ -1249,7 +1250,13 @@ function App(): JSX.Element {
     slotIndex: number,
     slotVersion: number,
     mode: ClientSpiritRollMode,
-    options: { targetSlotIndex?: number } = {},
+    options: {
+      candidateCount?: number;
+      excludeCandidateIds?: string[];
+      lockedTraitSlotIndexes?: number[];
+      material?: ClientSpiritTraitRollMaterial;
+      targetSlotIndex?: number;
+    } = {},
   ): Promise<ClientRollSpiritTraitsResponse | null> => {
     const actionKey = `spirit:roll:${slotIndex}:${mode}`;
     if (!spiritState) {

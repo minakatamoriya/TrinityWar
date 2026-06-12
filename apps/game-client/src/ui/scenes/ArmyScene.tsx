@@ -9,13 +9,14 @@ import type {
   ClientSpiritRole,
   ClientRollSpiritTraitsResponse,
   ClientSpiritActiveRollMode,
+  ClientSpiritTraitRollMaterial,
   ClientSpiritRollMode,
   ClientSpiritSlot,
   ClientSpiritState,
   ClientSpiritTraitCode,
   ClientSpiritTraitRollPreview,
 } from '@trinitywar/shared';
-import { CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER, CLIENT_SPIRIT_TRAIT_ROLL_RULES, getClientSpiritInnateTrait } from '@trinitywar/shared';
+import { CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER, CLIENT_SPIRIT_TRAIT_ROLL_RULES, getBasicSpiritTraitRollGoldCost, getClientSpiritInnateTrait } from '@trinitywar/shared';
 import type { TutorialArmyUiRules } from '../../tutorial/tutorialFlow';
 import { FullScreenToolShell } from '../common/ModalShell';
 
@@ -36,7 +37,13 @@ interface ArmySceneProps {
     slotIndex: number,
     slotVersion: number,
     mode: ClientSpiritRollMode,
-    options?: { targetSlotIndex?: number },
+    options?: {
+      candidateCount?: number;
+      excludeCandidateIds?: string[];
+      lockedTraitSlotIndexes?: number[];
+      material?: ClientSpiritTraitRollMaterial;
+      targetSlotIndex?: number;
+    },
   ) => Promise<ClientRollSpiritTraitsResponse | null>;
   onResolveTraitRoll: (rollLogId: string, selectedTraitCode: ClientSpiritTraitCode | null, slotVersion: number) => Promise<boolean>;
 }
@@ -83,13 +90,16 @@ function getTraitRollGoldCost(baseGold: number, advantage?: ClientFactionAdvanta
   return Math.ceil(Math.max(baseGold, 0) * (1 - reductionPercent / 100));
 }
 
-function formatTraitRollCost(cost: { marrow: number; jade: number; gold: number }, goldCost: number): string {
+function formatTraitRollCost(cost: { marrow: number; jade: number; gold: number }, goldCost: number, options: { tianjiTalisman?: number } = {}): string {
   const parts: string[] = [];
   if (cost.marrow > 0) {
     parts.push(`灵髓 ${cost.marrow}`);
   }
   if (cost.jade > 0) {
     parts.push(`灵玉 ${cost.jade}`);
+  }
+  if ((options.tianjiTalisman ?? 0) > 0) {
+    parts.push(`天机符 ${options.tianjiTalisman}`);
   }
   if (goldCost > 0) {
     parts.push(`金币 ${formatNumber(goldCost)}`);
@@ -567,6 +577,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const [composeElement, setComposeElement] = useState<ClientSpiritElement>('wood');
   const [composeStep, setComposeStep] = useState<SpiritComposeStep>('choose-spirit');
   const [targetTraitSlot, setTargetTraitSlot] = useState(1);
+  const [lockedTraitSlots, setLockedTraitSlots] = useState<number[]>([]);
   const [selectedTraitRollMode, setSelectedTraitRollMode] = useState<ClientSpiritActiveRollMode>('basic');
   const [pendingTraitRoll, setPendingTraitRoll] = useState<ClientSpiritTraitRollPreview | null>(null);
   const [goldReforgeConfirmOpen, setGoldReforgeConfirmOpen] = useState(false);
@@ -649,22 +660,70 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
       : `未触发，当前阵营为${playerFaction}`
     : '';
   const selectedTraitRollPlan = traitRollPlans.find((plan) => plan.mode === selectedTraitRollMode) ?? traitRollPlans[0];
-  const selectedTraitRollGoldCost = getTraitRollGoldCost(selectedTraitRollPlan.cost.gold, advantage);
+  const selectedTraitRollGoldCost = getTraitRollGoldCost(
+    selectedTraitRollPlan.mode === 'basic'
+      ? getBasicSpiritTraitRollGoldCost(selectedSlot?.level ?? 10)
+      : selectedTraitRollPlan.cost.gold,
+    advantage,
+  );
   const unlockedTraitSlotCount = selectedSlot?.unlockedTraitSlots ?? 0;
+  const lockedTraitSlotCount = selectedTraitRollPlan.mode === 'basic' ? lockedTraitSlots.length : 0;
+  const selectedTraitRollTianjiCost = lockedTraitSlotCount;
+  const selectedTraitRollCostText = formatTraitRollCost(
+    selectedTraitRollPlan.mode === 'basic'
+      ? { ...selectedTraitRollPlan.cost, gold: getBasicSpiritTraitRollGoldCost(selectedSlot?.level ?? 10) }
+      : selectedTraitRollPlan.cost,
+    selectedTraitRollGoldCost,
+    { tianjiTalisman: selectedTraitRollTianjiCost },
+  );
   const selectedBreakthroughStage = selectedSlot?.breakthroughStage ?? 0;
   const selectedTraitRollHasSlots = unlockedTraitSlotCount > 0;
   const selectedTraitRollUnlocked = selectedBreakthroughStage >= selectedTraitRollPlan.unlockBreakthroughStage;
   const selectedTraitRollHasMaterials = (spirit.spiritMarrow ?? 0) >= selectedTraitRollPlan.cost.marrow
     && (spirit.spiritJade ?? 0) >= selectedTraitRollPlan.cost.jade
+    && spirit.tianjiTalisman >= selectedTraitRollTianjiCost
     && vaultGold >= selectedTraitRollGoldCost;
-  const selectedTraitRollDisabled = busy || !selectedTraitRollHasSlots || !selectedTraitRollUnlocked || !selectedTraitRollHasMaterials || Boolean(pendingTraitRoll);
+  const selectedTraitRollLockFeatureUnlocked = (selectedSlot?.level ?? 0) >= 50;
+  const selectedTraitRollLocksValid = selectedTraitRollPlan.mode !== 'basic'
+    || (lockedTraitSlotCount === 0)
+    || (selectedTraitRollLockFeatureUnlocked && lockedTraitSlotCount < unlockedTraitSlotCount);
+  const selectedTraitRollDisabled = busy || !selectedTraitRollHasSlots || !selectedTraitRollUnlocked || !selectedTraitRollHasMaterials || !selectedTraitRollLocksValid || Boolean(pendingTraitRoll);
   const selectedTraitRollNeedsSlot = selectedTraitRollPlan.mode !== 'basic';
-  const selectedTraitRollOptions = selectedTraitRollNeedsSlot ? { targetSlotIndex: targetTraitSlot } : undefined;
+  const selectedTraitRollOptions = selectedTraitRollNeedsSlot
+    ? {
+      candidateCount: selectedTraitRollPlan.candidateCount,
+      material: selectedTraitRollPlan.mode === 'normal' ? 'lingsui' as const : 'lingyu' as const,
+      targetSlotIndex: targetTraitSlot,
+    }
+    : {
+      candidateCount: selectedTraitRollPlan.candidateCount,
+      lockedTraitSlotIndexes: lockedTraitSlots,
+      material: 'gold' as const,
+    };
+  const advancedRerollGoldCost = getTraitRollGoldCost(CLIENT_SPIRIT_TRAIT_ROLL_RULES.advanced.cost.gold, advantage);
+  const canRerollAdvancedTraitRoll = Boolean(pendingTraitRoll && pendingTraitRoll.mode === 'advanced')
+    && !busy
+    && (spirit.spiritJade ?? 0) >= CLIENT_SPIRIT_TRAIT_ROLL_RULES.advanced.cost.jade
+    && vaultGold >= advancedRerollGoldCost;
   const codexGroups = codexRarityGroups.map((group) => ({
     ...group,
     pets: spirit.codex.filter((entry) => entry.definition.rarity === group.rarity),
   }));
   const isLevelFlashActive = Date.now() - levelFlashToken < 700;
+  const toggleLockedTraitSlot = (slotIndex: number): void => {
+    setLockedTraitSlots((current) => {
+      if (current.includes(slotIndex)) {
+        return current.filter((item) => item !== slotIndex);
+      }
+
+      const maxLockableSlots = Math.min(3, Math.max(unlockedTraitSlotCount - 1, 0));
+      if (current.length >= maxLockableSlots) {
+        return current;
+      }
+
+      return [...current, slotIndex].sort((left, right) => left - right);
+    });
+  };
   const runSelectedTraitRoll = async (): Promise<void> => {
     if (!selectedSlot) {
       return;
@@ -675,6 +734,24 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
       setPendingTraitRoll(result.traitRoll);
     } else {
       setPendingTraitRoll(null);
+    }
+  };
+  const rerollAdvancedTraitGroup = async (): Promise<void> => {
+    if (!selectedSlot || !pendingTraitRoll || pendingTraitRoll.mode !== 'advanced') {
+      return;
+    }
+
+    const excludeCandidateIds = pendingTraitRoll.excludeCandidateIds && pendingTraitRoll.excludeCandidateIds.length > 0
+      ? pendingTraitRoll.excludeCandidateIds
+      : pendingTraitRoll.candidates.map((candidate) => candidate.candidateId);
+    const result = await onRollTraits(selectedSlot.slotIndex, selectedSlot.slotVersion, 'advanced', {
+      candidateCount: CLIENT_SPIRIT_TRAIT_ROLL_RULES.advanced.candidateCount,
+      excludeCandidateIds,
+      material: 'lingyu',
+      targetSlotIndex: pendingTraitRoll.targetSlotIndex,
+    });
+    if (result?.traitRoll) {
+      setPendingTraitRoll(result.traitRoll);
     }
   };
 
@@ -721,6 +798,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
     const unlockedSlots = selectedSlot?.unlockedTraitSlots ?? 0;
     if (unlockedSlots <= 0) {
       setTargetTraitSlot(1);
+      setLockedTraitSlots([]);
       setSelectedTraitRollMode('basic');
       setPendingTraitRoll(null);
       setGoldReforgeConfirmOpen(false);
@@ -728,12 +806,16 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
     }
 
     setTargetTraitSlot((current) => Math.min(Math.max(current, 1), unlockedSlots));
+    setLockedTraitSlots((current) => current.filter((slotIndex) => slotIndex <= unlockedSlots));
     setPendingTraitRoll(null);
     setGoldReforgeConfirmOpen(false);
   }, [selectedSlot?.slotIndex, selectedSlot?.unlockedTraitSlots]);
 
   useEffect(() => {
     setGoldReforgeConfirmOpen(false);
+    if (selectedTraitRollMode !== 'basic') {
+      setLockedTraitSlots([]);
+    }
   }, [selectedTraitRollMode]);
 
   useEffect(() => {
@@ -1061,6 +1143,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                           <div className="trait-roll-resource-bar">
                             <span>灵髓 {formatNumber(spirit.spiritMarrow ?? 0)}</span>
                             <span>灵玉 {formatNumber(spirit.spiritJade ?? 0)}</span>
+                            <span>天机符 {formatNumber(spirit.tianjiTalisman)}</span>
                             <span>金币 {formatNumber(vaultGold)}</span>
                           </div>
                           <div className="trait-roll-step-head">
@@ -1069,7 +1152,9 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                           </div>
                           <div className="trait-roll-plan-grid" role="radiogroup" aria-label="洗练方式">
                             {traitRollPlans.map((plan) => {
-                              const goldCost = getTraitRollGoldCost(plan.cost.gold, advantage);
+                              const goldCost = plan.mode === 'basic'
+                                ? getTraitRollGoldCost(getBasicSpiritTraitRollGoldCost(selectedSlot?.level ?? 10), advantage)
+                                : getTraitRollGoldCost(plan.cost.gold, advantage);
                               const isSelected = selectedTraitRollMode === plan.mode;
                               const isUnlocked = selectedBreakthroughStage >= plan.unlockBreakthroughStage;
                               return (
@@ -1095,7 +1180,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                           <div className="trait-roll-setup-panel">
                             <div className="trait-roll-step-head">
                               <span>2</span>
-                              <strong>{selectedTraitRollNeedsSlot ? '选择槽位' : '确认范围'}</strong>
+                              <strong>{selectedTraitRollNeedsSlot ? '选择槽位' : '选择锁定'}</strong>
                             </div>
                             <p className="trait-roll-mode-summary">{selectedTraitRollPlan.summary}</p>
                             {selectedTraitRollNeedsSlot ? (
@@ -1113,7 +1198,33 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                                 ))}
                               </div>
                             ) : (
-                              <p className="trait-roll-selection-note">将立即重洗全部已解锁词条，不生成保留候选。</p>
+                              <div className="trait-roll-lock-grid">
+                                {Array.from({ length: selectedSlot.unlockedTraitSlots ?? 0 }, (_, index) => index + 1).map((slotIndex) => {
+                                  const isLocked = lockedTraitSlots.includes(slotIndex);
+                                  const canAddLock = selectedTraitRollLockFeatureUnlocked && lockedTraitSlots.length < Math.min(3, Math.max(unlockedTraitSlotCount - 1, 0));
+                                  return (
+                                    <button
+                                      className={`trait-roll-lock-button${isLocked ? ' is-selected' : ''}`}
+                                      disabled={Boolean(pendingTraitRoll) || (!isLocked && !canAddLock)}
+                                      key={`lock-${slotIndex}`}
+                                      onClick={() => toggleLockedTraitSlot(slotIndex)}
+                                      type="button"
+                                    >
+                                      <span>{getTraitSlotDisplay(selectedSlot, slotIndex)}</span>
+                                      <small>{isLocked ? '已锁定' : canAddLock ? '可锁定' : selectedTraitRollLockFeatureUnlocked ? '不可再锁' : 'Lv.50 开放锁定'}</small>
+                                    </button>
+                                  );
+                                })}
+                                <p className="trait-roll-selection-note">
+                                  {selectedTraitRollLockFeatureUnlocked ? (
+                                    lockedTraitSlots.length > 0
+                                      ? `本次保留 ${lockedTraitSlots.length} 条，额外消耗天机符 ${lockedTraitSlots.length}。`
+                                      : '不锁定时会重洗全部已解锁词条。'
+                                  ) : (
+                                    '锁定功能 Lv.50 开放，当前仅可重洗全部已解锁词条。'
+                                  )}
+                                </p>
+                              </div>
                             )}
                             {pendingTraitRoll ? (
                               <div className="trait-roll-result-panel">
@@ -1143,6 +1254,16 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                                     </button>
                                   ))}
                                 </div>
+                                {pendingTraitRoll.mode === 'advanced' ? (
+                                  <button
+                                    className="secondary-button trait-roll-keep-button"
+                                    disabled={!canRerollAdvancedTraitRoll}
+                                    onClick={rerollAdvancedTraitGroup}
+                                    type="button"
+                                  >
+                                    换一组（灵玉 1 + 金币 {formatNumber(advancedRerollGoldCost)}）
+                                  </button>
+                                ) : null}
                                 <button
                                   className="secondary-button trait-roll-keep-button"
                                   disabled={busy}
@@ -1166,7 +1287,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                                 {goldReforgeConfirmOpen && selectedTraitRollPlan.mode === 'basic' ? (
                                   <div className="trait-roll-warning-panel">
                                     <strong>确认金币重铸</strong>
-                                    <p>金币重铸会随机替换全部已解锁词条，已洗好的词条也会被覆盖。</p>
+                                    <p>{lockedTraitSlots.length > 0 ? `金币重铸会保留已锁定的 ${lockedTraitSlots.length} 条词条，其余已解锁词条会被随机替换。` : '金币重铸会随机替换全部已解锁词条，已洗好的词条也会被覆盖。'}</p>
                                     <label className="trait-roll-checkbox-row">
                                       <input
                                         checked={goldReforgeSkipChecked}
@@ -1211,7 +1332,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                                       ? `Lv.${selectedTraitRollPlan.unlockLevel} 开放${selectedTraitRollPlan.label}`
                                       : selectedTraitRollHasMaterials
                                       ? selectedTraitRollPlan.confirmLabel
-                                      : `资源不足：需要 ${formatTraitRollCost(selectedTraitRollPlan.cost, selectedTraitRollGoldCost)}`
+                                      : `资源不足：需要 ${selectedTraitRollCostText}`
                                     : '暂无可洗练词条槽'}
                                 </button>
                               </>

@@ -26,6 +26,7 @@ export type ClientSpiritTraitCode =
   | 'tenacity';
 export type ClientSpiritActiveRollMode = 'basic' | 'normal' | 'advanced';
 export type ClientSpiritRollMode = ClientSpiritActiveRollMode;
+export type ClientSpiritTraitRollMaterial = 'gold' | 'lingsui' | 'lingyu';
 export type ClientSpiritFeedActionType = 'feed_once' | 'fill_full';
 
 export interface ClientSpiritTraitRollRule {
@@ -54,21 +55,21 @@ export const CLIENT_SPIRIT_TRAIT_ROLL_RULES: Record<ClientSpiritActiveRollMode, 
   },
   normal: {
     mode: 'normal',
-    label: '灵髓洗练',
-    badge: '1 个结果',
-    summary: '选择 1 个槽位，随机出 1 个候选。',
-    confirmLabel: '灵髓洗练',
+    label: '灵髓定向',
+    badge: '7 选 1',
+    summary: '选择 1 个槽位，从常规候选池中生成 7 个可替换结果。',
+    confirmLabel: '灵髓定向',
     unlockBreakthroughStage: 2,
     unlockLevel: 20,
-    candidateCount: 1,
+    candidateCount: 7,
     cost: { marrow: 5, jade: 0, gold: 500 },
   },
   advanced: {
     mode: 'advanced',
-    label: '灵玉洗练',
-    badge: '3 选 1',
-    summary: '选择 1 个槽位，随机出 3 个候选。',
-    confirmLabel: '灵玉洗练',
+    label: '灵玉高级',
+    badge: '高级 3 选 1',
+    summary: '选择 1 个槽位，从高级候选池中生成 3 个结果，可消耗灵玉换一组。',
+    confirmLabel: '灵玉高级',
     unlockBreakthroughStage: 3,
     unlockLevel: 30,
     candidateCount: 3,
@@ -77,6 +78,25 @@ export const CLIENT_SPIRIT_TRAIT_ROLL_RULES: Record<ClientSpiritActiveRollMode, 
 };
 
 export const CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER: ClientSpiritActiveRollMode[] = ['basic', 'normal', 'advanced'];
+
+export function getBasicSpiritTraitRollGoldCost(level: number): number {
+  if (level < 10) {
+    return CLIENT_SPIRIT_TRAIT_ROLL_RULES.basic.cost.gold;
+  }
+  if (level < 20) {
+    return 200;
+  }
+  if (level < 30) {
+    return 400;
+  }
+  if (level < 40) {
+    return 600;
+  }
+  if (level < 50) {
+    return 800;
+  }
+  return 1000;
+}
 
 export interface ClientSpiritDefinition {
   spiritId: string;
@@ -296,6 +316,7 @@ export interface ClientSpiritMutationResponse {
 }
 
 export interface ClientSpiritTraitRollCandidate {
+  candidateId: string;
   traitCode: ClientSpiritTraitCode;
   label: string;
   description: string;
@@ -307,8 +328,10 @@ export interface ClientSpiritTraitRollPreview {
   slotIndex: number;
   targetSlotIndex: number;
   mode: ClientSpiritActiveRollMode;
+  material: ClientSpiritTraitRollMaterial;
   currentTrait: ClientSpiritTraitRollCandidate | null;
   candidates: ClientSpiritTraitRollCandidate[];
+  excludeCandidateIds?: string[];
 }
 
 export interface ClientRollSpiritTraitsResponse extends ClientSpiritMutationResponse {
@@ -435,6 +458,10 @@ export interface ClientRollSpiritTraitsRequest {
   slotIndex: number;
   mode: ClientSpiritRollMode;
   targetSlotIndex?: number;
+  material?: ClientSpiritTraitRollMaterial;
+  candidateCount?: number;
+  lockedTraitSlotIndexes?: number[];
+  excludeCandidateIds?: string[];
   slotVersion?: number;
   walletVersion?: number;
   resourceVersion?: number;

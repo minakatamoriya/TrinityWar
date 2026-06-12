@@ -33,6 +33,8 @@ export const SPIRIT_TRAIT_ROLL_RULES: Record<ClientSpiritActiveRollMode, {
   },
 };
 
+const ADVANCED_TRAIT_CODES = new Set<ClientSpiritTraitCode>(['crit', 'crit_damage', 'counter', 'lifesteal', 'tenacity']);
+
 export function isActiveTraitRollMode(mode: string): mode is ClientSpiritActiveRollMode {
   return mode === 'basic' || mode === 'normal' || mode === 'advanced';
 }
@@ -54,6 +56,7 @@ export function assertKnownTraitCode(code: string, throwBadRequest: (message: st
 export function toTraitRollCandidate(code: string): ClientSpiritTraitRollCandidate {
   const definition = getTraitDefinition(code);
   return {
+    candidateId: definition.code,
     traitCode: definition.code,
     label: definition.label,
     description: definition.description,
@@ -64,21 +67,34 @@ export function toTraitRollCandidate(code: string): ClientSpiritTraitRollCandida
 export function rollTraitCandidates(
   mode: ClientSpiritActiveRollMode,
   currentTraitCode: string | null,
+  excludeCandidateIds: string[] = [],
 ): ClientSpiritTraitRollCandidate[] {
   const rule = SPIRIT_TRAIT_ROLL_RULES[mode];
-  const pool = SPIRIT_TRAIT_DEFINITIONS.filter((definition) => definition.code !== currentTraitCode);
-  const shuffled = [...pool];
+  const excludedTraitCodes = new Set(
+    excludeCandidateIds.map((candidateId) => getTraitDefinition(candidateId).code),
+  );
+  const basePool = SPIRIT_TRAIT_DEFINITIONS.filter((definition) => definition.code !== currentTraitCode && !excludedTraitCodes.has(definition.code));
+  const advancedPool = mode === 'advanced' ? basePool.filter((definition) => ADVANCED_TRAIT_CODES.has(definition.code)) : [];
+  const fallbackPool = mode === 'advanced'
+    ? basePool.filter((definition) => !ADVANCED_TRAIT_CODES.has(definition.code))
+    : basePool;
+  const shuffledAdvanced = shuffleTraitDefinitions(advancedPool);
+  const shuffledFallback = shuffleTraitDefinitions(fallbackPool);
+  const shuffled = mode === 'advanced'
+    ? [...shuffledAdvanced, ...shuffledFallback]
+    : shuffledFallback;
+
+  return shuffled.slice(0, Math.min(rule.candidateCount, shuffled.length)).map((definition) => toTraitRollCandidate(definition.code));
+}
+
+function shuffleTraitDefinitions<T>(items: T[]): T[] {
+  const shuffled = [...items];
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(Math.random() * (index + 1));
     [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
   }
 
-  return shuffled.slice(0, Math.min(rule.candidateCount, shuffled.length)).map((definition) => ({
-    traitCode: definition.code,
-    label: definition.label,
-    description: definition.description,
-    value: definition.value,
-  }));
+  return shuffled;
 }
 
 export function rollFullRandomTraits(unlockedSlots: number): Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> {

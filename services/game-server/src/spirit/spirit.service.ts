@@ -1,7 +1,7 @@
 ﻿import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { PlayerSpiritStatus, Prisma, PrismaClient, SpiritElement, SpiritRarity, SpiritRole } from '@prisma/client';
-import { APP_NAME, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientRecoverSpiritRequest, type ClientResolveSpiritTraitRollRequest, type ClientRollSpiritTraitsRequest, type ClientRollSpiritTraitsResponse, type ClientSetMainSpiritRequest, type ClientSpiritCodexEntry, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritStatus, type ClientSpiritSlot, type ClientSpiritDefinition, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
+import { APP_NAME, getBasicSpiritTraitRollGoldCost, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientRecoverSpiritRequest, type ClientResolveSpiritTraitRollRequest, type ClientRollSpiritTraitsRequest, type ClientRollSpiritTraitsResponse, type ClientSetMainSpiritRequest, type ClientSpiritActiveRollMode, type ClientSpiritCodexEntry, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritStatus, type ClientSpiritSlot, type ClientSpiritDefinition, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientSpiritTraitRollMaterial, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
 import { AuditService } from '../audit/audit.service.js';
 import { DailyTaskLifecycleService } from '../client-read/daily-task-lifecycle.service.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
@@ -21,7 +21,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { STARTER_SPIRIT_IDS } from '../seed/seed-data/spirits.js';
 import { TaskConfigService } from '../task-config/task-config.service.js';
-import { getTraitDefinition, isActiveTraitRollMode, rollFullRandomTraits, rollTraitCandidates, SPIRIT_TRAIT_DEFINITIONS, SPIRIT_TRAIT_ROLL_RULES, toTraitRollCandidate } from './spirit-trait-roll-rules.js';
+import { getTraitDefinition, isActiveTraitRollMode, rollTraitCandidates, SPIRIT_TRAIT_DEFINITIONS, SPIRIT_TRAIT_ROLL_RULES, toTraitRollCandidate } from './spirit-trait-roll-rules.js';
 
 const SPIRIT_SOUL_GOLD_PRICE = 100;
 const SPIRIT_MAX_LEVEL = 50;
@@ -32,6 +32,7 @@ const SPIRIT_DISSOLVE_REFUND_RATIO = 0.35;
 const SPIRIT_LEVEL_EXP_REQUIRED = 10_000;
 const SPIRIT_AD_DAILY_LIMIT = 3;
 const SPIRIT_AD_TALISMAN_REWARD = 5;
+const MAX_SPIRIT_TRAIT_LOCKED_SLOTS = 3;
 const SPIRIT_SHOP_ITEMS: ClientSpiritShopItem[] = [
   { itemId: 'spirit-root-100', label: '灵根 x100', description: '日常补给', priceTianjiTalisman: 10, limitLabel: '不限购', remainingPurchases: null, rewards: [{ kind: 'spirit-root', label: '灵根', quantity: 100 }] },
   { itemId: 'spirit-marrow-5', label: '灵髓 x5', description: '洗练基础材料', priceTianjiTalisman: 20, limitLabel: '每日 5 次', remainingPurchases: 5, rewards: [{ kind: 'spirit-marrow', label: '灵髓', quantity: 5 }] },
@@ -565,6 +566,9 @@ export class SpiritService {
   ): Promise<ClientRollSpiritTraitsResponse> {
     validateRollSpiritTraitsRequest(request);
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
+    const lockedTraitSlotIndexes = normalizeLockedTraitSlotIndexes(request.lockedTraitSlotIndexes);
+    const excludeCandidateIds = normalizeExcludeCandidateIds(request.excludeCandidateIds);
+    const material = getTraitRollMaterial(request.mode);
 
     return this.prisma.transaction(async (client) => {
       if (!isActiveTraitRollMode(request.mode)) {
@@ -574,7 +578,11 @@ export class SpiritService {
         endpoint: 'roll-traits',
         slotIndex: request.slotIndex,
         mode: request.mode,
+        material,
         targetSlotIndex: request.targetSlotIndex ?? null,
+        candidateCount: request.candidateCount ?? null,
+        lockedTraitSlotIndexes,
+        excludeCandidateIds,
         slotVersion: request.slotVersion ?? null,
         walletVersion: request.walletVersion ?? null,
         resourceVersion: request.resourceVersion ?? null,
@@ -590,6 +598,7 @@ export class SpiritService {
           select: {
             spiritMarrow: true,
             spiritJade: true,
+            tianjiTalisman: true,
             resourceVersion: true,
             player: {
               select: {
@@ -643,6 +652,10 @@ export class SpiritService {
       if (unlockedSlots <= 0) {
         throw new BusinessError({ code: ErrorCode.BadRequest, message: 'No unlocked trait slots.', statusCode: 400 });
       }
+      const beforeTraits = normalizeTraitRows(slot.traits);
+      if (request.mode === 'basic') {
+        validateLockedTraitSlots(lockedTraitSlotIndexes, unlockedSlots, beforeTraits);
+      }
       if (request.mode !== 'basic' && (typeof request.targetSlotIndex !== 'number' || request.targetSlotIndex < 1 || request.targetSlotIndex > unlockedSlots)) {
         throwBadRequest('targetSlotIndex must refer to an unlocked trait slot.');
       }
@@ -652,25 +665,40 @@ export class SpiritService {
       if (slot.breakthroughStage < rollRule.unlockBreakthroughStage) {
         throw new BusinessError({ code: ErrorCode.BadRequest, message: 'Trait roll mode is not unlocked.', statusCode: 400 });
       }
-      const baseCost = rollRule.cost;
+      if (request.mode === 'basic' && lockedTraitSlotIndexes.length > 0 && slot.level < 50) {
+        throw new BusinessError({ code: ErrorCode.BadRequest, message: 'Trait slot locking unlocks at level 50.', statusCode: 400 });
+      }
+      const baseCost = request.mode === 'basic'
+        ? { ...rollRule.cost, gold: getBasicSpiritTraitRollGoldCost(slot.level) }
+        : rollRule.cost;
       const cost = {
         ...baseCost,
         gold: applyFactionSpiritTraitRollGoldCost(baseCost.gold, factionCode),
+        tianjiTalisman: request.mode === 'basic' ? lockedTraitSlotIndexes.length : 0,
       };
-      if (resource.spiritMarrow < cost.marrow || resource.spiritJade < cost.jade) {
+      if (resource.spiritMarrow < cost.marrow || resource.spiritJade < cost.jade || resource.tianjiTalisman < cost.tianjiTalisman) {
         throw new BusinessError({ code: ErrorCode.Conflict, message: 'Insufficient trait roll materials.', statusCode: 409 });
       }
       if (wallet.vaultGold < cost.gold) {
         throw new BusinessError({ code: ErrorCode.InsufficientVaultGold, message: 'Insufficient vault gold.', statusCode: 409 });
       }
 
-      const beforeTraits = normalizeTraitRows(slot.traits);
+      const consumed = {
+        material,
+        gold: cost.gold,
+        marrow: cost.marrow,
+        jade: cost.jade,
+        tianjiTalisman: cost.tianjiTalisman,
+        lockedTraitSlotIndexes,
+        excludeCandidateIds,
+      };
 
       await client.playerSpiritResource.update({
         where: { playerId },
         data: {
           spiritMarrow: { decrement: cost.marrow },
           spiritJade: { decrement: cost.jade },
+          tianjiTalisman: { decrement: cost.tianjiTalisman },
           resourceVersion: { increment: 1 },
         },
       });
@@ -692,13 +720,24 @@ export class SpiritService {
           relatedEntityType: 'spirit-slot',
           relatedEntityId: slot.id,
           requestIdempotencyKey: idempotencyKey ?? null,
-          note: `Roll spirit traits in ${request.mode} mode.`,
+          note: `Roll spirit traits in ${request.mode} mode with ${material}.`,
         });
       }
       if (request.mode === 'basic') {
-        const resultTraits = rollFullRandomTraits(unlockedSlots);
-        await client.playerSpiritTrait.deleteMany({ where: { spiritSlotId: slot.id } });
-        for (const trait of resultTraits) {
+        const lockedSlotSet = new Set(lockedTraitSlotIndexes);
+        const resultTraits = rollFullRandomTraitsWithLocks(unlockedSlots, beforeTraits, lockedSlotSet);
+        const refreshedSlotIndexes = resultTraits
+          .map((trait) => trait.slotIndex)
+          .filter((slotIndex) => !lockedSlotSet.has(slotIndex));
+        if (refreshedSlotIndexes.length > 0) {
+          await client.playerSpiritTrait.deleteMany({
+            where: {
+              spiritSlotId: slot.id,
+              slotIndex: { in: refreshedSlotIndexes },
+            },
+          });
+        }
+        for (const trait of resultTraits.filter((item) => !lockedSlotSet.has(item.slotIndex))) {
           const definition = getTraitDefinition(trait.traitCode);
           await client.playerSpiritTrait.create({
             data: {
@@ -719,10 +758,10 @@ export class SpiritService {
             playerId,
             spiritSlotId: slot.id,
             mode: request.mode,
-            lockedSlotIndex: null,
+            lockedSlotIndex: lockedTraitSlotIndexes.length === 1 ? lockedTraitSlotIndexes[0] : null,
             targetSlotIndex: null,
             targetTraitCode: null,
-            consumedJson: cost as unknown as Prisma.InputJsonValue,
+            consumedJson: consumed as unknown as Prisma.InputJsonValue,
             beforeTraitsJson: beforeTraits as unknown as Prisma.InputJsonValue,
             resultTraitsJson: resultTraits as unknown as Prisma.InputJsonValue,
             candidateResultsJson: resultTraits as unknown as Prisma.InputJsonValue,
@@ -744,7 +783,8 @@ export class SpiritService {
             },
           });
         }
-        const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 金币重铸已完成。');
+        const lockedSummary = lockedTraitSlotIndexes.length > 0 ? `，已锁定 ${lockedTraitSlotIndexes.length} 条词条` : '';
+        const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ` 金币重铸已完成${lockedSummary}。`);
         await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
         return response;
       }
@@ -754,7 +794,26 @@ export class SpiritService {
         throwBadRequest('targetSlotIndex must refer to an unlocked trait slot.');
       }
       const currentTrait = beforeTraits.find((trait) => trait.slotIndex === targetSlotIndex) ?? null;
-      const candidates = rollTraitCandidates(request.mode, currentTrait?.traitCode ?? null);
+      if (request.mode === 'advanced' && excludeCandidateIds.length > 0) {
+        await client.spiritTraitRollLog.updateMany({
+          where: {
+            playerId,
+            spiritSlotId: slot.id,
+            mode: request.mode,
+            targetSlotIndex,
+            status: 'PENDING',
+          },
+          data: {
+            status: 'KEPT',
+            selectedTraitCode: null,
+            resolvedAt: new Date(),
+          },
+        });
+      }
+      const candidates = rollTraitCandidates(request.mode, currentTrait?.traitCode ?? null, excludeCandidateIds);
+      if (candidates.length <= 0) {
+        throwBadRequest('No available trait roll candidates.');
+      }
       const rollLog = await client.spiritTraitRollLog.create({
         data: {
           playerId,
@@ -763,7 +822,7 @@ export class SpiritService {
           lockedSlotIndex: null,
           targetSlotIndex,
           targetTraitCode: null,
-          consumedJson: cost as unknown as Prisma.InputJsonValue,
+          consumedJson: consumed as unknown as Prisma.InputJsonValue,
           beforeTraitsJson: beforeTraits as unknown as Prisma.InputJsonValue,
           resultTraitsJson: beforeTraits as unknown as Prisma.InputJsonValue,
           candidateResultsJson: candidates as unknown as Prisma.InputJsonValue,
@@ -792,8 +851,10 @@ export class SpiritService {
           slotIndex: request.slotIndex,
           targetSlotIndex,
           mode: request.mode,
+          material,
           currentTrait: currentTrait ? toTraitRollCandidate(currentTrait.traitCode) : null,
           candidates,
+          excludeCandidateIds: [...excludeCandidateIds, ...candidates.map((candidate) => candidate.candidateId)],
         },
       };
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
@@ -2202,6 +2263,109 @@ function normalizeTraitRows(traits: SpiritReadTrait[]): Array<{ slotIndex: numbe
     }));
 }
 
+function normalizeLockedTraitSlotIndexes(value: unknown): number[] {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throwBadRequest('lockedTraitSlotIndexes must be an array.');
+  }
+
+  const normalized: number[] = [];
+  for (const slotIndex of value) {
+    if (!Number.isInteger(slotIndex) || slotIndex <= 0) {
+      throwBadRequest('lockedTraitSlotIndexes must contain positive integers.');
+    }
+    if (normalized.includes(slotIndex)) {
+      throwBadRequest('lockedTraitSlotIndexes cannot contain duplicate slots.');
+    }
+    normalized.push(slotIndex);
+  }
+
+  return normalized.sort((left, right) => left - right);
+}
+
+function normalizeExcludeCandidateIds(value: unknown): string[] {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throwBadRequest('excludeCandidateIds must be an array.');
+  }
+
+  const normalized: string[] = [];
+  for (const candidateId of value) {
+    if (typeof candidateId !== 'string' || candidateId.trim().length <= 0) {
+      throwBadRequest('excludeCandidateIds must contain strings.');
+    }
+    const definition = SPIRIT_TRAIT_DEFINITIONS.find((entry) => entry.code === candidateId);
+    if (!definition) {
+      throwBadRequest('excludeCandidateIds must contain known candidate ids.');
+    }
+    if (normalized.includes(definition.code)) {
+      continue;
+    }
+    normalized.push(definition.code);
+  }
+
+  return normalized;
+}
+
+function validateLockedTraitSlots(
+  lockedTraitSlotIndexes: number[],
+  unlockedSlots: number,
+  beforeTraits: Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }>,
+): void {
+  if (lockedTraitSlotIndexes.length > MAX_SPIRIT_TRAIT_LOCKED_SLOTS) {
+    throwBadRequest(`lockedTraitSlotIndexes cannot contain more than ${MAX_SPIRIT_TRAIT_LOCKED_SLOTS} slots.`);
+  }
+  if (lockedTraitSlotIndexes.length >= unlockedSlots) {
+    throwBadRequest('lockedTraitSlotIndexes cannot lock every unlocked trait slot.');
+  }
+
+  for (const slotIndex of lockedTraitSlotIndexes) {
+    if (slotIndex > unlockedSlots) {
+      throwBadRequest('lockedTraitSlotIndexes must refer to unlocked trait slots.');
+    }
+    if (!beforeTraits.some((trait) => trait.slotIndex === slotIndex)) {
+      throwBadRequest('lockedTraitSlotIndexes must refer to existing traits.');
+    }
+  }
+}
+
+function getTraitRollMaterial(mode: ClientSpiritActiveRollMode): ClientSpiritTraitRollMaterial {
+  if (mode === 'normal') {
+    return 'lingsui';
+  }
+  if (mode === 'advanced') {
+    return 'lingyu';
+  }
+  return 'gold';
+}
+
+function rollFullRandomTraitsWithLocks(
+  unlockedSlots: number,
+  beforeTraits: Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }>,
+  lockedSlotSet: Set<number>,
+): Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> {
+  const result: Array<{ slotIndex: number; traitCode: ClientSpiritTraitCode }> = [];
+
+  for (let slotIndex = 1; slotIndex <= unlockedSlots; slotIndex += 1) {
+    if (lockedSlotSet.has(slotIndex)) {
+      const existingTrait = beforeTraits.find((trait) => trait.slotIndex === slotIndex);
+      if (existingTrait) {
+        result.push(existingTrait);
+      }
+      continue;
+    }
+
+    const definition = randomTraitDefinition(true, new Set());
+    result.push({ slotIndex, traitCode: definition.code });
+  }
+
+  return result.sort((left, right) => left.slotIndex - right.slotIndex);
+}
+
 function randomTraitDefinition(allowDuplicate: boolean, usedCodes: Set<string>) {
   const pool = allowDuplicate ? SPIRIT_TRAIT_DEFINITIONS : SPIRIT_TRAIT_DEFINITIONS.filter((definition) => !usedCodes.has(definition.code));
   return pool[Math.floor(Math.random() * pool.length)] ?? SPIRIT_TRAIT_DEFINITIONS[0];
@@ -2372,6 +2536,32 @@ function validateRollSpiritTraitsRequest(request: ClientRollSpiritTraitsRequest)
   validateSlotRequest(request, 'slotIndex');
   if (!isActiveTraitRollMode(String(request.mode))) {
     throwBadRequest('mode must be basic, normal, or advanced.');
+  }
+  const mode = request.mode;
+  const body = request as unknown as Record<string, unknown>;
+  const expectedMaterial = getTraitRollMaterial(mode);
+  if (request.material !== undefined && request.material !== expectedMaterial) {
+    throwBadRequest(`material must be ${expectedMaterial} for ${mode} mode.`);
+  }
+  if (request.candidateCount !== undefined) {
+    const expectedCandidateCount = SPIRIT_TRAIT_ROLL_RULES[mode].candidateCount;
+    if (!Number.isInteger(request.candidateCount) || request.candidateCount !== expectedCandidateCount) {
+      throwBadRequest(`candidateCount must be ${expectedCandidateCount} for ${mode} mode.`);
+    }
+  }
+  if (mode === 'basic') {
+    if (request.targetSlotIndex !== undefined) {
+      throwBadRequest('targetSlotIndex cannot be used in basic mode.');
+    }
+    if (Array.isArray(body.excludeCandidateIds) && body.excludeCandidateIds.length > 0) {
+      throwBadRequest('excludeCandidateIds can only be used in advanced mode.');
+    }
+  }
+  if (mode !== 'basic' && Array.isArray(body.lockedTraitSlotIndexes) && body.lockedTraitSlotIndexes.length > 0) {
+    throwBadRequest('lockedTraitSlotIndexes can only be used in basic mode.');
+  }
+  if (mode !== 'advanced' && Array.isArray(body.excludeCandidateIds) && body.excludeCandidateIds.length > 0) {
+    throwBadRequest('excludeCandidateIds can only be used in advanced mode.');
   }
   if (request.mode !== 'basic' && (!Number.isInteger(request.targetSlotIndex) || Number(request.targetSlotIndex) <= 0)) {
     throwBadRequest('targetSlotIndex must be a positive integer.');
