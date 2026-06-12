@@ -817,6 +817,7 @@ export class ClientCommandService {
             seedId: true,
             label: true,
             rarity: true,
+            sortOrder: true,
           },
         }),
       ]);
@@ -867,11 +868,35 @@ export class ClientCommandService {
         },
       });
 
-      if (!inventory || !inventory.unlockedAt) {
+      const requirement = getPlantUnlockRequirement(seedDefinition.seedId, seedDefinition.rarity, seedDefinition.sortOrder);
+      const baseUnlocked = requirement.harvestRequired <= 0 && requirement.contributionRequired <= 0;
+
+      if (!inventory?.unlockedAt && !baseUnlocked) {
         throw new BusinessError({
           code: ErrorCode.Forbidden,
           message: 'Seed is not unlocked.',
           statusCode: 403,
+        });
+      }
+
+      if (!inventory?.unlockedAt && baseUnlocked) {
+        await client.playerSeedInventory.upsert({
+          where: {
+            playerId_seedDefinitionId: {
+              playerId: input.playerId,
+              seedDefinitionId: seedDefinition.id,
+            },
+          },
+          create: {
+            playerId: input.playerId,
+            seedDefinitionId: seedDefinition.id,
+            quantity: 0,
+            unlockedAt: now,
+          },
+          update: {
+            unlockedAt: now,
+            inventoryVersion: { increment: 1 },
+          },
         });
       }
 

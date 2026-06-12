@@ -806,6 +806,7 @@ export interface ClientClaimNotificationResponse {
   id: string;
   claimStatus: 'claimed';
   claimedAt: string;
+  readAt: string;
   unreadCount: number;
   summary: string;
 }

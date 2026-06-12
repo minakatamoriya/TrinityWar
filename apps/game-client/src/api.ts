@@ -520,10 +520,12 @@ export async function markNotificationAsRead(notificationId: string): Promise<Cl
 
 export async function claimNotification(notificationId: string): Promise<ClientClaimNotificationResponse> {
   if (forceMockCommands) {
+    const claimedAt = new Date().toISOString();
     return {
       id: notificationId,
       claimStatus: 'claimed',
-      claimedAt: new Date().toISOString(),
+      claimedAt,
+      readAt: claimedAt,
       unreadCount: 0,
       summary: '模拟模式下已领取附件。',
     };

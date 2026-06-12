@@ -406,7 +406,6 @@ function App(): JSX.Element {
       return;
     }
 
-    notifications.close();
     setSeedRewardModal(buildNotificationClaimRewardModal(notification));
   };
 
@@ -1946,7 +1945,7 @@ function App(): JSX.Element {
 
   const handleStartCultivation = async (fieldId: string, fieldCode: string, seedId: string): Promise<void> => {
     const seed = seedCatalogMap.get(seedId);
-    if (!seed || !unlockedSeedIds.includes(seed.id)) {
+    if (!seed || (!unlockedSeedIds.includes(seed.id) && !seed.unlockedByDefault)) {
       showToast('当前只可选择已解锁的灵植。', 'error');
       return;
     }
@@ -1991,7 +1990,7 @@ function App(): JSX.Element {
     }
 
     const seed = seedCatalogMap.get(selectedSeedId);
-    if (!seed || !unlockedSeedIds.includes(seed.id)) {
+    if (!seed || (!unlockedSeedIds.includes(seed.id) && !seed.unlockedByDefault)) {
       showToast('当前只可选择已解锁的灵植。', 'error');
       return;
     }

@@ -51,6 +51,8 @@ export function markNotificationClaimedInList(
       ...item,
       claimStatus: result.claimStatus,
       claimedAt: result.claimedAt,
+      read: true,
+      readAt: result.readAt,
       canDelete: true,
     } : item),
   } : current;

@@ -405,6 +405,7 @@ export class NotificationService {
         id: notificationId,
         claimStatus: 'claimed',
         claimedAt: claimedAt.toISOString(),
+        readAt: readAt.toISOString(),
         unreadCount,
         summary,
       };
@@ -707,6 +708,18 @@ export class NotificationService {
         },
       });
     }
+
+    await client.playerSeasonRewardGrant.updateMany({
+      where: {
+        playerId,
+        notificationId,
+        status: { in: ['generated', 'notified'] },
+      },
+      data: {
+        status: 'claimed',
+        claimedAt: new Date(),
+      },
+    });
 
     return `已领取附件：${attachments.map((item) => `${item.name ?? item.label} x${item.quantity}`).join('，')}。`;
   }

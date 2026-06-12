@@ -33,7 +33,7 @@ export const SPIRIT_TRAIT_ROLL_RULES: Record<ClientSpiritActiveRollMode, {
   },
 };
 
-const ADVANCED_TRAIT_CODES = new Set<ClientSpiritTraitCode>(['crit', 'crit_damage', 'counter', 'lifesteal', 'tenacity']);
+const ADVANCED_TRAIT_CODES = new Set<ClientSpiritTraitCode>(SPIRIT_TRAIT_DEFINITIONS.map((definition) => definition.code));
 
 export function isActiveTraitRollMode(mode: string): mode is ClientSpiritActiveRollMode {
   return mode === 'basic' || mode === 'normal' || mode === 'advanced';
@@ -74,15 +74,10 @@ export function rollTraitCandidates(
     excludeCandidateIds.map((candidateId) => getTraitDefinition(candidateId).code),
   );
   const basePool = SPIRIT_TRAIT_DEFINITIONS.filter((definition) => definition.code !== currentTraitCode && !excludedTraitCodes.has(definition.code));
-  const advancedPool = mode === 'advanced' ? basePool.filter((definition) => ADVANCED_TRAIT_CODES.has(definition.code)) : [];
-  const fallbackPool = mode === 'advanced'
-    ? basePool.filter((definition) => !ADVANCED_TRAIT_CODES.has(definition.code))
+  const candidatePool = mode === 'advanced'
+    ? basePool.filter((definition) => ADVANCED_TRAIT_CODES.has(definition.code))
     : basePool;
-  const shuffledAdvanced = shuffleTraitDefinitions(advancedPool);
-  const shuffledFallback = shuffleTraitDefinitions(fallbackPool);
-  const shuffled = mode === 'advanced'
-    ? [...shuffledAdvanced, ...shuffledFallback]
-    : shuffledFallback;
+  const shuffled = shuffleTraitDefinitions(candidatePool);
 
   return shuffled.slice(0, Math.min(rule.candidateCount, shuffled.length)).map((definition) => toTraitRollCandidate(definition.code));
 }

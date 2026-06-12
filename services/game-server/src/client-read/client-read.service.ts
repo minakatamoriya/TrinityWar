@@ -121,9 +121,9 @@ export class ClientReadService {
       const inventoryEntry = seedDefinition.playerInventory[0];
       const isTutorialSeed = seedDefinition.seedId === 'qilingya';
       const quantity = isTutorialSeed ? 0 : inventoryEntry?.quantity ?? 0;
-      const unlocked = (inventoryEntry?.unlockedAt ?? null) !== null;
       const unlockRequirement = getPlantUnlockRequirement(seedDefinition.seedId, seedDefinition.rarity, seedDefinition.sortOrder);
       const baseUnlocked = unlockRequirement.harvestRequired <= 0 && unlockRequirement.contributionRequired <= 0;
+      const unlocked = baseUnlocked || (inventoryEntry?.unlockedAt ?? null) !== null;
       const discovered = unlocked || baseUnlocked || Boolean(seedDefinition.plantResearch[0]?.discoveredAt);
       const requirementsMet = harvestCount >= unlockRequirement.harvestRequired
         && contribution >= unlockRequirement.contributionRequired;

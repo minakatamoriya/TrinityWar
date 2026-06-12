@@ -160,7 +160,9 @@ async function prepareSpiritTraitState(prisma: PrismaDb, playerId: string, defin
       },
     });
 
-    const maxHp = definition.baseHp + Math.max(30 - 1, 0) * definition.growthHp;
+    const level = 50;
+    const breakthroughStage = 3;
+    const maxHp = definition.baseHp + Math.max(level - 1, 0) * definition.growthHp;
     const slot = await client.playerSpiritSlot.upsert({
       where: { playerId_slotIndex: { playerId, slotIndex: 1 } },
       create: {
@@ -168,9 +170,9 @@ async function prepareSpiritTraitState(prisma: PrismaDb, playerId: string, defin
         slotIndex: 1,
         spiritDefinitionId: definition.id,
         isMain: true,
-        level: 30,
+        level,
         exp: 0,
-        breakthroughStage: 3,
+        breakthroughStage,
         lastExpSettledAt: now,
         element: 'WOOD',
         currentHp: maxHp,
@@ -182,9 +184,9 @@ async function prepareSpiritTraitState(prisma: PrismaDb, playerId: string, defin
       update: {
         spiritDefinitionId: definition.id,
         isMain: true,
-        level: 30,
+        level,
         exp: 0,
-        breakthroughStage: 3,
+        breakthroughStage,
         satiatedUntil: null,
         lastExpSettledAt: now,
         element: 'WOOD',

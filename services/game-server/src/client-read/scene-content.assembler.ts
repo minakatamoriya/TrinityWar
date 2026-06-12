@@ -311,13 +311,13 @@ export class SceneContentAssembler {
     const harvestCount = readModel.plantUnlockMetrics.harvestCount;
 
     return readModel.seedInventory.filter((inventory) => inventory.seedDefinition.seedId !== 'qilingya').map((inventory) => {
-      const unlocked = Boolean(inventory.unlockedAt);
       const requirement = getPlantUnlockRequirement(
         inventory.seedDefinition.seedId,
         inventory.seedDefinition.rarity,
         inventory.seedDefinition.sortOrder,
       );
       const baseUnlocked = requirement.harvestRequired <= 0 && requirement.contributionRequired <= 0;
+      const unlocked = baseUnlocked || Boolean(inventory.unlockedAt);
       const discovered = unlocked || baseUnlocked || inventory.seedDefinition.plantResearch.length > 0;
       const essenceQuantity = Math.max(inventory.quantity, 0);
       const requirementsMet = harvestCount >= requirement.harvestRequired
