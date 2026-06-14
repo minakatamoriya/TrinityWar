@@ -11,7 +11,7 @@ const upgradeDescriptions: Record<string, string> = {
   protectionTech: '结阵护住灵田与本命灵宠，延长被挑战成功后的保护时间。',
   farmYieldTech: '引灵雨滋养田垄，提升作物培育与成熟阶段的金币收益。',
   collectWindowTech: '观天象定农时，延长作物成熟后的可收窗口。',
-  factionOfferingTech: '凝聚同道心念，提升金币上缴时获得的个人阵营贡献。',
+  factionOfferingTech: '凝聚同道心念，提升个人阵营贡献获取效率。',
 };
 
 function getUpgradeCostText(costText: string): string {

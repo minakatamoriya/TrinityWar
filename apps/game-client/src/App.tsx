@@ -1162,7 +1162,7 @@ function App(): JSX.Element {
       const result = await donateFactionResources(input);
       applyMutationResult(result);
     } catch {
-      showToast('当前无法完成阵营上缴，请稍后重试。', 'error');
+      showToast('当前无法完成阵营贡献同步，请稍后重试。', 'error');
     } finally {
       setPendingActionKey(null);
     }

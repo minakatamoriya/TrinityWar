@@ -218,7 +218,7 @@ export class ClientCommandController {
   @UseGuards(AuthPlaceholderGuard)
   @ApiBearerAuth()
   @ApiBody({ type: FactionDonateRequestDto })
-  @ApiOkResponse({ description: 'Donate gold to faction and gain contribution.' })
+  @ApiOkResponse({ description: '旧版兼容入口，不再发放贡献。' })
   async donateFaction(
     @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
     @Body() body: ClientFactionDonateRequest,

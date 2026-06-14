@@ -42,7 +42,7 @@ const CASTLE_LEVEL_CONFIG = [
   { level: 10, upgradeCost: 1000, cumulativeCost: 4350, taxPerHour: 56, unlocks: ['开放灵宠上限第 5 档'] },
   { level: 11, upgradeCost: 1150, cumulativeCost: 5500, taxPerHour: 64, unlocks: [] },
   { level: 12, upgradeCost: 1300, cumulativeCost: 6800, taxPerHour: 72, unlocks: ['开放中段防守强化', '开放灵宠上限第 6 档'] },
-  { level: 13, upgradeCost: 1500, cumulativeCost: 8300, taxPerHour: 80, unlocks: ['开放中段阵营上缴效率加成'] },
+  { level: 13, upgradeCost: 1500, cumulativeCost: 8300, taxPerHour: 80, unlocks: ['开放中段阵营贡献效率加成'] },
   { level: 14, upgradeCost: 1700, cumulativeCost: 10000, taxPerHour: 88, unlocks: ['开放灵宠上限第 7 档'] },
   { level: 15, upgradeCost: 1900, cumulativeCost: 11900, taxPerHour: 98, unlocks: ['进入四田经营成型阶段'] },
   { level: 16, upgradeCost: 2100, cumulativeCost: 14000, taxPerHour: 108, unlocks: ['开放灵宠上限第 8 档'] },
@@ -548,7 +548,7 @@ export const TERRITORY_TECH_TRACKS = {
   factionOfferingTech: {
     id: 'factionOfferingTech',
     title: '同心诀',
-    description: '凝聚同道心念，提升金币上缴时获得的个人阵营贡献。',
+    description: '凝聚同道心念，提升个人阵营贡献获取效率。',
     effectKey: 'factionContributionBonusPercent',
     levels: [
       { level: 1, costResource: 'gold', costAmount: 360, upgradeCost: 360, effectValue: 3 },
@@ -711,7 +711,7 @@ export const SEASON_WEEK_PLAN = [
 /**
  * 已经接入服务端结算的正式参数。
  *
- * 这些字段改动后，会直接影响当前 demo 的建造、培育、造兵、阵营上缴和部分兼容逻辑。
+ * 这些字段改动后，会直接影响当前 demo 的建造、培育、造兵、阵营贡献和部分兼容逻辑。
  * 税收、小时分红、金库容量和临时待领取已在 2026-05-24 轻量化方案中退场。
  */
 export const GAME_BALANCE = {

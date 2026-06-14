@@ -10,7 +10,7 @@ export function buildActionMessage(label: string, context?: string): string {
   }
 
   if (label.includes('上缴')) {
-    return `${subject}上缴后会立即累积贡献值，并影响每日俸禄档位。`;
+    return `${subject}这是旧版兼容入口，当前不再发放贡献。`;
   }
 
   if (label.includes('说明') || label.includes('详情')) {

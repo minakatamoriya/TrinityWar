@@ -1287,7 +1287,7 @@ export class ClientCommandService {
     return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
       return {
         app: APP_NAME,
-        summary: '\u5df2\u5151\u6362\u4e00\u4efd\u9635\u8425\u8d21\u732e\uff0c\u5f53\u524d\u8d21\u732e\u5df2\u540c\u6b65\u3002',
+        summary: '\u65e7\u7248\u9635\u8425\u5165\u53e3\u5df2\u9000\u5f79\uff0c\u5f53\u524d\u8d21\u732e\u7531\u65e5\u5e38\u884c\u4e3a\u79ef\u7d2f\u3002',
         home: await this.clientReadService.getHomeSummary(input.playerId, client),
         scenes: await this.clientReadService.getSceneContent(input.playerId, client),
       };

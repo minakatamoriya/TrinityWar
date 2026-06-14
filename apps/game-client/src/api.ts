@@ -768,7 +768,7 @@ function syncMockFactionScene(): void {
   mockSceneSnapshot.faction.hero = {
     eyebrow: '阵营面板',
     title: '人界阵营',
-    description: '上缴金币积累个人贡献，每日按贡献档位领取材料俸禄。',
+    description: '完成日常行为积累个人贡献，每日按贡献档位领取材料俸禄。',
     advantage: '今日俸禄档位：入门俸禄',
     breakdown: '预计每日俸禄：金币 x20、灵根 x20、普通兽魂 x5',
     action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
@@ -784,10 +784,10 @@ function syncMockFactionScene(): void {
     { faction: '魔界', advantage: '总贡献 1,340', totalContribution: '1,340', power: '1,340' },
   ];
   mockSceneSnapshot.faction.donate = {
-    title: '捐献金币',
-    description: '100 金币 = 1 贡献，确认后会立即从当前金币扣除。',
+    title: '阵营贡献',
+    description: '贡献主要来自种田、灵宠、互助和对战行为，旧版资源兑换入口已停用。',
     goldStep: 100,
-    contributionRule: '100 金币 = 1 贡献；贡献越高，每日俸禄材料越好。',
+    contributionRule: '当前没有资源兑换入口，贡献由日常行为积累。',
   };
   mockSceneSnapshot.faction.stipend = {
     title: '每日阵营俸禄',
@@ -1167,26 +1167,8 @@ void applyMockRecruitArmy;
   };
 }
 
-function applyMockFactionDonate(input: ClientFactionDonateRequest): ClientStateMutationResponse {
-  const vaultResource = mockHomeSnapshot.resources.find((resource) => resource.tone === 'vault');
-
-  if (!vaultResource) {
-    throw new Error('Mock home summary is missing faction donate resources.');
-  }
-
-  const goldStep = mockSceneSnapshot.faction.donate.goldStep;
-  const vault = parseCurrentAndCapacity(vaultResource.value);
-  const actualGoldAmount = Math.min(Math.max(Math.floor(input.goldAmount / goldStep) * goldStep, 0), Math.floor(vault.current / goldStep) * goldStep);
-
-  if (actualGoldAmount <= 0) {
-    return buildMockMutation('请先选择要捐出的金币。');
-  }
-
-  const contributionGain = actualGoldAmount / goldStep;
-  applyVaultGoldDelta(-actualGoldAmount);
-  mockFactionContribution += contributionGain;
-
-  return buildMockMutation(`已向阵营捐出 ${formatNumber(actualGoldAmount)} 金币，贡献值 +${formatNumber(contributionGain)}。`);
+function applyMockFactionDonate(_input: ClientFactionDonateRequest): ClientStateMutationResponse {
+  return buildMockMutation('旧版阵营入口已退役，当前贡献由日常行为积累。');
 }
 
 export async function collectFieldEarnings(input: ClientCollectFieldRequest): Promise<ClientCollectFieldResponse> {

@@ -1618,7 +1618,7 @@ export interface ClientFactionLeaderboardEntry {
 
 export interface ClientFactionDonateRequest {
   /**
-   * @deprecated Gold donation no longer grants contribution. Use ClientFactionTaskSubmitRequest.
+   * @deprecated 旧版兼容入口已停用，当前贡献来自日常行为。
    */
   goldAmount: number;
 }

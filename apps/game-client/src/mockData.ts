@@ -150,7 +150,7 @@ export const mockHomeSummary: HomeSummaryResponse = {
     { key: 'farm', title: '农场', description: '收成熟田地' },
     { key: 'raid', title: '灵宠', description: '培育灵宠并查看当前守备' },
     { key: 'report', title: '探索', description: '查看目标与战报' },
-    { key: 'faction', title: '阵营', description: '上缴并领取俸禄' },
+    { key: 'faction', title: '阵营', description: '查看贡献并领取俸禄' },
   ],
 };
 
@@ -190,7 +190,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
         id: 'factionOfferingTech',
         title: '同心诀',
         levelText: 'Lv.0 -> Lv.1',
-        description: '凝聚同道心念，提升金币上缴时获得的个人阵营贡献。',
+        description: '凝聚同道心念，提升个人阵营贡献获取效率。',
         effectText: '当前 0%，修习后 3%。',
         costText: '消耗 360 金币',
         action: { label: '修习法术', target: 'building', tone: 'secondary' },
@@ -408,7 +408,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
     hero: {
       eyebrow: '阵营面板',
       title: '人界阵营',
-      description: '完成阵营任务积累个人贡献，每日按贡献档位领取材料俸禄。',
+      description: '完成日常行为积累个人贡献，每日按贡献档位领取材料俸禄。',
       advantage: '今日俸禄档位：入门俸禄',
       breakdown: '预计每日俸禄：金币 x20、灵根 x20、普通兽魂 x5',
       action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
@@ -425,9 +425,9 @@ export const mockSceneContent: ClientSceneContentResponse = {
     ],
     donate: {
       title: '阵营贡献',
-      description: '贡献主要来自今日阵营任务和金币捐献。',
+      description: '贡献主要来自种田、灵宠、互助和对战行为，旧版资源兑换入口已停用。',
       goldStep: 100,
-      contributionRule: '100 金币 = 1 贡献；贡献越高，每日俸禄材料越好。',
+      contributionRule: '当前没有资源兑换入口，贡献由日常行为积累。',
     },
     tasks: [],
     contributionLogs: [],
