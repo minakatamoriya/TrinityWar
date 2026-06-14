@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import type {
   AdminAdjustPlayerResourcesResponse,
   AdminDeletePlayerResponse,
+  AdminDesignDocResponse,
   AdminListResponse,
   AdminOverviewResponse,
   AdminPlayerOverviewResponse,
@@ -18,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { RobotService } from '../robot/robot.service.js';
 import { SeasonService } from '../season/season.service.js';
 import { TaskConfigService, type TaskConfigGroup } from '../task-config/task-config.service.js';
+import { buildAdminDesignDocResponse } from './admin-design-doc.js';
 
 interface PagingQuery {
   page?: string;
@@ -49,6 +51,7 @@ export class AdminReadonlyService {
       'share-assist-readonly',
       'season-readonly',
       'robot-dashboard',
+      'design-docs-readonly',
     ];
     const configWriteModules = [
       'seed-config-write',
@@ -87,6 +90,66 @@ export class AdminReadonlyService {
         },
       },
     };
+  }
+
+  async getDesignDocs(): Promise<AdminDesignDocResponse> {
+    const [seedDefinitions, spiritDefinitions, taskConfigs, factions] = await Promise.all([
+      this.prisma.db.seedDefinition.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { seedId: 'asc' }],
+        select: {
+          seedId: true,
+          label: true,
+          rarity: true,
+          sortOrder: true,
+          growSeconds: true,
+          matureSeconds: true,
+          collectWindowSeconds: true,
+          baseYieldGold: true,
+          strategyNote: true,
+          lore: true,
+        },
+      }),
+      this.prisma.db.spiritDefinition.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { spiritId: 'asc' }],
+        select: {
+          spiritId: true,
+          label: true,
+          rarity: true,
+          factionAffinity: true,
+          role: true,
+          shardName: true,
+          shardUnlockRequired: true,
+          baseAttack: true,
+          baseHp: true,
+          growthAttack: true,
+          growthHp: true,
+          sortOrder: true,
+          lore: true,
+        },
+      }),
+      this.taskConfigService.listAdminTaskConfigs(),
+      this.prisma.db.faction.findMany({
+        orderBy: { code: 'asc' },
+        select: {
+          code: true,
+          name: true,
+        },
+      }),
+    ]);
+
+    return buildAdminDesignDocResponse({
+      seedDefinitions: seedDefinitions.map((item) => ({
+        ...item,
+        rarity: item.rarity,
+      })),
+      spiritDefinitions: spiritDefinitions.map((item) => ({
+        ...item,
+        rarity: String(item.rarity),
+        role: String(item.role),
+      })),
+      taskConfigs,
+      factions,
+    });
   }
 
   async getCurrentSeasonAdmin(): Promise<Record<string, unknown>> {

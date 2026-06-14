@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+﻿import { Inject, Injectable } from '@nestjs/common';
 import {
   NotificationCategory,
   SocialAssistType,
@@ -30,10 +30,6 @@ import {
 } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
-import {
-  buildFieldReadyAtUpdate,
-  getFieldReadyAt,
-} from '../lib/field-timing.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 const WATER_CAMPAIGN_EXPIRES_MS = 24 * 60 * 60 * 1000;
@@ -44,18 +40,15 @@ const DAILY_WATER_CAMPAIGN_CREATE_LIMIT = 5;
 const DAILY_FRIEND_INVITE_CAMPAIGN_CREATE_LIMIT = 3;
 const DAILY_PUBLIC_ASSIST_CONFIRM_LIMIT = 10;
 const DAILY_OWNER_WATER_ASSIST_RECEIVE_LIMIT = 10;
-const WATER_REMAINING_RATIO = 0.4;
-const WATER_MIN_EFFECT_SECONDS = 10 * 60;
-const WATER_MAX_EFFECT_SECONDS = 60 * 60;
 const SHARE_ASSIST_REWARD_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000;
-const OWNER_WATER_ASSIST_REWARD = [{ kind: 'gold' as const, quantity: 20, label: '金币' }];
+const OWNER_WATER_ASSIST_REWARD = [{ kind: 'gold' as const, quantity: 20, label: '閲戝竵' }];
 const RETURNING_HELPER_WATER_ASSIST_REWARD = [
-  { kind: 'gold' as const, quantity: 20, label: '金币' },
-  { kind: 'spiritSoul' as const, quantity: 1, label: '兽魂' },
+  { kind: 'gold' as const, quantity: 20, label: '閲戝竵' },
+  { kind: 'spiritSoul' as const, quantity: 1, label: '鍏介瓊' },
 ];
 const NEW_HELPER_TUTORIAL_REWARD = [
-  { kind: 'gold' as const, quantity: 30, label: '金币' },
-  { kind: 'spiritSoul' as const, quantity: 1, label: '兽魂' },
+  { kind: 'gold' as const, quantity: 30, label: '閲戝竵' },
+  { kind: 'spiritSoul' as const, quantity: 1, label: '鍏介瓊' },
 ];
 
 type CampaignWithOwner = ShareAssistCampaign & {
@@ -67,25 +60,8 @@ type CampaignWithOwner = ShareAssistCampaign & {
 interface DeliveredWaterEffect {
   applied: boolean;
   shortenedSeconds: number;
-  reason: 'shortened' | 'no_active_field' | 'already_complete';
-  fieldSlotId: string | null;
+  reason: 'delivered' | 'no_active_field' | 'already_complete';
 }
-
-const shareWaterableFieldSelect = {
-  id: true,
-  status: true,
-  seedAt: true,
-  matureAt: true,
-  readyAt: true,
-  lastCalculatedAt: true,
-  seedDefinition: {
-    select: {
-      seedId: true,
-    },
-  },
-} satisfies Prisma.PlayerFieldSlotSelect;
-
-type ShareWaterableField = Prisma.PlayerFieldSlotGetPayload<{ select: typeof shareWaterableFieldSelect }>;
 
 @Injectable()
 export class ShareAssistService {
@@ -123,7 +99,7 @@ export class ShareAssistService {
 
     return {
       app: APP_NAME,
-      summary: isFriendInvite ? '单人好友邀请链接已创建，被接受后即失效。' : '浇水助力链接已创建。',
+      summary: isFriendInvite ? 'Friend invite link created.' : 'Water assist link created.',
       campaign: this.mapCampaign(campaign),
       sharePath: isFriendInvite ? `/share/friend/${campaign.id}` : `/share/water/${campaign.id}`,
     };
@@ -138,14 +114,14 @@ export class ShareAssistService {
       campaign: campaignView,
       copy: campaign.campaignType === ShareAssistCampaignType.FRIEND_INVITE
         ? {
-          title: `${campaign.owner.nickname}邀请你成为好友`,
-          description: '这是一条单人好友邀请链接，仅第一个确认者生效；接受后双方会成为好友并收到对应奖励。',
-          actionLabel: '接受好友邀请',
+          title: `${campaign.owner.nickname} invited you to be friends`,
+          description: 'This link can only be accepted once. After acceptance, both players become friends and receive rewards.',
+          actionLabel: 'Accept invite',
         }
         : {
-          title: `${campaign.owner.nickname}邀请你帮 TA 浇水`,
-          description: '帮 TA 浇一次水，助力会送达好友；完成助力后，双方都可以获得轻量奖励。',
-          actionLabel: '帮 TA 浇水',
+          title: `${campaign.owner.nickname} invited you to assist`,
+          description: 'Send an assist to your friend. Assist rewards are delivered after completion.',
+          actionLabel: 'Send assist',
         },
     };
   }
@@ -254,18 +230,18 @@ export class ShareAssistService {
 
       const notificationId = await createRewardNotification(client, {
         playerId,
-        title: isFriendInvite ? '新友奖励' : '新友助力奖励',
+        title: isFriendInvite ? 'Friend reward' : 'Assist reward',
         body: canBindFriend
-          ? `你已和 ${relation.inviter.nickname} 成为好友，新友奖励已送达。`
-          : '你已完成新手流程，微信助力奖励已送达，请在附件中领取。',
+          ? `You and ${relation.inviter.nickname} are now friends. The new friend reward is ready.`
+          : 'Tutorial assist reward has been delivered. Please claim it in notifications.',
         attachments: NEW_HELPER_TUTORIAL_REWARD,
       });
 
       if (isFriendInvite) {
         await createRewardNotification(client, {
           playerId: relation.inviterPlayerId,
-          title: '邀请新友奖励',
-          body: `${invitedPlayer.nickname} 已接受邀请并成为你的好友，邀请奖励已送达。`,
+          title: 'Invite reward',
+          body: `${invitedPlayer.nickname} accepted your invite and became your friend. The invite reward is ready.`,
           attachments: OWNER_WATER_ASSIST_REWARD,
         });
       }
@@ -277,7 +253,7 @@ export class ShareAssistService {
           feedType: canBindFriend ? SocialFeedType.FRIEND_ACCEPTED : SocialFeedType.FRIEND_WATERED_FIELD,
           relatedEntityType: 'share_assist_campaign',
           relatedEntityId: relation.sourceCampaignId,
-          summary: canBindFriend ? `你已和 ${relation.inviter.nickname} 成为好友。` : '你已完成微信助力。',
+          summary: canBindFriend ? `You and ${relation.inviter.nickname} are now friends.` : 'Assist completed.',
           metadataJson: {
             shareAssistCampaignId: relation.sourceCampaignId,
             inviteRelationId: relation.id,
@@ -289,16 +265,16 @@ export class ShareAssistService {
       if (isFriendInvite) {
         await client.playerSocialFeed.create({
           data: {
-            playerId: relation.inviterPlayerId,
-            actorPlayerId: playerId,
-            feedType: SocialFeedType.FRIEND_ACCEPTED,
-            relatedEntityType: 'share_assist_campaign',
-            relatedEntityId: relation.sourceCampaignId,
-            summary: `${invitedPlayer.nickname} 已接受邀请并成为你的好友。`,
-            metadataJson: {
-              shareAssistCampaignId: relation.sourceCampaignId,
-              inviteRelationId: relation.id,
-              reward: 'friend_invite_owner',
+          playerId: relation.inviterPlayerId,
+          actorPlayerId: playerId,
+          feedType: SocialFeedType.FRIEND_ACCEPTED,
+          relatedEntityType: 'share_assist_campaign',
+          relatedEntityId: relation.sourceCampaignId,
+          summary: `${invitedPlayer.nickname} accepted your invite and became your friend.`,
+          metadataJson: {
+            shareAssistCampaignId: relation.sourceCampaignId,
+            inviteRelationId: relation.id,
+            reward: 'friend_invite_owner',
             },
           },
         });
@@ -309,7 +285,7 @@ export class ShareAssistService {
 
     return {
       app: APP_NAME,
-      summary: result.rewarded ? '新友助力奖励已发送到通知。' : result.bound ? '邀请关系已绑定，无需重复发奖。' : '没有找到待绑定的助力邀请。',
+      summary: result.rewarded ? 'Reward delivered.' : result.bound ? 'Invite linked, no duplicate reward.' : 'No pending invite found.',
       bound: result.bound,
       rewarded: result.rewarded,
       notificationId: result.notificationId,
@@ -726,15 +702,15 @@ export class ShareAssistService {
 
     await createRewardNotification(client, {
       playerId: input.helperPlayerId,
-      title: '好友邀请奖励',
-      body: `你已和 ${input.campaign.owner.nickname} 成为好友，奖励可在附件中领取。`,
+      title: 'Friend invite reward',
+      body: `You and ${input.campaign.owner.nickname} are now friends. The reward is ready.`,
       attachments: RETURNING_HELPER_WATER_ASSIST_REWARD,
     });
 
     await createRewardNotification(client, {
       playerId: input.campaign.ownerPlayerId,
-      title: '邀请好友奖励',
-      body: `${helper.nickname} 已接受邀请并成为你的好友，邀请奖励已送达。`,
+      title: 'Invite reward',
+      body: `${helper.nickname} accepted your invite and became your friend. The invite reward is ready.`,
       attachments: OWNER_WATER_ASSIST_REWARD,
     });
 
@@ -746,7 +722,7 @@ export class ShareAssistService {
           feedType: SocialFeedType.FRIEND_ACCEPTED,
           relatedEntityType: 'share_assist_campaign',
           relatedEntityId: input.campaign.id,
-          summary: `你已和 ${input.campaign.owner.nickname} 成为好友。`,
+          summary: `You and ${input.campaign.owner.nickname} are now friends.`,
           metadataJson: {
             shareAssistCampaignId: input.campaign.id,
             reward: 'returning_friend_invite',
@@ -760,7 +736,7 @@ export class ShareAssistService {
           feedType: SocialFeedType.FRIEND_ACCEPTED,
           relatedEntityType: 'share_assist_campaign',
           relatedEntityId: input.campaign.id,
-          summary: `${helper.nickname} 已接受邀请并成为你的好友。`,
+          summary: `${helper.nickname} accepted your invite and became your friend.`,
           metadataJson: {
             shareAssistCampaignId: input.campaign.id,
             reward: 'friend_invite_owner',
@@ -776,19 +752,14 @@ export class ShareAssistService {
     client: Prisma.TransactionClient,
     input: { campaign: CampaignWithOwner; helperPlayerId: string | null },
   ): Promise<DeliveredWaterEffect & { assistRecordId: string | null }> {
-    const now = new Date();
-    const field = input.campaign.targetEntityId
-      ? await findShareWaterableFieldById(client, input.campaign.ownerPlayerId, input.campaign.targetEntityId)
-      : await findFirstShareWaterableField(client, input.campaign.ownerPlayerId);
-    const effect = field ? await applyShareWaterFieldEffect(client, field, now) : noDeliveredEffect('no_active_field');
     const assistRecord = await client.playerAssistRecord.create({
       data: {
         helperPlayerId: input.helperPlayerId ?? input.campaign.ownerPlayerId,
         targetPlayerId: input.campaign.ownerPlayerId,
         assistType: SocialAssistType.WATER_FIELD,
-        targetEntityType: 'field_slot',
-        targetEntityId: effect.fieldSlotId,
-        effectValue: effect.shortenedSeconds,
+        targetEntityType: input.campaign.targetEntityType,
+        targetEntityId: input.campaign.targetEntityId,
+        effectValue: 0,
         dateKey: getLocalDateKey(),
       },
     });
@@ -798,21 +769,21 @@ export class ShareAssistService {
         playerId: input.campaign.ownerPlayerId,
         actorPlayerId: input.helperPlayerId,
         feedType: SocialFeedType.FRIEND_WATERED_FIELD,
-        relatedEntityType: 'field_slot',
-        relatedEntityId: effect.fieldSlotId,
-        summary: effect.applied ? '好友帮你浇水，田地成长已加快。' : '好友的浇水助力已送达。',
+        relatedEntityType: 'share_assist_campaign',
+        relatedEntityId: input.campaign.id,
+        summary: 'Friend assist sent. Reward delivered.',
         metadataJson: {
           shareAssistCampaignId: input.campaign.id,
-          effectSeconds: effect.shortenedSeconds,
-          deliveredReason: effect.reason,
+          effectSeconds: 0,
+          deliveredReason: 'delivered',
         },
       },
     });
 
     await createRewardNotification(client, {
       playerId: input.campaign.ownerPlayerId,
-      title: '浇水助力已送达',
-      body: effect.applied ? '好友已为你的灵田浇水，本次助力奖励可在附件中领取。' : '好友已送出浇水助力，本次助力奖励可在附件中领取。',
+      title: 'Assist delivered',
+      body: 'Your friend assist has been sent. Please claim the reward in notifications.',
       attachments: OWNER_WATER_ASSIST_REWARD,
     });
 
@@ -822,29 +793,33 @@ export class ShareAssistService {
           playerId: input.helperPlayerId,
           actorPlayerId: input.campaign.ownerPlayerId,
           feedType: SocialFeedType.FRIEND_WATERED_FIELD,
-          relatedEntityType: 'field_slot',
-          relatedEntityId: effect.fieldSlotId,
-          summary: effect.applied ? '你已帮好友完成浇水，助力奖励已送达。' : '你已帮好友送出浇水助力，奖励已送达。',
+          relatedEntityType: 'share_assist_campaign',
+          relatedEntityId: input.campaign.id,
+          summary: 'You sent a friend assist. Reward delivered.',
           metadataJson: {
             shareAssistCampaignId: input.campaign.id,
-            effectSeconds: effect.shortenedSeconds,
-            deliveredReason: effect.reason,
+            effectSeconds: 0,
+            deliveredReason: 'delivered',
           },
         },
       });
 
       await createRewardNotification(client, {
         playerId: input.helperPlayerId,
-        title: '浇水助力奖励',
-        body: '你已完成一次好友浇水助力，奖励可在附件中领取。',
+        title: 'Assist reward',
+        body: 'You completed one friend assist. The reward is ready in notifications.',
         attachments: RETURNING_HELPER_WATER_ASSIST_REWARD,
       });
     }
 
-    return { ...effect, assistRecordId: assistRecord.id };
+    return {
+      applied: true,
+      shortenedSeconds: 0,
+      reason: 'delivered',
+      assistRecordId: assistRecord.id,
+    };
   }
 }
-
 function campaignInclude(): {
   owner: {
     select: {
@@ -1007,81 +982,6 @@ function getCurrentLocalDayRange(now = new Date()): { start: Date; end: Date } {
   return { start, end };
 }
 
-async function findShareWaterableFieldById(
-  client: Prisma.TransactionClient,
-  targetPlayerId: string,
-  fieldSlotId: string,
-): Promise<ShareWaterableField | null> {
-  return client.playerFieldSlot.findFirst({
-    where: {
-      id: fieldSlotId,
-      playerId: targetPlayerId,
-      isUnlocked: true,
-      status: 'GROWING',
-      seedDefinitionId: { not: null },
-    },
-    select: shareWaterableFieldSelect,
-  });
-}
-
-async function findFirstShareWaterableField(client: Prisma.TransactionClient, targetPlayerId: string): Promise<ShareWaterableField | null> {
-  return client.playerFieldSlot.findFirst({
-    where: {
-      playerId: targetPlayerId,
-      isUnlocked: true,
-      status: 'GROWING',
-      seedDefinitionId: { not: null },
-    },
-    orderBy: [
-      { readyAt: 'asc' },
-      { matureAt: 'asc' },
-      { slotIndex: 'asc' },
-    ],
-    select: shareWaterableFieldSelect,
-  });
-}
-
-async function applyShareWaterFieldEffect(client: Prisma.TransactionClient, field: ShareWaterableField, now: Date): Promise<DeliveredWaterEffect> {
-  const stageStartedAt = getShareWaterableStageStartedAt(field, now);
-  const currentStageEndsAt = getShareWaterableStageEndsAt(field, stageStartedAt);
-
-  if (currentStageEndsAt.getTime() <= now.getTime()) {
-    return noDeliveredEffect('already_complete', field.id);
-  }
-
-  const remainingSeconds = Math.ceil((currentStageEndsAt.getTime() - now.getTime()) / 1000);
-  const shortenedSeconds = Math.min(
-    Math.max(Math.floor(remainingSeconds * WATER_REMAINING_RATIO), WATER_MIN_EFFECT_SECONDS),
-    WATER_MAX_EFFECT_SECONDS,
-    remainingSeconds,
-  );
-  const afterStageEndsAt = new Date(currentStageEndsAt.getTime() - shortenedSeconds * 1000);
-
-  await client.playerFieldSlot.update({
-    where: { id: field.id },
-    data: {
-      ...buildFieldReadyAtUpdate(afterStageEndsAt),
-      lastCalculatedAt: now,
-      statusVersion: { increment: 1 },
-    },
-  });
-
-  return {
-    applied: true,
-    shortenedSeconds,
-    reason: 'shortened',
-    fieldSlotId: field.id,
-  };
-}
-
-function getShareWaterableStageStartedAt(field: ShareWaterableField, now: Date): Date {
-  return field.seedAt ?? field.lastCalculatedAt ?? now;
-}
-
-function getShareWaterableStageEndsAt(field: ShareWaterableField, stageStartedAt: Date): Date {
-  return getFieldReadyAt(field, field.seedDefinition?.seedId ?? '', stageStartedAt);
-}
-
 async function createRewardNotification(
   client: Prisma.TransactionClient,
   input: {
@@ -1127,12 +1027,11 @@ function toAttachmentJson(attachments: Array<{ kind: 'gold' | 'spiritSoul'; quan
   })) as Prisma.InputJsonValue;
 }
 
-function noDeliveredEffect(reason: DeliveredWaterEffect['reason'], fieldSlotId: string | null = null): DeliveredWaterEffect {
+function noDeliveredEffect(reason: DeliveredWaterEffect['reason']): DeliveredWaterEffect {
   return {
     applied: false,
     shortenedSeconds: 0,
     reason,
-    fieldSlotId,
   };
 }
 
@@ -1191,24 +1090,25 @@ function buildSummary(
   campaignType: ShareAssistCampaignType,
 ): string {
   if (nextAction === 'already_assisted') {
-    return campaignType === ShareAssistCampaignType.FRIEND_INVITE ? '你已经确认过这个好友邀请。' : '你已经帮过这个助力链接。';
+    return campaignType === ShareAssistCampaignType.FRIEND_INVITE ? 'Invite already accepted.' : 'Assist already used.';
   }
   if (nextAction === 'expired') {
-    return campaignType === ShareAssistCampaignType.FRIEND_INVITE ? '这个好友邀请已过期。' : '这个助力链接已过期。';
+    return campaignType === ShareAssistCampaignType.FRIEND_INVITE ? 'This invite has expired.' : 'This assist link has expired.';
   }
   if (nextAction === 'full') {
-    return campaignType === ShareAssistCampaignType.FRIEND_INVITE ? '这个单人好友邀请已经被接受。' : '这个助力链接的次数已满。';
+    return campaignType === ShareAssistCampaignType.FRIEND_INVITE ? 'This friend invite is already full.' : 'This assist link has reached its limit.';
   }
   if (campaignType === ShareAssistCampaignType.FRIEND_INVITE) {
     return audience === 'new-user'
-      ? '邀请已确认，完成新手流程后可绑定好友并领取新友奖励。这条单人链接随后失效。'
-      : '好友邀请已确认，欢迎回归。这条单人链接随后失效。';
+      ? 'Invite confirmed. Finish onboarding to bind and claim the friend reward.'
+      : 'Friend invite confirmed. Welcome back.';
   }
   return audience === 'new-user'
-    ? '助力成功，完成新手流程后可以领取新友奖励。'
-    : '浇水成功，助力已送达好友。';
+    ? 'Assist confirmed. Finish onboarding to claim the reward.'
+    : 'Assist delivered to your friend.';
 }
 
 function isKnownUniqueError(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
+

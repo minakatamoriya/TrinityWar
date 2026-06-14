@@ -896,6 +896,65 @@ export interface AdminRaidOrderDetailResponse {
   assetLocks: Array<Record<string, unknown>>;
 }
 
+export type AdminDesignDocMetricTone = 'neutral' | 'ok' | 'warn' | 'bad';
+
+export interface AdminDesignDocMetric {
+  label: string;
+  value: string | number;
+  tone?: AdminDesignDocMetricTone;
+}
+
+export interface AdminDesignDocFact {
+  label: string;
+  key: string;
+  value: unknown;
+}
+
+export interface AdminDesignDocTableColumn {
+  key: string;
+  label: string;
+}
+
+export interface AdminDesignDocTable {
+  key: string;
+  title: string;
+  description: string;
+  columns: AdminDesignDocTableColumn[];
+  rows: Array<Record<string, unknown>>;
+}
+
+export interface AdminDesignDocCard {
+  id: string;
+  title: string;
+  subtitle: string;
+  category: string;
+  source: string;
+  summary: string;
+  tags: string[];
+  metrics: AdminDesignDocMetric[];
+  facts: AdminDesignDocFact[];
+  notes: string[];
+}
+
+export interface AdminDesignDocSection {
+  key: string;
+  title: string;
+  description: string;
+  metrics: AdminDesignDocMetric[];
+  cards: AdminDesignDocCard[];
+  tables: AdminDesignDocTable[];
+}
+
+export interface AdminDesignDocResponse {
+  generatedAt: string;
+  overview: {
+    title: string;
+    summary: string;
+    metrics: AdminDesignDocMetric[];
+  };
+  sections: AdminDesignDocSection[];
+}
+
 export type HomeResourceTone = 'vault' | 'army';
 
 export interface HomeResourceSummary {
@@ -1578,6 +1637,7 @@ export type ClientSocialRelationType = 'friend' | 'following' | 'enemy' | 'block
 export type ClientSocialRelationStatus = 'active' | 'pending' | 'muted';
 export type ClientSocialFeedType =
   | 'friend_watered_field'
+  | 'friend_revived_field'
   | 'friend_guarded_field'
   | 'friend_requested'
   | 'friend_accepted'
@@ -1587,7 +1647,7 @@ export type ClientSocialFeedType =
   | 'enemy_raided'
   | 'revenge_available'
   | 'faction_help_requested';
-export type ClientSocialAssistType = 'water_field' | 'harvest_field' | 'guard_field' | 'recover_spirit' | 'faction_task_help';
+export type ClientSocialAssistType = 'water_field' | 'revive_field' | 'harvest_field' | 'guard_field' | 'recover_spirit' | 'faction_task_help';
 export type ClientTeamChallengeStatus = 'pending' | 'accepted' | 'rejected' | 'expired' | 'settled';
 
 export interface ClientSocialPlayerSummary {
@@ -1609,7 +1669,7 @@ export interface ClientSocialRelationItem {
   createdAt: string;
   target: ClientSocialPlayerSummary;
   assistSummary?: {
-    waterableCount: number;
+    revivableCount: number;
     harvestableCount: number;
     availableCount: number;
   };
@@ -1671,7 +1731,7 @@ export interface ClientSocialRelationMutationResponse {
   reverseRelation?: ClientSocialRelationItem;
 }
 
-export interface ClientSocialWaterFieldRequest {
+export interface ClientSocialReviveFieldRequest {
   targetPlayerId: string;
   fieldSlotId?: string;
   requestIdempotencyKey?: string;
@@ -1693,9 +1753,9 @@ export interface ClientSocialFriendFieldVisitField {
   title: string;
   cropName: string | null;
   cropRarity: string | null;
-  canWater: boolean;
+  canRevive: boolean;
   canHarvest: boolean;
-  nextAction: 'harvest' | 'water' | null;
+  nextAction: 'harvest' | 'revive' | null;
   unavailableReason: string | null;
   rewardPreview: {
     gold: number;
@@ -1753,7 +1813,7 @@ export interface ClientSocialAssistResponse {
   field?: {
     fieldSlotId: string;
     status: 'GROWING' | 'MATURE' | 'WITHERED' | 'EMPTY' | 'LOCKED';
-    shortenedSeconds: number;
+    effectSeconds: number;
     beforeStageEndsAt: string;
     afterStageEndsAt: string;
     fieldVersion: number;
@@ -1832,7 +1892,7 @@ export interface PublicShareAssistConfirmResponse {
   deliveredEffect: {
     applied: boolean;
     shortenedSeconds: number;
-    reason: 'shortened' | 'no_active_field' | 'already_complete';
+    reason: 'delivered' | 'no_active_field' | 'already_complete';
   };
   invitePending: boolean;
   nextAction: 'start_tutorial' | 'enter_game' | 'already_assisted' | 'expired' | 'full';

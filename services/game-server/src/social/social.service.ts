@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+﻿import { Inject, Injectable } from '@nestjs/common';
 import type { FieldStatus, Player, PlayerSocialFeed, PlayerSocialRelation, Prisma, PrismaClient, TeamChallenge } from '@prisma/client';
 import { SocialAssistType, SocialFeedType, SocialRelationStatus, SocialRelationType, TeamChallengeStatus } from '@prisma/client';
 import {
@@ -16,8 +16,8 @@ import {
   type ClientSocialRelationItem,
   type ClientSocialRelationListResponse,
   type ClientSocialRelationMutationResponse,
+  type ClientSocialReviveFieldRequest,
   type ClientSocialSummaryResponse,
-  type ClientSocialWaterFieldRequest,
   type ClientTeamChallengeItem,
   type ClientTeamChallengeRequest,
   type ClientTeamChallengeResponse,
@@ -34,15 +34,14 @@ import { FieldLifecycleService } from '../client-read/field-lifecycle.service.js
 
 const SOCIAL_PAGE_SIZE = 30;
 const HARVEST_INTIMACY_GAIN = 2;
-const WATER_INTIMACY_GAIN = 2;
+const REVIVE_INTIMACY_GAIN = 2;
 const DAILY_FRIEND_INTIMACY_GAIN_LIMIT = 20;
+const DAILY_FRIEND_ASSIST_LIMIT = 20;
 const FRIEND_HARVEST_REWARD_GOLD = 10;
-const WATER_REMAINING_RATIO = 0.4;
-const WATER_MIN_EFFECT_SECONDS = 10 * 60;
-const WATER_MAX_EFFECT_SECONDS = 60 * 60;
+const REVIVE_WINDOW_SECONDS = 30 * 60;
 const TEAM_CHALLENGE_EXPIRES_MS = 2 * 60 * 60 * 1000;
 const SOCIAL_CONTRIBUTION_REWARDS = {
-  waterField: 1,
+  reviveField: 1,
   harvestField: 2,
 } as const;
 
@@ -67,10 +66,10 @@ type TeamChallengeWithPlayers = TeamChallenge & {
   target: PlayerSummaryProjection;
 };
 
-interface WateredFieldResult {
+interface RevivedFieldResult {
   fieldSlotId: string;
   status: FieldStatus;
-  shortenedSeconds: number;
+  effectSeconds: number;
   beforeStageEndsAt: Date;
   afterStageEndsAt: Date;
   fieldVersion: number;
@@ -85,13 +84,13 @@ interface HarvestedFieldResult {
   rewardGold: number;
 }
 
-const waterableFieldSelect = {
+const revivableFieldSelect = {
   id: true,
   status: true,
-  seedAt: true,
+  statusVersion: true,
   matureAt: true,
   readyAt: true,
-  lastCalculatedAt: true,
+  overripeAt: true,
   seedDefinition: {
     select: {
       seedId: true,
@@ -99,7 +98,7 @@ const waterableFieldSelect = {
   },
 } satisfies Prisma.PlayerFieldSlotSelect;
 
-type WaterableField = Prisma.PlayerFieldSlotGetPayload<{ select: typeof waterableFieldSelect }>;
+type RevivableField = Prisma.PlayerFieldSlotGetPayload<{ select: typeof revivableFieldSelect }>;
 
 const harvestableFieldSelect = {
   id: true,
@@ -305,7 +304,7 @@ export class SocialService {
             feedType: SocialFeedType.FRIEND_REQUESTED,
             relatedEntityType: 'player_social_relation',
             relatedEntityId: targetRelation.id,
-            summary: '对方请求加你为好友。',
+            summary: '对方向你发送了好友申请。',
             metadataJson: { relationId: targetRelation.id, requesterPlayerId: playerId },
           },
         });
@@ -459,7 +458,7 @@ export class SocialService {
     };
   }
 
-  async waterField(playerId: string, request: ClientSocialWaterFieldRequest, options: { now?: Date } = {}): Promise<ClientSocialAssistResponse> {
+  async reviveField(playerId: string, request: ClientSocialReviveFieldRequest, options: { now?: Date } = {}): Promise<ClientSocialAssistResponse> {
     const result = await this.prisma.transaction(async (client) => {
       const now = options.now ?? new Date();
       await this.assertPlayerExists(client, playerId);
@@ -470,9 +469,10 @@ export class SocialService {
       }
       await this.assertActiveFriendRelation(client, playerId, request.targetPlayerId);
       await this.fieldLifecycleService.settlePlayerFields(client, request.targetPlayerId, now);
+      await this.assertDailyAssistCapacity(client, playerId, now);
 
       const dateKey = getLocalDateKey(now);
-      const wateredField = await this.applyWaterFieldAssist(client, {
+      const revivedField = await this.applyReviveFieldAssist(client, {
         helperPlayerId: playerId,
         targetPlayerId: request.targetPlayerId,
         fieldSlotId: request.fieldSlotId,
@@ -483,16 +483,16 @@ export class SocialService {
         data: {
           helperPlayerId: playerId,
           targetPlayerId: request.targetPlayerId,
-          assistType: SocialAssistType.WATER_FIELD,
+          assistType: SocialAssistType.REVIVE_FIELD,
           targetEntityType: 'field_slot',
-          targetEntityId: wateredField.fieldSlotId,
-          effectValue: wateredField.shortenedSeconds,
+          targetEntityId: revivedField.fieldSlotId,
+          effectValue: revivedField.effectSeconds,
           createdAt: now,
           intimacyGain: await this.calculateDailyFriendIntimacyGain(client, {
             playerId,
             targetPlayerId: request.targetPlayerId,
             dateKey,
-            requestedGain: WATER_INTIMACY_GAIN,
+            requestedGain: REVIVE_INTIMACY_GAIN,
           }),
           dateKey,
         },
@@ -502,15 +502,15 @@ export class SocialService {
         data: {
           playerId: request.targetPlayerId,
           actorPlayerId: playerId,
-          feedType: SocialFeedType.FRIEND_WATERED_FIELD,
+          feedType: SocialFeedType.FRIEND_REVIVED_FIELD,
           relatedEntityType: 'field_slot',
-          relatedEntityId: wateredField.fieldSlotId,
-          summary: '你的好友帮你浇水了，成长时间缩短了。',
+          relatedEntityId: revivedField.fieldSlotId,
+          summary: '你的好友帮你复活了一块枯萎田，已重新进入成熟收取窗口。',
           metadataJson: {
             assistId: assist.id,
-            effectSeconds: wateredField.shortenedSeconds,
-            beforeStageEndsAt: wateredField.beforeStageEndsAt.toISOString(),
-            afterStageEndsAt: wateredField.afterStageEndsAt.toISOString(),
+            effectSeconds: revivedField.effectSeconds,
+            beforeStageEndsAt: revivedField.beforeStageEndsAt.toISOString(),
+            afterStageEndsAt: revivedField.afterStageEndsAt.toISOString(),
           },
         },
       });
@@ -518,25 +518,25 @@ export class SocialService {
       await this.bumpInteraction(client, playerId, request.targetPlayerId, assist.intimacyGain);
       await grantFactionContribution(client, {
         playerId,
-        contribution: SOCIAL_CONTRIBUTION_REWARDS.waterField,
-        sourceType: 'social-water-field',
+        contribution: SOCIAL_CONTRIBUTION_REWARDS.reviveField,
+        sourceType: 'social-revive-field',
         sourceId: assist.id,
         metadata: {
           targetPlayerId: request.targetPlayerId,
-          fieldSlotId: wateredField.fieldSlotId,
-          shortenedSeconds: wateredField.shortenedSeconds,
+          fieldSlotId: revivedField.fieldSlotId,
+          effectSeconds: revivedField.effectSeconds,
         },
       });
       const counts = await this.getCounts(client, playerId);
-      return { assist, counts, intimacyGain: assist.intimacyGain, wateredField };
+      return { assist, counts, intimacyGain: assist.intimacyGain, revivedField };
     });
 
     return {
       app: APP_NAME,
-      summary: `已帮好友浇水，成长缩短 ${formatDuration(result.wateredField.shortenedSeconds)}，${formatIntimacyGainClause(result.intimacyGain)}。`,
+      summary: `已帮好友复活一块枯萎田，并重新争取到 30 分钟收取时间，${formatIntimacyGainClause(result.intimacyGain)}。`,
       assist: {
         id: result.assist.id,
-        assistType: 'water_field',
+        assistType: 'revive_field',
         targetPlayerId: result.assist.targetPlayerId,
         targetEntityType: result.assist.targetEntityType,
         targetEntityId: result.assist.targetEntityId,
@@ -546,12 +546,12 @@ export class SocialService {
       },
       intimacyGain: result.intimacyGain,
       field: {
-        fieldSlotId: result.wateredField.fieldSlotId,
-        status: result.wateredField.status,
-        shortenedSeconds: result.wateredField.shortenedSeconds,
-        beforeStageEndsAt: result.wateredField.beforeStageEndsAt.toISOString(),
-        afterStageEndsAt: result.wateredField.afterStageEndsAt.toISOString(),
-        fieldVersion: result.wateredField.fieldVersion,
+        fieldSlotId: result.revivedField.fieldSlotId,
+        status: result.revivedField.status,
+        effectSeconds: result.revivedField.effectSeconds,
+        beforeStageEndsAt: result.revivedField.beforeStageEndsAt.toISOString(),
+        afterStageEndsAt: result.revivedField.afterStageEndsAt.toISOString(),
+        fieldVersion: result.revivedField.fieldVersion,
       },
       counts: result.counts,
     };
@@ -577,14 +577,13 @@ export class SocialService {
       orderBy: { slotIndex: 'asc' },
       select: friendFieldVisitSelect,
     });
-    const wateredFieldIds = await this.findWateredFieldIdsForCurrentCycle(this.prisma.db, playerId, request.targetPlayerId, fields);
     const harvestedFieldIds = await this.findHarvestedFieldIdsForCurrentCycle(this.prisma.db, playerId, request.targetPlayerId, fields);
 
     return {
       app: APP_NAME,
       friend: this.mapPlayer(target),
-      fields: fields.map((field) => this.mapFriendVisitField(field, now, wateredFieldIds.has(field.id), harvestedFieldIds.has(field.id))),
-      ruleText: '一键助力会自动处理当前可助力田地：成长中浇水，成熟后采摘；枯萎田暂时不能助力，采摘不影响好友收成。',
+      fields: fields.map((field) => this.mapFriendVisitField(field, now, harvestedFieldIds.has(field.id))),
+      ruleText: '一键助力会自动处理当前可助力田地：枯萎时先复活再收取，成熟时直接收取；采摘不会影响好友收成。',
     };
   }
 
@@ -607,7 +606,7 @@ export class SocialService {
       app: APP_NAME,
       friend: this.mapPlayer(target),
       fields: fields.map((field) => this.mapHarvestableField(field)),
-      ruleText: '不会影响好友收成',
+      ruleText: '涓嶄細褰卞搷濂藉弸鏀舵垚',
     };
   }
 
@@ -622,6 +621,7 @@ export class SocialService {
       }
       await this.assertActiveFriendRelation(client, playerId, request.targetPlayerId);
       await this.fieldLifecycleService.settlePlayerFields(client, request.targetPlayerId, now);
+      await this.assertDailyAssistCapacity(client, playerId, now);
 
       const dateKey = getLocalDateKey(now);
 
@@ -642,7 +642,7 @@ export class SocialService {
         select: { id: true },
       });
       if (repeatedHarvest) {
-        throw this.invalidRequest('这块田地本轮已经采摘过了，可以继续帮好友浇水。');
+        throw this.invalidRequest('这块田地本轮已经采摘过了，可以继续帮助好友复活其他枯萎田。');
       }
 
       const harvestResult = this.mapHarvestedField(harvestedField);
@@ -705,7 +705,7 @@ export class SocialService {
             feedType: SocialFeedType.FRIEND_WATERED_FIELD,
             relatedEntityType: 'player_assist_record',
             relatedEntityId: assist.id,
-            summary: `你拜访 ${target.nickname} 的灵田，采摘到一缕灵田余韵。`,
+            summary: `你拜访了 ${target.nickname} 的灵田，采摘到一缕灵田余韵。`,
             metadataJson: {
               assistId: assist.id,
               assistType: 'harvest_field',
@@ -763,7 +763,7 @@ export class SocialService {
       },
       intimacyGain: result.intimacyGain,
       rewards: [
-        { kind: 'gold', quantity: result.harvestResult.rewardGold, label: '金币' },
+        { kind: 'gold', quantity: result.harvestResult.rewardGold, label: '閲戝竵' },
       ],
       counts: result.counts,
     };
@@ -944,7 +944,7 @@ export class SocialService {
           feedType: SocialFeedType.FRIEND_ACCEPTED,
           relatedEntityType: 'player',
           relatedEntityId: secondPlayerId,
-          summary: '你们已经成为好友，可以互相浇水了。',
+          summary: '你们已经成为好友，可以互相助力灵田了。',
           metadataJson: { friendPlayerId: secondPlayerId },
         },
       }),
@@ -955,7 +955,7 @@ export class SocialService {
           feedType: SocialFeedType.FRIEND_ACCEPTED,
           relatedEntityType: 'player',
           relatedEntityId: firstPlayerId,
-          summary: '你们已经成为好友，可以互相浇水了。',
+          summary: '你们已经成为好友，可以互相助力灵田了。',
           metadataJson: { friendPlayerId: firstPlayerId },
         },
       }),
@@ -1080,96 +1080,98 @@ export class SocialService {
     return Math.min(Math.max(input.requestedGain, 0), remainingGain);
   }
 
-  private async applyWaterFieldAssist(
-    client: DbClient,
-    input: { helperPlayerId: string; targetPlayerId: string; fieldSlotId?: string; now: Date },
-  ): Promise<WateredFieldResult> {
-    const field = input.fieldSlotId
-      ? await this.findWaterableFieldById(client, input.targetPlayerId, input.fieldSlotId)
-      : await this.findFirstWaterableField(client, input.targetPlayerId);
-
-    if (!field) {
-      throw this.invalidRequest('好友当前没有可浇水的成长中田地。');
-    }
-
-    const stageStartedAt = getWaterableStageStartedAt(field, input.now);
-    const currentStageEndsAt = getWaterableStageEndsAt(field, stageStartedAt);
-
-    if (currentStageEndsAt.getTime() <= input.now.getTime()) {
-      throw this.invalidRequest('这块田已经可以进入下一阶段，不能继续浇水。');
-    }
-
-    const repeatedAssist = await client.playerAssistRecord.findFirst({
+  private async assertDailyAssistCapacity(client: DbClient, helperPlayerId: string, now: Date): Promise<void> {
+    const dateKey = getLocalDateKey(now);
+    const usedCount = await client.playerAssistRecord.count({
       where: {
-        helperPlayerId: input.helperPlayerId,
-        targetPlayerId: input.targetPlayerId,
-        assistType: SocialAssistType.WATER_FIELD,
-        targetEntityType: 'field_slot',
-        targetEntityId: field.id,
-        createdAt: { gte: stageStartedAt },
+        helperPlayerId,
+        dateKey,
+        assistType: { in: [SocialAssistType.REVIVE_FIELD, SocialAssistType.HARVEST_FIELD] },
       },
-      select: { id: true },
     });
 
-    if (repeatedAssist) {
-      throw this.invalidRequest('你已经帮这块田浇过水了，等它进入下一轮成长后再来。');
+    if (usedCount >= DAILY_FRIEND_ASSIST_LIMIT) {
+      throw this.invalidRequest('今日好友助力次数已达上限。');
+    }
+  }
+
+  private async applyReviveFieldAssist(
+    client: DbClient,
+    input: { helperPlayerId: string; targetPlayerId: string; fieldSlotId?: string; now: Date },
+  ): Promise<RevivedFieldResult> {
+    const field = input.fieldSlotId
+      ? await this.findRevivableFieldById(client, input.targetPlayerId, input.fieldSlotId)
+      : await this.findFirstRevivableField(client, input.targetPlayerId);
+
+    if (!field) {
+      throw this.invalidRequest('好友当前没有可复活的枯萎田地。');
     }
 
-    const remainingSeconds = Math.ceil((currentStageEndsAt.getTime() - input.now.getTime()) / 1000);
-    const shortenedSeconds = Math.min(
-      Math.max(Math.floor(remainingSeconds * WATER_REMAINING_RATIO), WATER_MIN_EFFECT_SECONDS),
-      WATER_MAX_EFFECT_SECONDS,
-      remainingSeconds,
-    );
-    const afterStageEndsAt = new Date(currentStageEndsAt.getTime() - shortenedSeconds * 1000);
-    const updated = await client.playerFieldSlot.update({
-      where: { id: field.id },
+    const beforeStageEndsAt = field.overripeAt ?? field.readyAt ?? field.matureAt ?? input.now;
+    const afterStageEndsAt = new Date(input.now.getTime() + REVIVE_WINDOW_SECONDS * 1000);
+    const updatedCount = await client.playerFieldSlot.updateMany({
+      where: {
+        id: field.id,
+        playerId: input.targetPlayerId,
+        status: 'WITHERED',
+        statusVersion: field.statusVersion,
+      },
       data: {
-        ...buildFieldReadyAtUpdate(afterStageEndsAt),
+        status: 'MATURE',
+        ...buildFieldReadyAtUpdate(input.now),
+        overripeAt: afterStageEndsAt,
         lastCalculatedAt: input.now,
         statusVersion: { increment: 1 },
       },
+    });
+
+    if (updatedCount.count !== 1) {
+      throw this.invalidRequest('该田地状态已变化，请刷新后重试。');
+    }
+
+    const updatedField = await client.playerFieldSlot.findUnique({
+      where: { id: field.id },
       select: { statusVersion: true },
     });
 
     return {
       fieldSlotId: field.id,
-      status: field.status,
-      shortenedSeconds,
-      beforeStageEndsAt: currentStageEndsAt,
+      status: 'MATURE',
+      effectSeconds: REVIVE_WINDOW_SECONDS,
+      beforeStageEndsAt,
       afterStageEndsAt,
-      fieldVersion: updated.statusVersion,
+      fieldVersion: updatedField?.statusVersion ?? field.statusVersion + 1,
     };
   }
 
-  private async findWaterableFieldById(client: DbClient, targetPlayerId: string, fieldSlotId: string): Promise<WaterableField | null> {
+  private async findRevivableFieldById(client: DbClient, targetPlayerId: string, fieldSlotId: string): Promise<RevivableField | null> {
     return client.playerFieldSlot.findFirst({
       where: {
         id: fieldSlotId,
         playerId: targetPlayerId,
         isUnlocked: true,
-        status: 'GROWING',
+        status: 'WITHERED',
         seedDefinitionId: { not: null },
       },
       orderBy: { slotIndex: 'asc' },
-      select: waterableFieldSelect,
+      select: revivableFieldSelect,
     });
   }
 
-  private async findFirstWaterableField(client: DbClient, targetPlayerId: string): Promise<WaterableField | null> {
+  private async findFirstRevivableField(client: DbClient, targetPlayerId: string): Promise<RevivableField | null> {
     return client.playerFieldSlot.findFirst({
       where: {
         playerId: targetPlayerId,
         isUnlocked: true,
-        status: 'GROWING',
+        status: 'WITHERED',
         seedDefinitionId: { not: null },
       },
       orderBy: [
+        { overripeAt: 'asc' },
         { readyAt: 'asc' },
-        { matureAt: 'asc' },
         { slotIndex: 'asc' },
       ],
-      select: waterableFieldSelect,
+      select: revivableFieldSelect,
     });
   }
 
@@ -1238,43 +1240,13 @@ export class SocialService {
     return new Set(records.map((record) => record.targetEntityId).filter((id): id is string => typeof id === 'string'));
   }
 
-  private async findWateredFieldIdsForCurrentCycle(
-    client: DbClient,
-    helperPlayerId: string,
-    targetPlayerId: string,
-    fields: FriendFieldVisitSlot[],
-  ): Promise<Set<string>> {
-    const waterableFields = fields.filter((field) => field.isUnlocked && Boolean(field.seedDefinition) && field.status === 'GROWING');
-    if (waterableFields.length === 0) {
-      return new Set();
-    }
-
-    const conditions = waterableFields.map((field) => ({
-      targetEntityId: field.id,
-      createdAt: { gte: getVisitFieldCycleStartedAt(field) },
-    }));
-    const records = await client.playerAssistRecord.findMany({
-      where: {
-        helperPlayerId,
-        targetPlayerId,
-        assistType: SocialAssistType.WATER_FIELD,
-        targetEntityType: 'field_slot',
-        OR: conditions,
-      },
-      select: { targetEntityId: true },
-    });
-
-    return new Set(records.map((record) => record.targetEntityId).filter((id): id is string => typeof id === 'string'));
-  }
-
   private mapFriendVisitField(
     field: FriendFieldVisitSlot,
     now: Date,
-    wateredThisCycle: boolean,
     harvestedThisCycle: boolean,
   ): ClientSocialFriendFieldVisitField {
     const status = field.status as ClientSocialFriendFieldVisitField['status'];
-    const canWater = !wateredThisCycle && field.isUnlocked && field.status === 'GROWING' && Boolean(field.seedDefinition);
+    const canRevive = field.isUnlocked && field.status === 'WITHERED' && Boolean(field.seedDefinition);
     const canHarvest = !harvestedThisCycle && field.isUnlocked && field.status === 'MATURE' && Boolean(field.seedDefinition);
     const timing = getFriendFieldTiming(field, now);
     const rewardPreview = canHarvest ? { gold: calculateHarvestRewardGold(field) } : null;
@@ -1282,7 +1254,7 @@ export class SocialService {
 
     return {
       fieldSlotId: field.id,
-      fieldCode: `田地 ${String(field.slotIndex).padStart(2, '0')}`,
+      fieldCode: `鐢板湴 ${String(field.slotIndex).padStart(2, '0')}`,
       slotIndex: field.slotIndex,
       status,
       tone,
@@ -1290,10 +1262,10 @@ export class SocialService {
       title: getFriendFieldTitle(status),
       cropName: field.seedDefinition?.label ?? null,
       cropRarity: field.seedDefinition?.rarity ?? null,
-      canWater,
+      canRevive,
       canHarvest,
-      nextAction: canHarvest ? 'harvest' : canWater ? 'water' : null,
-      unavailableReason: canWater || canHarvest ? null : getFriendFieldUnavailableReason(field, wateredThisCycle),
+      nextAction: canHarvest ? 'harvest' : canRevive ? 'revive' : null,
+      unavailableReason: canRevive || canHarvest ? null : getFriendFieldUnavailableReason(field),
       rewardPreview,
       progressRemainingSeconds: timing.remainingSeconds,
       progressTotalSeconds: timing.totalSeconds,
@@ -1305,9 +1277,9 @@ export class SocialService {
     const rewardGold = calculateHarvestRewardGold(field);
     return {
       fieldSlotId: field.id,
-      fieldCode: `田地 ${field.slotIndex}`,
+      fieldCode: `鐢板湴 ${field.slotIndex}`,
       status: field.status as 'MATURE',
-      cropName: field.seedDefinition?.label ?? '未知灵植',
+      cropName: field.seedDefinition?.label ?? '鏈煡鐏垫',
       cropRarity: field.seedDefinition?.rarity ?? 'common',
       rewardPreview: { gold: rewardGold },
     };
@@ -1316,9 +1288,9 @@ export class SocialService {
   private mapHarvestedField(field: HarvestableField): HarvestedFieldResult {
     return {
       fieldSlotId: field.id,
-      fieldCode: `田地 ${field.slotIndex}`,
+      fieldCode: `鐢板湴 ${field.slotIndex}`,
       status: field.status,
-      cropName: field.seedDefinition?.label ?? '未知灵植',
+      cropName: field.seedDefinition?.label ?? '鏈煡鐏垫',
       cropRarity: field.seedDefinition?.rarity ?? 'common',
       rewardGold: calculateHarvestRewardGold(field),
     };
@@ -1439,7 +1411,7 @@ export class SocialService {
       where: {
         playerId: { in: uniqueTargetPlayerIds },
         isUnlocked: true,
-        status: { in: ['GROWING', 'MATURE'] },
+        status: { in: ['WITHERED', 'MATURE'] },
         seedDefinitionId: { not: null },
       },
       select: {
@@ -1451,26 +1423,7 @@ export class SocialService {
       },
     });
     const matureFields = fields.filter((field) => field.status === 'MATURE');
-    const growingFields = fields.filter((field) => field.status === 'GROWING');
-    const [wateredRecords, harvestedRecords] = await Promise.all([
-      growingFields.length > 0
-        ? client.playerAssistRecord.findMany({
-          where: {
-            helperPlayerId,
-            assistType: SocialAssistType.WATER_FIELD,
-            targetEntityType: 'field_slot',
-            OR: growingFields.map((field) => ({
-              targetPlayerId: field.playerId,
-              targetEntityId: field.id,
-              createdAt: { gte: field.seedAt ?? field.lastCalculatedAt ?? new Date(0) },
-            })),
-          },
-          select: {
-            targetEntityId: true,
-          },
-        })
-        : [],
-      matureFields.length > 0
+    const harvestedRecords: Array<{ targetEntityId: string | null }> = await (matureFields.length > 0
         ? client.playerAssistRecord.findMany({
         where: {
           helperPlayerId,
@@ -1486,14 +1439,12 @@ export class SocialService {
           targetEntityId: true,
         },
       })
-        : [],
-    ]);
-    const wateredFieldIds = new Set(wateredRecords.map((record) => record.targetEntityId).filter((id): id is string => typeof id === 'string'));
+        : []);
     const harvestedFieldIds = new Set(harvestedRecords.map((record) => record.targetEntityId).filter((id): id is string => typeof id === 'string'));
     const summaryByPlayerId = new Map<string, ClientSocialRelationItem['assistSummary']>();
 
     for (const targetPlayerId of uniqueTargetPlayerIds) {
-      summaryByPlayerId.set(targetPlayerId, { waterableCount: 0, harvestableCount: 0, availableCount: 0 });
+      summaryByPlayerId.set(targetPlayerId, { revivableCount: 0, harvestableCount: 0, availableCount: 0 });
     }
 
     for (const field of fields) {
@@ -1501,8 +1452,8 @@ export class SocialService {
       if (!summary) {
         continue;
       }
-      if (field.status === 'GROWING' && !wateredFieldIds.has(field.id)) {
-        summary.waterableCount += 1;
+      if (field.status === 'WITHERED') {
+        summary.revivableCount += 1;
         summary.availableCount += 1;
         continue;
       }
@@ -1548,17 +1499,17 @@ export class SocialService {
   private buildFeedActions(feedType: SocialFeedType, targetPlayerId?: string, relatedEntityId?: string): ClientSocialFeedItem['actions'] {
     if (feedType === SocialFeedType.FRIEND_REQUESTED) {
       return [
-        { label: '同意', action: 'accept_friend', targetPlayerId, relatedEntityId },
-        { label: '拒绝', action: 'reject_friend', targetPlayerId, relatedEntityId },
+        { label: '鍚屾剰', action: 'accept_friend', targetPlayerId, relatedEntityId },
+        { label: '鎷掔粷', action: 'reject_friend', targetPlayerId, relatedEntityId },
       ];
     }
-    if (feedType === SocialFeedType.FRIEND_WATERED_FIELD) {
-      return [{ label: '回浇', action: 'assist_back', targetPlayerId }];
+    if (feedType === SocialFeedType.FRIEND_WATERED_FIELD || feedType === SocialFeedType.FRIEND_REVIVED_FIELD) {
+      return [{ label: '鍥炴祰', action: 'assist_back', targetPlayerId }];
     }
     if (feedType === SocialFeedType.REVENGE_AVAILABLE || feedType === SocialFeedType.ENEMY_RAIDED) {
       return [
-        { label: '复仇', action: 'revenge', targetPlayerId, relatedEntityId },
-        { label: '关注', action: 'follow', targetPlayerId },
+        { label: '澶嶄粐', action: 'revenge', targetPlayerId, relatedEntityId },
+        { label: '鍏虫敞', action: 'follow', targetPlayerId },
       ];
     }
     if (feedType === SocialFeedType.TEAM_CHALLENGE_INVITED) {
@@ -1588,14 +1539,6 @@ export class SocialService {
   }
 }
 
-function getWaterableStageStartedAt(field: WaterableField, now: Date): Date {
-  return field.seedAt ?? field.lastCalculatedAt ?? now;
-}
-
-function getWaterableStageEndsAt(field: WaterableField, stageStartedAt: Date): Date {
-  return getFieldReadyAt(field, field.seedDefinition?.seedId ?? '', stageStartedAt);
-}
-
 function getHarvestCycleStartedAt(field: HarvestableField): Date {
   return field.seedAt ?? field.lastCalculatedAt ?? new Date(0);
 }
@@ -1614,20 +1557,21 @@ function getVisitFieldCycleStartedAt(field: FriendFieldVisitSlot): Date {
   return field.seedAt ?? field.lastCalculatedAt ?? new Date(0);
 }
 
-function getFriendFieldUnavailableReason(field: FriendFieldVisitSlot, wateredThisCycle = false): string | null {
+function getFriendFieldUnavailableReason(field: FriendFieldVisitSlot): string | null {
   if (!field.isUnlocked || field.status === 'LOCKED') {
     return '好友尚未解锁这块田地';
   }
   if (field.status === 'EMPTY' || !field.seedDefinition) {
     return '好友还没有播种';
   }
-  if (wateredThisCycle && field.status === 'GROWING') {
-    return '这块田本轮已经浇过水，等进入下一阶段后再来助力';
-  }
   if (field.status === 'WITHERED') {
-    return '这块田地已经枯萎，不能采摘；等好友重新播种后再来助力';
+    return null;
   }
-  return null;
+  if (field.status === 'GROWING') {
+    return '作物仍在成长中，当前不可助力';
+  }
+
+  return '当前不可助力';
 }
 
 function mapFriendFieldTone(status: FieldStatus): ClientSocialFriendFieldVisitField['tone'] {
@@ -1654,12 +1598,12 @@ function getFriendFieldBadge(status: ClientSocialFriendFieldVisitField['status']
     return '空闲';
   }
   if (status === 'GROWING') {
-    return '成长';
+    return '鎴愰暱';
   }
   if (status === 'MATURE') {
-    return '成熟';
+    return '鎴愮啛';
   }
-  return '枯萎';
+  return '鏋悗';
 }
 
 function getFriendFieldTitle(status: ClientSocialFriendFieldVisitField['status']): string {
@@ -1673,9 +1617,9 @@ function getFriendFieldTitle(status: ClientSocialFriendFieldVisitField['status']
     return '成长中';
   }
   if (status === 'MATURE') {
-    return '成熟可收';
+    return '鎴愮啛鍙敹';
   }
-  return '已经枯萎';
+  return '宸茬粡鏋悗';
 }
 
 function getFriendFieldTiming(field: FriendFieldVisitSlot, now: Date): { remainingSeconds: number; totalSeconds: number } {
@@ -1693,20 +1637,6 @@ function buildTiming(startedAt: Date, endsAt: Date, now: Date): { remainingSecon
   return { remainingSeconds, totalSeconds };
 }
 
-function formatDuration(totalSeconds: number): string {
-  const safeSeconds = Math.max(Math.floor(totalSeconds), 0);
-  const hours = Math.floor(safeSeconds / 3600);
-  const minutes = Math.floor((safeSeconds % 3600) / 60);
-
-  if (hours > 0 && minutes > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  if (hours > 0) {
-    return `${hours}h`;
-  }
-  return `${Math.max(minutes, 1)}m`;
-}
-
 function formatIntimacyGainClause(intimacyGain: number): string {
   if (intimacyGain > 0) {
     return `亲密度 +${intimacyGain}`;
@@ -1718,3 +1648,6 @@ function formatIntimacyGainClause(intimacyGain: number): string {
 function buildFriendIntimacyPairKey(playerId: string, targetPlayerId: string): string {
   return [playerId, targetPlayerId].sort().join(':');
 }
+
+
+

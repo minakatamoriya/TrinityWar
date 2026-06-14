@@ -4,6 +4,7 @@ import {
   APP_NAME,
   type AdminCreateNotificationResponse,
   type AdminAdjustPlayerResourcesResponse,
+  type AdminDesignDocResponse,
   type AdminDeletePlayerResponse,
   type AdminListResponse,
   type AdminNotificationHistoryItem,
@@ -34,6 +35,7 @@ import { SystemView } from './views/SystemView';
 import { TaskConfigView, type TaskConfigGroup } from './views/TaskConfigView';
 import { SeasonView } from './views/SeasonView';
 import { RobotTestView } from './views/RobotTestView';
+import { DesignDocsView } from './views/DesignDocsView';
 import { TableSection } from './components/TableSection';
 import type { AdminRecord, ModuleKey, PlayerModal } from './types';
 import type { PlayerResourceAdjustFormState } from './types';
@@ -130,6 +132,9 @@ function App(): JSX.Element {
   const [auditTargetId, setAuditTargetId] = useState('');
   const [auditAction, setAuditAction] = useState('');
   const [robotDashboard, setRobotDashboard] = useState<RobotDashboardViewModel | null>(null);
+  const [designDocs, setDesignDocs] = useState<AdminDesignDocResponse | null>(null);
+  const [designDocsSearch, setDesignDocsSearch] = useState('');
+  const [designDocsSectionKey, setDesignDocsSectionKey] = useState('all');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -174,6 +179,9 @@ function App(): JSX.Element {
     }
     if (activeModule === 'robotTest' && !robotDashboard) {
       void loadRobotDashboard();
+    }
+    if (activeModule === 'designDocs' && !designDocs) {
+      void loadDesignDocs();
     }
   }, [activeModule]);
 
@@ -242,6 +250,16 @@ function App(): JSX.Element {
     const result = await run('robot-dashboard', () => adminFetch<RobotDashboardViewModel>('/robots/dashboard'));
     if (result) {
       setRobotDashboard(result);
+    }
+  };
+
+  const loadDesignDocs = async (): Promise<void> => {
+    const result = await run('design-docs', () => adminFetch<AdminDesignDocResponse>('/docs/design'));
+    if (result) {
+      setDesignDocs(result);
+      if (designDocsSectionKey !== 'all' && !result.sections.some((section) => section.key === designDocsSectionKey)) {
+        setDesignDocsSectionKey('all');
+      }
     }
   };
 
@@ -1161,6 +1179,18 @@ function App(): JSX.Element {
               onStartSocialLoop={(input) => void startRobotSocial3Loop(input)}
               onStopLoop={() => void stopRobotDaily3Loop()}
               onStopSeasonSimV1Loop={() => void stopRobotSeasonSimV1Loop()}
+            />
+          ) : null}
+
+          {activeModule === 'designDocs' ? (
+            <DesignDocsView
+              activeSectionKey={designDocsSectionKey}
+              busy={busy}
+              docs={designDocs}
+              onRefresh={() => void loadDesignDocs()}
+              onSearchChange={setDesignDocsSearch}
+              onSectionChange={setDesignDocsSectionKey}
+              search={designDocsSearch}
             />
           ) : null}
 

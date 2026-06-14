@@ -1301,6 +1301,203 @@ h3 {
   background: #ffffff;
 }
 
+.design-docs {
+  align-content: start;
+}
+
+.design-doc-metrics,
+.design-doc-section-metrics,
+.design-doc-result-head,
+.design-doc-toolbar,
+.design-doc-card-tags,
+.design-doc-card-metrics,
+.design-doc-facts {
+  display: grid;
+  gap: 10px;
+}
+
+.design-doc-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-top: 16px;
+}
+
+.design-doc-metric,
+.design-doc-result-head div,
+.design-doc-card-metrics div,
+.design-doc-facts div {
+  border: 1px solid #dbe3ec;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.design-doc-metric {
+  min-height: 72px;
+  padding: 12px;
+}
+
+.design-doc-metric.ok {
+  border-color: #badbcc;
+  background: #f0fbf5;
+}
+
+.design-doc-metric.warn {
+  border-color: #ead5b2;
+  background: #fffaf0;
+}
+
+.design-doc-metric.bad {
+  border-color: #e6b5ae;
+  background: #fff7f5;
+}
+
+.design-doc-metric span,
+.design-doc-result-head span,
+.design-doc-card-head span,
+.design-doc-card-head small,
+.design-doc-card-metrics span,
+.design-doc-facts span {
+  color: #516174;
+  font-size: 12px;
+}
+
+.design-doc-metric strong,
+.design-doc-result-head strong {
+  display: block;
+  margin-top: 7px;
+  color: #1b2430;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+.design-doc-toolbar {
+  align-items: center;
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, 260px);
+  margin-top: 16px;
+}
+
+.design-doc-result-head {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.design-doc-result-head div {
+  padding: 12px;
+}
+
+.design-doc-section {
+  display: grid;
+  gap: 14px;
+}
+
+.design-doc-section-metrics {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.design-doc-card-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.design-doc-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #d2d9e2;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.design-doc-card-head {
+  display: flex;
+  gap: 12px;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.design-doc-card-head div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.design-doc-card-head strong {
+  color: #1b2430;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.design-doc-card-head code {
+  max-width: 160px;
+  padding: 4px 6px;
+  border: 1px solid #dbe3ec;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #345b83;
+  overflow-wrap: anywhere;
+}
+
+.design-doc-card p {
+  margin: 0;
+  color: #344256;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.design-doc-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.design-doc-card-tags span {
+  border: 1px solid #d3dde8;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #516174;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.design-doc-card-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.design-doc-card-metrics div,
+.design-doc-facts div {
+  min-width: 0;
+  padding: 10px;
+}
+
+.design-doc-card-metrics strong,
+.design-doc-facts strong {
+  display: block;
+  margin-top: 5px;
+  color: #1b2430;
+  overflow-wrap: anywhere;
+}
+
+.design-doc-facts {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.design-doc-facts code {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.design-doc-notes {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: #516174;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 @media (max-width: 1100px) {
   .admin-layout {
     grid-template-columns: 1fr;
@@ -1317,6 +1514,9 @@ h3 {
   .metric-grid,
   .robot-overview,
   .robot-scenario-grid,
+  .design-doc-toolbar,
+  .design-doc-result-head,
+  .design-doc-card-metrics,
   .two-column {
     grid-template-columns: 1fr;
   }

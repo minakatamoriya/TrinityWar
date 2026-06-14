@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   ClientSocialFeedItem,
   ClientSocialFriendFieldVisitResponse,
   ClientSocialRelationItem,
@@ -330,7 +330,7 @@ function getRelationActionLabel(relation: RelationRow): string {
     return '仅战斗';
   }
   if (relation.friendStatus === 'active') {
-    return '浇水';
+    return '助力';
   }
   if (relation.friendStatus === 'pending') {
     return '待确认';
@@ -396,11 +396,11 @@ function FriendFieldVisitModal(props: {
           );
         })}
       </div>
-      {!hasActionableField ? <p className="muted social-field-visit-empty">好友当前没有可助力的田地。等 TA 播种或作物进入成长阶段后再来。</p> : null}
+      {!hasActionableField ? <p className="muted social-field-visit-empty">好友当前没有可助力的田地。等 TA 成熟或枯萎后再来。</p> : null}
       <div className="social-field-visit-actionbar">
         <div>
           <strong>{hasActionableField ? '一键结算当前可助力田地' : '暂无可助力田地'}</strong>
-          <span>成长中自动浇水，成熟后自动采摘。</span>
+          <span>枯萎时自动复活，成熟后自动采摘。</span>
         </div>
         <button className="primary-button" disabled={props.busy || !hasActionableField} onClick={props.onAssistAll} type="button">
           {props.busy ? '助力中...' : '一键助力'}
@@ -441,22 +441,22 @@ function buildFriendFieldStatusView(field: ClientSocialFriendFieldVisitResponse[
     description: field.unavailableReason ?? getFriendFieldDescription(field),
     emphasis: field.nextAction === 'harvest' && field.rewardPreview
       ? `一键助力可采摘 +${field.rewardPreview.gold} 金币`
-      : field.nextAction === 'water'
-        ? '一键助力会自动浇水并增加亲密度'
+      : field.nextAction === 'revive'
+        ? '一键助力会先复活再直接收取'
         : undefined,
     harvestable: false,
   };
 }
 
 function getFriendFieldProgressLabel(field: ClientSocialFriendFieldVisitResponse['fields'][number]): string {
-  if (field.nextAction === 'water') {
-    return '可浇水';
+  if (field.nextAction === 'revive') {
+    return '可一键助力';
   }
   if (field.nextAction === 'harvest') {
     return '可采摘';
   }
   if (field.status === 'GROWING') {
-    return '本轮已浇水';
+    return '成长中';
   }
   if (field.status === 'MATURE') {
     return '本轮已采摘';
@@ -466,10 +466,10 @@ function getFriendFieldProgressLabel(field: ClientSocialFriendFieldVisitResponse
 
 function getFriendFieldDescription(field: ClientSocialFriendFieldVisitResponse['fields'][number]): string {
   if (field.nextAction === 'harvest') {
-    return '作物已成熟，可采摘一缕灵田余韵，不影响好友收成。';
+    return '作物已经成熟，可采摘一缕灵田余韵，不影响好友收成。';
   }
-  if (field.nextAction === 'water') {
-    return '作物成长中，可帮好友浇水并增加亲密度。';
+  if (field.nextAction === 'revive') {
+    return '作物已经枯萎，可一键复活并直接收取。';
   }
   return formatFriendFieldStatus(field.status);
 }

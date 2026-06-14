@@ -144,6 +144,7 @@ enum SocialRelationStatus {
 
 enum SocialFeedType {
   FRIEND_WATERED_FIELD
+  FRIEND_REVIVED_FIELD
   FRIEND_GUARDED_FIELD
   FRIEND_REQUESTED
   FRIEND_ACCEPTED
@@ -157,6 +158,7 @@ enum SocialFeedType {
 
 enum SocialAssistType {
   WATER_FIELD
+  REVIVE_FIELD
   HARVEST_FIELD
   GUARD_FIELD
   RECOVER_SPIRIT

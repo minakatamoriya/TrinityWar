@@ -8,6 +8,7 @@ export const navItems: NavItem[] = [
   { key: 'season', label: '赛季', description: '赛季状态、快照与历史记录' },
   { key: 'shareAssist', label: '助力记录', description: '邀请、助力和奖励绑定只读排查' },
   { key: 'robotTest', label: '机器人测试', description: '日常操作模拟与动作日志' },
+  { key: 'designDocs', label: '数值文档', description: '关键设定、派生指标与横向对比' },
   { key: 'spiritConfig', label: '灵宠管理', description: '新增、编辑、删除灵宠定义' },
   { key: 'seedConfig', label: '植物管理', description: '新增、编辑、删除植物定义' },
   { key: 'taskConfig', label: '任务模块', description: '新手任务与贡献值设定' },

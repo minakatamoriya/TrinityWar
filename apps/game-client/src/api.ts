@@ -69,8 +69,8 @@
   type ClientSocialHarvestFieldRequest,
   type ClientSocialRelationListResponse,
   type ClientSocialRelationMutationResponse,
+  type ClientSocialReviveFieldRequest,
   type ClientSocialSummaryResponse,
-  type ClientSocialWaterFieldRequest,
   type ClientResolveSpiritTraitRollRequest,
   type ClientRollSpiritTraitsResponse,
   type ClientRollSpiritTraitsRequest,
@@ -1658,9 +1658,9 @@ export async function deleteSocialFriend(targetPlayerId: string): Promise<Client
   });
 }
 
-export async function waterSocialField(input: ClientSocialWaterFieldRequest): Promise<ClientSocialAssistResponse> {
-  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('social-water-field');
-  return fetchJson<ClientSocialAssistResponse>(`${CLIENT_API_PREFIX}/social/assist/water-field`, {
+export async function reviveSocialField(input: ClientSocialReviveFieldRequest): Promise<ClientSocialAssistResponse> {
+  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('social-revive-field');
+  return fetchJson<ClientSocialAssistResponse>(`${CLIENT_API_PREFIX}/social/assist/revive-field`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

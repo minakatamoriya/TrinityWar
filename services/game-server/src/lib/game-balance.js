@@ -11,6 +11,7 @@
  * 2. 所有金额单位默认都是金币，所有时间单位默认都是秒，除非字段名明确写了 minutes 或 hours。
  * 3. 如果一个参数已经进入服务端结算，请优先改这里，再观察模拟和埋点，不要回到业务文件里改硬编码。
  */
+const COMMON_NON_STARTER_SPIRIT_IDS = ['xuanhu', 'hegui', 'shuanghu', 'yingbao', 'yundiao', 'shanxiong'];
 
 function buildLevelValueTable(levelConfigs, valueKey) {
   return levelConfigs.reduce((table, config) => {
@@ -256,6 +257,7 @@ export const FACTION_STIPEND_CONFIG = {
       rewards: [
         { kind: 'gold', quantity: 20, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-0'], label: '灵根' },
+        { kind: 'spirit-shard', quantity: 1, label: '灵宠精魄', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'ordinary-soul', quantity: 5, label: '普通兽魂' },
       ],
     },
@@ -266,6 +268,7 @@ export const FACTION_STIPEND_CONFIG = {
       rewards: [
         { kind: 'gold', quantity: 30, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-100'], label: '灵根' },
+        { kind: 'spirit-shard', quantity: 2, label: '灵宠精魄', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'ordinary-soul', quantity: 10, label: '普通兽魂' },
       ],
     },
@@ -276,6 +279,7 @@ export const FACTION_STIPEND_CONFIG = {
       rewards: [
         { kind: 'gold', quantity: 40, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-300'], label: '灵根' },
+        { kind: 'spirit-shard', quantity: 3, label: '灵宠精魄', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'spirit-marrow', quantity: 2, label: '灵髓' },
         { kind: 'rare-soul', quantity: 2, label: '稀有兽魂' },
         { kind: 'ordinary-soul', quantity: 8, label: '普通兽魂' },
@@ -288,6 +292,7 @@ export const FACTION_STIPEND_CONFIG = {
       rewards: [
         { kind: 'gold', quantity: 50, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-600'], label: '灵根' },
+        { kind: 'spirit-shard', quantity: 4, label: '灵宠精魄', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'spirit-marrow', quantity: 4, label: '灵髓' },
         { kind: 'rare-soul', quantity: 6, label: '稀有兽魂' },
       ],
@@ -299,6 +304,7 @@ export const FACTION_STIPEND_CONFIG = {
       rewards: [
         { kind: 'gold', quantity: 60, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-800'], label: '灵根' },
+        { kind: 'spirit-shard', quantity: 5, label: '灵宠精魄', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'spirit-marrow', quantity: 6, label: '灵髓' },
         { kind: 'spirit-jade', quantity: 1, label: '灵玉' },
         { kind: 'rare-soul', quantity: 10, label: '稀有兽魂' },
@@ -311,6 +317,7 @@ export const FACTION_STIPEND_CONFIG = {
       rewards: [
         { kind: 'gold', quantity: 80, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-1000'], label: '灵根' },
+        { kind: 'spirit-shard', quantity: 6, label: '灵宠精魄', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'spirit-marrow', quantity: 8, label: '灵髓' },
         { kind: 'spirit-jade', quantity: 2, label: '灵玉' },
         { kind: 'legendary-soul', quantity: 2, label: '传说兽魂' },

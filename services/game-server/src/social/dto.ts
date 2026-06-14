@@ -2,7 +2,7 @@ import type {
   ClientSocialFollowRequest,
   ClientSocialFriendRequest,
   ClientSocialHarvestFieldRequest,
-  ClientSocialWaterFieldRequest,
+  ClientSocialReviveFieldRequest,
   ClientTeamChallengeRequest,
 } from '@trinitywar/shared';
 
@@ -15,7 +15,7 @@ export class SocialFriendRequestDto implements ClientSocialFriendRequest {
   sourceType?: string;
 }
 
-export class SocialWaterFieldRequestDto implements ClientSocialWaterFieldRequest {
+export class SocialReviveFieldRequestDto implements ClientSocialReviveFieldRequest {
   targetPlayerId!: string;
   fieldSlotId?: string;
   requestIdempotencyKey?: string;

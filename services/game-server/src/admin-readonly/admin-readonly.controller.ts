@@ -3,6 +3,7 @@ import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type {
   AdminAdjustPlayerResourcesResponse,
   AdminDeletePlayerResponse,
+  AdminDesignDocResponse,
   AdminListResponse,
   AdminOverviewResponse,
   AdminPlayerOverviewResponse,
@@ -36,6 +37,12 @@ export class AdminReadonlyController {
   @ApiOkResponse({ description: 'List admin operation audit logs.' })
   listAuditLogs(@Query() query: Record<string, string | undefined>): Promise<AdminListResponse<Record<string, unknown>>> {
     return this.adminReadonlyService.listAuditLogs(query);
+  }
+
+  @Get('docs/design')
+  @ApiOkResponse({ description: 'Generated concise game design and balance docs.' })
+  getDesignDocs(): Promise<AdminDesignDocResponse> {
+    return this.adminReadonlyService.getDesignDocs();
   }
 
   @Get('robots/dashboard')
@@ -411,6 +418,7 @@ export class AdminReadonlyController {
 
 defineRouteParamTypes(AdminReadonlyController.prototype, 'searchPlayers', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'listAuditLogs', [Object]);
+defineRouteParamTypes(AdminReadonlyController.prototype, 'getDesignDocs', []);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getRobotDaily3AutomationConfig', []);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'updateRobotDaily3AutomationConfig', [Object]);
 defineRouteParamTypes(AdminReadonlyController.prototype, 'getRobotSocial3AutomationConfig', []);

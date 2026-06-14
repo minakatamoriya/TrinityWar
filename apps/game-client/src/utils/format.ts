@@ -16,12 +16,12 @@ export function formatServerTime(serverTime: string): string {
 }
 
 export function parseTianjiCostText(costText: string): number {
-  const match = costText.match(/^消耗\s*([\d,，]+)\s*天机符/);
+  const match = costText.match(/^消耗\s*([\d,+]+)\s*天机符/);
   if (!match) {
     return 0;
   }
 
-  return Math.max(Number(match[1].replace(/[，,]/g, '')) || 0, 0);
+  return Math.max(Number(match[1].replace(/[,+]/g, '')) || 0, 0);
 }
 
 export function parseCapacityResourceValue(value: string): ResourceProgressValue {
@@ -38,14 +38,14 @@ export function formatNumber(value: number): string {
 }
 
 export function formatSocialAssistSummary(input: {
-  wateredCount: number;
+  revivedCount: number;
   harvestedCount: number;
   rewardGold: number;
   intimacyGain: number;
   cappedIntimacyCount?: number;
 }): string[] {
   return [
-    input.wateredCount > 0 ? `浇水 ${input.wateredCount} 块` : null,
+    input.revivedCount > 0 ? `复活 ${input.revivedCount} 块` : null,
     input.harvestedCount > 0 ? `采摘 ${input.harvestedCount} 块` : null,
     input.rewardGold > 0 ? `金币 +${formatNumber(input.rewardGold)}` : null,
     input.intimacyGain > 0 ? `亲密度 +${formatNumber(input.intimacyGain)}` : null,
@@ -67,5 +67,7 @@ export function formatProtectionCountdown(totalSeconds: number): string {
 }
 
 export function formatReadSource(status: ClientReadSourceStatus): string {
-  return status.source === 'api' ? '实时接口' : `本地演示数据${status.fallbackReason ? `（${status.fallbackReason}）` : ''}`;
+  return status.source === 'api'
+    ? '实时接口'
+    : `本地演示数据${status.fallbackReason ? `（${status.fallbackReason}）` : ''}`;
 }

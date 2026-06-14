@@ -109,7 +109,7 @@ export class RaidSettlementRuleService {
     if (!input.suppressRandomRewards && battle.result === 'WIN' && (input.guaranteedOrdinarySoul ?? 0) > 0) {
       soulRewards.ordinary = Math.max(soulRewards.ordinary, Math.floor(input.guaranteedOrdinarySoul ?? 0));
     }
-    const shardDrop = input.suppressRandomRewards ? null : buildShardDrop(input.defenderSpirit, tier, scoreDeltaRatio);
+    const shardDrop = input.suppressRandomRewards ? null : buildShardDrop(input.defenderSpirit, tier);
     const rewardItems = buildRewardItems(soulRewards, shardDrop);
     const rewardSummary = formatRewardSummary(soulRewards, shardDrop);
     const attackerHpLossPercent = input.attackerSpirit ? Math.max(Math.round((1 - (attackerNextHp ?? 0) / Math.max(input.attackerSpirit.maxHp, 1)) * 100), 0) : 0;
@@ -405,18 +405,13 @@ function formatRewardSummary(soulRewards: RaidSettlementRuleResult['soulRewards'
 function buildShardDrop(
   defenderSpirit: SpiritBattleSnapshot | null,
   tier: RaidOutcomeTier,
-  scoreDeltaRatio: number,
 ): { spiritDefinitionId: string; spiritId: string; label: string; quantity: number } | null {
   if (!defenderSpirit || !['perfect_win', 'major_win', 'minor_win'].includes(tier)) {
     return null;
   }
 
-  const rarity = defenderSpirit.spiritDefinition.rarity;
-  const baseChance = rarity === 'LEGENDARY' ? 0.03 : rarity === 'RARE' ? 0.08 : 0.16;
-  const tierBonus = tier === 'perfect_win' ? 0.08 : tier === 'major_win' ? 0.04 : 0;
-  const deterministicRoll = Math.abs(Math.sin((scoreDeltaRatio + defenderSpirit.level) * 9973)) % 1;
-
-  if (deterministicRoll > baseChance + tierBonus) {
+  const quantity = getShardDropQuantity(defenderSpirit.spiritDefinition.rarity, tier);
+  if (quantity <= 0) {
     return null;
   }
 
@@ -424,8 +419,24 @@ function buildShardDrop(
     spiritDefinitionId: defenderSpirit.spiritDefinition.id,
     spiritId: defenderSpirit.spiritDefinition.spiritId,
     label: defenderSpirit.spiritDefinition.label,
-    quantity: 1,
+    quantity,
   };
+}
+
+function getShardDropQuantity(rarity: string, tier: RaidOutcomeTier): number {
+  if (rarity === 'LEGENDARY') {
+    return tier === 'perfect_win' ? 2 : 1;
+  }
+  if (rarity === 'RARE') {
+    if (tier === 'perfect_win') {
+      return 3;
+    }
+    return tier === 'major_win' ? 2 : 1;
+  }
+  if (tier === 'perfect_win') {
+    return 4;
+  }
+  return tier === 'major_win' ? 3 : 2;
 }
 
 function buildTraitTotals(traits: SpiritBattleSnapshot['traits']): TraitTotals {

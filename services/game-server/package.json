@@ -20,6 +20,7 @@
     "verify:season-activity-sign-in": "tsx src/verification/verify-season-activity-sign-in.ts",
     "verify:season-rewards": "tsx src/verification/verify-season-rewards.ts",
     "verify:admin-season-rewards-readonly": "tsx src/verification/verify-admin-season-rewards-readonly.ts",
+    "verify:raid-shard-drops": "tsx src/verification/verify-raid-shard-drops.ts",
     "verify:raid-worker": "tsx src/verification/verify-raid-worker.ts",
     "verify:notifications": "tsx src/verification/verify-notification-flow.ts",
     "verify:spirit-flow": "tsx src/verification/verify-spirit-flow.ts",

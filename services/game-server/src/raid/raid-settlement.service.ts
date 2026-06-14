@@ -376,6 +376,11 @@ export class RaidSettlementService {
 
     if (settlementResult.shardDrop) {
       const now = new Date();
+      const spiritDefinition = await client.spiritDefinition.findUnique({
+        where: { id: settlementResult.shardDrop.spiritDefinitionId },
+        select: { shardUnlockRequired: true },
+      });
+      const shardUnlockRequired = spiritDefinition?.shardUnlockRequired ?? 100;
       const existingCodex = await client.playerSpiritCodex.findUnique({
         where: {
           playerId_spiritDefinitionId: {
@@ -390,31 +395,31 @@ export class RaidSettlementService {
       });
 
       if (existingCodex) {
-        const nextShardCount = Math.min(existingCodex.shardCount + settlementResult.shardDrop.quantity, 100);
+        const nextShardCount = Math.min(existingCodex.shardCount + settlementResult.shardDrop.quantity, shardUnlockRequired);
         await client.playerSpiritCodex.update({
           where: { id: existingCodex.id },
           data: {
             hasSeen: true,
             shardCount: nextShardCount,
-            readyToCompose: nextShardCount >= 100,
+            readyToCompose: nextShardCount >= shardUnlockRequired,
             firstSeenAt: existingCodex.shardCount > 0 ? undefined : now,
-            readyAt: nextShardCount >= 100 ? now : null,
+            readyAt: nextShardCount >= shardUnlockRequired ? now : null,
             codexVersion: { increment: 1 },
           },
         });
       } else {
-        const nextShardCount = Math.min(settlementResult.shardDrop.quantity, 100);
+        const nextShardCount = Math.min(settlementResult.shardDrop.quantity, shardUnlockRequired);
         await client.playerSpiritCodex.create({
           data: {
             playerId: raidOrder.attackerPlayerId,
             spiritDefinitionId: settlementResult.shardDrop.spiritDefinitionId,
             hasSeen: true,
             shardCount: nextShardCount,
-            readyToCompose: nextShardCount >= 100,
+            readyToCompose: nextShardCount >= shardUnlockRequired,
             ownedCurrent: false,
             ownedEver: false,
             firstSeenAt: now,
-            readyAt: nextShardCount >= 100 ? now : null,
+            readyAt: nextShardCount >= shardUnlockRequired ? now : null,
             lastOwnedAt: null,
             codexVersion: 1,
           },

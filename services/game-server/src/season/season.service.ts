@@ -3,6 +3,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import { APP_NAME, formatSeasonLabel, type ClientSeasonMedal, type ClientSeasonRewardGrant, type ClientSeasonRewardItem, type ClientSeasonRewardsResponse, type ClientSeasonSignInState } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
+import { COMMON_NON_STARTER_SPIRIT_IDS, SPIRIT_DEFINITION_SEEDS } from '../seed/seed-data/spirits.js';
 
 const SEASON_LENGTH_DAYS = 28;
 const SEASON_START_UTC = new Date('2026-05-03T16:00:00.000Z');
@@ -829,8 +830,10 @@ function getContributionRewardTier(contributionScore: number): string | null {
   return null;
 }
 
-const SEASON_REWARD_SHARD_SPIRIT_ID = 'canglang';
 const TALISMAN_REWARD: ClientSeasonRewardItem = { kind: 'tianjiTalisman', quantity: 1, label: '天机符', name: '天机符', nameEn: 'Tianji Talisman' };
+const SEASON_REWARD_SHARD_SPIRIT_BY_ID = new Map(
+  SPIRIT_DEFINITION_SEEDS.map((spirit) => [spirit.spiritId, spirit]),
+);
 
 export type SeasonRewardSnapshot = {
   playerId: string;
@@ -940,7 +943,7 @@ function getSpiritRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       statSnapshot: { spiritOwnedCount, maxSpiritLevel },
       rewards: [
         rareSoul(2),
-        spiritShard(8),
+        spiritShard(snapshot, 8),
       ],
     });
   }
@@ -955,7 +958,7 @@ function getSpiritRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       statSnapshot: { spiritOwnedCount, maxSpiritLevel },
       rewards: [
         ordinarySoul(8),
-        spiritShard(5),
+        spiritShard(snapshot, 5),
       ],
     });
   }
@@ -970,7 +973,7 @@ function getSpiritRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       statSnapshot: { spiritOwnedCount, maxSpiritLevel },
       rewards: [
         ordinarySoul(3),
-        spiritShard(3),
+        spiritShard(snapshot, 3),
       ],
     });
   }
@@ -989,7 +992,7 @@ function getCombatRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       statSnapshot: { raidCount: snapshot.raidCount },
       rewards: [
         rareSoul(2),
-        spiritShard(8),
+        spiritShard(snapshot, 8),
       ],
     });
   }
@@ -1004,7 +1007,7 @@ function getCombatRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       statSnapshot: { raidCount: snapshot.raidCount },
       rewards: [
         ordinarySoul(8),
-        spiritShard(5),
+        spiritShard(snapshot, 5),
       ],
     });
   }
@@ -1019,7 +1022,7 @@ function getCombatRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       statSnapshot: { raidCount: snapshot.raidCount },
       rewards: [
         ordinarySoul(3),
-        spiritShard(2),
+        spiritShard(snapshot, 2),
       ],
     });
   }
@@ -1040,7 +1043,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
         tianjiTalisman(10),
         rareSoul(5),
         rareSoul(3),
-        spiritShard(10),
+        spiritShard(snapshot, 10),
       ],
     });
   }
@@ -1057,7 +1060,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
         tianjiTalisman(7),
         rareSoul(3),
         rareSoul(2),
-        spiritShard(8),
+        spiritShard(snapshot, 8),
       ],
     });
   }
@@ -1074,7 +1077,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
         tianjiTalisman(5),
         ordinarySoul(10),
         ordinarySoul(10),
-        spiritShard(6),
+        spiritShard(snapshot, 6),
       ],
     });
   }
@@ -1091,7 +1094,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
         tianjiTalisman(3),
         ordinarySoul(5),
         ordinarySoul(5),
-        spiritShard(4),
+        spiritShard(snapshot, 4),
       ],
     });
   }
@@ -1108,7 +1111,7 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
         tianjiTalisman(2),
         ordinarySoul(3),
         ordinarySoul(3),
-        spiritShard(2),
+        spiritShard(snapshot, 2),
       ],
     });
   }
@@ -1149,8 +1152,41 @@ function rareSoul(quantity: number): ClientSeasonRewardItem {
   return { kind: 'rareSoul', quantity, label: '稀有兽魂', name: '稀有兽魂', nameEn: 'Rare Soul' };
 }
 
-function spiritShard(quantity: number): ClientSeasonRewardItem {
-  return { kind: 'spiritShard', spiritId: SEASON_REWARD_SHARD_SPIRIT_ID, quantity, label: '苍狼精魄', name: '苍狼精魄', nameEn: 'Canglang Shard' };
+function spiritShard(snapshot: SeasonRewardSnapshot, quantity: number): ClientSeasonRewardItem {
+  const spirit = resolveSeasonRewardShardSpirit(snapshot);
+  return {
+    kind: 'spiritShard',
+    spiritId: spirit.spiritId,
+    quantity,
+    label: spirit.shardName,
+    name: spirit.shardName,
+    nameEn: 'Spirit Shard',
+  };
+}
+
+function resolveSeasonRewardShardSpirit(snapshot: SeasonRewardSnapshot): { spiritId: string; shardName: string } {
+  const availableSpiritIds = COMMON_NON_STARTER_SPIRIT_IDS.length > 0
+    ? COMMON_NON_STARTER_SPIRIT_IDS
+    : SPIRIT_DEFINITION_SEEDS.map((spirit) => spirit.spiritId);
+  const selectedSpiritId = availableSpiritIds[stableStringHash(`${snapshot.playerId}:${snapshot.seasonNumber}:season-shard`) % availableSpiritIds.length];
+  const spirit = selectedSpiritId ? SEASON_REWARD_SHARD_SPIRIT_BY_ID.get(selectedSpiritId) : null;
+  if (spirit) {
+    return { spiritId: spirit.spiritId, shardName: spirit.shardName };
+  }
+
+  const fallbackSpirit = SPIRIT_DEFINITION_SEEDS[0];
+  return {
+    spiritId: fallbackSpirit?.spiritId ?? 'canglang',
+    shardName: fallbackSpirit?.shardName ?? '灵宠精魄',
+  };
+}
+
+function stableStringHash(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash * 31) + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
 }
 
 async function refreshSeasonRewardGrant(

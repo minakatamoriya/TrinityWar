@@ -44,9 +44,9 @@ async function main(): Promise<void> {
       })),
       skipDuplicates: true,
     });
-    const shardSpirit = await prisma.spiritDefinition.findUniqueOrThrow({
+    const mainSpiritDefinition = await prisma.spiritDefinition.findUniqueOrThrow({
       where: { spiritId: 'canglang' },
-      select: { id: true, shardUnlockRequired: true, baseHp: true, growthHp: true },
+      select: { id: true, baseHp: true, growthHp: true },
     });
     await prisma.playerSpiritSlot.upsert({
       where: {
@@ -58,22 +58,22 @@ async function main(): Promise<void> {
       create: {
         playerId,
         slotIndex: 1,
-        spiritDefinitionId: shardSpirit.id,
+        spiritDefinitionId: mainSpiritDefinition.id,
         isMain: true,
         level: 12,
         element: 'FIRE',
-        currentHp: shardSpirit.baseHp + shardSpirit.growthHp * 11,
-        maxHp: shardSpirit.baseHp + shardSpirit.growthHp * 11,
+        currentHp: mainSpiritDefinition.baseHp + mainSpiritDefinition.growthHp * 11,
+        maxHp: mainSpiritDefinition.baseHp + mainSpiritDefinition.growthHp * 11,
         status: 'ACTIVE',
         acquiredAt: new Date(),
       },
       update: {
-        spiritDefinitionId: shardSpirit.id,
+        spiritDefinitionId: mainSpiritDefinition.id,
         isMain: true,
         level: 12,
         element: 'FIRE',
-        currentHp: shardSpirit.baseHp + shardSpirit.growthHp * 11,
-        maxHp: shardSpirit.baseHp + shardSpirit.growthHp * 11,
+        currentHp: mainSpiritDefinition.baseHp + mainSpiritDefinition.growthHp * 11,
+        maxHp: mainSpiritDefinition.baseHp + mainSpiritDefinition.growthHp * 11,
         status: 'ACTIVE',
         dissolvedAt: null,
         acquiredAt: new Date(),
@@ -83,15 +83,6 @@ async function main(): Promise<void> {
     const beforeResource = await prisma.playerSpiritResource.findUniqueOrThrow({
       where: { playerId },
       select: { tianjiTalisman: true, ordinarySoul: true },
-    });
-    const beforeCodex = await prisma.playerSpiritCodex.findUnique({
-      where: {
-        playerId_spiritDefinitionId: {
-          playerId,
-          spiritDefinitionId: shardSpirit.id,
-        },
-      },
-      select: { shardCount: true },
     });
     await seasonService.generateSeasonSnapshots(prisma, season.seasonNumber);
     const starterContributionGrant = await prisma.playerSeasonRewardGrant.findFirstOrThrow({
@@ -193,6 +184,7 @@ async function main(): Promise<void> {
     let expectedTalismanReward = 0;
     let expectedOrdinarySoulReward = 0;
     let expectedShardReward = 0;
+    let rewardShardSpiritId: string | null = null;
     let foundMedalAttachment = false;
     const attachments = Array.isArray(notification.attachmentJson) ? notification.attachmentJson : [];
     for (const reward of attachments) {
@@ -206,7 +198,8 @@ async function main(): Promise<void> {
       if (record.kind === 'ordinarySoul') {
         expectedOrdinarySoulReward += Number(record.quantity ?? 0);
       }
-      if (record.kind === 'spiritShard' && record.spiritId === 'canglang') {
+      if (record.kind === 'spiritShard' && typeof record.spiritId === 'string') {
+        rewardShardSpiritId = record.spiritId;
         expectedShardReward += Number(record.quantity ?? 0);
       }
       if (record.kind === 'medal') {
@@ -225,6 +218,22 @@ async function main(): Promise<void> {
     if (expectedShardReward <= 0) {
       throw new Error('Expected contribution reward to include spirit shard.');
     }
+    if (!rewardShardSpiritId) {
+      throw new Error('Expected contribution reward to target a concrete spirit shard.');
+    }
+    const rewardShardSpirit = await prisma.spiritDefinition.findUniqueOrThrow({
+      where: { spiritId: rewardShardSpiritId },
+      select: { id: true, shardUnlockRequired: true },
+    });
+    const beforeCodex = await prisma.playerSpiritCodex.findUnique({
+      where: {
+        playerId_spiritDefinitionId: {
+          playerId,
+          spiritDefinitionId: rewardShardSpirit.id,
+        },
+      },
+      select: { shardCount: true },
+    });
     const refreshedMedalSummary = await prisma.playerNotification.findFirstOrThrow({
       where: { playerId, titleSnapshot: medalSummaryTitle },
       select: { id: true, bodySnapshot: true, claimStatus: true, attachmentJson: true },
@@ -255,12 +264,12 @@ async function main(): Promise<void> {
       where: {
         playerId_spiritDefinitionId: {
           playerId,
-          spiritDefinitionId: shardSpirit.id,
+          spiritDefinitionId: rewardShardSpirit.id,
         },
       },
       select: { shardCount: true },
     });
-    const expectedShardCount = Math.min((beforeCodex?.shardCount ?? 0) + expectedShardReward, shardSpirit.shardUnlockRequired);
+    const expectedShardCount = Math.min((beforeCodex?.shardCount ?? 0) + expectedShardReward, rewardShardSpirit.shardUnlockRequired);
     if (afterCodex.shardCount !== expectedShardCount) {
       throw new Error('Expected season reward spirit shard grant to be credited.');
     }

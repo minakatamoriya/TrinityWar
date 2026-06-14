@@ -10,8 +10,8 @@ import type {
   ClientSocialHarvestFieldRequest,
   ClientSocialRelationListResponse,
   ClientSocialRelationMutationResponse,
+  ClientSocialReviveFieldRequest,
   ClientSocialSummaryResponse,
-  ClientSocialWaterFieldRequest,
   ClientTeamChallengeRequest,
   ClientTeamChallengeResponse,
 } from '@trinitywar/shared';
@@ -20,7 +20,7 @@ import { AuthPlaceholderGuard } from '../auth/auth-placeholder.guard.js';
 import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
 import { createUnauthorizedError } from '../common/errors/index.js';
-import { SocialFollowRequestDto, SocialFriendRequestDto, SocialHarvestFieldRequestDto, SocialWaterFieldRequestDto, TeamChallengeRequestDto } from './dto.js';
+import { SocialFollowRequestDto, SocialFriendRequestDto, SocialHarvestFieldRequestDto, SocialReviveFieldRequestDto, TeamChallengeRequestDto } from './dto.js';
 import { SocialService } from './social.service.js';
 
 @ApiTags('client-social')
@@ -110,15 +110,15 @@ export class SocialController {
     return this.socialService.deleteFriend(this.requirePlayerId(currentPlayer), targetPlayerId);
   }
 
-  @Post('assist/water-field')
-  @ApiBody({ type: SocialWaterFieldRequestDto })
-  @ApiOkResponse({ description: 'Record a water-field assist.' })
-  async waterField(
+  @Post('assist/revive-field')
+  @ApiBody({ type: SocialReviveFieldRequestDto })
+  @ApiOkResponse({ description: 'Record a revive-field assist.' })
+  async reviveField(
     @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
-    @Body() body: ClientSocialWaterFieldRequest,
+    @Body() body: ClientSocialReviveFieldRequest,
     @Headers('x-idempotency-key') idempotencyKey?: string,
   ): Promise<ClientSocialAssistResponse> {
-    return this.socialService.waterField(this.requirePlayerId(currentPlayer), {
+    return this.socialService.reviveField(this.requirePlayerId(currentPlayer), {
       ...body,
       requestIdempotencyKey: body.requestIdempotencyKey ?? idempotencyKey,
     });
@@ -207,7 +207,7 @@ defineRouteParamTypes(SocialController.prototype, 'requestFriend', [Object, Obje
 defineRouteParamTypes(SocialController.prototype, 'acceptFriendRequest', [Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'rejectFriendRequest', [Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'deleteFriend', [Object, String]);
-defineRouteParamTypes(SocialController.prototype, 'waterField', [Object, Object, String]);
+defineRouteParamTypes(SocialController.prototype, 'reviveField', [Object, Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'visitFriendFields', [Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'previewHarvestField', [Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'harvestField', [Object, Object, String]);

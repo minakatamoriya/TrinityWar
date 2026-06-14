@@ -13,9 +13,9 @@ import {
   loadSocialRelations,
   loadSocialSummary,
   rejectSocialFriendRequest,
+  reviveSocialField,
   requestSocialFriend,
   visitSocialFriendFields,
-  waterSocialField,
 } from '../../api';
 import { formatSocialAssistSummary } from '../../utils/format';
 import { runSocialFieldAssists } from './socialAssist';
@@ -79,7 +79,7 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
     const assistResult = await runSocialFieldAssists({
       targetPlayerId,
       fields,
-      waterField: (fieldSlotId) => waterSocialField({ targetPlayerId, fieldSlotId }),
+      reviveField: (fieldSlotId) => reviveSocialField({ targetPlayerId, fieldSlotId }),
       harvestField: (fieldSlotId) => harvestSocialField({ targetPlayerId, fieldSlotId }),
     });
 
@@ -92,7 +92,7 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
   };
 
   const showAssistResultToast = (assistResult: {
-    wateredCount: number;
+    revivedCount: number;
     harvestedCount: number;
     rewardGold: number;
     intimacyGain: number;
@@ -137,7 +137,7 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
       return;
     }
 
-    const actionableFields = visit.fields.filter((field) => field.nextAction === 'water' || field.nextAction === 'harvest');
+    const actionableFields = visit.fields.filter((field) => field.nextAction === 'revive' || field.nextAction === 'harvest');
     if (actionableFields.length === 0) {
       onToast('好友当前没有可助力的田地。', 'info');
       return;
@@ -191,7 +191,7 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
 
     try {
       const visit = await visitSocialFriendFields(targetPlayerId);
-      const actionableFields = visit.fields.filter((field) => field.nextAction === 'water' || field.nextAction === 'harvest');
+      const actionableFields = visit.fields.filter((field) => field.nextAction === 'revive' || field.nextAction === 'harvest');
       if (actionableFields.length === 0) {
         onToast('好友当前没有可助力的田地。', 'info');
         void loadBundle();

@@ -5,7 +5,7 @@ import type {
 } from '@trinitywar/shared';
 
 export interface SocialFieldAssistResult {
-  wateredCount: number;
+  revivedCount: number;
   harvestedCount: number;
   rewardGold: number;
   intimacyGain: number;
@@ -17,11 +17,11 @@ export interface SocialFieldAssistResult {
 export async function runSocialFieldAssists(input: {
   targetPlayerId: string;
   fields: ClientSocialFriendFieldVisitField[];
-  waterField: (fieldSlotId: string) => Promise<ClientSocialAssistResponse>;
+  reviveField: (fieldSlotId: string) => Promise<ClientSocialAssistResponse>;
   harvestField: (fieldSlotId: string) => Promise<ClientSocialAssistResponse>;
 }): Promise<SocialFieldAssistResult> {
   const result: SocialFieldAssistResult = {
-    wateredCount: 0,
+    revivedCount: 0,
     harvestedCount: 0,
     rewardGold: 0,
     intimacyGain: 0,
@@ -32,14 +32,23 @@ export async function runSocialFieldAssists(input: {
 
   for (const field of input.fields) {
     try {
-      if (field.nextAction === 'water') {
-        const response = await input.waterField(field.fieldSlotId);
-        result.wateredCount += 1;
+      if (field.nextAction === 'revive') {
+        const response = await input.reviveField(field.fieldSlotId);
+        result.revivedCount += 1;
         result.intimacyGain += response.intimacyGain;
         if (response.intimacyGain <= 0) {
           result.cappedIntimacyCount += 1;
         }
         result.latestCounts = response.counts;
+
+        const harvestResponse = await input.harvestField(field.fieldSlotId);
+        result.harvestedCount += 1;
+        result.rewardGold += harvestResponse.rewards?.reduce((sum, reward) => sum + (reward.kind === 'gold' ? reward.quantity : 0), 0) ?? 0;
+        result.intimacyGain += harvestResponse.intimacyGain;
+        if (harvestResponse.intimacyGain <= 0) {
+          result.cappedIntimacyCount += 1;
+        }
+        result.latestCounts = harvestResponse.counts;
         continue;
       }
 

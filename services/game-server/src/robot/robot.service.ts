@@ -2034,12 +2034,12 @@ export class RobotService implements OnApplicationBootstrap {
       };
     }
 
-    const waterField = visit.fields.find((field) => field.canWater);
-    if (waterField) {
-      const result = await this.socialService.waterField(helperPlayerId, {
+    const reviveField = visit.fields.find((field) => field.canRevive);
+    if (reviveField) {
+      const result = await this.socialService.reviveField(helperPlayerId, {
         targetPlayerId,
-        fieldSlotId: waterField.fieldSlotId,
-        requestIdempotencyKey: `robot-social-water-${helperPlayerId}-${Date.now()}`,
+        fieldSlotId: reviveField.fieldSlotId,
+        requestIdempotencyKey: `robot-social-revive-${helperPlayerId}-${Date.now()}`,
       }, { now });
       return {
         actionName: 'friend-field-assist',
@@ -2047,8 +2047,8 @@ export class RobotService implements OnApplicationBootstrap {
           summary: result.summary,
           assistType: result.assist.assistType,
           targetPlayerId,
-          fieldSlotId: waterField.fieldSlotId,
-          shortenedSeconds: result.field?.shortenedSeconds ?? result.assist.effectValue ?? 0,
+          fieldSlotId: reviveField.fieldSlotId,
+          effectSeconds: result.field?.effectSeconds ?? result.assist.effectValue ?? 0,
           intimacyGain: result.intimacyGain ?? 0,
         },
       };
@@ -3400,9 +3400,9 @@ function summarizeSeasonSimResourceDeltas(logs: Array<{ actionName: string; stat
       if (assistType === 'harvest_field') {
         summary.socialHarvestCount += 1;
         summary.socialGoldIncome += Math.max(Number(result.rewardGold ?? 0), 0);
-      } else if (assistType === 'water_field') {
+      } else if (assistType === 'revive_field') {
         summary.socialWaterCount += 1;
-        summary.socialShortenedSeconds += Math.max(Number(result.shortenedSeconds ?? 0), 0);
+        summary.socialShortenedSeconds += Math.max(Number(result.effectSeconds ?? 0), 0);
       } else {
         summary.socialNoopCount += 1;
       }
@@ -3877,9 +3877,9 @@ function applyDayActionMetrics(
       add('socialHarvestCount', 1);
       add('socialGoldIncome', rewardGold);
       add('netGoldDelta', rewardGold);
-    } else if (assistType === 'water_field') {
+    } else if (assistType === 'revive_field') {
       add('socialWaterCount', 1);
-      add('socialShortenedSeconds', Math.max(Number(result.shortenedSeconds ?? 0), 0));
+      add('socialShortenedSeconds', Math.max(Number(result.effectSeconds ?? 0), 0));
     } else {
       add('socialNoopCount', 1);
     }
