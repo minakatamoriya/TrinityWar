@@ -1,11 +1,19 @@
 import type {
   ClientSpiritCodexEntry,
-  ClientSpiritRarity,
-  ClientSpiritRole,
 } from '@trinitywar/shared';
+import {
+  formatSpiritUnlockRequirement,
+  getFirstVisibleSpiritCodexId,
+  getSpiritCodexName,
+  getSpiritCodexRarityLabel,
+  getSpiritCodexShardProgress,
+  getSpiritCodexStatusLabel,
+  getSpiritCodexVisibilityLabel,
+  getSpiritFactionLabel,
+  getSpiritRoleLabel,
+  isSpiritCodexVisible,
+} from '../../modules/spirit/spiritCodexPresentation';
 import { FullScreenToolShell } from './ModalShell';
-
-type DisplayRarity = '普通' | '稀有' | '传说';
 
 interface SpiritCodexModalProps {
   entries: ClientSpiritCodexEntry[];
@@ -21,54 +29,6 @@ const codexRarityGroups = [
   { key: 'legend', label: '传说', rarity: 'legendary' as const },
 ];
 
-function getRarityLabel(rarity: ClientSpiritRarity): DisplayRarity {
-  if (rarity === 'legendary') {
-    return '传说';
-  }
-  if (rarity === 'rare') {
-    return '稀有';
-  }
-  return '普通';
-}
-
-function getFactionLabel(faction: ClientSpiritCodexEntry['definition']['factionAffinity']): string {
-  if (faction === 'immortal') {
-    return '仙界';
-  }
-  if (faction === 'demon') {
-    return '魔界';
-  }
-  return '人界';
-}
-
-function getRoleLabel(role: ClientSpiritRole): string {
-  if (role === 'attack') {
-    return '攻击型';
-  }
-  if (role === 'health') {
-    return '血量型';
-  }
-  return '均衡型';
-}
-
-function isDiscovered(entry: ClientSpiritCodexEntry): boolean {
-  return entry.hasSeen || entry.ownedEver || entry.shardCount > 0 || entry.ownedCurrent;
-}
-
-function isReadyToCompose(entry: ClientSpiritCodexEntry): boolean {
-  return entry.readyToCompose;
-}
-
-function getShardLabel(entry: ClientSpiritCodexEntry): string {
-  if (entry.ownedCurrent) {
-    return '已拥有';
-  }
-  if (entry.readyToCompose) {
-    return '待合成';
-  }
-  return `${entry.shardCount} / ${entry.definition.shardUnlockRequired}`;
-}
-
 export function SpiritCodexModal(props: SpiritCodexModalProps): JSX.Element | null {
   const {
     entries,
@@ -78,14 +38,19 @@ export function SpiritCodexModal(props: SpiritCodexModalProps): JSX.Element | nu
     onSelectSpirit,
   } = props;
   const codexById = new Map(entries.map((entry) => [entry.spiritId, entry]));
-  const selectedEntry = selectedSpiritId
-    ? codexById.get(selectedSpiritId) ?? null
-    : entries.find((entry) => isDiscovered(entry)) ?? entries[0] ?? null;
+  const fallbackSpiritId = getFirstVisibleSpiritCodexId(entries);
+  const resolvedSpiritId = selectedSpiritId && codexById.has(selectedSpiritId)
+    ? selectedSpiritId
+    : fallbackSpiritId;
+  const selectedEntry = resolvedSpiritId ? codexById.get(resolvedSpiritId) ?? null : null;
 
   if (!selectedEntry) {
     return null;
   }
 
+  const selectedVisible = isSpiritCodexVisible(selectedEntry);
+  const selectedSpiritName = getSpiritCodexName(selectedEntry);
+  const selectedStatusLabel = getSpiritCodexStatusLabel(selectedEntry);
   const codexGroups = codexRarityGroups.map((group) => ({
     ...group,
     pets: entries.filter((entry) => entry.definition.rarity === group.rarity),
@@ -96,7 +61,7 @@ export function SpiritCodexModal(props: SpiritCodexModalProps): JSX.Element | nu
       ariaLabel="灵宠图鉴"
       bodyClassName="seed-codex-body"
       className="spirit-codex-screen"
-      description="记录见过、解锁、待合成和曾经拥有过的灵宠"
+      description="记录灵宠的可见、收集、待合成和拥有状态"
       onBack={onClose}
       title="灵宠图鉴"
     >
@@ -107,17 +72,17 @@ export function SpiritCodexModal(props: SpiritCodexModalProps): JSX.Element | nu
             </div>
             <div className="seed-codex-icon-grid">
               {group.pets.map((entry) => {
-                const discovered = isDiscovered(entry);
+                const visible = isSpiritCodexVisible(entry);
+                const spiritName = getSpiritCodexName(entry);
                 return (
                   <button
-                    aria-label={discovered ? entry.definition.label : '尚未展示'}
-                    className={`seed-codex-icon ${discovered ? 'is-unlocked' : 'is-locked'} ${entry.spiritId === selectedEntry.spiritId && discovered ? 'is-selected' : ''}`}
-                    disabled={!discovered}
+                    aria-label={visible ? spiritName : `${group.label}未可见灵宠`}
+                    className={`seed-codex-icon ${visible ? 'is-unlocked' : 'is-locked'} ${entry.spiritId === selectedEntry.spiritId ? 'is-selected' : ''}`}
                     key={entry.spiritId}
                     onClick={() => onSelectSpirit(entry.spiritId)}
                     type="button"
                   >
-                    <span>{discovered ? entry.definition.label.slice(0, 2) : '？？'}</span>
+                    <span>{visible ? spiritName.slice(0, 2) : '？？'}</span>
                   </button>
                 );
               })}
@@ -125,33 +90,45 @@ export function SpiritCodexModal(props: SpiritCodexModalProps): JSX.Element | nu
           </section>
         ))}
 
-        <section className={`seed-codex-detail-card ${isDiscovered(selectedEntry) ? '' : 'is-undiscovered'}`}>
-          {isDiscovered(selectedEntry) ? (
+        <section className={`seed-codex-detail-card ${selectedVisible ? '' : 'is-undiscovered'}`}>
+          <div className="seed-codex-detail-head">
+            <div>
+              <p className="eyebrow">{getSpiritCodexRarityLabel(selectedEntry.definition.rarity)}</p>
+              <h3>{selectedSpiritName}</h3>
+            </div>
+            <span className="task-state-badge">{selectedStatusLabel}</span>
+          </div>
+          {selectedVisible ? (
             <>
-              <div className="seed-codex-detail-head">
-                <div>
-                  <p className="eyebrow">{getRarityLabel(selectedEntry.definition.rarity)}</p>
-                  <h3>{selectedEntry.definition.label}</h3>
-                </div>
-              </div>
               <p className="seed-codex-lore">{selectedEntry.definition.lore ?? '尚未补充该灵宠的额外背景描述。'}</p>
               <div className="seed-codex-stats">
-                <div className="seed-codex-stat-row"><strong>阵营归属</strong><span>{getFactionLabel(selectedEntry.definition.factionAffinity)}</span></div>
-                <div className="seed-codex-stat-row"><strong>主模板</strong><span>{getRoleLabel(selectedEntry.definition.role)}</span></div>
-                <div className="seed-codex-stat-row"><strong>精魄进度</strong><span>{getShardLabel(selectedEntry)}</span></div>
+                <div className="seed-codex-stat-row"><strong>可见状态</strong><span>{getSpiritCodexVisibilityLabel(selectedEntry)}</span></div>
+                <div className="seed-codex-stat-row"><strong>阵营归属</strong><span>{getSpiritFactionLabel(selectedEntry.definition.factionAffinity)}</span></div>
+                <div className="seed-codex-stat-row"><strong>主模板</strong><span>{getSpiritRoleLabel(selectedEntry.definition.role)}</span></div>
+                <div className="seed-codex-stat-row"><strong>精魄进度</strong><span>{getSpiritCodexShardProgress(selectedEntry)}</span></div>
                 <div className="seed-codex-stat-row"><strong>曾经拥有</strong><span>{selectedEntry.ownedEver ? '是' : '否'}</span></div>
                 <div className="seed-codex-stat-row"><strong>五行状态</strong><span>{selectedEntry.ownedCurrent ? '已固定当前五行' : '未合成前可自选五行'}</span></div>
               </div>
-              {isReadyToCompose(selectedEntry) ? (
-                <div className="seed-codex-strategy">
-                  <strong>待合成</strong>
-                  <p>{stableFull ? '当前兽栏已满，需要先解散旧宠腾出栏位。图鉴只记录状态，不直接发宠。' : '精魄已满。请返回兽栏，点开一个空栏位完成合成与五行指定。'}</p>
-                </div>
-              ) : null}
             </>
           ) : (
-            <p className="seed-codex-undiscovered-text">尚未展示</p>
+            <p className="seed-codex-undiscovered-text">尚未获得该灵宠精魄，完整图鉴信息暂不可见。</p>
           )}
+          {!selectedEntry.ownedCurrent ? (
+            <div className="seed-codex-strategy">
+              <strong>解锁条件</strong>
+              <p>{formatSpiritUnlockRequirement(selectedEntry)}</p>
+              {!selectedVisible ? (
+                <div className="seed-codex-stats">
+                  <div className="seed-codex-stat-row"><strong>可见状态</strong><span>{getSpiritCodexVisibilityLabel(selectedEntry)}</span></div>
+                  <div className="seed-codex-stat-row"><strong>精魄进度</strong><span>{getSpiritCodexShardProgress(selectedEntry)}</span></div>
+                  <div className="seed-codex-stat-row"><strong>解锁门槛</strong><span>{selectedEntry.definition.shardUnlockRequired} 个对应精魄</span></div>
+                </div>
+              ) : null}
+              {selectedEntry.readyToCompose ? (
+                <p>{stableFull ? '当前兽栏已满，需要先解散旧宠腾出栏位。图鉴只记录状态，不直接发宠。' : '精魄已满。请返回兽栏，点开一个空栏位完成合成与五行指定。'}</p>
+              ) : null}
+            </div>
+          ) : null}
         </section>
     </FullScreenToolShell>
   );

@@ -12,6 +12,7 @@ import type { FarmOptimisticMutation } from '../modules/farm/farmOptimisticState
 import { buildSeedCatalogMap, buildSeedGroups, getFirstVisibleUnlockedSeedId } from '../modules/farm/seedPresentation';
 import { findResourceByTone } from '../modules/home/homeSelectors';
 import { buildSeasonProgress } from '../modules/season/seasonPresentation';
+import { getFirstVisibleSpiritCodexId } from '../modules/spirit/spiritCodexPresentation';
 import { buildTutorialTask, getTutorialUiRules, isNewUserInTutorial, type TutorialStage } from '../tutorial/tutorialFlow';
 import { parseCapacityResourceValue } from '../utils/format';
 import type { SeedCodexState } from './appStateTypes';
@@ -86,8 +87,7 @@ export function buildAppDerivedState(input: BuildAppDerivedStateInput) {
     : null;
   const firstVisibleUnlockedSeedId = getFirstVisibleUnlockedSeedId(seedGroups);
   const topSpiritCodexSelectedId = topSpiritCodexSpiritId
-    ?? spiritState?.codex.find((entry) => entry.hasSeen || entry.ownedEver || entry.shardCount > 0 || entry.ownedCurrent)?.spiritId
-    ?? spiritState?.codex[0]?.spiritId
+    ?? (spiritState ? getFirstVisibleSpiritCodexId(spiritState.codex) : null)
     ?? null;
   const spiritStableFull = spiritState ? spiritState.slots.filter((slot) => slot.spiritId).length >= spiritState.slots.length : false;
   const backpackResourceItems = buildBackpackResourceItems({ spiritState, unlockedSeedIds, seedInventory });

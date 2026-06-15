@@ -17,7 +17,9 @@ import type {
   ClientSpiritTraitRollPreview,
 } from '@trinitywar/shared';
 import { CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER, CLIENT_SPIRIT_TRAIT_ROLL_RULES, getBasicSpiritTraitRollGoldCost, getClientSpiritInnateTrait } from '@trinitywar/shared';
+import { getFirstVisibleSpiritCodexId } from '../../modules/spirit/spiritCodexPresentation';
 import type { TutorialArmyUiRules } from '../../tutorial/tutorialFlow';
+import { SpiritCodexModal } from '../common/SpiritCodexModal';
 import { FullScreenToolShell } from '../common/ModalShell';
 
 interface ArmySceneProps {
@@ -59,12 +61,6 @@ const elementChoices: Array<{ value: ClientSpiritElement; label: DisplayElement 
   { value: 'water', label: '水' },
   { value: 'fire', label: '火' },
   { value: 'earth', label: '土' },
-];
-
-const codexRarityGroups = [
-  { key: 'common', label: '普通', rarity: 'common' as const },
-  { key: 'rare', label: '稀有', rarity: 'rare' as const },
-  { key: 'legend', label: '传说', rarity: 'legendary' as const },
 ];
 
 const DAILY_FREE_RECOVERY_LIMIT = 3;
@@ -522,24 +518,6 @@ function getFactionBonusLabel(faction: string): string {
   return '未触发';
 }
 
-function isDiscovered(entry: ClientSpiritCodexEntry): boolean {
-  return entry.hasSeen || entry.ownedEver || entry.shardCount > 0 || entry.ownedCurrent;
-}
-
-function isReadyToCompose(entry: ClientSpiritCodexEntry): boolean {
-  return entry.readyToCompose;
-}
-
-function getShardLabel(entry: ClientSpiritCodexEntry): string {
-  if (entry.ownedCurrent) {
-    return '已拥有';
-  }
-  if (entry.readyToCompose) {
-    return '待合成';
-  }
-  return `${entry.shardCount} / ${entry.definition.shardUnlockRequired}`;
-}
-
 function SpiritStageCard(props: {
   name: string;
   phase: string;
@@ -572,7 +550,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const { advantage, playerFaction, spirit, vaultGold, busy, uiRules, onSetMain, onRecover, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits, onResolveTraitRoll } = props;
   const [codexOpen, setCodexOpen] = useState(false);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
-  const [selectedCodexSpiritId, setSelectedCodexSpiritId] = useState<string | null>(() => spirit.codex.find((entry) => isDiscovered(entry))?.spiritId ?? spirit.codex[0]?.spiritId ?? null);
+  const [selectedCodexSpiritId, setSelectedCodexSpiritId] = useState<string | null>(() => getFirstVisibleSpiritCodexId(spirit.codex));
   const [selectedComposeSpiritId, setSelectedComposeSpiritId] = useState<string>(() => spirit.readyToCompose.find((entry) => !entry.ownedCurrent)?.spiritId ?? '');
   const [composeElement, setComposeElement] = useState<ClientSpiritElement>('wood');
   const [composeStep, setComposeStep] = useState<SpiritComposeStep>('choose-spirit');
@@ -613,7 +591,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const stableSlots = slots.filter((slot) => !slot.isMain && slot.slotIndex > 1);
   const selectedSlot = selectedSlotIndex === null ? null : slots.find((slot) => slot.slotIndex === selectedSlotIndex) ?? null;
   const selectedSlotEntry = selectedSlot?.spiritId ? codexById.get(selectedSlot.spiritId) ?? null : null;
-  const selectedCodexEntry = selectedCodexSpiritId ? codexById.get(selectedCodexSpiritId) ?? null : null;
   const hasOwnedStarterEver = spirit.codex.some((entry) => STARTER_SPIRIT_IDS.includes(entry.spiritId) && entry.ownedEver);
   const starterComposePets = !mainSlot && !hasOwnedStarterEver
     ? spirit.codex.filter((entry) => STARTER_SPIRIT_IDS.includes(entry.spiritId) && entry.hasSeen && !entry.ownedCurrent)
@@ -705,10 +682,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
     && !busy
     && (spirit.spiritJade ?? 0) >= CLIENT_SPIRIT_TRAIT_ROLL_RULES.advanced.cost.jade
     && vaultGold >= advancedRerollGoldCost;
-  const codexGroups = codexRarityGroups.map((group) => ({
-    ...group,
-    pets: spirit.codex.filter((entry) => entry.definition.rarity === group.rarity),
-  }));
   const isLevelFlashActive = Date.now() - levelFlashToken < 700;
   const toggleLockedTraitSlot = (slotIndex: number): void => {
     setLockedTraitSlots((current) => {
@@ -1426,69 +1399,14 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
         </FullScreenToolShell>
       ), portalTarget) : null}
 
-      {codexOpen && selectedCodexEntry && portalTarget ? createPortal((
-        <FullScreenToolShell
-          ariaLabel="灵宠图鉴"
-          bodyClassName="seed-codex-body"
-          className="spirit-codex-screen"
-          description="记录见过、解锁、待合成和曾经拥有过的灵宠"
-          onBack={() => setCodexOpen(false)}
-          title="灵宠图鉴"
-        >
-            {codexGroups.map((group) => (
-              <section className="panel-card seed-codex-rarity-row" key={group.key}>
-                <div className="seed-codex-rarity-head">
-                  <strong>{group.label}</strong>
-                </div>
-                <div className="seed-codex-icon-grid">
-                  {group.pets.map((entry) => {
-                    const discovered = isDiscovered(entry);
-                    return (
-                      <button
-                        aria-label={discovered ? entry.definition.label : '尚未展示'}
-                        className={`seed-codex-icon ${discovered ? 'is-unlocked' : 'is-locked'} ${entry.spiritId === selectedCodexEntry.spiritId && discovered ? 'is-selected' : ''}`}
-                        disabled={!discovered}
-                        key={entry.spiritId}
-                        onClick={() => setSelectedCodexSpiritId(entry.spiritId)}
-                        type="button"
-                      >
-                        <span>{discovered ? entry.definition.label.slice(0, 2) : '？？'}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-
-            <section className={`seed-codex-detail-card ${isDiscovered(selectedCodexEntry) ? '' : 'is-undiscovered'}`}>
-              {isDiscovered(selectedCodexEntry) ? (
-                <>
-                  <div className="seed-codex-detail-head">
-                    <div>
-                      <p className="eyebrow">{getRarityLabel(selectedCodexEntry.definition.rarity)}</p>
-                      <h3>{selectedCodexEntry.definition.label}</h3>
-                    </div>
-                  </div>
-                  <p className="seed-codex-lore">{selectedCodexEntry.definition.lore ?? '尚未补充该灵宠的额外背景描述。'}</p>
-                  <div className="seed-codex-stats">
-                    <div className="seed-codex-stat-row"><strong>阵营归属</strong><span>{getFactionLabel(selectedCodexEntry.definition.factionAffinity)}</span></div>
-                    <div className="seed-codex-stat-row"><strong>主模板</strong><span>{getRoleLabel(selectedCodexEntry.definition.role)}</span></div>
-                    <div className="seed-codex-stat-row"><strong>精魄进度</strong><span>{getShardLabel(selectedCodexEntry)}</span></div>
-                    <div className="seed-codex-stat-row"><strong>曾经拥有</strong><span>{selectedCodexEntry.ownedEver ? '是' : '否'}</span></div>
-                    <div className="seed-codex-stat-row"><strong>五行状态</strong><span>{selectedCodexEntry.ownedCurrent ? '已固定当前五行' : '未合成前可自选五行'}</span></div>
-                  </div>
-                  {isReadyToCompose(selectedCodexEntry) ? (
-                    <div className="seed-codex-strategy">
-                      <strong>待合成</strong>
-                      <p>{isStableFull ? '当前兽栏已满，需要先解散旧宠腾出栏位。图鉴只记录状态，不直接发宠。' : '精魄已满。请返回兽栏，点开一个空栏位完成合成与五行指定。'}</p>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <p className="seed-codex-undiscovered-text">尚未展示</p>
-              )}
-            </section>
-        </FullScreenToolShell>
+      {codexOpen && portalTarget ? createPortal((
+        <SpiritCodexModal
+          entries={spirit.codex}
+          onClose={() => setCodexOpen(false)}
+          onSelectSpirit={setSelectedCodexSpiritId}
+          selectedSpiritId={selectedCodexSpiritId}
+          stableFull={isStableFull}
+        />
       ), portalTarget) : null}
     </div>
   );
