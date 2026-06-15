@@ -1,5 +1,6 @@
 ﻿import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import type { ClientCodexPrompt } from '@trinitywar/shared';
 import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { grantFactionContribution } from '../faction/contribution.service.js';
@@ -68,22 +69,46 @@ export class RaidSettlementService {
       });
 
       const lockedGold = raidOrder.assetLocks.reduce((sum, lock) => sum + lock.lockedGold, 0);
+      const attackerSpirit = readSpiritSnapshot(raidOrder.attackerSnapshotJson) ?? buildSpiritSnapshotFromSlot(raidOrder.attacker.spiritSlots[0] ?? null);
+      const defenderSpirit = readSpiritSnapshot(raidOrder.defenderSnapshotJson) ?? buildSpiritSnapshotFromSlot(raidOrder.defender.spiritSlots[0] ?? null);
+      const defenderCodex = defenderSpirit
+        ? await client.playerSpiritCodex.findUnique({
+          where: {
+            playerId_spiritDefinitionId: {
+              playerId: raidOrder.attackerPlayerId,
+              spiritDefinitionId: defenderSpirit.spiritDefinition.id,
+            },
+          },
+          select: {
+            shardCount: true,
+            readyToCompose: true,
+            ownedCurrent: true,
+            ownedEver: true,
+          },
+        })
+        : null;
+      const shardDropDisplayLabel = isSpiritCodexRevealed(defenderCodex) && defenderSpirit
+        ? defenderSpirit.spiritDefinition.label
+        : '？？';
       const settlementResult = this.raidSettlementRuleService.calculate({
         lockedGold,
         vaultGold: raidOrder.attacker.wallet.vaultGold,
         attackerFactionName: raidOrder.attacker.faction?.name ?? readFactionName(raidOrder.attackerSnapshotJson) ?? null,
         defenderFactionName: raidOrder.defender.faction?.name ?? readFactionName(raidOrder.defenderSnapshotJson) ?? null,
-        attackerSpirit: readSpiritSnapshot(raidOrder.attackerSnapshotJson) ?? buildSpiritSnapshotFromSlot(raidOrder.attacker.spiritSlots[0] ?? null),
-        defenderSpirit: readSpiritSnapshot(raidOrder.defenderSnapshotJson) ?? buildSpiritSnapshotFromSlot(raidOrder.defender.spiritSlots[0] ?? null),
+        attackerSpirit,
+        defenderSpirit,
         guaranteedOrdinarySoul: readGuaranteedOrdinarySoul(raidOrder.defenderSnapshotJson),
         suppressRandomRewards: readTutorialTarget(raidOrder.defenderSnapshotJson),
+        shardDropDisplayLabel,
       });
       const nextVaultGold = raidOrder.attacker.wallet.vaultGold + settlementResult.depositedGold;
       await this.applyDefenderLootConsumption(client, raidOrder, settlementResult.lootGold, now);
       const defenderProtectedUntil = new Date(now.getTime() + 60 * 60 * 1000);
+      const codexPrompts = await this.applySpiritSettlement(client, raidOrder, settlementResult);
 
       const rewardItemsJson = [
         ...settlementResult.rewardItems,
+        ...codexPrompts.map((prompt) => ({ ...prompt, type: 'codexPrompt', promptType: prompt.type })),
         ...settlementResult.battleEvents.map((event) => ({ ...event, type: 'battleEvent' })),
       ];
       const battleReplay = buildRaidBattleReplay(raidOrder.id, {
@@ -113,8 +138,6 @@ export class RaidSettlementService {
         battleReplayJson: battleReplay as unknown as Prisma.InputJsonValue,
         reportSummary: settlementResult.reportSummary,
       }, client);
-
-      await this.applySpiritSettlement(client, raidOrder, settlementResult);
 
       await client.player.update({
         where: { id: raidOrder.defenderPlayerId },
@@ -333,7 +356,8 @@ export class RaidSettlementService {
     client: Prisma.TransactionClient,
     raidOrder: NonNullable<Awaited<ReturnType<RaidRepository['findRaidOrderForSettlement']>>>,
     settlementResult: ReturnType<RaidSettlementRuleService['calculate']>,
-  ): Promise<void> {
+  ): Promise<ClientCodexPrompt[]> {
+    const codexPrompts: ClientCodexPrompt[] = [];
     const attackerFactionCode = normalizeFactionCode(raidOrder.attacker.faction?.code ?? readFactionName(raidOrder.attackerSnapshotJson));
 
     if (settlementResult.attackerSpiritSlotId && settlementResult.attackerNextHp !== null) {
@@ -391,41 +415,64 @@ export class RaidSettlementService {
         select: {
           id: true,
           shardCount: true,
+          readyToCompose: true,
         },
       });
 
       if (existingCodex) {
         const nextShardCount = Math.min(existingCodex.shardCount + settlementResult.shardDrop.quantity, shardUnlockRequired);
+        const nextReadyToCompose = nextShardCount >= shardUnlockRequired;
+        codexPrompts.push(...buildSpiritCodexPrompts({
+          spiritId: settlementResult.shardDrop.spiritId,
+          label: settlementResult.shardDrop.label,
+          previousShardCount: existingCodex.shardCount,
+          nextShardCount,
+          wasReadyToCompose: existingCodex.readyToCompose,
+          nextReadyToCompose,
+          shardUnlockRequired,
+        }));
         await client.playerSpiritCodex.update({
           where: { id: existingCodex.id },
           data: {
             hasSeen: true,
             shardCount: nextShardCount,
-            readyToCompose: nextShardCount >= shardUnlockRequired,
+            readyToCompose: nextReadyToCompose,
             firstSeenAt: existingCodex.shardCount > 0 ? undefined : now,
-            readyAt: nextShardCount >= shardUnlockRequired ? now : null,
+            readyAt: nextReadyToCompose ? now : null,
             codexVersion: { increment: 1 },
           },
         });
       } else {
         const nextShardCount = Math.min(settlementResult.shardDrop.quantity, shardUnlockRequired);
+        const nextReadyToCompose = nextShardCount >= shardUnlockRequired;
+        codexPrompts.push(...buildSpiritCodexPrompts({
+          spiritId: settlementResult.shardDrop.spiritId,
+          label: settlementResult.shardDrop.label,
+          previousShardCount: 0,
+          nextShardCount,
+          wasReadyToCompose: false,
+          nextReadyToCompose,
+          shardUnlockRequired,
+        }));
         await client.playerSpiritCodex.create({
           data: {
             playerId: raidOrder.attackerPlayerId,
             spiritDefinitionId: settlementResult.shardDrop.spiritDefinitionId,
             hasSeen: true,
             shardCount: nextShardCount,
-            readyToCompose: nextShardCount >= shardUnlockRequired,
+            readyToCompose: nextReadyToCompose,
             ownedCurrent: false,
             ownedEver: false,
             firstSeenAt: now,
-            readyAt: nextShardCount >= shardUnlockRequired ? now : null,
+            readyAt: nextReadyToCompose ? now : null,
             lastOwnedAt: null,
             codexVersion: 1,
           },
         });
       }
     }
+
+    return codexPrompts;
   }
 
   private async compensateFailedRaidOrder(raidOrderId: string): Promise<void> {
@@ -598,6 +645,55 @@ function buildSpiritSnapshotFromSlot(slot: {
   };
 }
 
+function isSpiritCodexRevealed(entry: {
+  shardCount: number;
+  readyToCompose: boolean;
+  ownedCurrent: boolean;
+  ownedEver: boolean;
+} | null): boolean {
+  if (!entry) {
+    return false;
+  }
+
+  return entry.shardCount > 0 || entry.readyToCompose || entry.ownedCurrent || entry.ownedEver;
+}
+
+function buildSpiritCodexPrompts(input: {
+  spiritId: string;
+  label: string;
+  previousShardCount: number;
+  nextShardCount: number;
+  wasReadyToCompose: boolean;
+  nextReadyToCompose: boolean;
+  shardUnlockRequired: number;
+}): ClientCodexPrompt[] {
+  const prompts: ClientCodexPrompt[] = [];
+
+  if (input.previousShardCount <= 0 && input.nextShardCount > 0) {
+    prompts.push({
+      type: 'spirit-codex-visible',
+      subjectId: input.spiritId,
+      label: input.label,
+      message: `获得 ${input.label} 精魄，灵宠图鉴已可见。`,
+      current: input.nextShardCount,
+      required: input.shardUnlockRequired,
+    });
+  }
+
+  if (!input.wasReadyToCompose && input.nextReadyToCompose) {
+    prompts.push({
+      type: 'spirit-compose-ready',
+      subjectId: input.spiritId,
+      label: input.label,
+      message: `${input.label} 已达到合成条件。`,
+      current: input.nextShardCount,
+      required: input.shardUnlockRequired,
+    });
+  }
+
+  return prompts;
+}
+
 function isSpiritBattleSnapshot(value: unknown): value is SpiritBattleSnapshot {
   const candidate = value as Partial<SpiritBattleSnapshot> | null;
   return Boolean(
@@ -639,7 +735,7 @@ function formatRewardSummary(settlementResult: ReturnType<RaidSettlementRuleServ
   ].filter(Boolean);
 
   if (settlementResult.shardDrop) {
-    rewardParts.push(`${settlementResult.shardDrop.label}精魄 x${settlementResult.shardDrop.quantity}`);
+    rewardParts.push(`${settlementResult.shardDrop.displayLabel}精魄 x${settlementResult.shardDrop.quantity}`);
   }
 
   return rewardParts.join('、') || '无额外掉落';

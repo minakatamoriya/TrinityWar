@@ -734,6 +734,7 @@ export const GAME_BALANCE = {
     temporaryClaimMinutes: 0,
     freeRaidCountPerDay: 3,
     protectionHoursAfterRaid: 1,
+    spiritShardDropChance: 100,
   },
   farm: {
     defaultCultivationCost: 0,

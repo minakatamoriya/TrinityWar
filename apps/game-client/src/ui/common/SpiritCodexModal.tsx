@@ -5,8 +5,8 @@ import {
   formatSpiritUnlockRequirement,
   getFirstVisibleSpiritCodexId,
   getSpiritCodexName,
+  getSpiritCodexProgressLabel,
   getSpiritCodexRarityLabel,
-  getSpiritCodexShardProgress,
   getSpiritCodexStatusLabel,
   getSpiritCodexVisibilityLabel,
   getSpiritFactionLabel,
@@ -105,7 +105,7 @@ export function SpiritCodexModal(props: SpiritCodexModalProps): JSX.Element | nu
                 <div className="seed-codex-stat-row"><strong>可见状态</strong><span>{getSpiritCodexVisibilityLabel(selectedEntry)}</span></div>
                 <div className="seed-codex-stat-row"><strong>阵营归属</strong><span>{getSpiritFactionLabel(selectedEntry.definition.factionAffinity)}</span></div>
                 <div className="seed-codex-stat-row"><strong>主模板</strong><span>{getSpiritRoleLabel(selectedEntry.definition.role)}</span></div>
-                <div className="seed-codex-stat-row"><strong>精魄进度</strong><span>{getSpiritCodexShardProgress(selectedEntry)}</span></div>
+                <div className="seed-codex-stat-row"><strong>精魄状态</strong><span>{getSpiritCodexProgressLabel(selectedEntry)}</span></div>
                 <div className="seed-codex-stat-row"><strong>曾经拥有</strong><span>{selectedEntry.ownedEver ? '是' : '否'}</span></div>
                 <div className="seed-codex-stat-row"><strong>五行状态</strong><span>{selectedEntry.ownedCurrent ? '已固定当前五行' : '未合成前可自选五行'}</span></div>
               </div>
@@ -113,22 +113,20 @@ export function SpiritCodexModal(props: SpiritCodexModalProps): JSX.Element | nu
           ) : (
             <p className="seed-codex-undiscovered-text">尚未获得该灵宠精魄，完整图鉴信息暂不可见。</p>
           )}
-          {!selectedEntry.ownedCurrent ? (
-            <div className="seed-codex-strategy">
-              <strong>解锁条件</strong>
-              <p>{formatSpiritUnlockRequirement(selectedEntry)}</p>
-              {!selectedVisible ? (
-                <div className="seed-codex-stats">
-                  <div className="seed-codex-stat-row"><strong>可见状态</strong><span>{getSpiritCodexVisibilityLabel(selectedEntry)}</span></div>
-                  <div className="seed-codex-stat-row"><strong>精魄进度</strong><span>{getSpiritCodexShardProgress(selectedEntry)}</span></div>
-                  <div className="seed-codex-stat-row"><strong>解锁门槛</strong><span>{selectedEntry.definition.shardUnlockRequired} 个对应精魄</span></div>
-                </div>
-              ) : null}
-              {selectedEntry.readyToCompose ? (
-                <p>{stableFull ? '当前兽栏已满，需要先解散旧宠腾出栏位。图鉴只记录状态，不直接发宠。' : '精魄已满。请返回兽栏，点开一个空栏位完成合成与五行指定。'}</p>
-              ) : null}
-            </div>
-          ) : null}
+          <div className="seed-codex-strategy">
+            <strong>{selectedEntry.codexState === 'unlocked' ? '合成状态' : '解锁条件'}</strong>
+            <p>{formatSpiritUnlockRequirement(selectedEntry)}</p>
+            {!selectedVisible && selectedEntry.codexState !== 'unlocked' ? (
+              <div className="seed-codex-stats">
+                <div className="seed-codex-stat-row"><strong>可见状态</strong><span>{getSpiritCodexVisibilityLabel(selectedEntry)}</span></div>
+                <div className="seed-codex-stat-row"><strong>精魄状态</strong><span>{getSpiritCodexProgressLabel(selectedEntry)}</span></div>
+                <div className="seed-codex-stat-row"><strong>解锁门槛</strong><span>{selectedEntry.definition.shardUnlockRequired} 个对应精魄</span></div>
+              </div>
+            ) : null}
+            {selectedEntry.readyToCompose ? (
+              <p>{stableFull ? '当前兽栏已满，需要先解散旧宠腾出栏位。图鉴只记录状态，不直接发宠。' : '精魄已满。请返回兽栏，点开一个空栏位完成合成与五行指定。'}</p>
+            ) : null}
+          </div>
         </section>
     </FullScreenToolShell>
   );

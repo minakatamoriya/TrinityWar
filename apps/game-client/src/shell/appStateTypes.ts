@@ -61,7 +61,8 @@ export interface GlobalUnlockModalState {
   summary: string;
   items: GlobalUnlockItem[];
   afterConfirmActions?: TutorialFlowAction[];
-  completionKind?: 'friend-invite';
+  completionKind?: 'friend-invite' | 'spirit-codex-visible';
+  subjectId?: string;
 }
 
 export interface ShareAssistDemoState {

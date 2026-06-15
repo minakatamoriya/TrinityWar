@@ -10,6 +10,15 @@ function main(): void {
     assertShardDrop(service, { rarity: 'COMMON', attackerBaseAttack: 60, defenderBaseAttack: 45, expectedTier: 'minor_win', expectedQuantity: 2 });
     assertShardDrop(service, { rarity: 'COMMON', attackerBaseAttack: 65, defenderBaseAttack: 40, expectedTier: 'major_win', expectedQuantity: 3 });
     assertShardDrop(service, { rarity: 'COMMON', attackerBaseAttack: 80, defenderBaseAttack: 40, expectedTier: 'perfect_win', expectedQuantity: 4 });
+    assertShardDrop(service, {
+      rarity: 'COMMON',
+      attackerBaseAttack: 60,
+      defenderBaseAttack: 45,
+      expectedTier: 'minor_win',
+      expectedQuantity: 2,
+      shardDropDisplayLabel: '？？',
+      expectedDisplayLabel: '？？',
+    });
 
     assertShardDrop(service, { rarity: 'RARE', attackerBaseAttack: 55, defenderBaseAttack: 40, expectedTier: 'minor_win', expectedQuantity: 1 });
     assertShardDrop(service, { rarity: 'RARE', attackerBaseAttack: 65, defenderBaseAttack: 40, expectedTier: 'major_win', expectedQuantity: 2 });
@@ -31,6 +40,8 @@ function assertShardDrop(
     defenderBaseAttack: number;
     expectedTier: 'minor_win' | 'major_win' | 'perfect_win';
     expectedQuantity: number;
+    shardDropDisplayLabel?: string;
+    expectedDisplayLabel?: string;
   },
 ): void {
   const result = service.calculate({
@@ -50,11 +61,13 @@ function assertShardDrop(
       rarity: input.rarity,
       baseAttack: input.defenderBaseAttack,
     }),
+    shardDropDisplayLabel: input.shardDropDisplayLabel,
   });
 
   assert.equal(result.result, 'WIN');
   assert.equal(result.tier, input.expectedTier);
   assert.equal(result.shardDrop?.quantity ?? 0, input.expectedQuantity);
+  assert.equal(result.shardDrop?.displayLabel ?? null, input.expectedDisplayLabel ?? `${input.rarity} Defender`);
 }
 
 function buildSpiritSnapshot(input: {

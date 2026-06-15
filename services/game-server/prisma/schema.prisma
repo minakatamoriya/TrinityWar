@@ -655,7 +655,7 @@ model SpiritDefinition {
   factionAffinity     String       @map("faction_affinity")
   role                SpiritRole
   shardName           String       @map("shard_name")
-  shardUnlockRequired Int          @default(100) @map("shard_unlock_required")
+  shardUnlockRequired Int          @map("shard_unlock_required")
   baseAttack          Int          @map("base_attack")
   baseHp              Int          @map("base_hp")
   growthAttack        Int          @map("growth_attack")

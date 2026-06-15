@@ -236,6 +236,21 @@ export interface ClientSpiritCodexEntry {
   definition: ClientSpiritDefinition;
 }
 
+export type ClientCodexPromptType =
+  | 'spirit-codex-visible'
+  | 'spirit-compose-ready'
+  | 'plant-discovered'
+  | 'plant-unlocked';
+
+export interface ClientCodexPrompt {
+  type: ClientCodexPromptType;
+  subjectId: string;
+  label: string;
+  message: string;
+  current?: number;
+  required?: number;
+}
+
 export interface ClientSpiritState {
   spiritSoul: number;
   spiritRoot?: number;
@@ -1369,6 +1384,7 @@ export interface ClientRaidActionResponse {
     temporaryClaimExpiresAt: string | null;
     casualties: number;
     rewards: ClientRaidRewardItem[];
+    codexPrompts?: ClientCodexPrompt[];
     contributionGain?: number;
     battleEvents?: ClientRaidBattleEvent[];
     battleReplay?: ClientRaidBattleReplay;
@@ -1399,6 +1415,7 @@ export interface ClientClaimFactionStipendResponse {
   summary: string;
   stipend: ClientFactionStipendSummary;
   rewards: ClientFactionStipendReward[];
+  codexPrompts?: ClientCodexPrompt[];
   bootstrap?: ClientBootstrapResponse;
   home: HomeSummaryResponse;
   scenes: ClientSceneContentResponse;
@@ -1505,7 +1522,9 @@ export interface ClientPlantInventoryItem {
   researchStatus?: ClientPlantResearchStatus;
   unlockEssenceRequired?: number;
   unlockHarvestRequired?: number;
+  unlockHarvestOwned?: number;
   unlockContributionRequired?: number;
+  unlockContributionOwned?: number;
   canUnlock?: boolean;
   essenceQuantity: number;
   growSeconds: number;

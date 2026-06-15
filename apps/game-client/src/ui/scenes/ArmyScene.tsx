@@ -17,7 +17,14 @@ import type {
   ClientSpiritTraitRollPreview,
 } from '@trinitywar/shared';
 import { CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER, CLIENT_SPIRIT_TRAIT_ROLL_RULES, getBasicSpiritTraitRollGoldCost, getClientSpiritInnateTrait } from '@trinitywar/shared';
-import { getFirstVisibleSpiritCodexId } from '../../modules/spirit/spiritCodexPresentation';
+import {
+  getFirstVisibleSpiritCodexId,
+  getSpiritCodexName,
+  getSpiritCodexProgressLabel,
+  getSpiritCodexShardProgress,
+  getSpiritCodexStatusLabel,
+  isSpiritCodexVisible,
+} from '../../modules/spirit/spiritCodexPresentation';
 import type { TutorialArmyUiRules } from '../../tutorial/tutorialFlow';
 import { SpiritCodexModal } from '../common/SpiritCodexModal';
 import { FullScreenToolShell } from '../common/ModalShell';
@@ -48,12 +55,19 @@ interface ArmySceneProps {
     },
   ) => Promise<ClientRollSpiritTraitsResponse | null>;
   onResolveTraitRoll: (rollLogId: string, selectedTraitCode: ClientSpiritTraitCode | null, slotVersion: number) => Promise<boolean>;
+  onOpenSpiritUnlockSurface: () => void;
 }
 
 type DisplayRarity = '普通' | '稀有' | '传说';
 type DisplayElement = '金' | '木' | '水' | '火' | '土';
 type SpiritPetActionTab = 'overview' | 'growth' | 'breakthrough' | 'traits';
 type SpiritComposeStep = 'choose-spirit' | 'choose-element';
+
+const composeRarityGroups = [
+  { key: 'common', label: '普通', rarity: 'common' as const },
+  { key: 'rare', label: '稀有', rarity: 'rare' as const },
+  { key: 'legend', label: '传说', rarity: 'legendary' as const },
+];
 
 const elementChoices: Array<{ value: ClientSpiritElement; label: DisplayElement }> = [
   { value: 'metal', label: '金' },
@@ -67,7 +81,6 @@ const DAILY_FREE_RECOVERY_LIMIT = 3;
 const DAILY_TALISMAN_RECOVERY_LIMIT = 3;
 const MAX_QUICK_RECOVERY_PER_DAY = DAILY_FREE_RECOVERY_LIMIT + DAILY_TALISMAN_RECOVERY_LIMIT;
 const SPIRIT_MAX_LEVEL = 50;
-const STARTER_SPIRIT_IDS = ['canglang', 'linglu', 'qingyuan'];
 const traitRollPlans: ClientSpiritTraitRollRule[] = CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER.map((mode) => CLIENT_SPIRIT_TRAIT_ROLL_RULES[mode]);
 
 const petActionTabs: Array<{ key: SpiritPetActionTab; label: string }> = [
@@ -547,11 +560,11 @@ function SpiritStageCard(props: {
 }
 
 export function ArmyScene(props: ArmySceneProps): JSX.Element {
-  const { advantage, playerFaction, spirit, vaultGold, busy, uiRules, onSetMain, onRecover, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits, onResolveTraitRoll } = props;
+  const { advantage, playerFaction, spirit, vaultGold, busy, uiRules, onSetMain, onRecover, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits, onResolveTraitRoll, onOpenSpiritUnlockSurface } = props;
   const [codexOpen, setCodexOpen] = useState(false);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [selectedCodexSpiritId, setSelectedCodexSpiritId] = useState<string | null>(() => getFirstVisibleSpiritCodexId(spirit.codex));
-  const [selectedComposeSpiritId, setSelectedComposeSpiritId] = useState<string>(() => spirit.readyToCompose.find((entry) => !entry.ownedCurrent)?.spiritId ?? '');
+  const [selectedComposeSpiritId, setSelectedComposeSpiritId] = useState<string>(() => spirit.readyToCompose[0]?.spiritId ?? spirit.codex[0]?.spiritId ?? '');
   const [composeElement, setComposeElement] = useState<ClientSpiritElement>('wood');
   const [composeStep, setComposeStep] = useState<SpiritComposeStep>('choose-spirit');
   const [targetTraitSlot, setTargetTraitSlot] = useState(1);
@@ -591,15 +604,12 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const stableSlots = slots.filter((slot) => !slot.isMain && slot.slotIndex > 1);
   const selectedSlot = selectedSlotIndex === null ? null : slots.find((slot) => slot.slotIndex === selectedSlotIndex) ?? null;
   const selectedSlotEntry = selectedSlot?.spiritId ? codexById.get(selectedSlot.spiritId) ?? null : null;
-  const hasOwnedStarterEver = spirit.codex.some((entry) => STARTER_SPIRIT_IDS.includes(entry.spiritId) && entry.ownedEver);
-  const starterComposePets = !mainSlot && !hasOwnedStarterEver
-    ? spirit.codex.filter((entry) => STARTER_SPIRIT_IDS.includes(entry.spiritId) && entry.hasSeen && !entry.ownedCurrent)
-    : [];
-  const composePetById = new Map(
-    [...spirit.readyToCompose.filter((entry) => !entry.ownedCurrent), ...starterComposePets].map((entry) => [entry.spiritId, entry]),
-  );
-  const availableComposePets = Array.from(composePetById.values());
-  const selectedComposeEntry = availableComposePets.find((entry) => entry.spiritId === selectedComposeSpiritId) ?? availableComposePets[0] ?? null;
+  const composeEntries = spirit.codex;
+  const composeGroups = composeRarityGroups.map((group) => ({
+    ...group,
+    pets: composeEntries.filter((entry) => entry.definition.rarity === group.rarity),
+  }));
+  const selectedComposeEntry = composeEntries.find((entry) => entry.spiritId === selectedComposeSpiritId) ?? composeEntries[0] ?? null;
   const occupiedCount = slots.filter((slot) => slot.spiritId).length;
   const isStableFull = occupiedCount >= slots.length;
   const canOpenOwnedPetDetail = uiRules.allowOwnedPetDetail;
@@ -847,7 +857,10 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
         ) : null}
         {uiRules.showCodexButton ? (
         <section className="spirit-top-actions">
-          <button className="spirit-codex-button-card" onClick={() => setCodexOpen(true)} type="button">
+          <button className="spirit-codex-button-card" onClick={() => {
+            setCodexOpen(true);
+            onOpenSpiritUnlockSurface();
+          }} type="button">
             <span>灵宠图鉴</span>
             <strong>打开图鉴</strong>
           </button>
@@ -903,7 +916,10 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
               </div>
             </article>
           ) : (
-            <button className="spirit-empty-main-card" onClick={() => setSelectedSlotIndex(slots[0]?.slotIndex ?? null)} type="button">
+            <button className="spirit-empty-main-card" onClick={() => {
+              setSelectedSlotIndex(slots[0]?.slotIndex ?? null);
+              onOpenSpiritUnlockSurface();
+            }} type="button">
               <span className="spirit-empty-main-plus">+</span>
               <strong>当前暂无主位灵宠</strong>
               <span>请先在空栏位中完成合成，再设为主位</span>
@@ -922,7 +938,12 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
               const entry = slot.spiritId ? codexById.get(slot.spiritId) ?? null : null;
 
               return (
-                <article className={`spirit-stable-slot${slot.spiritId && entry ? '' : ' spirit-stable-slot-empty'}`} key={slot.slotIndex} onClick={() => setSelectedSlotIndex(slot.slotIndex)} role="button" tabIndex={0}>
+                <article className={`spirit-stable-slot${slot.spiritId && entry ? '' : ' spirit-stable-slot-empty'}`} key={slot.slotIndex} onClick={() => {
+                  setSelectedSlotIndex(slot.slotIndex);
+                  if (!slot.spiritId) {
+                    onOpenSpiritUnlockSurface();
+                  }
+                }} role="button" tabIndex={0}>
                   <strong>{slot.spiritId && entry ? `${entry.definition.label} Lv.${slot.level}` : '空栏位'}</strong>
                   <span>{slot.spiritId && entry ? `副位 ${slot.slotIndex - 1} · ${getElementLabel(slot.element)} · ${getHealthText(slot)}` : `副位 ${slot.slotIndex - 1}`}</span>
                   <small>{slot.spiritId && entry ? `${getPhaseForLevel(slot.level)} · ${getHealthStatus(slot)}` : '可合成新宠'}</small>
@@ -1324,31 +1345,62 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                       <h3>{selectedSlot.isMain || selectedSlot.slotIndex === 1 ? '主位' : `副位 ${selectedSlot.slotIndex - 1}`}</h3>
                     </div>
                   </div>
-                  {availableComposePets.length > 0 ? (
+                  {composeGroups.some((group) => group.pets.length > 0) ? (
                     <>
                       {composeStep === 'choose-spirit' ? (
-                      <div className="spirit-compose-picker">
-                        <div className="panel-head">
-                          <h4>选择灵宠</h4>
-                          <span className="soft-tag">第一只灵宠将入主位</span>
-                        </div>
-                        <div className="seed-codex-icon-grid spirit-compose-icon-grid">
-                          {availableComposePets.map((entry) => (
-                            <div className="spirit-compose-icon-item" key={entry.spiritId}>
-                              <button
-                                aria-label={`选择${entry.definition.label}`}
-                                className={`seed-codex-icon spirit-compose-icon is-unlocked${selectedComposeEntry?.spiritId === entry.spiritId ? ' is-selected' : ''}`}
-                                onClick={() => setSelectedComposeSpiritId(entry.spiritId)}
-                                type="button"
-                              >
-                                <span>{entry.definition.label.slice(0, 2)}</span>
-                              </button>
-                              {uiRules.allowOwnedPetDetail ? <small>{entry.shardCount} / {entry.definition.shardUnlockRequired}</small> : <small>可结契</small>}
-                            </div>
+                        <div className="spirit-compose-picker">
+                          <div className="panel-head">
+                            <h4>选择灵宠</h4>
+                            <span className="soft-tag">图鉴式排列，亮起的灵宠可继续合成</span>
+                          </div>
+                          {composeGroups.map((group) => (
+                            <section className="seed-codex-rarity-row" key={group.key}>
+                              <div className="seed-codex-rarity-head">
+                                <strong>{group.label}</strong>
+                              </div>
+                              <div className="seed-codex-icon-grid spirit-compose-icon-grid">
+                                {group.pets.map((entry) => {
+                                  const visible = isSpiritCodexVisible(entry);
+                                  const spiritName = getSpiritCodexName(entry);
+                                  const composeReady = entry.readyToCompose;
+
+                                  return (
+                                    <div className="spirit-compose-icon-item" key={entry.spiritId}>
+                                      <button
+                                        aria-label={`选择${visible ? spiritName : '未知灵宠'}`}
+                                        className={`seed-codex-icon spirit-compose-icon ${composeReady ? 'is-unlocked' : 'is-locked'} ${selectedComposeEntry?.spiritId === entry.spiritId ? 'is-selected' : ''}`}
+                                        onClick={() => setSelectedComposeSpiritId(entry.spiritId)}
+                                        type="button"
+                                      >
+                                        <span>{visible ? spiritName.slice(0, 2) : '？？'}</span>
+                                      </button>
+                                      <small>{getSpiritCodexShardProgress(entry).replace(' / ', '/')}</small>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </section>
                           ))}
+
+                          {selectedComposeEntry ? (
+                            <div className="seed-codex-strategy">
+                              <strong>{selectedComposeEntry.readyToCompose ? '可合成灵宠' : '灵宠进度'}</strong>
+                              <p>
+                                {selectedComposeEntry.readyToCompose
+                                  ? `${selectedComposeEntry.definition.shardName} 已满，可以进入五行选择。`
+                                  : `已收集 ${selectedComposeEntry.definition.shardName} ${getSpiritCodexProgressLabel(selectedComposeEntry)}，满 ${selectedComposeEntry.definition.shardUnlockRequired} 个后可合成。`}
+                              </p>
+                              <div className="seed-codex-stats">
+                                <div className="seed-codex-stat-row"><strong>状态</strong><span>{getSpiritCodexStatusLabel(selectedComposeEntry)}</span></div>
+                                <div className="seed-codex-stat-row"><strong>数量</strong><span>{getSpiritCodexProgressLabel(selectedComposeEntry)}</span></div>
+                                <div className="seed-codex-stat-row"><strong>门槛</strong><span>{selectedComposeEntry.definition.shardUnlockRequired} 个对应精魄</span></div>
+                              </div>
+                              {selectedComposeEntry.readyToCompose ? (
+                                <button className="primary-button spirit-full-button" disabled={busy} onClick={() => setComposeStep('choose-element')} type="button">开始合成</button>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
-                        <button className="primary-button spirit-full-button" disabled={!selectedComposeEntry} onClick={() => setComposeStep('choose-element')} type="button">选定灵宠</button>
-                      </div>
                       ) : selectedComposeEntry ? (
                         <div className="spirit-element-ritual">
                           <div className="panel-head">

@@ -853,6 +853,7 @@ function buildRaidActionResponse(
       temporaryClaimExpiresAt: null,
       casualties: 0,
       rewards: [],
+      codexPrompts: [],
       protectedUntil: target?.expiresAt.toISOString() ?? new Date().toISOString(),
       reportSummary: '已进入异步结算队列。',
     },
@@ -886,6 +887,7 @@ function buildSettledRaidActionResponse(
 ): ClientRaidActionResponse {
   const rewards = normalizeRaidRewards(settlement.rewardItemsJson);
   const battleEvents = normalizeRaidBattleEvents(settlement.rewardItemsJson);
+  const codexPrompts = normalizeCodexPrompts(settlement.rewardItemsJson);
   const battleReplay = order
     ? buildRaidBattleReplay(orderId, {
       result: settlement.result,
@@ -919,6 +921,7 @@ function buildSettledRaidActionResponse(
       temporaryClaimExpiresAt: settlement.temporaryClaimExpiresAt?.toISOString() ?? null,
       casualties: 0,
       rewards,
+      codexPrompts,
       battleEvents,
       battleReplay,
       protectedUntil: protectedUntil?.toISOString() ?? new Date().toISOString(),
@@ -941,6 +944,41 @@ function normalizeRaidRewards(value: unknown): ClientRaidRewardItem[] {
       quantity: Math.max(Math.floor(item.quantity ?? 0), 0),
     }))
     .filter((item) => item.quantity > 0);
+}
+
+function normalizeCodexPrompts(value: unknown): NonNullable<ClientRaidActionResponse['result']['codexPrompts']> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => item as {
+      type?: string;
+      promptType?: string;
+      subjectId?: string;
+      label?: string;
+      message?: string;
+      current?: number;
+      required?: number;
+    })
+    .filter((item) => (
+      item.type === 'codexPrompt'
+      && (
+        item.promptType === 'spirit-codex-visible'
+        || item.promptType === 'spirit-compose-ready'
+        || item.promptType === 'plant-discovered'
+        || item.promptType === 'plant-unlocked'
+      )
+    ))
+    .filter((item) => typeof item.subjectId === 'string' && typeof item.label === 'string' && typeof item.message === 'string')
+    .map((item) => ({
+      type: item.promptType as NonNullable<ClientRaidActionResponse['result']['codexPrompts']>[number]['type'],
+      subjectId: item.subjectId ?? '',
+      label: item.label ?? '',
+      message: item.message ?? '',
+      current: typeof item.current === 'number' ? item.current : undefined,
+      required: typeof item.required === 'number' ? item.required : undefined,
+    }));
 }
 
 function normalizeRaidBattleEvents(value: unknown): NonNullable<ClientRaidActionResponse['result']['battleEvents']> {

@@ -6,6 +6,7 @@ import {
   getFactionBattleAttackMultiplier,
   getFactionBattleDefenseMainSpiritMaxHpMultiplier,
 } from '../lib/faction-advantage-formulas.js';
+import { GAME_BALANCE } from '../lib/game-balance.js';
 
 type RaidOutcomeTier = 'perfect_win' | 'major_win' | 'minor_win' | 'draw' | 'minor_loss' | 'major_loss' | 'perfect_loss';
 type Element = 'METAL' | 'WOOD' | 'WATER' | 'FIRE' | 'EARTH';
@@ -46,6 +47,7 @@ export interface RaidSettlementRuleInput {
   defenderSpirit: SpiritBattleSnapshot | null;
   guaranteedOrdinarySoul?: number;
   suppressRandomRewards?: boolean;
+  shardDropDisplayLabel?: string;
 }
 
 export interface RaidSettlementRuleResult {
@@ -62,7 +64,7 @@ export interface RaidSettlementRuleResult {
   defenderHpLossPercent: number;
   spiritSoulReward: number;
   soulRewards: { ordinary: number; rare: number; legendary: number };
-  shardDrop: { spiritDefinitionId: string; spiritId: string; label: string; quantity: number } | null;
+  shardDrop: { spiritDefinitionId: string; spiritId: string; label: string; displayLabel: string; quantity: number } | null;
   rewardItems: Array<Record<string, unknown>>;
   battleEvents: Array<{ type: string; label: string; description: string }>;
   attackerSpiritSlotId: string | null;
@@ -109,7 +111,7 @@ export class RaidSettlementRuleService {
     if (!input.suppressRandomRewards && battle.result === 'WIN' && (input.guaranteedOrdinarySoul ?? 0) > 0) {
       soulRewards.ordinary = Math.max(soulRewards.ordinary, Math.floor(input.guaranteedOrdinarySoul ?? 0));
     }
-    const shardDrop = input.suppressRandomRewards ? null : buildShardDrop(input.defenderSpirit, tier);
+    const shardDrop = input.suppressRandomRewards ? null : buildShardDrop(input.defenderSpirit, tier, input.shardDropDisplayLabel);
     const rewardItems = buildRewardItems(soulRewards, shardDrop);
     const rewardSummary = formatRewardSummary(soulRewards, shardDrop);
     const attackerHpLossPercent = input.attackerSpirit ? Math.max(Math.round((1 - (attackerNextHp ?? 0) / Math.max(input.attackerSpirit.maxHp, 1)) * 100), 0) : 0;
@@ -392,7 +394,7 @@ function buildRewardItems(
     items.push({ type: 'legendarySoul', seedId: 'legendary-soul', label: '传说兽魂', quantity: soulRewards.legendary });
   }
   if (shardDrop) {
-    items.push({ type: 'spiritShard', spiritId: shardDrop.spiritId, seedId: shardDrop.spiritId, label: `${shardDrop.label}精魄`, quantity: shardDrop.quantity });
+    items.push({ type: 'spiritShard', spiritId: shardDrop.spiritId, seedId: shardDrop.spiritId, label: `${shardDrop.displayLabel}精魄`, quantity: shardDrop.quantity });
   }
   return items;
 }
@@ -405,8 +407,14 @@ function formatRewardSummary(soulRewards: RaidSettlementRuleResult['soulRewards'
 function buildShardDrop(
   defenderSpirit: SpiritBattleSnapshot | null,
   tier: RaidOutcomeTier,
-): { spiritDefinitionId: string; spiritId: string; label: string; quantity: number } | null {
+  displayLabel?: string,
+): { spiritDefinitionId: string; spiritId: string; label: string; displayLabel: string; quantity: number } | null {
   if (!defenderSpirit || !['perfect_win', 'major_win', 'minor_win'].includes(tier)) {
+    return null;
+  }
+
+  const dropChance = clampPercent(Number(GAME_BALANCE.raid?.spiritShardDropChance ?? 100));
+  if (!randomChance(dropChance / 100)) {
     return null;
   }
 
@@ -419,6 +427,7 @@ function buildShardDrop(
     spiritDefinitionId: defenderSpirit.spiritDefinition.id,
     spiritId: defenderSpirit.spiritDefinition.spiritId,
     label: defenderSpirit.spiritDefinition.label,
+    displayLabel: displayLabel ?? defenderSpirit.spiritDefinition.label,
     quantity,
   };
 }

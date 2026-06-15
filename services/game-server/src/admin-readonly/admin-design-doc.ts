@@ -152,6 +152,7 @@ function buildCoreRulesSection(): AdminDesignDocSection {
     freeRaidCountPerDay: number;
     protectionHoursAfterRaid: number;
     temporaryClaimMinutes: number;
+    spiritShardDropChance: number;
   };
 
   const cards: AdminDesignDocCard[] = [
@@ -167,11 +168,13 @@ function buildCoreRulesSection(): AdminDesignDocSection {
         metric('每日免费掠夺', raidConfig.freeRaidCountPerDay),
         metric('被掠保护', `${raidConfig.protectionHoursAfterRaid} 小时`),
         metric('临时待领取', raidConfig.temporaryClaimMinutes <= 0 ? '已退役' : `${raidConfig.temporaryClaimMinutes} 分钟`, raidConfig.temporaryClaimMinutes <= 0 ? 'warn' : 'neutral'),
+        metric('灵宠精魄掉落率', `${raidConfig.spiritShardDropChance}%`),
       ],
       facts: [
         fact('freeRaidCountPerDay', 'freeRaidCountPerDay', raidConfig.freeRaidCountPerDay),
         fact('protectionHoursAfterRaid', 'protectionHoursAfterRaid', raidConfig.protectionHoursAfterRaid),
         fact('temporaryClaimMinutes', 'temporaryClaimMinutes', raidConfig.temporaryClaimMinutes),
+        fact('spiritShardDropChance', 'spiritShardDropChance', raidConfig.spiritShardDropChance),
       ],
       notes: [
         '当前临时待领取金已退役，文档里保留该字段只是为了排查旧逻辑。',
@@ -897,14 +900,19 @@ function sanitizeSeasonFocus(value: string): string {
 }
 
 function sanitizeLegacyPhrase(value: string): string {
-  return value
-    .replaceAll('法术修习', '种植经营')
-    .replaceAll('修习 1 次法术', '完成 1 次成长升级')
-    .replaceAll('修习法术', '推进种植经营')
-    .replaceAll('冲最后法术', '冲灵宠成长节点')
-    .replaceAll('最后法术', '灵宠成长节点')
-    .replaceAll('不再只靠建筑线提供驱动力。', '由种植、灵宠和阵营目标共同提供驱动力。')
-    .replaceAll('建筑线', '种植与灵宠成长');
+  return [
+    ['法术修习', '种植经营'],
+    ['修习 1 次法术', '完成 1 次成长升级'],
+    ['修习法术', '推进种植经营'],
+    ['冲最后法术', '冲灵宠成长节点'],
+    ['最后法术', '灵宠成长节点'],
+    ['不再只靠建筑线提供驱动力。', '由种植、灵宠和阵营目标共同提供驱动力。'],
+    ['建筑线', '种植与灵宠成长'],
+  ].reduce((current, [search, replacement]) => replaceAllText(current, search, replacement), value);
+}
+
+function replaceAllText(value: string, search: string, replacement: string): string {
+  return value.split(search).join(replacement);
 }
 
 function groupSortOrder(group: string): number {

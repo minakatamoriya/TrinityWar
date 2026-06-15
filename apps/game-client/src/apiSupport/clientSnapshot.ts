@@ -15,6 +15,7 @@ export function normalizeBootstrap(bootstrap: ClientBootstrapResponse): ClientBo
       globalItemInventory: { ...bootstrap.backpack.globalItemInventory },
       unlockedSeedIds: [...bootstrap.backpack.unlockedSeedIds],
       unlockedPlantIds: [...(bootstrap.backpack.unlockedPlantIds ?? bootstrap.backpack.unlockedSeedIds)],
+      plantResearch: structuredClone(bootstrap.backpack.plantResearch ?? {}),
       starterSeedClaimed: bootstrap.backpack.starterSeedClaimed,
       tianjiTalismanClaimed: bootstrap.backpack.tianjiTalismanClaimed,
       spiritSoulClaimed: bootstrap.backpack.spiritSoulClaimed,

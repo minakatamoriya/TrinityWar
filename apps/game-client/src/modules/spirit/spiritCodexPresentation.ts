@@ -49,6 +49,9 @@ export function getSpiritCodexName(entry: ClientSpiritCodexEntry): string {
 }
 
 export function getSpiritCodexStatusLabel(entry: ClientSpiritCodexEntry): string {
+  if (entry.ownedCurrent && entry.readyToCompose) {
+    return '已拥有，可再次合成';
+  }
   if (entry.ownedCurrent) {
     return '已拥有';
   }
@@ -80,13 +83,34 @@ export function getSpiritCodexShardProgress(entry: ClientSpiritCodexEntry): stri
   return `${current} / ${required}`;
 }
 
-export function formatSpiritUnlockRequirement(entry: ClientSpiritCodexEntry): string {
-  const required = Math.max(entry.definition.shardUnlockRequired, 0);
-  const progress = getSpiritCodexShardProgress(entry);
-
-  if (entry.codexState !== 'hidden') {
-    return `已收集 ${entry.definition.shardName} ${progress}，满 ${required} 后可解锁合成资格。`;
+export function getSpiritCodexProgressLabel(entry: ClientSpiritCodexEntry): string {
+  if (entry.codexState === 'unlocked') {
+    return entry.readyToCompose ? '已解锁，可再次合成' : '已解锁';
   }
 
-  return `首次获得对应精魄后开放完整图鉴信息；累计收集满 ${required} 个对应精魄后可解锁合成资格。`;
+  return getSpiritCodexShardProgress(entry);
+}
+
+export function formatSpiritUnlockRequirement(entry: ClientSpiritCodexEntry): string {
+  const required = Math.max(entry.definition.shardUnlockRequired, 0);
+
+  if (entry.codexState === 'unlocked') {
+    return entry.readyToCompose
+      ? '当前灵宠已解锁，且已满足再次合成条件。'
+      : '当前灵宠已解锁。';
+  }
+
+  if (entry.codexState !== 'hidden') {
+    return `已收集 ${entry.definition.shardName} ${getSpiritCodexShardProgress(entry)}，达到 ${required} 个后可获得合成资格。`;
+  }
+
+  return `首次获得对应精魄后开放完整图鉴信息；累计收集达到 ${required} 个对应精魄后可获得合成资格。`;
+}
+
+export function getSpiritComposeAvailabilityLabel(entry: ClientSpiritCodexEntry): string {
+  if (entry.readyToCompose) {
+    return entry.ownedCurrent ? '已拥有，可再次合成' : '已备齐，可合成';
+  }
+
+  return '可结契';
 }

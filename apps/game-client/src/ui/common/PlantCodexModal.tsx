@@ -48,17 +48,13 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
     onUnlockPlant,
   } = props;
   const selectedResearch = selectedPlant.research;
-  const discovered = isPlantDiscovered(selectedPlant);
-  const identityVisible = isPlantIdentityVisible(selectedPlant);
+  const selectedCodexState = getPlantCodexState(selectedPlant);
+  const discovered = selectedCodexState !== 'hidden';
+  const fullyUnlocked = selectedCodexState === 'unlocked';
+  const identityVisible = selectedCodexState !== 'hidden';
   const selectedPlantName = identityVisible ? selectedPlant.name : '未知灵植';
   const canUnlock = Boolean(selectedResearch?.canUnlock && onUnlockPlant);
-  const selectedStatusLabel = selectedPlant.unlocked
-    ? '已解锁'
-    : selectedResearch?.canUnlock
-      ? '可解锁'
-      : selectedResearch?.discovered
-        ? '研究中'
-        : '未解锁';
+  const selectedStatusLabel = getPlantCodexStatusLabel(selectedPlant);
 
   return (
     <FullScreenToolShell
@@ -105,20 +101,26 @@ export function PlantCodexModal<TPlant extends PlantCodexItem>(props: PlantCodex
             </div>
             {discovered ? (
               <>
-              <p className="seed-codex-lore">{selectedPlant.lore}</p>
-              <div className="seed-codex-stats">
-                <div className="seed-codex-stat-row">
-                  <strong>收益</strong>
-                  <span>培育中 {formatNumber(selectedPlant.stageGold.growing)} / 成熟 {formatNumber(selectedPlant.stageGold.mature)} / 枯萎 {formatNumber(selectedPlant.stageGold.withered)}</span>
-                </div>
-              </div>
-              <div className="seed-codex-strategy">
-                <strong>策略建议</strong>
-                <p>{selectedPlant.description}</p>
-              </div>
+                <p className="seed-codex-lore">{selectedPlant.lore}</p>
+                {fullyUnlocked ? (
+                  <>
+                    <div className="seed-codex-stats">
+                      <div className="seed-codex-stat-row">
+                        <strong>收益</strong>
+                        <span>培育中 {formatNumber(selectedPlant.stageGold.growing)} / 成熟 {formatNumber(selectedPlant.stageGold.mature)} / 枯萎 {formatNumber(selectedPlant.stageGold.withered)}</span>
+                      </div>
+                    </div>
+                    <div className="seed-codex-strategy">
+                      <strong>策略建议</strong>
+                      <p>{selectedPlant.description}</p>
+                    </div>
+                  </>
+                ) : (
+                  <p className="seed-codex-undiscovered-text">已发现该灵植。完成解锁条件后开放完整收益资料，并可在灵田中播种。</p>
+                )}
               </>
             ) : (
-              <p className="seed-codex-undiscovered-text">达成解锁条件后开放完整图鉴信息。</p>
+              <p className="seed-codex-undiscovered-text">尚未通过自己的研究链路发现该灵植，完整图鉴信息暂不可见。</p>
             )}
             {!selectedPlant.unlocked && selectedResearch ? (
               <div className="seed-codex-strategy">
@@ -147,6 +149,30 @@ function isPlantDiscovered(plant: PlantCodexItem): boolean {
 
 function isPlantIdentityVisible(plant: PlantCodexItem): boolean {
   return isPlantDiscovered(plant);
+}
+
+function getPlantCodexState(plant: PlantCodexItem): 'hidden' | 'visible-progress' | 'unlocked' {
+  if (plant.unlocked || plant.research?.status === 'unlocked') {
+    return 'unlocked';
+  }
+  if (plant.research?.discovered || plant.research?.status === 'discovered' || plant.research?.status === 'ready') {
+    return 'visible-progress';
+  }
+  return 'hidden';
+}
+
+function getPlantCodexStatusLabel(plant: PlantCodexItem): string {
+  const state = getPlantCodexState(plant);
+  if (state === 'unlocked') {
+    return '已解锁';
+  }
+  if (plant.research?.canUnlock || plant.research?.status === 'ready') {
+    return '可解锁';
+  }
+  if (state === 'visible-progress') {
+    return '研究中';
+  }
+  return '未发现';
 }
 
 function formatPlantUnlockRequirement(

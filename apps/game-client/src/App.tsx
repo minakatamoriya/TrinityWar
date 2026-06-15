@@ -4,6 +4,7 @@ import type {
   ClientCastleExtensionUpgradeId,
   ClientCollectFieldRequest,
   ClientCollectFieldResponse,
+  ClientCodexPrompt,
   ClientRaidActionRequest,
   ClientRaidDeepIntelResponse,
   ClientRaidBattleReplay,
@@ -70,7 +71,6 @@ import {
 } from './modules/farm/farmBoardState';
 import {
   applyFarmSeedRewardsToInventory,
-  applyFarmSeedRewardsToUnlockedSeedIds,
   applySpiritMaterialRewardDelta,
   buildSpiritMaterialRewardDelta,
 } from './modules/farm/farmRewardState';
@@ -97,6 +97,7 @@ import {
   emptyGlobalItemInventory,
   getPreferredSeedId,
 } from './modules/backpack/backpackState';
+import { mergePlantResearchStateFromScenePlants } from './modules/farm/seedPresentation';
 import { buildUpgradeRequest } from './modules/building/buildingRequests';
 import { buildFactionContributionTiers } from './modules/faction/factionPresentation';
 import { applyFactionStipendSoulRewards } from './modules/faction/factionRewardState';
@@ -108,7 +109,6 @@ import {
 } from './modules/raid/raidViewModel';
 import {
   applyRaidRewardsToSeedInventory,
-  applyRaidRewardsToUnlockedSeedIds,
 } from './modules/raid/raidRewardState';
 import { buildSettledRaidRewardModal } from './modules/raid/raidRewardPresentation';
 import { readCampaignIdFromFriendInviteUrl } from './modules/share/shareLinks';
@@ -128,7 +128,7 @@ import {
   spendLocalTianjiTalisman,
   syncTianjiTalismanInInventory,
 } from './modules/spirit/spiritState';
-import { buildSpiritComposeUnlockModal } from './modules/spirit/spiritPresentation';
+import { buildSpiritCodexVisibleUnlockModal, buildSpiritComposeUnlockModal } from './modules/spirit/spiritPresentation';
 import { buildAppDerivedState } from './shell/appDerivedState';
 import { selectAppEntryState } from './shell/appEntrySelectors';
 import { AppSceneRouter } from './shell/AppSceneRouter';
@@ -218,6 +218,7 @@ function App(): JSX.Element {
   const [farmBoardEditor, setFarmBoardEditor] = useState<FarmBoardEditorState | null>(null);
   const [globalFeatureModal, setGlobalFeatureModal] = useState<GlobalFeatureModalState | null>(null);
   const [globalUnlockModal, setGlobalUnlockModal] = useState<GlobalUnlockModalState | null>(null);
+  const [pendingSpiritCodexRevealIds, setPendingSpiritCodexRevealIds] = useState<string[]>([]);
   const [seasonSignInState, setSeasonSignInState] = useState<ClientSeasonSignInState | null>(null);
   const [seasonRewardsState, setSeasonRewardsState] = useState<ClientSeasonRewardsResponse | null>(null);
   const characterDialog = useCharacterDialog();
@@ -374,6 +375,10 @@ function App(): JSX.Element {
     setSelectedSeedId(nextState.selectedSeedId);
   };
 
+  const syncPlantResearchFromScenePlants = (plants: ClientViewModel['scenes']['farm']['plants']): void => {
+    setPlantResearchState((current) => mergePlantResearchStateFromScenePlants(current, plants));
+  };
+
   const applySpiritState = (nextSpiritState: ClientSpiritState): void => {
     setSpiritState(nextSpiritState);
     setGlobalItemInventory((current) => syncTianjiTalismanInInventory(current, nextSpiritState.tianjiTalisman));
@@ -395,6 +400,7 @@ function App(): JSX.Element {
     applyClientViewModel(data.viewModel);
     setSeasonSignInState(data.seasonSignIn);
     setSeasonRewardsState(data.seasonRewards);
+    setPendingSpiritCodexRevealIds([]);
     applySpiritState(data.spirit);
     setFarmBoard(data.farmBoard);
   };
@@ -1180,7 +1186,6 @@ function App(): JSX.Element {
       const result = await unlockPlant({ plantType: plantId });
       applyMutationResult(result);
       syncSeedBackpackState(result.bootstrap.backpack);
-      showToast(result.summary, 'success');
     } catch (error) {
       const message = error instanceof Error && error.message ? error.message : '当前无法解锁灵植，请稍后重试。';
       showToast(message, 'error');
@@ -1416,12 +1421,14 @@ function App(): JSX.Element {
       }
       setGlobalItemInventory((current) => applyFactionStipendSoulRewards(current, result.rewards));
       setSeedRewardModal(null);
-      showToast(
-        tutorialStage === 'faction'
-          ? '阵营俸禄已领取，奖励已入库。'
-          : result.summary,
-        'success',
-      );
+      if (!showCodexPrompts(result.codexPrompts)) {
+        showToast(
+          tutorialStage === 'faction'
+            ? '阵营俸禄已领取，奖励已入库。'
+            : result.summary,
+          'success',
+        );
+      }
       if (tutorialStage === 'faction') {
         runTutorialFlowActions(getTutorialFlowActions('factionStipendClaimed'));
       }
@@ -1497,8 +1504,80 @@ function App(): JSX.Element {
 
   const applyMutationResult = (result: { home: HomeSummaryResponse; scenes: ClientViewModel['scenes']; summary: string }): void => {
     setViewModel((current) => applyClientViewModelScenePatch(current, result));
+    syncPlantResearchFromScenePlants(result.scenes.farm.plants);
 
     showToast(result.summary, 'success');
+  };
+
+  const enqueueSpiritCodexRevealPrompts = (prompts?: ClientCodexPrompt[]): void => {
+    const revealedSpiritIds = (prompts ?? [])
+      .filter((prompt) => prompt.type === 'spirit-codex-visible')
+      .map((prompt) => prompt.subjectId)
+      .filter((subjectId) => subjectId.length > 0);
+
+    if (revealedSpiritIds.length <= 0) {
+      return;
+    }
+
+    setPendingSpiritCodexRevealIds((current) => {
+      const nextIds = [...current];
+      for (const spiritId of revealedSpiritIds) {
+        if (!nextIds.includes(spiritId)) {
+          nextIds.push(spiritId);
+        }
+      }
+      return nextIds;
+    });
+  };
+
+  const openPendingSpiritCodexReveal = (): boolean => {
+    if (globalUnlockModal || !spiritState) {
+      return false;
+    }
+
+    const nextSpiritId = pendingSpiritCodexRevealIds.find((spiritId) => (
+      spiritState.codex.some((entry) => entry.spiritId === spiritId && entry.codexState !== 'hidden')
+    ));
+
+    if (!nextSpiritId) {
+      return false;
+    }
+
+    const nextModal = buildSpiritCodexVisibleUnlockModal({
+      spirit: spiritState,
+      spiritId: nextSpiritId,
+    });
+    if (!nextModal) {
+      return false;
+    }
+
+    setGlobalUnlockModal(nextModal);
+    return true;
+  };
+
+  const showCodexPrompts = (prompts?: ClientCodexPrompt[]): boolean => {
+    if (!prompts || prompts.length === 0) {
+      return false;
+    }
+
+    enqueueSpiritCodexRevealPrompts(prompts);
+
+    const spiritCodexVisibleCount = prompts.filter((prompt) => prompt.type === 'spirit-codex-visible').length;
+    const displayMessages = prompts
+      .filter((prompt) => prompt.type !== 'spirit-codex-visible')
+      .map((prompt) => prompt.message);
+
+    if (spiritCodexVisibleCount === 1) {
+      displayMessages.unshift('有新的灵宠图鉴已可见，前往图鉴或合成栏查看。');
+    } else if (spiritCodexVisibleCount > 1) {
+      displayMessages.unshift(`有 ${spiritCodexVisibleCount} 只灵宠图鉴已可见，前往图鉴或合成栏查看。`);
+    }
+
+    showToast(
+      displayMessages.join(' '),
+      prompts.some((prompt) => prompt.type === 'spirit-compose-ready' || prompt.type === 'plant-unlocked') ? 'success' : 'info',
+    );
+    return true;
   };
 
   const applySpiritMutationResult = (result: { home: HomeSummaryResponse; scenes: ClientViewModel['scenes']; spirit: ClientSpiritState; summary: string }): void => {
@@ -1719,9 +1798,20 @@ function App(): JSX.Element {
         applyMutationResult(result);
         const displayableRewards = result.result.rewards.filter(isDisplayableFarmReward);
         const hasDisplayableRewards = displayableRewards.length > 0;
+        const newlyDiscoveredPlantNames = Array.from(new Set(
+          displayableRewards
+            .filter((reward) => (
+              ((reward.kind ?? 'seed') === 'seed' || reward.kind === 'essence')
+              && Boolean(reward.seedId)
+              && reward.seedId !== TUTORIAL_STARTER_SEED_ID
+              && !unlockedSeedIds.includes(reward.seedId as string)
+              && !plantResearchState[reward.seedId as string]?.discovered
+            ))
+            .map((reward) => seedCatalogMap.get(reward.seedId as string)?.name ?? reward.label)
+            .filter((name): name is string => Boolean(name)),
+        ));
         if (hasDisplayableRewards) {
           setSeedInventory((current) => applyFarmSeedRewardsToInventory(current, displayableRewards, TUTORIAL_STARTER_SEED_ID));
-          setUnlockedSeedIds((current) => applyFarmSeedRewardsToUnlockedSeedIds(current, displayableRewards, TUTORIAL_STARTER_SEED_ID));
           setSpiritState((current) => applySpiritMaterialRewardDelta(current, buildSpiritMaterialRewardDelta(displayableRewards)));
         }
         setFarmCollectPresentation({
@@ -1735,6 +1825,9 @@ function App(): JSX.Element {
             quantity: reward.quantity,
             tone: getRewardBubbleTone(reward),
           })));
+        }
+        if (newlyDiscoveredPlantNames.length > 0) {
+          showToast(`发现新灵植：${newlyDiscoveredPlantNames.join('、')}。`, 'success');
         }
         if (tutorialStage === 'farm') {
           runTutorialFlowActions(getTutorialFlowActions('farmRewardConfirmed'));
@@ -1795,6 +1888,7 @@ function App(): JSX.Element {
           const response = await raidClientTarget(input);
           const nextSpiritState = await loadSpiritState().catch(() => null);
           setViewModel((current) => applyClientViewModelScenePatch(current, response));
+          syncPlantResearchFromScenePlants(response.scenes.farm.plants);
           if (nextSpiritState) {
             applySpiritState(nextSpiritState);
           }
@@ -1804,8 +1898,8 @@ function App(): JSX.Element {
 
           if (response.result.rewards.length > 0) {
             setSeedInventory((current) => applyRaidRewardsToSeedInventory(current, response.result.rewards));
-            setUnlockedSeedIds((current) => applyRaidRewardsToUnlockedSeedIds(current, response.result.rewards));
           }
+          showCodexPrompts(response.result.codexPrompts);
 
           raidIntel.dismissModal();
           if (tutorialStage === 'raid') {
@@ -2097,10 +2191,16 @@ function App(): JSX.Element {
     }
 
     const afterConfirmActions = globalUnlockModal.afterConfirmActions ?? [];
+    const spiritCodexRevealSubjectId = globalUnlockModal.completionKind === 'spirit-codex-visible'
+      ? globalUnlockModal.subjectId ?? null
+      : null;
     setGlobalUnlockModal(null);
     if (globalUnlockModal.completionKind === 'friend-invite') {
       setPendingFriendInvite(null);
       setSocialTab('friends');
+    }
+    if (spiritCodexRevealSubjectId) {
+      setPendingSpiritCodexRevealIds((current) => current.filter((spiritId) => spiritId !== spiritCodexRevealSubjectId));
     }
     if (afterConfirmActions.length > 0) {
       runTutorialFlowActions(afterConfirmActions);
@@ -2218,6 +2318,7 @@ function App(): JSX.Element {
             onOpenSpiritCodex={() => {
               setTopSpiritCodexSpiritId(topSpiritCodexSelectedId);
               setTopResourcePanel('spirit-codex');
+              openPendingSpiritCodexReveal();
             }}
           />
 
@@ -2333,6 +2434,7 @@ function App(): JSX.Element {
             onSetMainSpirit={(slotIndex, slotVersion) => {
               void handleSetMainSpiritAction(slotIndex, slotVersion);
             }}
+            onOpenSpiritUnlockSurface={openPendingSpiritCodexReveal}
             onToggleFollowTarget={raidIntel.toggleFollowTarget}
             onTransferFaction={handleTransferFaction}
             onTutorialAction={handleTutorialTaskAction}

@@ -109,6 +109,7 @@ interface AppSceneRouterProps {
   ) => Promise<ClientRollSpiritTraitsResponse | null>;
   onResolveSpiritTraitRoll: (rollLogId: string, selectedTraitCode: ClientSpiritTraitCode | null, slotVersion: number) => Promise<boolean>;
   onSetMainSpirit: (slotIndex: number, slotVersion: number) => void;
+  onOpenSpiritUnlockSurface: () => void;
   onToggleFollowTarget: (target: ClientRaidTarget) => void;
   onTransferFaction: (factionName: string) => void;
   onTutorialAction: () => void;
@@ -180,6 +181,7 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
     onResolveSpiritTraitRoll,
     onRollSpiritTraits,
     onSetMainSpirit,
+    onOpenSpiritUnlockSurface,
     onToggleFollowTarget,
     onTransferFaction,
     onTutorialAction,
@@ -235,6 +237,7 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
           onBreakthrough={onBreakthroughSpirit}
           onRollTraits={onRollSpiritTraits}
           onResolveTraitRoll={onResolveSpiritTraitRoll}
+          onOpenSpiritUnlockSurface={onOpenSpiritUnlockSurface}
           playerFaction={home.factionName}
           spirit={spiritState}
           vaultGold={vaultGold}

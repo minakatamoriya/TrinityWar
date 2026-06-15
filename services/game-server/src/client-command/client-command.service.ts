@@ -9,6 +9,7 @@ import {
   type ClientClaimPendingResponse,
   type ClientCollectFieldResponse,
   type ClientCollectRewardItem,
+  type ClientCodexPrompt,
   type ClientFactionTaskSubmitResponse,
   type ClientFactionStipendReward,
   type ClientFactionDonateRequest,
@@ -1415,6 +1416,7 @@ export class ClientCommandService {
       const rareSoulReward = sumRewardQuantity(rewards, 'rare-soul');
       const legendarySoulReward = sumRewardQuantity(rewards, 'legendary-soul');
       const spiritShardRewards = rewards.filter((entry) => entry.kind === 'spirit-shard' && entry.spiritId);
+      const codexPrompts: ClientCodexPrompt[] = [];
 
       if (goldReward > 0) {
         const nextVaultGold = playerState.wallet.vaultGold + goldReward;
@@ -1472,7 +1474,7 @@ export class ClientCommandService {
 
         const spiritDefinition = await client.spiritDefinition.findUnique({
           where: { spiritId: reward.spiritId },
-          select: { id: true, shardUnlockRequired: true },
+          select: { id: true, spiritId: true, label: true, shardUnlockRequired: true },
         });
 
         if (!spiritDefinition) {
@@ -1486,9 +1488,21 @@ export class ClientCommandService {
               spiritDefinitionId: spiritDefinition.id,
             },
           },
-          select: { shardCount: true },
+          select: { shardCount: true, readyToCompose: true },
         });
-        const nextShardCount = Math.min((existing?.shardCount ?? 0) + reward.quantity, spiritDefinition.shardUnlockRequired);
+        const previousShardCount = existing?.shardCount ?? 0;
+        const nextShardCount = Math.min(previousShardCount + reward.quantity, spiritDefinition.shardUnlockRequired);
+        const nextReadyToCompose = nextShardCount >= spiritDefinition.shardUnlockRequired;
+
+        codexPrompts.push(...buildSpiritCodexPrompts({
+          spiritId: spiritDefinition.spiritId,
+          label: spiritDefinition.label,
+          previousShardCount,
+          nextShardCount,
+          wasReadyToCompose: Boolean(existing?.readyToCompose),
+          nextReadyToCompose,
+          shardUnlockRequired: spiritDefinition.shardUnlockRequired,
+        }));
 
         await client.playerSpiritCodex.upsert({
           where: {
@@ -1502,16 +1516,16 @@ export class ClientCommandService {
             spiritDefinitionId: spiritDefinition.id,
             hasSeen: true,
             shardCount: nextShardCount,
-            readyToCompose: nextShardCount >= spiritDefinition.shardUnlockRequired,
+            readyToCompose: nextReadyToCompose,
             firstSeenAt: now,
-            readyAt: nextShardCount >= spiritDefinition.shardUnlockRequired ? now : null,
+            readyAt: nextReadyToCompose ? now : null,
           },
           update: {
             hasSeen: true,
             shardCount: nextShardCount,
-            readyToCompose: nextShardCount >= spiritDefinition.shardUnlockRequired,
+            readyToCompose: nextReadyToCompose,
             firstSeenAt: existing ? undefined : now,
-            readyAt: nextShardCount >= spiritDefinition.shardUnlockRequired ? now : undefined,
+            readyAt: nextReadyToCompose ? now : undefined,
             codexVersion: { increment: 1 },
           },
         });
@@ -1574,6 +1588,7 @@ export class ClientCommandService {
           action: null,
         },
         rewards,
+        codexPrompts,
         home,
         scenes,
         bootstrap,
@@ -1703,7 +1718,7 @@ export class ClientCommandService {
       const plant = scenes.farm.plants?.find((item) => item.plantType === seedDefinition.seedId);
       const responseSnapshot: ClientUnlockPlantResponse = {
         app: APP_NAME,
-        summary: `已解锁${seedDefinition.label}，现在可以直接播种。`,
+        summary: `灵植 ${seedDefinition.label} 已解锁，已可播种。`,
         bootstrap: await this.clientReadService.getBootstrap(input.playerId, client),
         home: await this.clientReadService.getHomeSummary(input.playerId, client),
         scenes,
@@ -1718,7 +1733,9 @@ export class ClientCommandService {
           researchStatus: 'unlocked',
           unlockEssenceRequired: 0,
           unlockHarvestRequired: requirement.harvestRequired,
+          unlockHarvestOwned: metrics.harvestCount,
           unlockContributionRequired: requirement.contributionRequired,
+          unlockContributionOwned: metrics.contribution,
           canUnlock: false,
           essenceQuantity: inventory.quantity,
           growSeconds: seedDefinition.growSeconds,
@@ -2433,6 +2450,43 @@ function drawGroupedRewards(input: {
 
   return Array.from(groupedRewards.values());
 }
+
+function buildSpiritCodexPrompts(input: {
+  spiritId: string;
+  label: string;
+  previousShardCount: number;
+  nextShardCount: number;
+  wasReadyToCompose: boolean;
+  nextReadyToCompose: boolean;
+  shardUnlockRequired: number;
+}): ClientCodexPrompt[] {
+  const prompts: ClientCodexPrompt[] = [];
+
+  if (input.previousShardCount <= 0 && input.nextShardCount > 0) {
+    prompts.push({
+      type: 'spirit-codex-visible',
+      subjectId: input.spiritId,
+      label: input.label,
+      message: `获得 ${input.label} 精魄，灵宠图鉴已可见。`,
+      current: input.nextShardCount,
+      required: input.shardUnlockRequired,
+    });
+  }
+
+  if (!input.wasReadyToCompose && input.nextReadyToCompose) {
+    prompts.push({
+      type: 'spirit-compose-ready',
+      subjectId: input.spiritId,
+      label: input.label,
+      message: `${input.label} 已达到合成条件。`,
+      current: input.nextShardCount,
+      required: input.shardUnlockRequired,
+    });
+  }
+
+  return prompts;
+}
+
 function sumRewardQuantity(rewards: ClientFactionStipendReward[], kind: ClientFactionStipendReward['kind']): number {
   return rewards
     .filter((reward) => reward.kind === kind)
