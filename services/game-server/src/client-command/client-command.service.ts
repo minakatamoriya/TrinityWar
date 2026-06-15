@@ -1407,7 +1407,10 @@ export class ClientCommandService {
 
       const contribution = playerState.factionMembers[0]?.contributionScore ?? 0;
       const tier = getFactionStipendTier(contribution);
-      const rewards = await resolveStipendRewards(client, (tier?.rewards ?? []) as ResolvableStipendReward[]);
+      const resolvedRewards = await resolveStipendRewards(client, (tier?.rewards ?? []) as ResolvableStipendReward[]);
+      const rewards = priorClaimCount <= 0
+        ? resolvedRewards.filter((entry) => entry.kind !== 'spirit-shard')
+        : resolvedRewards;
       const goldReward = sumRewardQuantity(rewards, 'gold');
       const spiritRootReward = sumRewardQuantity(rewards, 'spirit-root');
       const spiritMarrowReward = sumRewardQuantity(rewards, 'spirit-marrow');
@@ -1488,7 +1491,7 @@ export class ClientCommandService {
               spiritDefinitionId: spiritDefinition.id,
             },
           },
-          select: { shardCount: true, readyToCompose: true },
+          select: { hasSeen: true, shardCount: true, readyToCompose: true, ownedCurrent: true, ownedEver: true },
         });
         const previousShardCount = existing?.shardCount ?? 0;
         const nextShardCount = Math.min(previousShardCount + reward.quantity, spiritDefinition.shardUnlockRequired);
@@ -1499,7 +1502,10 @@ export class ClientCommandService {
           label: spiritDefinition.label,
           previousShardCount,
           nextShardCount,
+          wasHasSeen: Boolean(existing?.hasSeen),
           wasReadyToCompose: Boolean(existing?.readyToCompose),
+          wasOwnedCurrent: Boolean(existing?.ownedCurrent),
+          wasOwnedEver: Boolean(existing?.ownedEver),
           nextReadyToCompose,
           shardUnlockRequired: spiritDefinition.shardUnlockRequired,
         }));
@@ -2456,13 +2462,23 @@ function buildSpiritCodexPrompts(input: {
   label: string;
   previousShardCount: number;
   nextShardCount: number;
+  wasHasSeen: boolean;
   wasReadyToCompose: boolean;
+  wasOwnedCurrent: boolean;
+  wasOwnedEver: boolean;
   nextReadyToCompose: boolean;
   shardUnlockRequired: number;
 }): ClientCodexPrompt[] {
   const prompts: ClientCodexPrompt[] = [];
 
-  if (input.previousShardCount <= 0 && input.nextShardCount > 0) {
+  if (
+    input.previousShardCount <= 0
+    && !input.wasHasSeen
+    && !input.wasReadyToCompose
+    && !input.wasOwnedCurrent
+    && !input.wasOwnedEver
+    && input.nextShardCount > 0
+  ) {
     prompts.push({
       type: 'spirit-codex-visible',
       subjectId: input.spiritId,

@@ -39,6 +39,7 @@ export function SeedRewardModalHost(props: SeedRewardModalHostProps): JSX.Elemen
         || pendingActionKey === 'tutorial:starter-seeds'
         || (modal.confirmAction === 'claim-notification' && notificationActionId === `claim:${modal.notificationId}`)
       }
+      footerHint={modal.footerHint}
       getItemLabel={(item) => {
         const seed = item.seedId ? seedCatalogMap.get(item.seedId) : undefined;
         if (modal.confirmAction === 'claim-faction-stipend' && seed) {

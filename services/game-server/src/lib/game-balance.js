@@ -217,7 +217,7 @@ export const SPIRIT_BALANCE_CONFIG = {
 export const SPIRIT_ROOT_ECONOMY_CONFIG = {
   feed: {
     accelerateSecondsPerFeed: 2 * 60 * 60,
-    rootCostPerFeed: 20,
+    rootCostPerFeed: 10,
     expBonusBps: 5000,
   },
   farmHarvest: {
@@ -257,7 +257,7 @@ export const FACTION_STIPEND_CONFIG = {
       rewards: [
         { kind: 'gold', quantity: 20, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-0'], label: '灵根' },
-        { kind: 'spirit-shard', quantity: 1, label: '灵宠精魄', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
+        { kind: 'spirit-shard', quantity: 1, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'ordinary-soul', quantity: 5, label: '普通兽魂' },
       ],
     },
@@ -268,7 +268,7 @@ export const FACTION_STIPEND_CONFIG = {
       rewards: [
         { kind: 'gold', quantity: 30, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-100'], label: '灵根' },
-        { kind: 'spirit-shard', quantity: 2, label: '灵宠精魄', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
+        { kind: 'spirit-shard', quantity: 2, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'ordinary-soul', quantity: 10, label: '普通兽魂' },
       ],
     },
@@ -279,7 +279,7 @@ export const FACTION_STIPEND_CONFIG = {
       rewards: [
         { kind: 'gold', quantity: 40, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-300'], label: '灵根' },
-        { kind: 'spirit-shard', quantity: 3, label: '灵宠精魄', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
+        { kind: 'spirit-shard', quantity: 3, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'spirit-marrow', quantity: 2, label: '灵髓' },
         { kind: 'rare-soul', quantity: 2, label: '稀有兽魂' },
         { kind: 'ordinary-soul', quantity: 8, label: '普通兽魂' },
@@ -292,7 +292,7 @@ export const FACTION_STIPEND_CONFIG = {
       rewards: [
         { kind: 'gold', quantity: 50, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-600'], label: '灵根' },
-        { kind: 'spirit-shard', quantity: 4, label: '灵宠精魄', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
+        { kind: 'spirit-shard', quantity: 4, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'spirit-marrow', quantity: 4, label: '灵髓' },
         { kind: 'rare-soul', quantity: 6, label: '稀有兽魂' },
       ],
@@ -304,7 +304,7 @@ export const FACTION_STIPEND_CONFIG = {
       rewards: [
         { kind: 'gold', quantity: 60, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-800'], label: '灵根' },
-        { kind: 'spirit-shard', quantity: 5, label: '灵宠精魄', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
+        { kind: 'spirit-shard', quantity: 5, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'spirit-marrow', quantity: 6, label: '灵髓' },
         { kind: 'spirit-jade', quantity: 1, label: '灵玉' },
         { kind: 'rare-soul', quantity: 10, label: '稀有兽魂' },
@@ -317,7 +317,7 @@ export const FACTION_STIPEND_CONFIG = {
       rewards: [
         { kind: 'gold', quantity: 80, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-1000'], label: '灵根' },
-        { kind: 'spirit-shard', quantity: 6, label: '灵宠精魄', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
+        { kind: 'spirit-shard', quantity: 6, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'spirit-marrow', quantity: 8, label: '灵髓' },
         { kind: 'spirit-jade', quantity: 2, label: '灵玉' },
         { kind: 'legendary-soul', quantity: 2, label: '传说兽魂' },

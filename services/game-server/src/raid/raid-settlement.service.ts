@@ -414,8 +414,11 @@ export class RaidSettlementService {
         },
         select: {
           id: true,
+          hasSeen: true,
           shardCount: true,
           readyToCompose: true,
+          ownedCurrent: true,
+          ownedEver: true,
         },
       });
 
@@ -427,7 +430,10 @@ export class RaidSettlementService {
           label: settlementResult.shardDrop.label,
           previousShardCount: existingCodex.shardCount,
           nextShardCount,
+          wasHasSeen: existingCodex.hasSeen,
           wasReadyToCompose: existingCodex.readyToCompose,
+          wasOwnedCurrent: existingCodex.ownedCurrent,
+          wasOwnedEver: existingCodex.ownedEver,
           nextReadyToCompose,
           shardUnlockRequired,
         }));
@@ -437,7 +443,7 @@ export class RaidSettlementService {
             hasSeen: true,
             shardCount: nextShardCount,
             readyToCompose: nextReadyToCompose,
-            firstSeenAt: existingCodex.shardCount > 0 ? undefined : now,
+            firstSeenAt: existingCodex.shardCount > 0 || existingCodex.ownedCurrent || existingCodex.ownedEver || existingCodex.readyToCompose ? undefined : now,
             readyAt: nextReadyToCompose ? now : null,
             codexVersion: { increment: 1 },
           },
@@ -450,7 +456,10 @@ export class RaidSettlementService {
           label: settlementResult.shardDrop.label,
           previousShardCount: 0,
           nextShardCount,
+          wasHasSeen: false,
           wasReadyToCompose: false,
+          wasOwnedCurrent: false,
+          wasOwnedEver: false,
           nextReadyToCompose,
           shardUnlockRequired,
         }));
@@ -663,13 +672,23 @@ function buildSpiritCodexPrompts(input: {
   label: string;
   previousShardCount: number;
   nextShardCount: number;
+  wasHasSeen: boolean;
   wasReadyToCompose: boolean;
+  wasOwnedCurrent: boolean;
+  wasOwnedEver: boolean;
   nextReadyToCompose: boolean;
   shardUnlockRequired: number;
 }): ClientCodexPrompt[] {
   const prompts: ClientCodexPrompt[] = [];
 
-  if (input.previousShardCount <= 0 && input.nextShardCount > 0) {
+  if (
+    input.previousShardCount <= 0
+    && !input.wasHasSeen
+    && !input.wasReadyToCompose
+    && !input.wasOwnedCurrent
+    && !input.wasOwnedEver
+    && input.nextShardCount > 0
+  ) {
     prompts.push({
       type: 'spirit-codex-visible',
       subjectId: input.spiritId,

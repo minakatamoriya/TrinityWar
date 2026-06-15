@@ -29,6 +29,7 @@ export type TopResourcePanel = 'spirit-codex' | 'resources';
 export interface SeedRewardModalState {
   title: string;
   summary: string;
+  footerHint?: string;
   confirmAction?: 'claim-faction-stipend' | 'claim-starter-seeds' | 'claim-notification';
   notificationId?: string;
   afterConfirmActions?: TutorialFlowAction[];

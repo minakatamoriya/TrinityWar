@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient, SpiritElement } from '@prisma/client';
 import { APP_NAME, type ClientBootstrapResponse, type ClientPlantResearchState, type ClientSceneContentResponse, type ClientSeasonRewardsResponse, type ClientSeasonSignInResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
@@ -244,6 +244,7 @@ export class ClientReadService {
         where: { playerId },
         select: {
           spiritDefinition: { select: { spiritId: true } },
+          hasSeen: true,
           shardCount: true,
           readyToCompose: true,
           ownedCurrent: true,
@@ -551,7 +552,8 @@ export class ClientReadService {
     now: Date,
     options: { force?: boolean } = {},
   ): Promise<void> {
-    const target = await this.ensureTutorialTargetPlayer(client, now);
+    const tutorialTargetSpirit = await this.getTutorialTargetSpiritProfile(client, playerId);
+    const target = await this.ensureTutorialTargetPlayer(client, now, tutorialTargetSpirit);
     const latestBatch = await client.raidTargetPool.aggregate({
       where: { ownerPlayerId: playerId },
       _max: { refreshBatchNo: true },
@@ -629,9 +631,10 @@ export class ClientReadService {
   private async ensureTutorialTargetPlayer(
     client: Prisma.TransactionClient | PrismaClient,
     now: Date,
+    targetSpirit: { spiritId: string; element: SpiritElement },
   ) {
     const seedDefinition = await ensureSeedDefinition(client, TUTORIAL_TARGET_SEED_ID);
-    const spiritDefinition = await ensureSpiritDefinition(client, TUTORIAL_TARGET_SPIRIT_ID);
+    const spiritDefinition = await ensureSpiritDefinition(client, targetSpirit.spiritId);
     const existingIdentity = await client.playerAuthIdentity.findUnique({
       where: {
         provider_providerUserId: {
@@ -794,7 +797,7 @@ export class ClientReadService {
           isMain: true,
           level: 1,
           exp: 0,
-          element: 'WOOD',
+          element: targetSpirit.element,
           currentHp: maxHp,
           maxHp,
           status: 'ACTIVE',
@@ -805,7 +808,7 @@ export class ClientReadService {
           isMain: true,
           level: 1,
           exp: 0,
-          element: 'WOOD',
+          element: targetSpirit.element,
           currentHp: maxHp,
           maxHp,
           status: 'ACTIVE',
@@ -876,6 +879,32 @@ export class ClientReadService {
         },
       },
     });
+  }
+
+  private async getTutorialTargetSpiritProfile(
+    client: Prisma.TransactionClient | PrismaClient,
+    playerId: string,
+  ): Promise<{ spiritId: string; element: SpiritElement }> {
+    const mainSpirit = await client.playerSpiritSlot.findFirst({
+      where: {
+        playerId,
+        isMain: true,
+        spiritDefinitionId: { not: null },
+      },
+      select: {
+        element: true,
+        spiritDefinition: {
+          select: {
+            spiritId: true,
+          },
+        },
+      },
+    });
+
+    return {
+      spiritId: mainSpirit?.spiritDefinition?.spiritId ?? TUTORIAL_TARGET_SPIRIT_ID,
+      element: mainSpirit?.element ?? 'WOOD',
+    };
   }
 }
 

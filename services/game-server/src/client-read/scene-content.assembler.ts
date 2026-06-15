@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { APP_NAME, type ClientCodexState, type ClientFactionStipendReward, type ClientFarmField, type ClientPlantInventoryItem, type ClientRaidRewardItem, type ClientRaidSpiritPreview, type ClientSceneAction, type ClientSceneContentResponse, type ClientSceneVisibility } from '@trinitywar/shared';
+import { STARTER_SPIRIT_IDS } from '../seed/seed-data/spirits.js';
 import type { FieldStatus } from '@prisma/client';
 import {
   GAME_BALANCE,
@@ -392,10 +393,12 @@ export class SceneContentAssembler {
     const stipendState = readModel.factionStipendStates[0] ?? null;
     const donateGoldStep = GAME_BALANCE.faction.donateGoldStep;
     const contributionBonusPercent = getCurrentExtensionEffect('factionOfferingTech', readModel.buildings?.pendingClaimTechLevel ?? 0);
-    const stipendRewards = toPublicFactionStipendRewards((stipendTier?.rewards ?? []) as ClientFactionStipendReward[]);
+    const stipendRewards = toPublicFactionStipendRewards((stipendTier?.rewards ?? []) as ClientFactionStipendReward[])
+      .filter((reward) => readModel.factionStipendClaimCount > 0 || reward.kind !== 'spirit-shard');
     const visibleStipendRewards = stipendState?.claimedAt
       ? normalizeFactionStipendRewards(stipendState.rewardJson) ?? stipendRewards
       : stipendRewards;
+    const stipendRewardPrefix = stipendState?.claimedAt ? '\u4eca\u65e5\u5df2\u9886\u4ff8\u7984\uff1a' : '\u9884\u8ba1\u6bcf\u65e5\u4ff8\u7984\uff1a';
     const stipendRewardText = visibleStipendRewards.map((reward) => `${reward.label} x${formatNumber(reward.quantity)}`).join('\u3001') || '\u9635\u8425\u4ff8\u7984';
 
     return {
@@ -406,7 +409,7 @@ export class SceneContentAssembler {
           ? `\u9635\u8425\u603b\u8d21\u732e ${formatNumber(currentFactionTotalContribution)}`
           : '\u5f53\u524d\u8d26\u53f7\u6ca1\u6709\u9635\u8425\u5173\u7cfb\uff0c\u540e\u7eed\u9636\u6bb5\u518d\u5f00\u653e\u8f6c\u6295\u9635\u8425\u3002',
         advantage: currentFaction ? `\u9635\u8425\u4ff8\u7984\u6863\u4f4d\uff1a${stipendTier?.label ?? '\u9635\u8425\u4ff8\u7984'}` : '\u6682\u65e0\u9635\u8425\u4ff8\u7984',
-        breakdown: `\u9884\u8ba1\u6bcf\u65e5\u4ff8\u7984\uff1a${stipendRewardText}`,
+        breakdown: `${stipendRewardPrefix}${stipendRewardText}`,
         action: { label: '\u67e5\u770b\u9635\u8425', target: 'faction', tone: currentFaction ? 'secondary' : 'ghost' },
       },
       contribution: {
@@ -846,6 +849,10 @@ function buildRaidSpiritPreview(
 }
 
 function resolveSpiritSceneVisibility(entry: {
+  spiritDefinition: {
+    spiritId: string;
+  };
+  hasSeen: boolean;
   shardCount: number;
   readyToCompose: boolean;
   ownedCurrent: boolean;
@@ -855,6 +862,10 @@ function resolveSpiritSceneVisibility(entry: {
 }
 
 function resolveSpiritCodexState(entry: {
+  spiritDefinition: {
+    spiritId: string;
+  };
+  hasSeen: boolean;
   shardCount: number;
   readyToCompose: boolean;
   ownedCurrent: boolean;
@@ -866,6 +877,10 @@ function resolveSpiritCodexState(entry: {
 
   if (entry.ownedCurrent || entry.ownedEver || entry.readyToCompose) {
     return 'unlocked';
+  }
+
+  if (entry.hasSeen && STARTER_SPIRIT_IDS.includes(entry.spiritDefinition.spiritId as typeof STARTER_SPIRIT_IDS[number])) {
+    return 'visible-progress';
   }
 
   if (entry.shardCount > 0) {

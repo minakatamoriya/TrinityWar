@@ -416,7 +416,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
     contribution: {
       title: '当前贡献值',
       value: '40',
-      description: '贡献用于提升每日俸禄档位，俸禄以金币、灵宠精魄和分档兽魂为主。',
+      description: '贡献用于提升每日俸禄档位，俸禄以金币、随机灵宠碎片和分档兽魂为主。',
     },
     comparison: [
       { faction: '人界', advantage: '总贡献 1,260', totalContribution: '1,260', power: '1,260', isCurrent: true },

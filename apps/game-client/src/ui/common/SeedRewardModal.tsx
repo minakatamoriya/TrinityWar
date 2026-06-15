@@ -10,6 +10,7 @@ export interface SeedRewardModalItem {
 interface SeedRewardModalProps {
   title: string;
   summary: string;
+  footerHint?: string;
   items: SeedRewardModalItem[];
   confirming: boolean;
   getItemLabel: (item: SeedRewardModalItem) => string;
@@ -20,6 +21,7 @@ export function SeedRewardModal(props: SeedRewardModalProps): JSX.Element {
   const {
     title,
     summary,
+    footerHint,
     items,
     confirming,
     getItemLabel,
@@ -45,6 +47,7 @@ export function SeedRewardModal(props: SeedRewardModalProps): JSX.Element {
           </div>
         ))}
       </div>
+      {footerHint ? <p className="seed-reward-hint">{footerHint}</p> : null}
     </CenteredModalShell>
   );
 }

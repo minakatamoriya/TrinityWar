@@ -5826,6 +5826,13 @@ button.spirit-element-chip {
   font-weight: 700;
 }
 
+.seed-reward-hint {
+  margin: 14px 4px 0;
+  color: rgba(255, 235, 204, 0.88);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .raid-intel-topbar {
   display: grid;
   grid-template-columns: 1fr auto;

@@ -1415,9 +1415,13 @@ function App(): JSX.Element {
       const result = await claimFactionStipend({
         walletVersion: home.stateVersions.walletVersion,
       });
+      const nextSpiritState = await loadSpiritState().catch(() => null);
       applyMutationResult(result);
       if (result.bootstrap?.backpack) {
         syncSeedBackpackState(result.bootstrap.backpack);
+      }
+      if (nextSpiritState) {
+        applySpiritState(nextSpiritState);
       }
       setGlobalItemInventory((current) => applyFactionStipendSoulRewards(current, result.rewards));
       setSeedRewardModal(null);
@@ -1562,15 +1566,23 @@ function App(): JSX.Element {
 
     enqueueSpiritCodexRevealPrompts(prompts);
 
-    const spiritCodexVisibleCount = prompts.filter((prompt) => prompt.type === 'spirit-codex-visible').length;
-    const displayMessages = prompts
+    const spiritCodexVisiblePrompts = prompts.filter((prompt) => prompt.type === 'spirit-codex-visible');
+    const otherPromptMessages = prompts
       .filter((prompt) => prompt.type !== 'spirit-codex-visible')
       .map((prompt) => prompt.message);
+    const displayMessages = [...otherPromptMessages];
 
-    if (spiritCodexVisibleCount === 1) {
-      displayMessages.unshift('有新的灵宠图鉴已可见，前往图鉴或合成栏查看。');
-    } else if (spiritCodexVisibleCount > 1) {
-      displayMessages.unshift(`有 ${spiritCodexVisibleCount} 只灵宠图鉴已可见，前往图鉴或合成栏查看。`);
+    if (spiritCodexVisiblePrompts.length === 1) {
+      displayMessages.unshift(spiritCodexVisiblePrompts[0]?.message ?? '有新的灵宠图鉴已可见。');
+    } else if (spiritCodexVisiblePrompts.length > 1) {
+      const labels = spiritCodexVisiblePrompts
+        .map((prompt) => prompt.label.trim())
+        .filter((label) => label.length > 0);
+      displayMessages.unshift(
+        labels.length > 0
+          ? `有 ${spiritCodexVisiblePrompts.length} 只灵宠图鉴已可见：${labels.join('、')}。`
+          : `有 ${spiritCodexVisiblePrompts.length} 只灵宠图鉴已可见。`,
+      );
     }
 
     showToast(
@@ -1899,7 +1911,8 @@ function App(): JSX.Element {
           if (response.result.rewards.length > 0) {
             setSeedInventory((current) => applyRaidRewardsToSeedInventory(current, response.result.rewards));
           }
-          showCodexPrompts(response.result.codexPrompts);
+          enqueueSpiritCodexRevealPrompts(response.result.codexPrompts);
+          showCodexPrompts(response.result.codexPrompts?.filter((prompt) => prompt.type !== 'spirit-codex-visible'));
 
           raidIntel.dismissModal();
           if (tutorialStage === 'raid') {

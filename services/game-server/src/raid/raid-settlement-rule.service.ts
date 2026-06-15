@@ -170,6 +170,12 @@ type BattleHealthStatus = {
   attackCoefficient: number;
 };
 
+const ELEMENT_ADVANTAGE_EFFECT = {
+  attackMultiplier: 2,
+  traitMultiplier: 2,
+  hpMultiplier: 1,
+} as const;
+
 function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string | null, side: 'attacker' | 'defender'): SpiritPanel {
   if (!snapshot) {
     return {
@@ -237,8 +243,8 @@ function resolveSingleClash(attacker: SpiritPanel, defender: SpiritPanel): {
 } {
   const events: Array<{ type: string; label: string; description: string }> = [];
   const relation = resolveElementAdvantage(attacker.element, defender.element);
-  const attackerMultiplier = relation === 'attacker' ? 2 : 1;
-  const defenderMultiplier = relation === 'defender' ? 2 : 1;
+  const attackerMultiplier = relation === 'attacker' ? ELEMENT_ADVANTAGE_EFFECT.attackMultiplier : 1;
+  const defenderMultiplier = relation === 'defender' ? ELEMENT_ADVANTAGE_EFFECT.traitMultiplier : 1;
 
   for (const [sideLabel, panel] of [['进攻方', attacker], ['防守方', defender]] as const) {
     if (panel.healthStatus.code !== 'normal') {
@@ -260,8 +266,8 @@ function resolveSingleClash(attacker: SpiritPanel, defender: SpiritPanel): {
 
   const attackerDamage = resolveAttack(attacker, defender, attackerMultiplier, defenderMultiplier, '进攻方', events);
   const defenderDamage = resolveAttack(defender, attacker, defenderMultiplier, attackerMultiplier, '防守方', events);
-  let attackerHpAfter = Math.max(attacker.currentHp * attackerMultiplier - defenderDamage.damage + attackerDamage.lifesteal - defenderDamage.counterDamage, 0);
-  let defenderHpAfter = Math.max(defender.currentHp * defenderMultiplier - attackerDamage.damage + defenderDamage.lifesteal - attackerDamage.counterDamage, 0);
+  let attackerHpAfter = Math.max(attacker.currentHp * ELEMENT_ADVANTAGE_EFFECT.hpMultiplier - defenderDamage.damage + attackerDamage.lifesteal - defenderDamage.counterDamage, 0);
+  let defenderHpAfter = Math.max(defender.currentHp * ELEMENT_ADVANTAGE_EFFECT.hpMultiplier - attackerDamage.damage + defenderDamage.lifesteal - attackerDamage.counterDamage, 0);
 
   if (attackerDamage.execute) {
     defenderHpAfter = 0;
@@ -290,8 +296,8 @@ function resolveSingleClash(attacker: SpiritPanel, defender: SpiritPanel): {
     result,
     attackerHpAfter,
     defenderHpAfter,
-    attackerMaxHp: attacker.maxHp * attackerMultiplier,
-    defenderMaxHp: defender.maxHp * defenderMultiplier,
+    attackerMaxHp: attacker.maxHp * ELEMENT_ADVANTAGE_EFFECT.hpMultiplier,
+    defenderMaxHp: defender.maxHp * ELEMENT_ADVANTAGE_EFFECT.hpMultiplier,
     events,
   };
 }
@@ -327,7 +333,7 @@ function resolveAttack(
   const executeChance = 0;
   if (executeChance > 0 && Math.random() * 100 < executeChance) {
     events.push({ type: 'execute', label: `${label}触发秒杀`, description: '秒杀优先于普通伤害，直接击败目标。' });
-    return { damage: defender.currentHp * defenderMultiplier, lifesteal: 0, counterDamage: 0, execute: true };
+    return { damage: defender.currentHp, lifesteal: 0, counterDamage: 0, execute: true };
   }
 
   const randomFactor = 0.9 + Math.random() * 0.2;

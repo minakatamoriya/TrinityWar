@@ -69,6 +69,8 @@ const composeRarityGroups = [
   { key: 'legend', label: '传说', rarity: 'legendary' as const },
 ];
 
+const STARTER_SPIRIT_IDS = ['canglang', 'linglu', 'qingyuan'] as const;
+
 const elementChoices: Array<{ value: ClientSpiritElement; label: DisplayElement }> = [
   { value: 'metal', label: '金' },
   { value: 'wood', label: '木' },
@@ -601,6 +603,12 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const codexById = useMemo(() => new Map(spirit.codex.map((entry) => [entry.spiritId, entry])), [spirit.codex]);
   const mainSlot = slots.find((slot) => slot.isMain && slot.spiritId !== null) ?? spirit.mainSlot;
   const mainEntry = mainSlot?.spiritId ? codexById.get(mainSlot.spiritId) ?? null : null;
+  const starterComposeEntries = useMemo(
+    () => STARTER_SPIRIT_IDS
+      .map((spiritId) => spirit.codex.find((entry) => entry.spiritId === spiritId) ?? null)
+      .filter((entry): entry is ClientSpiritCodexEntry => Boolean(entry)),
+    [spirit.codex],
+  );
   const stableSlots = slots.filter((slot) => !slot.isMain && slot.slotIndex > 1);
   const selectedSlot = selectedSlotIndex === null ? null : slots.find((slot) => slot.slotIndex === selectedSlotIndex) ?? null;
   const selectedSlotEntry = selectedSlot?.spiritId ? codexById.get(selectedSlot.spiritId) ?? null : null;
@@ -609,9 +617,22 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
     ...group,
     pets: composeEntries.filter((entry) => entry.definition.rarity === group.rarity),
   }));
-  const selectedComposeEntry = composeEntries.find((entry) => entry.spiritId === selectedComposeSpiritId) ?? composeEntries[0] ?? null;
+  const firstVisibleComposeEntry = composeEntries.find((entry) => isSpiritCodexVisible(entry)) ?? null;
   const occupiedCount = slots.filter((slot) => slot.spiritId).length;
   const isStableFull = occupiedCount >= slots.length;
+  const isTutorialStarterSelection = Boolean(
+    selectedSlot
+    && !selectedSlotEntry
+    && !mainSlot
+    && !uiRules.showStableSlots
+    && (selectedSlot.isMain || selectedSlot.slotIndex === 1)
+    && starterComposeEntries.length > 0,
+  );
+  const selectedComposeEntry = composeEntries.find((entry) => entry.spiritId === selectedComposeSpiritId)
+    ?? (isTutorialStarterSelection ? starterComposeEntries[0] : firstVisibleComposeEntry)
+    ?? composeEntries[0]
+    ?? null;
+  const selectedComposeEntryVisible = selectedComposeEntry ? isSpiritCodexVisible(selectedComposeEntry) : false;
   const canOpenOwnedPetDetail = uiRules.allowOwnedPetDetail;
   const selectedComposeElementLabel = getElementLabel(composeElement) || '木';
   const availableTianjiTalisman = spirit.tianjiTalisman;
@@ -776,6 +797,18 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
     setSelectedPetTab('overview');
     setComposeStep('choose-spirit');
   }, [selectedSlotIndex]);
+
+  useEffect(() => {
+    if (!isTutorialStarterSelection) {
+      return;
+    }
+
+    setSelectedComposeSpiritId((current) => (
+      starterComposeEntries.some((entry) => entry.spiritId === current)
+        ? current
+        : starterComposeEntries[0]?.spiritId ?? current
+    ));
+  }, [isTutorialStarterSelection, starterComposeEntries]);
 
   useEffect(() => {
     const unlockedSlots = selectedSlot?.unlockedTraitSlots ?? 0;
@@ -1353,7 +1386,28 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                             <h4>选择灵宠</h4>
                             <span className="soft-tag">图鉴式排列，亮起的灵宠可继续合成</span>
                           </div>
-                          {composeGroups.map((group) => (
+                          {isTutorialStarterSelection ? (
+                            <div className="spirit-starter-grid">
+                              {starterComposeEntries.map((entry) => {
+                                const selected = selectedComposeEntry?.spiritId === entry.spiritId;
+                                const rarity = getRarityLabel(entry.definition.rarity);
+
+                                return (
+                                  <button
+                                    className={`spirit-starter-card${selected ? ' is-selected' : ''}`}
+                                    key={entry.spiritId}
+                                    onClick={() => setSelectedComposeSpiritId(entry.spiritId)}
+                                    type="button"
+                                  >
+                                    <strong>{entry.definition.label}</strong>
+                                    <span>{getFactionLabel(entry.definition.factionAffinity)} · {getRoleLabel(entry.definition.role)} · {rarity}</span>
+                                    <small>首次结契不消耗精魄，选定后再注入五行灵力。</small>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                          {!isTutorialStarterSelection && composeGroups.map((group) => (
                             <section className="seed-codex-rarity-row" key={group.key}>
                               <div className="seed-codex-rarity-head">
                                 <strong>{group.label}</strong>
@@ -1382,7 +1436,30 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                             </section>
                           ))}
 
-                          {selectedComposeEntry ? (
+                          {isTutorialStarterSelection && selectedComposeEntry ? (
+                            <div className="seed-codex-strategy">
+                              <strong>新手首宠</strong>
+                              <p>{selectedComposeEntry.definition.label} 只能在新手阶段结契一次。确认后再选择五行属性，结契完成会自动成为你的主位灵宠。</p>
+                              <div className="seed-codex-stats">
+                                <div className="seed-codex-stat-row"><strong>阵营</strong><span>{getFactionLabel(selectedComposeEntry.definition.factionAffinity)}</span></div>
+                                <div className="seed-codex-stat-row"><strong>定位</strong><span>{getRoleLabel(selectedComposeEntry.definition.role)}</span></div>
+                                <div className="seed-codex-stat-row"><strong>结契条件</strong><span>首次新手免费结契</span></div>
+                              </div>
+                              <button className="primary-button spirit-full-button" disabled={busy} onClick={() => setComposeStep('choose-element')} type="button">选择五行</button>
+                            </div>
+                          ) : null}
+                          {!isTutorialStarterSelection && selectedComposeEntry && !selectedComposeEntryVisible ? (
+                            <div className="seed-codex-strategy">
+                              <strong>未可见灵宠</strong>
+                              <p>尚未获得对应精魄，灵宠名称与完整进度暂不可见。</p>
+                              <div className="seed-codex-stats">
+                                <div className="seed-codex-stat-row"><strong>状态</strong><span>{getSpiritCodexStatusLabel(selectedComposeEntry)}</span></div>
+                                <div className="seed-codex-stat-row"><strong>数量</strong><span>未可见</span></div>
+                                <div className="seed-codex-stat-row"><strong>门槛</strong><span>{selectedComposeEntry.definition.shardUnlockRequired} 个对应精魄</span></div>
+                              </div>
+                            </div>
+                          ) : null}
+                          {!isTutorialStarterSelection && selectedComposeEntry && selectedComposeEntryVisible ? (
                             <div className="seed-codex-strategy">
                               <strong>{selectedComposeEntry.readyToCompose ? '可合成灵宠' : '灵宠进度'}</strong>
                               <p>

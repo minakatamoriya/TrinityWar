@@ -2052,6 +2052,10 @@ function toClientDefinition(definition: {
 }
 
 function resolveSpiritCodexState(entry: {
+  spiritDefinition: {
+    spiritId: string;
+  };
+  hasSeen: boolean;
   shardCount: number;
   readyToCompose: boolean;
   ownedCurrent: boolean;
@@ -2059,6 +2063,10 @@ function resolveSpiritCodexState(entry: {
 }): ClientCodexState {
   if (entry.ownedCurrent || entry.ownedEver || entry.readyToCompose) {
     return 'unlocked';
+  }
+
+  if (entry.hasSeen && STARTER_SPIRIT_IDS.includes(entry.spiritDefinition.spiritId as typeof STARTER_SPIRIT_IDS[number])) {
+    return 'visible-progress';
   }
 
   if (entry.shardCount > 0) {
