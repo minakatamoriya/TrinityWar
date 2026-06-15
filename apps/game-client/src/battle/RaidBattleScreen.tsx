@@ -127,11 +127,12 @@ function BattleUnitPanel(props: {
 }): JSX.Element {
   const { fallbackText, hp, position, unit } = props;
   const traitText = buildTraitText(unit, fallbackText);
+  const displayName = unit.displayName || unit.spiritName;
 
   return (
     <section className={`battle-unit-panel ${position}`}>
       <div className="battle-unit-line">
-        <strong>{position === 'top' ? '敌方' : '我方'} · {unit.spiritName}</strong>
+        <strong>{position === 'top' ? '敌方' : '我方'} · {displayName}</strong>
         <span>Lv.{unit.level} · {unit.element ? elementLabels[unit.element] : '无'} · {unit.rarity ?? '-'}</span>
       </div>
       <div className="battle-unit-line compact">

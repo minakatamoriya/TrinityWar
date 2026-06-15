@@ -1,7 +1,7 @@
 ﻿import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { PlayerSpiritStatus, Prisma, PrismaClient, SpiritElement, SpiritRarity, SpiritRole } from '@prisma/client';
-import { APP_NAME, getBasicSpiritTraitRollGoldCost, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientRecoverSpiritRequest, type ClientResolveSpiritTraitRollRequest, type ClientRollSpiritTraitsRequest, type ClientRollSpiritTraitsResponse, type ClientSetMainSpiritRequest, type ClientSpiritActiveRollMode, type ClientSpiritCodexEntry, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritStatus, type ClientSpiritSlot, type ClientSpiritDefinition, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientSpiritTraitRollMaterial, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
+import { APP_NAME, getBasicSpiritTraitRollGoldCost, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientCodexState, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientRecoverSpiritRequest, type ClientResolveSpiritTraitRollRequest, type ClientRollSpiritTraitsRequest, type ClientRollSpiritTraitsResponse, type ClientSceneVisibility, type ClientSetMainSpiritRequest, type ClientSpiritActiveRollMode, type ClientSpiritCodexEntry, type ClientSpiritDefinition, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritSlot, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritStatus, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientSpiritTraitRollMaterial, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
 import { AuditService } from '../audit/audit.service.js';
 import { DailyTaskLifecycleService } from '../client-read/daily-task-lifecycle.service.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
@@ -1972,15 +1972,21 @@ function buildSpiritState(
   });
   const mappedCodex: ClientSpiritCodexEntry[] = codexEntries
     .sort((left, right) => left.spiritDefinition.sortOrder - right.spiritDefinition.sortOrder)
-    .map((entry) => ({
-      spiritId: entry.spiritDefinition.spiritId,
-      hasSeen: entry.hasSeen,
-      shardCount: entry.shardCount,
-      readyToCompose: entry.readyToCompose,
-      ownedCurrent: entry.ownedCurrent,
-      ownedEver: entry.ownedEver,
-      definition: toClientDefinition(entry.spiritDefinition),
-    }));
+    .map((entry) => {
+      const codexState = resolveSpiritCodexState(entry);
+      return {
+        spiritId: entry.spiritDefinition.spiritId,
+        hasSeen: entry.hasSeen,
+        shardCount: entry.shardCount,
+        readyToCompose: entry.readyToCompose,
+        ownedCurrent: entry.ownedCurrent,
+        ownedEver: entry.ownedEver,
+        codexState,
+        sceneVisibility: resolveSpiritSceneVisibility(codexState),
+        displayName: resolveSpiritDisplayName(codexState, entry.spiritDefinition.label),
+        definition: toClientDefinition(entry.spiritDefinition),
+      };
+    });
 
   const mainSlot = mappedSlots.find((slot) => slot.isMain && slot.spiritId !== null) ?? null;
 
@@ -2043,6 +2049,31 @@ function toClientDefinition(definition: {
     growthHp: definition.growthHp,
     lore: definition.lore,
   };
+}
+
+function resolveSpiritCodexState(entry: {
+  shardCount: number;
+  readyToCompose: boolean;
+  ownedCurrent: boolean;
+  ownedEver: boolean;
+}): ClientCodexState {
+  if (entry.ownedCurrent || entry.ownedEver || entry.readyToCompose) {
+    return 'unlocked';
+  }
+
+  if (entry.shardCount > 0) {
+    return 'visible-progress';
+  }
+
+  return 'hidden';
+}
+
+function resolveSpiritSceneVisibility(codexState: ClientCodexState): ClientSceneVisibility {
+  return codexState === 'hidden' ? 'masked' : 'named';
+}
+
+function resolveSpiritDisplayName(codexState: ClientCodexState, label: string): string {
+  return codexState === 'hidden' ? '未知灵宠' : label;
 }
 
 function buildBreakthroughRequirement(

@@ -1,9 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   APP_NAME,
+  type ClientCodexState,
   type ClientRaidBattleEvent,
-  type ClientRaidBattleFloatingTone,
-  type ClientRaidBattleReplay,
   type ClientRaidBattleReplayResponse,
   type ClientRaidRewardItem,
   type ClientRaidActionResponse,
@@ -12,7 +11,7 @@ import {
   type ClientRaidOrderMessageResponse,
   type ClientRaidSpiritPreview,
   type ClientRaidTargetDetailResponse,
-  type ClientSpiritElement,
+  type ClientSceneVisibility,
 } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
@@ -20,7 +19,7 @@ import { getLocalDateKey } from '../lib/date-key.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RaidSettlementQueueService } from './raid-settlement-queue.service.js';
 import { RaidSettlementService } from './raid-settlement.service.js';
-import { parseRaidBattleReplay } from './raid-battle-replay.js';
+import { buildRaidBattleReplay, parseRaidBattleReplay } from './raid-battle-replay.js';
 import { RaidRepository } from './raid.repository.js';
 
 const RAID_INTEL_FREE_LIMIT = 3;
@@ -47,7 +46,13 @@ export class RaidTargetService {
       this.getIntelQuota(playerId),
       this.prisma.db.playerSpiritCodex.findMany({
         where: { playerId },
-        select: { spiritDefinition: { select: { spiritId: true } }, hasSeen: true },
+        select: {
+          spiritDefinition: { select: { spiritId: true } },
+          shardCount: true,
+          readyToCompose: true,
+          ownedCurrent: true,
+          ownedEver: true,
+        },
       }),
     ]);
 
@@ -61,14 +66,14 @@ export class RaidTargetService {
 
     // 取主宠 spiritId
     const mainSlot = target?.targetPlayer.spiritSlots[0] ?? null;
-    let hasSeen = false;
+    let sceneVisibility: ClientSceneVisibility = 'masked';
     const spiritId = mainSlot?.spiritDefinition?.spiritId;
     if (spiritId) {
       const entry = codex.find(e => e.spiritDefinition?.spiritId === spiritId);
-      hasSeen = !!entry?.hasSeen;
+      sceneVisibility = resolveSpiritSceneVisibility(entry);
     }
 
-    return buildRaidTargetDetailResponse(target, targetId, intelQuota, hasSeen);
+    return buildRaidTargetDetailResponse(target, targetId, intelQuota, sceneVisibility);
   }
 
   async getRaidTargetDeepIntel(playerId: string, targetId: string): Promise<ClientRaidDeepIntelResponse> {
@@ -89,7 +94,13 @@ export class RaidTargetService {
         }),
         client.playerSpiritCodex.findMany({
           where: { playerId },
-          select: { spiritDefinition: { select: { spiritId: true } }, hasSeen: true },
+          select: {
+            spiritDefinition: { select: { spiritId: true } },
+            shardCount: true,
+            readyToCompose: true,
+            ownedCurrent: true,
+            ownedEver: true,
+          },
         }),
       ]);
 
@@ -150,27 +161,18 @@ export class RaidTargetService {
         },
       });
 
-      // 确保窥探后 hasSeen=true
       const mainSlot = target?.targetPlayer.spiritSlots[0] ?? null;
+      let sceneVisibility: ClientSceneVisibility = 'masked';
       const spiritId = mainSlot?.spiritDefinition?.spiritId;
       if (spiritId) {
         const entry = codex.find(e => e.spiritDefinition?.spiritId === spiritId);
-        if (entry && !entry.hasSeen) {
-          await client.playerSpiritCodex.updateMany({
-            where: {
-              playerId,
-              spiritDefinition: { spiritId },
-            },
-            data: { hasSeen: true, firstSeenAt: new Date() },
-          });
-        }
+        sceneVisibility = resolveSpiritSceneVisibility(entry);
       }
 
-      // deepIntel 一定返回真名
       return buildRaidDeepIntelResponse(target, targetId, {
         remainingFreeIntel: Math.max(RAID_INTEL_FREE_LIMIT - nextFreeUsed, 0),
         remainingTalismanIntel: Math.max(RAID_INTEL_TALISMAN_LIMIT - nextTalismanUsed, 0),
-      }, true);
+      }, sceneVisibility);
     });
   }
 
@@ -363,6 +365,42 @@ export class RaidTargetService {
         });
       }
 
+      const defenderMainSpirit = target.targetPlayer.spiritSlots[0] ?? null;
+      const [attackerVisibilityForDefender, defenderVisibilityForAttacker] = await Promise.all([
+        attackerMainSpirit.spiritDefinition.spiritId
+          ? client.playerSpiritCodex.findFirst({
+            where: {
+              playerId: target.targetPlayerId,
+              spiritDefinition: {
+                spiritId: attackerMainSpirit.spiritDefinition.spiritId,
+              },
+            },
+            select: {
+              shardCount: true,
+              readyToCompose: true,
+              ownedCurrent: true,
+              ownedEver: true,
+            },
+          })
+          : null,
+        defenderMainSpirit?.spiritDefinition?.spiritId
+          ? client.playerSpiritCodex.findFirst({
+            where: {
+              playerId: input.playerId,
+              spiritDefinition: {
+                spiritId: defenderMainSpirit.spiritDefinition.spiritId,
+              },
+            },
+            select: {
+              shardCount: true,
+              readyToCompose: true,
+              ownedCurrent: true,
+              ownedEver: true,
+            },
+          })
+          : null,
+      ]);
+
       const nextDispatchedCount = 1;
       const settleAt = now;
       const frozenUnitSnapshot = { dispatchedCount: nextDispatchedCount };
@@ -383,6 +421,7 @@ export class RaidTargetService {
           availableCount: currentArmy?.availableCount ?? 0,
           frozenCount: currentArmy?.frozenCount ?? 0,
           mainSpirit: buildSpiritBattleSnapshot(attackerMainSpirit),
+          mainSpiritSceneVisibilityForDefender: resolveSpiritSceneVisibility(attackerVisibilityForDefender),
         },
         defenderSnapshotJson: {
           targetId: target.id,
@@ -390,7 +429,8 @@ export class RaidTargetService {
           targetSnapshotJson: target.targetSnapshotJson,
           fieldSnapshotJson: target.fieldSnapshotJson,
           riskSnapshotJson: target.riskSnapshotJson,
-          mainSpirit: buildSpiritBattleSnapshot(target.targetPlayer.spiritSlots[0] ?? null),
+          mainSpirit: buildSpiritBattleSnapshot(defenderMainSpirit),
+          mainSpiritSceneVisibilityForAttacker: resolveSpiritSceneVisibility(defenderVisibilityForAttacker),
         },
         dispatchedAt: now,
         settleAt,
@@ -635,15 +675,54 @@ export class RaidTargetService {
         ],
       },
       select: {
+        attackerPlayerId: true,
+        defenderPlayerId: true,
+        attackerSnapshotJson: true,
+        defenderSnapshotJson: true,
+        attacker: {
+          select: {
+            nickname: true,
+          },
+        },
+        defender: {
+          select: {
+            nickname: true,
+          },
+        },
         settlement: {
           select: {
             battleReplayJson: true,
+            result: true,
+            lootGold: true,
+            attackerLoss: true,
+            defenderLoss: true,
+            reportSummary: true,
+            rewardItemsJson: true,
           },
         },
       },
     });
 
-    const replay = parseRaidBattleReplay(order?.settlement?.battleReplayJson);
+    const replay = order?.settlement
+      ? buildRaidBattleReplay(
+        raidOrderId,
+        {
+          result: order.settlement.result,
+          lootGold: order.settlement.lootGold,
+          attackerLoss: order.settlement.attackerLoss,
+          defenderLoss: order.settlement.defenderLoss,
+          reportSummary: order.settlement.reportSummary,
+          rewardItemsJson: order.settlement.rewardItemsJson,
+        },
+        {
+          attackerSnapshotJson: order.attackerSnapshotJson,
+          defenderSnapshotJson: order.defenderSnapshotJson,
+          attacker: { nickname: order.attacker.nickname },
+          defender: { nickname: order.defender.nickname },
+        },
+        order.attackerPlayerId === input.playerId ? 'attacker' : 'defender',
+      )
+      : parseRaidBattleReplay(order?.settlement?.battleReplayJson);
     if (!order || !replay) {
       throw new BusinessError({
         code: ErrorCode.NotFound,
@@ -666,7 +745,7 @@ function buildRaidTargetDetailResponse(
     remainingFreeIntel: number;
     remainingTalismanIntel: number;
   },
-  hasSeen: boolean = false,
+  sceneVisibility: ClientSceneVisibility = 'masked',
 ): ClientRaidTargetDetailResponse {
   const targetSnapshot = target?.targetSnapshotJson as {
     name?: string;
@@ -681,7 +760,7 @@ function buildRaidTargetDetailResponse(
     detail?: string;
     tutorialTarget?: boolean;
   } | null;
-  const mainPetPreview = buildRaidSpiritPreview(target?.targetPlayer.spiritSlots[0] ?? null, hasSeen);
+  const mainPetPreview = buildRaidSpiritPreview(target?.targetPlayer.spiritSlots[0] ?? null, sceneVisibility);
   const fields = target?.targetPlayer.fieldSlots.map((field) => ({
     id: field.id,
     fieldVersion: undefined,
@@ -729,14 +808,14 @@ function buildRaidDeepIntelResponse(
     remainingFreeIntel: number;
     remainingTalismanIntel: number;
   },
-  hasSeen: boolean = true,
+  sceneVisibility: ClientSceneVisibility = 'masked',
 ): ClientRaidDeepIntelResponse {
   const mainSlot = target?.targetPlayer.spiritSlots[0] ?? null;
 
   return {
     app: APP_NAME,
     targetId,
-    mainPetPreview: buildRaidSpiritPreview(mainSlot, hasSeen),
+    mainPetPreview: buildRaidSpiritPreview(mainSlot, sceneVisibility),
     intel: {
       element: mapSpiritElement(mainSlot?.element ?? null),
       attackRating: buildAttackRating(mainSlot),
@@ -807,8 +886,21 @@ function buildSettledRaidActionResponse(
 ): ClientRaidActionResponse {
   const rewards = normalizeRaidRewards(settlement.rewardItemsJson);
   const battleEvents = normalizeRaidBattleEvents(settlement.rewardItemsJson);
-  const battleReplay = parseRaidBattleReplay(settlement.battleReplayJson)
-    ?? (order ? buildRaidBattleReplay(orderId, settlement, order, rewards, battleEvents) : undefined);
+  const battleReplay = order
+    ? buildRaidBattleReplay(orderId, {
+      result: settlement.result,
+      lootGold: settlement.lootGold,
+      attackerLoss: settlement.attackerLoss,
+      defenderLoss: settlement.defenderLoss,
+      reportSummary: settlement.reportSummary,
+      rewardItemsJson: settlement.rewardItemsJson,
+    }, {
+      attackerSnapshotJson: order.attackerSnapshotJson,
+      defenderSnapshotJson: order.defenderSnapshotJson,
+      attacker: { nickname: order.attacker.nickname },
+      defender: { nickname: order.defender.nickname },
+    }, 'attacker')
+    : parseRaidBattleReplay(settlement.battleReplayJson);
 
   return {
     app: APP_NAME,
@@ -866,167 +958,6 @@ function normalizeRaidBattleEvents(value: unknown): NonNullable<ClientRaidAction
       label: item.label ?? '',
       description: item.description ?? '',
     }));
-}
-
-function buildRaidBattleReplay(
-  orderId: string,
-  settlement: {
-    result: string;
-    lootGold: number;
-    attackerLoss: number;
-    defenderLoss: number;
-    reportSummary: string;
-  },
-  order: {
-    attackerSnapshotJson: unknown;
-    defenderSnapshotJson: unknown;
-    attacker: { nickname: string };
-    defender: { nickname: string };
-  },
-  rewards: ClientRaidRewardItem[],
-  battleEvents: ClientRaidBattleEvent[],
-): ClientRaidBattleReplay {
-  const attackerSpirit = readSpiritSnapshot(order.attackerSnapshotJson);
-  const defenderSpirit = readSpiritSnapshot(order.defenderSnapshotJson);
-  const attacker = buildBattleUnit('attacker', order.attacker.nickname, attackerSpirit, settlement.attackerLoss);
-  const defender = buildBattleUnit('defender', order.defender.nickname, defenderSpirit, settlement.defenderLoss);
-  const floatingSteps = battleEvents.slice(0, 4).map((event, index) => ({
-    type: 'floatingText' as const,
-    side: resolveBattleEventSide(event, index),
-    text: event.label,
-    tone: resolveBattleEventTone(event),
-    durationMs: 520,
-  }));
-
-  return {
-    orderId,
-    result: normalizeBattleResult(settlement.result),
-    title: settlement.result === 'WIN' ? '掠夺成功' : settlement.result === 'LOSS' ? '掠夺失利' : '双方相持',
-    summary: settlement.reportSummary,
-    attacker,
-    defender,
-    events: battleEvents,
-    steps: [
-      { type: 'enter', durationMs: 520 },
-      { type: 'clash', durationMs: 360 },
-      ...floatingSteps,
-      { type: 'hpChange', side: 'attacker', from: attacker.hpBefore, to: attacker.hpAfter, max: attacker.maxHp, durationMs: 520 },
-      { type: 'hpChange', side: 'defender', from: defender.hpBefore, to: defender.hpAfter, max: defender.maxHp, durationMs: 520 },
-      { type: 'return', durationMs: 480 },
-      { type: 'result', title: settlement.result === 'WIN' ? '胜利' : settlement.result === 'LOSS' ? '失败' : '平局', summary: settlement.reportSummary, durationMs: 1 },
-    ],
-    rewardsPreview: {
-      goldLoot: settlement.lootGold,
-      items: rewards,
-    },
-  };
-}
-
-function readSpiritSnapshot(value: unknown): ReturnType<typeof buildSpiritBattleSnapshot> {
-  const snapshot = value as { mainSpirit?: unknown } | null;
-  const mainSpirit = snapshot?.mainSpirit as ReturnType<typeof buildSpiritBattleSnapshot>;
-  return mainSpirit && typeof mainSpirit === 'object' ? mainSpirit : null;
-}
-
-function buildBattleUnit(
-  side: 'attacker' | 'defender',
-  playerName: string,
-  spirit: ReturnType<typeof buildSpiritBattleSnapshot>,
-  lossPercent: number,
-): ClientRaidBattleReplay['attacker'] {
-  const maxHp = Math.max(Math.floor(spirit?.maxHp ?? 120), 1);
-  const hpBefore = Math.min(Math.max(Math.floor(spirit?.currentHp ?? maxHp), 0), maxHp);
-  const hpAfter = Math.min(Math.max(Math.round(maxHp * (1 - Math.max(lossPercent, 0) / 100)), 0), maxHp);
-  const stats = buildBattleStats(spirit);
-  const healthStatus = resolveBattleHealthStatus(hpBefore, maxHp);
-
-  return {
-    side,
-    playerName,
-    spiritId: spirit?.spiritDefinition.spiritId ?? null,
-    spiritName: spirit?.spiritDefinition.label ?? '守备灵宠',
-    rarity: spirit?.spiritDefinition.rarity ?? null,
-    element: mapBattleElement(spirit?.element ?? null),
-    level: Math.max(Math.floor(spirit?.level ?? 1), 1),
-    hpBefore,
-    hpAfter,
-    maxHp,
-    attack: stats.attack,
-    healthStatus: healthStatus.code,
-    healthStatusLabel: healthStatus.label,
-    attackCoefficient: healthStatus.attackCoefficient,
-  };
-}
-
-function buildBattleStats(spirit: ReturnType<typeof buildSpiritBattleSnapshot>): { attack: number } {
-  if (!spirit?.spiritDefinition) {
-    return { attack: 50 };
-  }
-
-  const levelDelta = Math.max(spirit.level - 1, 0);
-  const rarityMultiplier = getRarityGrowthMultiplier(spirit.spiritDefinition.rarity, spirit.level);
-  const healthStatus = resolveBattleHealthStatus(spirit.currentHp, spirit.maxHp);
-  return {
-    attack: Math.round((spirit.spiritDefinition.baseAttack + levelDelta * spirit.spiritDefinition.growthAttack * rarityMultiplier) * healthStatus.attackCoefficient),
-  };
-}
-
-function resolveBattleHealthStatus(currentHp: number, maxHp: number): {
-  code: NonNullable<ClientRaidBattleReplay['attacker']['healthStatus']>;
-  label: string;
-  attackCoefficient: number;
-} {
-  const ratio = maxHp > 0 ? currentHp / maxHp : 0;
-  if (currentHp <= 0 || ratio <= 0) {
-    return { code: 'down', label: '不可出战', attackCoefficient: 0 };
-  }
-  if (ratio < 0.3) {
-    return { code: 'injured', label: '重伤：攻击 30%', attackCoefficient: 0.3 };
-  }
-  if (ratio < 0.7) {
-    return { code: 'low', label: '低迷：攻击 70%', attackCoefficient: 0.7 };
-  }
-  return { code: 'normal', label: '正常：攻击 100%', attackCoefficient: 1 };
-}
-
-function getRarityGrowthMultiplier(rarity: string, level: number): number {
-  if (rarity === 'LEGENDARY') return level <= 10 ? 0.9 : level <= 30 ? 1.02 : 1.18;
-  if (rarity === 'RARE') return level <= 10 ? 0.96 : level <= 30 ? 1.06 : 1.08;
-  return level <= 30 ? 1 : 0.92;
-}
-
-function mapBattleElement(element: string | null): ClientSpiritElement | null {
-  if (element === 'METAL') return 'metal';
-  if (element === 'WOOD') return 'wood';
-  if (element === 'WATER') return 'water';
-  if (element === 'FIRE') return 'fire';
-  if (element === 'EARTH') return 'earth';
-  return null;
-}
-
-function normalizeBattleResult(result: string): ClientRaidBattleReplay['result'] {
-  if (result === 'WIN' || result === 'LOSS' || result === 'DRAW') {
-    return result;
-  }
-
-  return 'DRAW';
-}
-
-function resolveBattleEventTone(event: ClientRaidBattleEvent): ClientRaidBattleFloatingTone {
-  if (event.type === 'dodge') return 'miss';
-  if (event.type === 'critical') return 'crit';
-  if (event.type === 'element' || event.type === 'lifesteal' || event.type === 'counter' || event.type === 'status') return 'buff';
-  return 'damage';
-}
-
-function resolveBattleEventSide(event: ClientRaidBattleEvent, index: number): 'attacker' | 'defender' {
-  if (event.description.includes('防守方') || event.label.includes('防守')) {
-    return 'defender';
-  }
-  if (event.description.includes('进攻方') || event.label.includes('进攻')) {
-    return 'attacker';
-  }
-  return index % 2 === 0 ? 'defender' : 'attacker';
 }
 
 function mapFieldStatusBadge(status: string): string {
@@ -1094,14 +1025,16 @@ function buildRaidSpiritPreview(
       rarity: string;
     } | null;
   } | null,
-  hasSeen: boolean = false,
+  sceneVisibility: ClientSceneVisibility = 'masked',
 ): ClientRaidSpiritPreview | null {
   if (!slot?.spiritDefinition) {
     return null;
   }
-  if (!hasSeen) {
+  if (sceneVisibility === 'masked') {
     return {
       spiritId: null,
+      sceneVisibility,
+      displayName: '？？',
       label: '？？',
       level: Math.max(slot.level, 1),
       rarity: null,
@@ -1110,6 +1043,8 @@ function buildRaidSpiritPreview(
   }
   return {
     spiritId: slot.spiritDefinition.spiritId,
+    sceneVisibility,
+    displayName: slot.spiritDefinition.label,
     label: slot.spiritDefinition.label,
     level: Math.max(slot.level, 1),
     rarity: mapSpiritRarity(slot.spiritDefinition.rarity),
@@ -1159,6 +1094,36 @@ function buildSpiritBattleSnapshot(
     spiritDefinition: slot.spiritDefinition,
     traits: slot.traits ?? [],
   };
+}
+
+function resolveSpiritSceneVisibility(entry: {
+  shardCount: number;
+  readyToCompose: boolean;
+  ownedCurrent: boolean;
+  ownedEver: boolean;
+} | null | undefined): ClientSceneVisibility {
+  return resolveSpiritCodexState(entry) === 'hidden' ? 'masked' : 'named';
+}
+
+function resolveSpiritCodexState(entry: {
+  shardCount: number;
+  readyToCompose: boolean;
+  ownedCurrent: boolean;
+  ownedEver: boolean;
+} | null | undefined): ClientCodexState {
+  if (!entry) {
+    return 'hidden';
+  }
+
+  if (entry.ownedCurrent || entry.ownedEver || entry.readyToCompose) {
+    return 'unlocked';
+  }
+
+  if (entry.shardCount > 0) {
+    return 'visible-progress';
+  }
+
+  return 'hidden';
 }
 
 function mapSpiritRarity(rarity: string): ClientRaidSpiritPreview['rarity'] {

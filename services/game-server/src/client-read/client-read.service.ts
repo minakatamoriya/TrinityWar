@@ -242,7 +242,13 @@ export class ClientReadService {
       this.clientReadRepository.findSceneContent(playerId, client, now),
       client.playerSpiritCodex.findMany({
         where: { playerId },
-        select: { spiritDefinition: { select: { spiritId: true } }, hasSeen: true },
+        select: {
+          spiritDefinition: { select: { spiritId: true } },
+          shardCount: true,
+          readyToCompose: true,
+          ownedCurrent: true,
+          ownedEver: true,
+        },
       }),
     ]);
 

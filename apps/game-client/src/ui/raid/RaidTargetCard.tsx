@@ -10,6 +10,7 @@ interface RaidTargetCardProps {
 export function RaidTargetCard(props: RaidTargetCardProps): JSX.Element {
   const { target, onSelect, followed = false, onToggleFollow } = props;
   const mainPet = target.mainPetPreview;
+  const mainPetName = mainPet?.displayName ?? mainPet?.label ?? '未发现主宠';
 
   return (
     <article className="target-card target-card-shell">
@@ -26,7 +27,7 @@ export function RaidTargetCard(props: RaidTargetCardProps): JSX.Element {
           <strong>{mainPet ? `主宠 Lv.${mainPet.level}` : `领地 Lv.${target.level}`}</strong>
         </div>
         <div className="target-card-subline">
-          <span>{mainPet ? `默认情报：${mainPet.label}` : '默认情报：未发现主宠'}</span>
+          <span>{`默认情报：${mainPetName}`}</span>
           <em>{target.loot}</em>
         </div>
       </button>

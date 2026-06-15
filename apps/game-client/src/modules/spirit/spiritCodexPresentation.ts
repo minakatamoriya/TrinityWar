@@ -37,7 +37,7 @@ export function getSpiritRoleLabel(role: ClientSpiritRole): string {
 }
 
 export function isSpiritCodexVisible(entry: ClientSpiritCodexEntry): boolean {
-  return entry.ownedCurrent || entry.ownedEver || entry.readyToCompose || entry.shardCount > 0;
+  return entry.sceneVisibility === 'named';
 }
 
 export function getFirstVisibleSpiritCodexId(entries: ClientSpiritCodexEntry[]): string | null {
@@ -45,7 +45,7 @@ export function getFirstVisibleSpiritCodexId(entries: ClientSpiritCodexEntry[]):
 }
 
 export function getSpiritCodexName(entry: ClientSpiritCodexEntry): string {
-  return isSpiritCodexVisible(entry) ? entry.definition.label : '未知灵宠';
+  return entry.displayName;
 }
 
 export function getSpiritCodexStatusLabel(entry: ClientSpiritCodexEntry): string {
@@ -55,17 +55,23 @@ export function getSpiritCodexStatusLabel(entry: ClientSpiritCodexEntry): string
   if (entry.readyToCompose) {
     return '待合成';
   }
-  if (entry.shardCount > 0) {
-    return '收集中';
-  }
   if (entry.ownedEver) {
     return '已收录';
+  }
+  if (entry.shardCount > 0 || entry.codexState === 'visible-progress') {
+    return '收集中';
   }
   return '未可见';
 }
 
 export function getSpiritCodexVisibilityLabel(entry: ClientSpiritCodexEntry): string {
-  return isSpiritCodexVisible(entry) ? '已可见' : '未可见';
+  if (entry.codexState === 'unlocked') {
+    return '已解锁';
+  }
+  if (entry.codexState === 'visible-progress') {
+    return '已可见';
+  }
+  return '未可见';
 }
 
 export function getSpiritCodexShardProgress(entry: ClientSpiritCodexEntry): string {
@@ -78,7 +84,7 @@ export function formatSpiritUnlockRequirement(entry: ClientSpiritCodexEntry): st
   const required = Math.max(entry.definition.shardUnlockRequired, 0);
   const progress = getSpiritCodexShardProgress(entry);
 
-  if (isSpiritCodexVisible(entry)) {
+  if (entry.codexState !== 'hidden') {
     return `已收集 ${entry.definition.shardName} ${progress}，满 ${required} 后可解锁合成资格。`;
   }
 

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { APP_NAME, type ClientFactionStipendReward, type ClientFarmField, type ClientPlantInventoryItem, type ClientRaidRewardItem, type ClientRaidSpiritPreview, type ClientSceneAction, type ClientSceneContentResponse } from '@trinitywar/shared';
+import { APP_NAME, type ClientCodexState, type ClientFactionStipendReward, type ClientFarmField, type ClientPlantInventoryItem, type ClientRaidRewardItem, type ClientRaidSpiritPreview, type ClientSceneAction, type ClientSceneContentResponse, type ClientSceneVisibility } from '@trinitywar/shared';
 import type { FieldStatus } from '@prisma/client';
 import {
   GAME_BALANCE,
@@ -29,7 +29,13 @@ const FIELD_STATUS_COPY: Record<FieldStatus, { title: string; badge: string; ton
 
 @Injectable()
 export class SceneContentAssembler {
-  assemble(readModel: SceneContentReadModel, codex: Array<{ spiritDefinition: { spiritId: string }, hasSeen: boolean }> = [], now: Date = new Date()): ClientSceneContentResponse {
+  assemble(readModel: SceneContentReadModel, codex: Array<{
+    spiritDefinition: { spiritId: string };
+    shardCount: number;
+    readyToCompose: boolean;
+    ownedCurrent: boolean;
+    ownedEver: boolean;
+  }> = [], now: Date = new Date()): ClientSceneContentResponse {
     const visibleRaidTargets = this.buildRaidTargets(readModel, codex, now);
 
     return {
@@ -91,7 +97,13 @@ export class SceneContentAssembler {
 
   private buildRaidTargets(
     readModel: SceneContentReadModel,
-    codex: Array<{ spiritDefinition: { spiritId: string }, hasSeen: boolean }> = [],
+    codex: Array<{
+      spiritDefinition: { spiritId: string };
+      shardCount: number;
+      readyToCompose: boolean;
+      ownedCurrent: boolean;
+      ownedEver: boolean;
+    }> = [],
     now: Date = new Date(),
   ): ClientSceneContentResponse['raid']['targets'] {
     return readModel.raidTargetPools.filter((targetPool) => !targetPool.targetPlayer.protectedUntil || targetPool.targetPlayer.protectedUntil <= now).map((targetPool) => {
@@ -111,13 +123,13 @@ export class SceneContentAssembler {
       const combatPower = snapshot.combatPower ?? targetPool.targetPlayer.army?.totalCount ?? 0;
       const raidableGold = snapshot.raidableGold ?? 0;
       const mainSlot = targetPool.targetPlayer.spiritSlots[0] ?? null;
-      let hasSeen = false;
+      let sceneVisibility: ClientSceneVisibility = 'masked';
       const spiritId = mainSlot?.spiritDefinition?.spiritId;
       if (spiritId) {
         const entry = codex.find(e => e.spiritDefinition?.spiritId === spiritId);
-        hasSeen = !!entry?.hasSeen;
+        sceneVisibility = resolveSpiritSceneVisibility(entry);
       }
-      const mainPetPreview = buildRaidSpiritPreview(mainSlot, hasSeen);
+      const mainPetPreview = buildRaidSpiritPreview(mainSlot, sceneVisibility);
 
       return {
         id: targetPool.id,
@@ -804,15 +816,17 @@ function formatDateTime(value: Date): string {
 
 function buildRaidSpiritPreview(
   slot: { level: number; spiritDefinition: { spiritId: string; label: string; rarity: string } | null } | null,
-  hasSeen: boolean = false,
+  sceneVisibility: ClientSceneVisibility = 'masked',
 ): ClientRaidSpiritPreview | null {
   if (!slot?.spiritDefinition) {
     return null;
   }
-  if (!hasSeen) {
+  if (sceneVisibility === 'masked') {
     return {
       spiritId: null,
-      label: '\u672a\u77e5',
+      sceneVisibility,
+      displayName: '？？',
+      label: '？？',
       level: Math.max(slot.level, 1),
       rarity: null,
       avatarGlyph: 'unknown',
@@ -820,11 +834,43 @@ function buildRaidSpiritPreview(
   }
   return {
     spiritId: slot.spiritDefinition.spiritId,
+    sceneVisibility,
+    displayName: slot.spiritDefinition.label,
     label: slot.spiritDefinition.label,
     level: Math.max(slot.level, 1),
     rarity: mapSpiritRarity(slot.spiritDefinition.rarity),
     avatarGlyph: getSpiritGlyph(slot.spiritDefinition.label),
   };
+}
+
+function resolveSpiritSceneVisibility(entry: {
+  shardCount: number;
+  readyToCompose: boolean;
+  ownedCurrent: boolean;
+  ownedEver: boolean;
+} | undefined): ClientSceneVisibility {
+  return resolveSpiritCodexState(entry) === 'hidden' ? 'masked' : 'named';
+}
+
+function resolveSpiritCodexState(entry: {
+  shardCount: number;
+  readyToCompose: boolean;
+  ownedCurrent: boolean;
+  ownedEver: boolean;
+} | undefined): ClientCodexState {
+  if (!entry) {
+    return 'hidden';
+  }
+
+  if (entry.ownedCurrent || entry.ownedEver || entry.readyToCompose) {
+    return 'unlocked';
+  }
+
+  if (entry.shardCount > 0) {
+    return 'visible-progress';
+  }
+
+  return 'hidden';
 }
 
 function mapSpiritRarity(rarity: string): ClientRaidSpiritPreview['rarity'] {

@@ -15,6 +15,8 @@ export type ClientSpiritRarity = 'common' | 'rare' | 'legendary';
 export type ClientSpiritRole = 'attack' | 'balanced' | 'health';
 export type ClientSpiritElement = 'metal' | 'wood' | 'water' | 'fire' | 'earth';
 export type ClientSpiritStatus = 'active' | 'wounded' | 'resting' | 'dissolved';
+export type ClientCodexState = 'hidden' | 'visible-progress' | 'unlocked';
+export type ClientSceneVisibility = 'masked' | 'named';
 export type ClientSpiritTraitCode =
   | 'claw'
   | 'thick_skin'
@@ -228,6 +230,9 @@ export interface ClientSpiritCodexEntry {
   readyToCompose: boolean;
   ownedCurrent: boolean;
   ownedEver: boolean;
+  codexState: ClientCodexState;
+  sceneVisibility: ClientSceneVisibility;
+  displayName: string;
   definition: ClientSpiritDefinition;
 }
 
@@ -368,6 +373,8 @@ export interface ClientRaidMessageSnapshot {
 
 export interface ClientRaidSpiritPreview {
   spiritId: string | null;
+  sceneVisibility: ClientSceneVisibility;
+  displayName: string;
   label: string;
   level: number;
   rarity: ClientSpiritRarity | null;
@@ -1293,6 +1300,8 @@ export interface ClientRaidBattleUnitSnapshot {
   side: ClientRaidBattleSide;
   playerName: string;
   spiritId: string | null;
+  sceneVisibility: ClientSceneVisibility;
+  displayName: string;
   spiritName: string;
   rarity: string | null;
   element: ClientSpiritElement | null;

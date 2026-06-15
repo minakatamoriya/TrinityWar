@@ -57,11 +57,11 @@ export const mockRaidMessageTemplates: ClientRaidMessageTemplate[] = [
 ];
 
 const mockRaidSpiritPreviews: Record<string, ClientRaidSpiritPreview> = {
-  'target-1': { spiritId: 'yingbao', label: '影豹', level: 9, rarity: 'common', avatarGlyph: '影' },
-  'target-2': { spiritId: 'linglu', label: '灵鹿', level: 8, rarity: 'common', avatarGlyph: '鹿' },
-  'target-3': { spiritId: 'qingyuan', label: '青猿', level: 6, rarity: 'common', avatarGlyph: '猿' },
-  'target-4': { spiritId: 'xuanhu', label: '玄虎', level: 11, rarity: 'common', avatarGlyph: '虎' },
-  'target-5': { spiritId: 'shuanghu', label: '霜狐', level: 5, rarity: 'common', avatarGlyph: '狐' },
+  'target-1': { spiritId: 'yingbao', sceneVisibility: 'named', displayName: '影豹', label: '影豹', level: 9, rarity: 'common', avatarGlyph: '影' },
+  'target-2': { spiritId: 'linglu', sceneVisibility: 'named', displayName: '灵鹿', label: '灵鹿', level: 8, rarity: 'common', avatarGlyph: '鹿' },
+  'target-3': { spiritId: 'qingyuan', sceneVisibility: 'named', displayName: '青猿', label: '青猿', level: 6, rarity: 'common', avatarGlyph: '猿' },
+  'target-4': { spiritId: 'xuanhu', sceneVisibility: 'named', displayName: '玄虎', label: '玄虎', level: 11, rarity: 'common', avatarGlyph: '虎' },
+  'target-5': { spiritId: 'shuanghu', sceneVisibility: 'named', displayName: '霜狐', label: '霜狐', level: 5, rarity: 'common', avatarGlyph: '狐' },
 };
 
 export const mockBootstrap: ClientBootstrapResponse = {

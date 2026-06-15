@@ -182,6 +182,8 @@ function prepareUnit(input: SpiritCollisionUnitInput): PreparedUnit {
       side: input.side,
       playerName: input.playerName,
       spiritId: input.spiritId,
+      sceneVisibility: 'named',
+      displayName: input.spiritName,
       spiritName: input.spiritName,
       rarity: input.rarity,
       element: input.element,

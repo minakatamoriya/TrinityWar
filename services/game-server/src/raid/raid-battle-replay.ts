@@ -3,6 +3,7 @@ import type {
   ClientRaidBattleFloatingTone,
   ClientRaidBattleReplay,
   ClientRaidRewardItem,
+  ClientSceneVisibility,
   ClientSpiritElement,
 } from '@trinitywar/shared';
 import type { SpiritBattleSnapshot } from './raid-settlement-rule.service.js';
@@ -23,17 +24,42 @@ export interface RaidBattleReplayOrderInput {
   defender: { nickname: string };
 }
 
+export type RaidBattleReplayViewer = 'attacker' | 'defender';
+
+interface RaidOrderAttackerSnapshot {
+  mainSpirit?: SpiritBattleSnapshot | null;
+  mainSpiritSceneVisibilityForDefender?: ClientSceneVisibility;
+}
+
+interface RaidOrderDefenderSnapshot {
+  mainSpirit?: SpiritBattleSnapshot | null;
+  mainSpiritSceneVisibilityForAttacker?: ClientSceneVisibility;
+}
+
 export function buildRaidBattleReplay(
   orderId: string,
   settlement: RaidBattleReplaySettlementInput,
   order: RaidBattleReplayOrderInput,
+  viewer: RaidBattleReplayViewer = 'attacker',
 ): ClientRaidBattleReplay {
   const rewards = normalizeRaidRewards(settlement.rewardItemsJson);
   const battleEvents = normalizeRaidBattleEvents(settlement.rewardItemsJson);
   const attackerSpirit = readSpiritSnapshot(order.attackerSnapshotJson);
   const defenderSpirit = readSpiritSnapshot(order.defenderSnapshotJson);
-  const attacker = buildBattleUnit('attacker', order.attacker.nickname, attackerSpirit, settlement.attackerLoss);
-  const defender = buildBattleUnit('defender', order.defender.nickname, defenderSpirit, settlement.defenderLoss);
+  const attacker = buildBattleUnit(
+    'attacker',
+    order.attacker.nickname,
+    attackerSpirit,
+    settlement.attackerLoss,
+    resolveBattleUnitSceneVisibility(order, 'attacker', viewer),
+  );
+  const defender = buildBattleUnit(
+    'defender',
+    order.defender.nickname,
+    defenderSpirit,
+    settlement.defenderLoss,
+    resolveBattleUnitSceneVisibility(order, 'defender', viewer),
+  );
   const floatingSteps = battleEvents.slice(0, 4).map((event, index) => ({
     type: 'floatingText' as const,
     side: resolveBattleEventSide(event, index),
@@ -119,19 +145,23 @@ function buildBattleUnit(
   playerName: string,
   spirit: SpiritBattleSnapshot | null,
   lossPercent: number,
+  sceneVisibility: ClientSceneVisibility,
 ): ClientRaidBattleReplay['attacker'] {
   const maxHp = Math.max(Math.floor(spirit?.maxHp ?? 120), 1);
   const hpBefore = Math.min(Math.max(Math.floor(spirit?.currentHp ?? maxHp), 0), maxHp);
   const hpAfter = Math.min(Math.max(Math.round(maxHp * (1 - Math.max(lossPercent, 0) / 100)), 0), maxHp);
   const stats = buildBattleStats(spirit);
   const healthStatus = resolveBattleHealthStatus(hpBefore, maxHp);
+  const displayName = sceneVisibility === 'named' ? spirit?.spiritDefinition.label ?? '守备灵宠' : '未知';
 
   return {
     side,
     playerName,
-    spiritId: spirit?.spiritDefinition.spiritId ?? null,
-    spiritName: spirit?.spiritDefinition.label ?? '守备灵宠',
-    rarity: spirit?.spiritDefinition.rarity ?? null,
+    spiritId: sceneVisibility === 'named' ? spirit?.spiritDefinition.spiritId ?? null : null,
+    sceneVisibility,
+    displayName,
+    spiritName: displayName,
+    rarity: sceneVisibility === 'named' ? spirit?.spiritDefinition.rarity ?? null : null,
     element: mapBattleElement(spirit?.element ?? null),
     level: Math.max(Math.floor(spirit?.level ?? 1), 1),
     hpBefore,
@@ -242,4 +272,30 @@ function resolveBattleEventSide(event: ClientRaidBattleEvent, index: number): 'a
     return 'attacker';
   }
   return index % 2 === 0 ? 'defender' : 'attacker';
+}
+
+function resolveBattleUnitSceneVisibility(
+  order: RaidBattleReplayOrderInput,
+  side: 'attacker' | 'defender',
+  viewer: RaidBattleReplayViewer,
+): ClientSceneVisibility {
+  if (side === viewer) {
+    return 'named';
+  }
+
+  if (side === 'attacker') {
+    return readAttackerSnapshot(order.attackerSnapshotJson).mainSpiritSceneVisibilityForDefender ?? 'masked';
+  }
+
+  return readDefenderSnapshot(order.defenderSnapshotJson).mainSpiritSceneVisibilityForAttacker ?? 'masked';
+}
+
+function readAttackerSnapshot(value: unknown): RaidOrderAttackerSnapshot {
+  const snapshot = value as RaidOrderAttackerSnapshot | null;
+  return snapshot && typeof snapshot === 'object' ? snapshot : {};
+}
+
+function readDefenderSnapshot(value: unknown): RaidOrderDefenderSnapshot {
+  const snapshot = value as RaidOrderDefenderSnapshot | null;
+  return snapshot && typeof snapshot === 'object' ? snapshot : {};
 }

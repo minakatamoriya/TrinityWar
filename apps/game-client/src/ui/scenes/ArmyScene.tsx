@@ -1388,7 +1388,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                   ) : (
                     <div className="seed-codex-strategy">
                       <strong>暂无待合成灵宠</strong>
-                      <p>继续通过战斗和主城赠送收集精魄。精魄满 100 后会在这里出现可合成项。</p>
+                      <p>继续通过战斗和主城赠送收集精魄。达到对应灵宠的合成门槛后，会在这里出现可合成项。</p>
                     </div>
                   )}
                 </>

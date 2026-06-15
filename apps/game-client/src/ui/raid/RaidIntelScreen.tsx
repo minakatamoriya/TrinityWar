@@ -86,7 +86,7 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
                 </div>
                 <div className="raid-spirit-info">
                   <p className="eyebrow">默认情报</p>
-                  <h4>{spiritPreview.label}</h4>
+                  <h4>{spiritPreview.displayName || spiritPreview.label}</h4>
                   <strong>Lv.{spiritPreview.level}</strong>
                 </div>
               </div>
@@ -169,6 +169,8 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
 function getRaidSpiritPreview(detail: ClientRaidTargetDetailResponse): ClientRaidSpiritPreview {
   return detail.mainPetPreview ?? {
     spiritId: null,
+    sceneVisibility: 'masked',
+    displayName: '未发现主宠',
     label: '未发现主宠',
     level: Math.max(detail.level, 1),
     rarity: null,

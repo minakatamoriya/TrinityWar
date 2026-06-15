@@ -10,7 +10,7 @@ export function buildBackpackResourceItems(input: {
   seedInventory: Record<string, number>;
 }): BackpackResourceItem[] {
   const raidShardResourceItems: BackpackResourceItem[] = (input.spiritState?.codex ?? [])
-    .filter((entry) => entry.hasSeen || entry.ownedEver || entry.ownedCurrent || entry.shardCount > 0)
+    .filter((entry) => entry.codexState !== 'hidden' || entry.ownedEver || entry.ownedCurrent || entry.shardCount > 0)
     .sort((left, right) => {
       const rarityDiff = rarityOrder[left.definition.rarity] - rarityOrder[right.definition.rarity];
       return rarityDiff !== 0 ? rarityDiff : left.definition.label.localeCompare(right.definition.label, 'zh-Hans-CN');

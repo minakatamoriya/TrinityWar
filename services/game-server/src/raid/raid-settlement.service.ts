@@ -98,7 +98,7 @@ export class RaidSettlementService {
         defenderSnapshotJson: raidOrder.defenderSnapshotJson,
         attacker: { nickname: raidOrder.attacker.nickname },
         defender: { nickname: raidOrder.defender.nickname },
-      });
+      }, 'attacker');
 
       const settlement = await this.raidRepository.createRaidSettlement({
         raidOrder: { connect: { id: raidOrder.id } },
