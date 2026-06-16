@@ -37,7 +37,6 @@ interface ArmySceneProps {
   busy: boolean;
   uiRules: TutorialArmyUiRules;
   onSetMain: (slotIndex: number, slotVersion: number) => void;
-  onRecover: (slotIndex: number, slotVersion: number) => void;
   onDissolve: (slotIndex: number, slotVersion: number) => void;
   onCompose: (spiritId: string, slotIndex: number, element: ClientSpiritElement) => void;
   onFeed: (slotIndex: number, slotVersion: number, actionType: 'feed_once' | 'fill_full') => void;
@@ -79,9 +78,6 @@ const elementChoices: Array<{ value: ClientSpiritElement; label: DisplayElement 
   { value: 'earth', label: '土' },
 ];
 
-const DAILY_FREE_RECOVERY_LIMIT = 3;
-const DAILY_TALISMAN_RECOVERY_LIMIT = 3;
-const MAX_QUICK_RECOVERY_PER_DAY = DAILY_FREE_RECOVERY_LIMIT + DAILY_TALISMAN_RECOVERY_LIMIT;
 const SPIRIT_MAX_LEVEL = 50;
 const traitRollPlans: ClientSpiritTraitRollRule[] = CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER.map((mode) => CLIENT_SPIRIT_TRAIT_ROLL_RULES[mode]);
 
@@ -469,55 +465,36 @@ function getHealthRatio(slot: ClientSpiritSlot): number {
   if (slot.maxHp <= 0) {
     return 0;
   }
-  return Math.min(Math.max((slot.currentHp / slot.maxHp) * 100, 0), 100);
+  return 100;
 }
 
 function getHealthText(slot: ClientSpiritSlot): string {
-  return `${Math.round(getHealthRatio(slot))}%`;
+  return `HP ${formatNumber(slot.maxHp)}`;
 }
 
 function getHealthStatus(slot: ClientSpiritSlot): string {
-  const ratio = getHealthRatio(slot);
-  if (ratio <= 0) {
-    return '不可出战';
+  if (slot.maxHp <= 0) {
+    return 'No spirit';
   }
-  if (ratio >= 70) {
-    return '正常：攻击 100%';
-  }
-  if (ratio >= 30) {
-    return '低迷：攻击 70%';
-  }
-  return '重伤：攻击 30%';
+  return 'Full HP each battle';
 }
 
-function getRecoveryPlan(dailyRecoveryUsed: number): {
+function getRecoveryPlan(_dailyRecoveryUsed: number): {
   freeRemaining: number;
   talismanRemaining: number;
   nextTalismanCost: number;
   totalRemaining: number;
 } {
-  const used = Math.min(Math.max(Math.floor(dailyRecoveryUsed), 0), MAX_QUICK_RECOVERY_PER_DAY);
-  const freeRemaining = Math.max(DAILY_FREE_RECOVERY_LIMIT - used, 0);
-  const talismanUsed = Math.max(used - DAILY_FREE_RECOVERY_LIMIT, 0);
-  const talismanRemaining = Math.max(DAILY_TALISMAN_RECOVERY_LIMIT - talismanUsed, 0);
-  const nextTalismanCost = freeRemaining > 0 || talismanRemaining <= 0 ? 0 : talismanUsed + 1;
-
   return {
-    freeRemaining,
-    talismanRemaining,
-    nextTalismanCost,
-    totalRemaining: freeRemaining + talismanRemaining,
+    freeRemaining: 0,
+    talismanRemaining: 0,
+    nextTalismanCost: 0,
+    totalRemaining: 0,
   };
 }
 
-function getRecoveryButtonText(plan: ReturnType<typeof getRecoveryPlan>): string {
-  if (plan.freeRemaining > 0) {
-    return '免费恢复';
-  }
-  if (plan.nextTalismanCost > 0) {
-    return `天机符恢复 x${plan.nextTalismanCost}`;
-  }
-  return '今日恢复已用完';
+function getRecoveryButtonText(_plan: ReturnType<typeof getRecoveryPlan>): string {
+  return '????';
 }
 
 function getFactionBonusLabel(faction: string): string {
@@ -562,7 +539,9 @@ function SpiritStageCard(props: {
 }
 
 export function ArmyScene(props: ArmySceneProps): JSX.Element {
-  const { advantage, playerFaction, spirit, vaultGold, busy, uiRules, onSetMain, onRecover, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits, onResolveTraitRoll, onOpenSpiritUnlockSurface } = props;
+  const { advantage, playerFaction, spirit, vaultGold, busy, uiRules, onSetMain, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits, onResolveTraitRoll, onOpenSpiritUnlockSurface } = props;
+  void getRecoveryButtonText;
+  void getHealthRatio;
   const [codexOpen, setCodexOpen] = useState(false);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [selectedCodexSpiritId, setSelectedCodexSpiritId] = useState<string | null>(() => getFirstVisibleSpiritCodexId(spirit.codex));
@@ -635,8 +614,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const selectedComposeEntryVisible = selectedComposeEntry ? isSpiritCodexVisible(selectedComposeEntry) : false;
   const canOpenOwnedPetDetail = uiRules.allowOwnedPetDetail;
   const selectedComposeElementLabel = getElementLabel(composeElement) || '木';
-  const availableTianjiTalisman = spirit.tianjiTalisman;
-  const recoveryPlan = getRecoveryPlan(spirit.dailyRecoveryUsed);
   const selectedSlotIsOnlyOwnedSpirit = occupiedCount <= 1;
   const selectedSlotCanDissolve = selectedSlot ? !selectedSlot.isMain && !selectedSlotIsOnlyOwnedSpirit : false;
   const selectedSlotDissolveLabel = selectedSlot?.isMain
@@ -1015,18 +992,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                     <button className="ghost-button" disabled={busy || !selectedSlotCanDissolve} onClick={() => onDissolve(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">{selectedSlotDissolveLabel}</button>
                   </div>
                   {resumeHint ? <p className="spirit-live-hint">{resumeHint.text}</p> : null}
-                  <div className="spirit-progress-block">
-                    <div className="spirit-progress-head">
-                      <span>{'\u8840\u91cf'}</span>
-                      <div className="spirit-progress-head-side">
-                        <strong>{getHealthText(selectedSlot)}</strong>
-                        <button className="secondary-button spirit-progress-action-button" disabled={busy || getHealthRatio(selectedSlot) >= 100 || recoveryPlan.totalRemaining <= 0 || availableTianjiTalisman < recoveryPlan.nextTalismanCost} onClick={() => onRecover(selectedSlot.slotIndex, selectedSlot.slotVersion)} type="button">{getRecoveryButtonText(recoveryPlan)}</button>
-                      </div>
-                    </div>
-                    <div className="spirit-progress-track" aria-hidden="true">
-                      <div className="spirit-progress-fill spirit-progress-fill-health" style={{ width: `${getHealthRatio(selectedSlot)}%` }} />
-                    </div>
-                  </div>
                   <div className="spirit-progress-block spirit-progress-block-live">
                     <div className="spirit-progress-head">
                       <span>{'\u7ecf\u9a8c'}</span>

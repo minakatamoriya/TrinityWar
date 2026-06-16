@@ -148,7 +148,7 @@ function buildBattleUnit(
   sceneVisibility: ClientSceneVisibility,
 ): ClientRaidBattleReplay['attacker'] {
   const maxHp = Math.max(Math.floor(spirit?.maxHp ?? 120), 1);
-  const hpBefore = Math.min(Math.max(Math.floor(spirit?.currentHp ?? maxHp), 0), maxHp);
+  const hpBefore = maxHp;
   const hpAfter = Math.min(Math.max(Math.round(maxHp * (1 - Math.max(lossPercent, 0) / 100)), 0), maxHp);
   const stats = buildBattleStats(spirit);
   const healthStatus = resolveBattleHealthStatus(hpBefore, maxHp);
@@ -210,9 +210,8 @@ function buildBattleStats(spirit: SpiritBattleSnapshot | null): { attack: number
 
   const levelDelta = Math.max(spirit.level - 1, 0);
   const rarityMultiplier = getRarityGrowthMultiplier(spirit.spiritDefinition.rarity, spirit.level);
-  const healthStatus = resolveBattleHealthStatus(spirit.currentHp, spirit.maxHp);
   return {
-    attack: Math.round((spirit.spiritDefinition.baseAttack + levelDelta * spirit.spiritDefinition.growthAttack * rarityMultiplier) * healthStatus.attackCoefficient),
+    attack: Math.round(spirit.spiritDefinition.baseAttack + levelDelta * spirit.spiritDefinition.growthAttack * rarityMultiplier),
   };
 }
 

@@ -1,7 +1,7 @@
 ﻿import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { PlayerSpiritStatus, Prisma, PrismaClient, SpiritElement, SpiritRarity, SpiritRole } from '@prisma/client';
-import { APP_NAME, getBasicSpiritTraitRollGoldCost, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientCodexState, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientRecoverSpiritRequest, type ClientResolveSpiritTraitRollRequest, type ClientRollSpiritTraitsRequest, type ClientRollSpiritTraitsResponse, type ClientSceneVisibility, type ClientSetMainSpiritRequest, type ClientSpiritActiveRollMode, type ClientSpiritCodexEntry, type ClientSpiritDefinition, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritSlot, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritStatus, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientSpiritTraitRollMaterial, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
+import { APP_NAME, getBasicSpiritTraitRollGoldCost, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientCodexState, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientRecoverSpiritRequest, type ClientResolveSpiritTraitRollRequest, type ClientRollSpiritTraitsRequest, type ClientRollSpiritTraitsResponse, type ClientSceneVisibility, type ClientSetMainSpiritRequest, type ClientSpiritActiveRollMode, type ClientSpiritCodexEntry, type ClientSpiritDefinition, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritSlot, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientSpiritTraitRollMaterial, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
 import { AuditService } from '../audit/audit.service.js';
 import { DailyTaskLifecycleService } from '../client-read/daily-task-lifecycle.service.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
@@ -25,9 +25,6 @@ import { getTraitDefinition, isActiveTraitRollMode, rollTraitCandidates, SPIRIT_
 
 const SPIRIT_SOUL_GOLD_PRICE = 100;
 const SPIRIT_MAX_LEVEL = 50;
-const SPIRIT_DAILY_FREE_RECOVERY_LIMIT = 3;
-const SPIRIT_DAILY_TALISMAN_RECOVERY_LIMIT = 3;
-const SPIRIT_DAILY_RECOVERY_LIMIT = SPIRIT_DAILY_FREE_RECOVERY_LIMIT + SPIRIT_DAILY_TALISMAN_RECOVERY_LIMIT;
 const SPIRIT_DISSOLVE_REFUND_RATIO = 0.35;
 const SPIRIT_LEVEL_EXP_REQUIRED = 10_000;
 const SPIRIT_AD_DAILY_LIMIT = 3;
@@ -1179,7 +1176,7 @@ export class SpiritService {
     playerId: string,
     request: ClientRecoverSpiritRequest,
     headerIdempotencyKey?: string,
-    now: Date = new Date(),
+    _now: Date = new Date(),
   ): Promise<ClientSpiritMutationResponse> {
     validateSlotRequest(request, 'slotIndex');
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
@@ -1196,43 +1193,24 @@ export class SpiritService {
         return idempotencyRecord.responseSnapshotJson as unknown as ClientSpiritMutationResponse;
       }
 
-      const [resource, slot] = await Promise.all([
-        client.playerSpiritResource.findUnique({
-          where: { playerId },
-          select: {
-            playerId: true,
-            spiritSoul: true,
-            tianjiTalisman: true,
-            dailyRecoveryUsed: true,
-            dailyRecoveryDateKey: true,
-            dailyIntelFreeUsed: true,
-            dailyIntelTalismanUsed: true,
-            dailyIntelDateKey: true,
-            resourceVersion: true,
-            updatedAt: true,
+      const slot = await client.playerSpiritSlot.findUnique({
+        where: {
+          playerId_slotIndex: {
+            playerId,
+            slotIndex: request.slotIndex,
           },
-        }),
-        client.playerSpiritSlot.findUnique({
-          where: {
-            playerId_slotIndex: {
-              playerId,
-              slotIndex: request.slotIndex,
-            },
+        },
+        select: {
+          id: true,
+          spiritDefinitionId: true,
+          slotVersion: true,
+          spiritDefinition: {
+            select: { label: true },
           },
-          select: {
-            id: true,
-            spiritDefinitionId: true,
-            currentHp: true,
-            maxHp: true,
-            slotVersion: true,
-            spiritDefinition: {
-              select: { label: true },
-            },
-          },
-        }),
-      ]);
+        },
+      });
 
-      if (!resource || !slot || !slot.spiritDefinitionId) {
+      if (!slot || !slot.spiritDefinitionId) {
         throw new BusinessError({
           code: ErrorCode.NotFound,
           message: 'Spirit slot not found.',
@@ -1240,69 +1218,12 @@ export class SpiritService {
         });
       }
 
-      assertVersion('resourceVersion', request.resourceVersion, resource.resourceVersion, { allowStale: true });
       assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
-
-      if (slot.currentHp >= slot.maxHp) {
-        throw new BusinessError({
-          code: ErrorCode.BadRequest,
-          message: 'Spirit is already at full health.',
-          statusCode: 400,
-        });
-      }
-
-      const dateKey = getLocalDateKey(now);
-      const nextRecoveryUsed = getNextDailyRecoveryUsed(resource, now);
-      if (nextRecoveryUsed > SPIRIT_DAILY_RECOVERY_LIMIT) {
-        throw new BusinessError({
-          code: ErrorCode.Conflict,
-          message: 'Daily spirit recovery limit reached.',
-          statusCode: 409,
-        });
-      }
-
-      const talismanCost = getSpiritRecoveryTalismanCost(nextRecoveryUsed);
-      if (resource.tianjiTalisman < talismanCost) {
-        throw new BusinessError({
-          code: ErrorCode.Conflict,
-          message: 'Insufficient Tianji talisman.',
-          statusCode: 409,
-        });
-      }
-
-      await client.playerSpiritResource.update({
-        where: { playerId },
-        data: {
-          tianjiTalisman: talismanCost > 0 ? { decrement: talismanCost } : undefined,
-          dailyRecoveryUsed: nextRecoveryUsed,
-          dailyRecoveryDateKey: dateKey,
-          resourceVersion: { increment: 1 },
-        },
-      });
-      await client.playerSpiritSlot.update({
-        where: { id: slot.id },
-        data: {
-          currentHp: slot.maxHp,
-          status: 'ACTIVE',
-          slotVersion: { increment: 1 },
-        },
-      });
-      const contributionConfig = await this.taskConfigService.getDailyFactionTaskConfig('spirit-recover', client);
-      if (contributionConfig?.isEnabled && contributionConfig.rewardContribution > 0) {
-        await grantFactionContribution(client, {
-          playerId,
-          contribution: contributionConfig.rewardContribution,
-          sourceType: 'spirit-recover',
-          sourceId: slot.id,
-          metadata: {
-            talismanCost,
-            recoveryUsed: nextRecoveryUsed,
-          },
-        });
-      }
-
-      const costText = talismanCost > 0 ? '，消耗天机符 x' + talismanCost : '，本次使用免费恢复';
-      const response = await this.buildSpiritMutationResponse(client, playerId, (slot.spiritDefinition?.label ?? '灵宠') + ' 已恢复至满血' + costText + '。');
+      const response = await this.buildSpiritMutationResponse(
+        client,
+        playerId,
+        (slot.spiritDefinition?.label ?? '灵宠') + ' 当前默认以满血状态参与战斗，无需恢复。',
+      );
       await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
       return response;
     });
@@ -1962,9 +1883,9 @@ function buildSpiritState(
       satiatedRemainingSeconds: Math.max(Math.floor(((settled.satiatedUntil?.getTime() ?? now.getTime()) - now.getTime()) / 1000), 0),
       satiatedExpBonusPercent: settled.satiatedUntil && settled.satiatedUntil.getTime() > now.getTime() ? 50 : 0,
       element: slot.element ? toClientElement(slot.element) : null,
-      currentHp: slot.currentHp,
+      currentHp: slot.maxHp,
       maxHp: slot.maxHp,
-      status: toClientStatus(slot.status),
+      status: 'active',
       traits: mapTraits(slot.traits).filter((trait) => trait.slotIndex <= unlockedTraitSlots),
       unlockedTraitSlots,
       slotVersion: slot.slotVersion,
@@ -1999,7 +1920,7 @@ function buildSpiritState(
     rareSoul: resource.rareSoul,
     legendarySoul: resource.legendarySoul,
     tianjiTalisman: resource.tianjiTalisman,
-    dailyRecoveryUsed: getEffectiveDailyRecoveryUsed(resource),
+    dailyRecoveryUsed: 0,
     dailyIntelFreeUsed: getEffectiveDailyIntelFreeUsed(resource),
     dailyIntelTalismanUsed: getEffectiveDailyIntelTalismanUsed(resource),
     resourceVersion: resource.resourceVersion,
@@ -2149,10 +2070,6 @@ function toClientElement(element: SpiritElement): ClientSpiritElement {
 
 function toPrismaElement(element: ClientSpiritElement): SpiritElement {
   return element.toUpperCase() as SpiritElement;
-}
-
-function toClientStatus(status: PlayerSpiritStatus): ClientSpiritStatus {
-  return status.toLowerCase() as ClientSpiritStatus;
 }
 
 function mapTraits(traits: SpiritReadTrait[]): ClientSpiritTrait[] {
@@ -2731,29 +2648,12 @@ function getSpiritRefundSoul(level: number): number {
   return total;
 }
 
-function getEffectiveDailyRecoveryUsed(resource: { dailyRecoveryDateKey: string | null; dailyRecoveryUsed: number }, now: Date = new Date()): number {
-  return resource.dailyRecoveryDateKey === getLocalDateKey(now) ? resource.dailyRecoveryUsed : 0;
-}
-
 function getEffectiveDailyIntelFreeUsed(resource: { dailyIntelDateKey: string | null; dailyIntelFreeUsed: number }): number {
   return resource.dailyIntelDateKey === getLocalDateKey() ? resource.dailyIntelFreeUsed : 0;
 }
 
 function getEffectiveDailyIntelTalismanUsed(resource: { dailyIntelDateKey: string | null; dailyIntelTalismanUsed: number }): number {
   return resource.dailyIntelDateKey === getLocalDateKey() ? resource.dailyIntelTalismanUsed : 0;
-}
-
-function getNextDailyRecoveryUsed(resource: { dailyRecoveryDateKey: string | null; dailyRecoveryUsed: number }, now: Date = new Date()): number {
-  const currentUsed = getEffectiveDailyRecoveryUsed(resource, now);
-  return currentUsed + 1;
-}
-
-function getSpiritRecoveryTalismanCost(nextRecoveryUsed: number): number {
-  if (nextRecoveryUsed <= SPIRIT_DAILY_FREE_RECOVERY_LIMIT) {
-    return 0;
-  }
-
-  return nextRecoveryUsed - SPIRIT_DAILY_FREE_RECOVERY_LIMIT;
 }
 
 function formatAccelerateDuration(seconds: number): string {

@@ -357,7 +357,7 @@ export class RaidTargetService {
         });
       }
 
-      if (attackerMainSpirit.currentHp <= 0) {
+      if (false) {
         throw new BusinessError({
           code: ErrorCode.RaidNotAllowed,
           message: '主位灵宠当前 0 血，无法出战。请先恢复血量，或更换主位灵宠后再发起掠夺。',
@@ -819,7 +819,7 @@ function buildRaidDeepIntelResponse(
     intel: {
       element: mapSpiritElement(mainSlot?.element ?? null),
       attackRating: buildAttackRating(mainSlot),
-      healthStatus: buildHealthStatus(mainSlot),
+      healthStatus: mainSlot ? '状态良好' : '未知',
       remainingFreeIntel: remaining.remainingFreeIntel,
       remainingTalismanIntel: remaining.remainingTalismanIntel,
     },
@@ -1126,9 +1126,9 @@ function buildSpiritBattleSnapshot(
     slotIndex: slot.slotIndex,
     level: slot.level,
     element: slot.element,
-    currentHp: slot.currentHp,
+    currentHp: slot.maxHp,
     maxHp: slot.maxHp,
-    status: slot.status,
+    status: 'ACTIVE',
     spiritDefinition: slot.spiritDefinition,
     traits: slot.traits ?? [],
   };

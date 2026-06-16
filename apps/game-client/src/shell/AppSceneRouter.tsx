@@ -90,7 +90,6 @@ interface AppSceneRouterProps {
   onOpenRaidTarget: (target: ClientRaidTarget) => void;
   onOpenSocialFieldVisit: (targetPlayerId: string) => void;
   onRaidAction: (action: ClientSceneAction, context?: string) => void;
-  onRecoverSpirit: (slotIndex: number, slotVersion: number) => void;
   onRefreshRaidTargets: () => void;
   onRefreshSocial: () => void;
   onRejectFriendRequest: (relationId: string) => void;
@@ -173,7 +172,6 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
     onOpenRaidTarget,
     onOpenSocialFieldVisit,
     onRaidAction,
-    onRecoverSpirit,
     onRefreshRaidTargets,
     onRefreshSocial,
     onRejectFriendRequest,
@@ -231,7 +229,6 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
           uiRules={tutorialUiRules.army}
           onCompose={onComposeSpirit}
           onDissolve={onDissolveSpirit}
-          onRecover={onRecoverSpirit}
           onSetMain={onSetMainSpirit}
           onFeed={onFeedSpirit}
           onBreakthrough={onBreakthroughSpirit}

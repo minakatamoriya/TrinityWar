@@ -218,9 +218,8 @@ function buildPanel(snapshot: SpiritBattleSnapshot | null, factionName: string |
   attack *= 1 + traits.claw / 100;
   maxHp *= 1 + traits.thickSkin / 100;
   const effectiveSnapshotMaxHp = Math.max(snapshot.maxHp * currentHpMultiplier, 1);
-  const currentHp = Math.min(Math.max(snapshot.currentHp * currentHpMultiplier, 0), effectiveSnapshotMaxHp);
+  const currentHp = effectiveSnapshotMaxHp;
   const healthStatus = resolveBattleHealthStatus(currentHp, effectiveSnapshotMaxHp);
-  attack *= healthStatus.attackCoefficient;
 
   return {
     label: snapshot.spiritDefinition.label,

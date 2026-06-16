@@ -4,7 +4,6 @@ import type { ClientCodexPrompt } from '@trinitywar/shared';
 import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { grantFactionContribution } from '../faction/contribution.service.js';
-import { applyFactionBattlePostRecovery } from '../lib/faction-advantage-formulas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { buildRaidBattleReplay } from './raid-battle-replay.js';
 import { RaidRepository } from './raid.repository.js';
@@ -358,33 +357,6 @@ export class RaidSettlementService {
     settlementResult: ReturnType<RaidSettlementRuleService['calculate']>,
   ): Promise<ClientCodexPrompt[]> {
     const codexPrompts: ClientCodexPrompt[] = [];
-    const attackerFactionCode = normalizeFactionCode(raidOrder.attacker.faction?.code ?? readFactionName(raidOrder.attackerSnapshotJson));
-
-    if (settlementResult.attackerSpiritSlotId && settlementResult.attackerNextHp !== null) {
-      const attackerMaxHp = settlementResult.attackerSpiritSlotId
-        ? (readSpiritSnapshot(raidOrder.attackerSnapshotJson)?.maxHp ?? buildSpiritSnapshotFromSlot(raidOrder.attacker.spiritSlots[0] ?? null)?.maxHp ?? settlementResult.attackerNextHp)
-        : settlementResult.attackerNextHp;
-      const recoveredAttackerHp = applyFactionBattlePostRecovery(settlementResult.attackerNextHp, attackerMaxHp, attackerFactionCode);
-      await client.playerSpiritSlot.update({
-        where: { id: settlementResult.attackerSpiritSlotId },
-        data: {
-          currentHp: recoveredAttackerHp,
-          status: recoveredAttackerHp <= 0 ? 'WOUNDED' : recoveredAttackerHp < 30 ? 'RESTING' : 'ACTIVE',
-          slotVersion: { increment: 1 },
-        },
-      });
-    }
-
-    if (settlementResult.defenderSpiritSlotId && settlementResult.defenderNextHp !== null) {
-      await client.playerSpiritSlot.update({
-        where: { id: settlementResult.defenderSpiritSlotId },
-        data: {
-          currentHp: settlementResult.defenderNextHp,
-          status: settlementResult.defenderNextHp <= 0 ? 'WOUNDED' : settlementResult.defenderNextHp < 30 ? 'RESTING' : 'ACTIVE',
-          slotVersion: { increment: 1 },
-        },
-      });
-    }
 
     if (settlementResult.soulRewards.ordinary > 0 || settlementResult.soulRewards.rare > 0 || settlementResult.soulRewards.legendary > 0) {
       await client.playerSpiritResource.update({
@@ -513,24 +485,6 @@ export class RaidSettlementService {
       }
     });
   }
-}
-
-function normalizeFactionCode(value: string | null | undefined): 'human' | 'immortal' | 'demon' | null {
-  if (!value) {
-    return null;
-  }
-
-  if (value === 'human' || value === '人界') {
-    return 'human';
-  }
-  if (value === 'immortal' || value === '仙界') {
-    return 'immortal';
-  }
-  if (value === 'demon' || value === '魔界') {
-    return 'demon';
-  }
-
-  return null;
 }
 
 interface DefenderFieldDeductionPlanEntry {

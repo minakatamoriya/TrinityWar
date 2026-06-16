@@ -321,7 +321,7 @@ function buildOpportunities(input: OpportunityInput): HomeOpportunity[] {
       target: 'raid',
       tone: 'spirit',
     });
-  } else if (input.mainSpirit && input.mainSpirit.currentHp <= 0) {
+  } else if (false) {
     items.push({
       kicker: '灵宠',
       title: '主战灵宠需要恢复',
@@ -416,7 +416,7 @@ function buildSpiritStatusText(
     return readyComposeCount > 0 ? '已有碎片满足合成条件，可先补齐第一只主战灵宠。' : '暂无主战灵宠，先在灵宠页查看可用养成入口。';
   }
 
-  if (mainSpirit.currentHp <= 0) {
+  if (false) {
     return '主战灵宠当前无法出战，恢复后可继续探索。';
   }
 

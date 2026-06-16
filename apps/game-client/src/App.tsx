@@ -26,7 +26,7 @@ import type {
   HomeSummaryResponse,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, claimFactionStipend, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, recoverSpirit, refreshRaidTargets, resetDemoExperimentState, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, claimFactionStipend, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import type { SocialRelationFilter, SocialTabKey } from './ui/scenes/SocialScene';
 import type { ShareAssistAudience } from './ui/share/ShareAssistPage';
@@ -1092,25 +1092,6 @@ function App(): JSX.Element {
         applySpiritMutationResult(result);
       } catch {
         showToast('当前无法切换主位灵宠，请稍后重试。', 'error');
-      }
-    });
-  };
-
-  const handleRecoverSpiritAction = async (slotIndex: number, slotVersion: number): Promise<void> => {
-    if (!spiritState) {
-      return;
-    }
-
-    await runPendingAction(`spirit:recover:${slotIndex}`, async () => {
-      try {
-        const result = await recoverSpirit({
-          slotIndex,
-          slotVersion,
-          resourceVersion: spiritState.resourceVersion,
-        });
-        applySpiritMutationResult(result);
-      } catch {
-        showToast('当前无法恢复灵宠，请稍后重试。', 'error');
       }
     });
   };
@@ -2427,9 +2408,6 @@ function App(): JSX.Element {
               void social.openFieldVisit(targetPlayerId);
             }}
             onRaidAction={handleSceneAction}
-            onRecoverSpirit={(slotIndex, slotVersion) => {
-              void handleRecoverSpiritAction(slotIndex, slotVersion);
-            }}
             onRefreshRaidTargets={() => {
               void handleRefreshRaidTargets();
             }}
