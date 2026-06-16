@@ -2332,9 +2332,7 @@ function normalizeSpiritSlot(slot: {
   level: number;
   exp: number;
   element: unknown;
-  currentHp: number;
   maxHp: number;
-  status: unknown;
   acquiredAt: Date | null;
   dissolvedAt: Date | null;
   slotVersion: number;
@@ -2368,9 +2366,7 @@ function normalizeSpiritSlot(slot: {
     element: slot.element,
     level: slot.level,
     exp: slot.exp,
-    currentHp: slot.currentHp,
     maxHp: slot.maxHp,
-    status: slot.status,
     baseAttack: slot.spiritDefinition?.baseAttack ?? null,
     baseHp: slot.spiritDefinition?.baseHp ?? null,
     growthAttack: slot.spiritDefinition?.growthAttack ?? null,

@@ -323,9 +323,7 @@ export class RaidTargetService {
           slotIndex: true,
           level: true,
           element: true,
-          currentHp: true,
           maxHp: true,
-          status: true,
           spiritDefinition: {
             select: {
               id: true,
@@ -1247,28 +1245,10 @@ function mapScoreRating(score: number): string {
 
 function buildHealthStatus(slot: { currentHp: number; maxHp: number; status: string } | null): string {
   if (!slot || slot.maxHp <= 0) {
-    return '未知';
+    return '??';
   }
 
-  if (slot.status === 'WOUNDED') {
-    return '受伤';
-  }
-
-  if (slot.status === 'RESTING') {
-    return '休整';
-  }
-
-  const ratio = slot.currentHp / slot.maxHp;
-
-  if (ratio >= 0.8) {
-    return '状态良好';
-  }
-
-  if (ratio >= 0.45) {
-    return '轻伤';
-  }
-
-  return '重伤';
+  return '????';
 }
 
 function pickPrimaryRaidField(target: NonNullable<Awaited<ReturnType<RaidRepository['findVisibleTargetPoolEntry']>>>) {

@@ -73,7 +73,6 @@ async function main(): Promise<void> {
       readCodex(prisma, playerId, mainDefinition.id),
     ]);
     assertEqual(slot1AfterDissolve.spiritDefinitionId, null, 'dissolved slot should be empty in database');
-    assertEqual(slot1AfterDissolve.status, 'DISSOLVED', 'dissolved slot status');
     assertAtLeast(resourceAfterDissolve.spiritSoul, resourceBeforeDissolve.spiritSoul, 'spirit soul should not decrease after dissolve');
     assertEqual(mainCodexAfterDissolve.ownedCurrent, false, 'dissolved spirit should no longer be currently owned');
     assertEqual(mainCodexAfterDissolve.ownedEver, true, 'dissolved spirit should remain owned ever');
@@ -142,8 +141,6 @@ async function prepareSpiritState(
         rareSoul: 20,
         legendarySoul: 5,
         tianjiTalisman: 10,
-        dailyRecoveryUsed: 0,
-        dailyRecoveryDateKey: null,
         dailyIntelFreeUsed: 0,
         dailyIntelTalismanUsed: 0,
         dailyIntelDateKey: null,
@@ -164,9 +161,7 @@ async function prepareSpiritState(
           level: definition ? 3 : 1,
           exp: 0,
           element: definition ? (slotIndex === 1 ? 'WOOD' : 'WATER') : null,
-          currentHp: maxHp,
           maxHp,
-          status: definition ? 'ACTIVE' : 'DISSOLVED',
           acquiredAt: definition ? now : null,
           dissolvedAt: definition ? null : now,
           slotVersion: 1,
@@ -180,9 +175,7 @@ async function prepareSpiritState(
           satiatedUntil: null,
           lastExpSettledAt: definition ? now : null,
           element: definition ? (slotIndex === 1 ? 'WOOD' : 'WATER') : null,
-          currentHp: maxHp,
           maxHp,
-          status: definition ? 'ACTIVE' : 'DISSOLVED',
           acquiredAt: definition ? now : null,
           dissolvedAt: definition ? null : now,
           slotVersion: { increment: 1 },
@@ -250,7 +243,6 @@ async function readSlot(prisma: PrismaDb, playerId: string, slotIndex: number) {
       spiritDefinitionId: true,
       isMain: true,
       element: true,
-      status: true,
       slotVersion: true,
     },
   });

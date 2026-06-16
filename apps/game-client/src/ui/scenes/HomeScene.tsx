@@ -33,7 +33,7 @@ export function HomeScene(props: HomeSceneProps): JSX.Element {
   } = props;
   const farmSummary = buildFarmSummary(scenes.farm.fields);
   const mainSpirit = spirit?.mainSlot ?? null;
-  const aliveSpiritCount = spirit?.slots.filter((slot) => slot.spiritId && slot.status !== 'dissolved').length ?? 0;
+  const aliveSpiritCount = spirit?.slots.filter((slot) => slot.spiritId).length ?? 0;
   const readyComposeCount = spirit?.readyToCompose.length ?? 0;
   const breakthroughReady = Boolean(spirit?.breakthroughRequirement?.canBreakthrough);
   const revengeableReports = [...scenes.report.defense, ...scenes.report.attack].filter((entry) => entry.revengeable).length;
@@ -428,7 +428,7 @@ function buildSpiritStatusText(
     return `${readyComposeCount} 只灵宠碎片已满足合成条件。`;
   }
 
-  return `生命 ${mainSpirit.currentHp}/${mainSpirit.maxHp}，当前可以继续承担探索与守备。`;
+  return `生命属性 ${mainSpirit.maxHp}，当前可以继续承担探索与守备。`;
 }
 
 function getNextContributionTarget(todayContribution: number): number {

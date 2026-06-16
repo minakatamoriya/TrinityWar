@@ -2183,23 +2183,13 @@ export class RobotService implements OnApplicationBootstrap {
       },
       select: {
         id: true,
-        currentHp: true,
         maxHp: true,
       },
     });
 
-    if (!mainSlot || mainSlot.currentHp >= mainSlot.maxHp) {
+    if (!mainSlot) {
       return;
     }
-
-    await this.prisma.db.playerSpiritSlot.update({
-      where: { id: mainSlot.id },
-      data: {
-        currentHp: mainSlot.maxHp,
-        status: 'ACTIVE',
-        slotVersion: { increment: 1 },
-      },
-    });
   }
 
   private async runDailySpiritGrowth(
@@ -2557,9 +2547,7 @@ export class RobotService implements OnApplicationBootstrap {
           level: 1,
           breakthroughStage: 0,
           element: 'WOOD',
-          currentHp: 100,
           maxHp: 100,
-          status: 'ACTIVE',
           acquiredAt: new Date(),
           lastExpSettledAt: new Date(now - 3 * 60 * 60 * 1000),
         },
@@ -2570,9 +2558,7 @@ export class RobotService implements OnApplicationBootstrap {
           exp: 0,
           breakthroughStage: 0,
           element: 'WOOD',
-          currentHp: 100,
           maxHp: 100,
-          status: 'ACTIVE',
           acquiredAt: new Date(),
           satiatedUntil: null,
           lastExpSettledAt: new Date(now - 3 * 60 * 60 * 1000),
@@ -2798,18 +2784,14 @@ export class RobotService implements OnApplicationBootstrap {
         isMain: true,
         level: 1,
         element: 'WOOD',
-        currentHp: 100,
         maxHp: 100,
-        status: 'ACTIVE',
         acquiredAt: new Date(),
       },
       update: {
         spiritDefinitionId,
         isMain: true,
         element: 'WOOD',
-        currentHp: 100,
         maxHp: 100,
-        status: 'ACTIVE',
         slotVersion: { increment: 1 },
       },
     });

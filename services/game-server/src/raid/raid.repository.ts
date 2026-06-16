@@ -41,9 +41,7 @@ export class RaidRepository {
                 slotIndex: true,
                 level: true,
                 element: true,
-                currentHp: true,
                 maxHp: true,
-                status: true,
                 spiritDefinition: {
                   select: {
                     id: true,
@@ -213,9 +211,7 @@ export class RaidRepository {
                 slotIndex: true,
                 level: true,
                 element: true,
-                currentHp: true,
                 maxHp: true,
-                status: true,
                 spiritDefinition: {
                   select: {
                     id: true,
@@ -262,9 +258,7 @@ export class RaidRepository {
                 slotIndex: true,
                 level: true,
                 element: true,
-                currentHp: true,
                 maxHp: true,
-                status: true,
                 spiritDefinition: {
                   select: {
                     id: true,

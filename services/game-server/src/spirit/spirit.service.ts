@@ -1,7 +1,7 @@
 ﻿import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import type { PlayerSpiritStatus, Prisma, PrismaClient, SpiritElement, SpiritRarity, SpiritRole } from '@prisma/client';
-import { APP_NAME, getBasicSpiritTraitRollGoldCost, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientCodexState, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientRecoverSpiritRequest, type ClientResolveSpiritTraitRollRequest, type ClientRollSpiritTraitsRequest, type ClientRollSpiritTraitsResponse, type ClientSceneVisibility, type ClientSetMainSpiritRequest, type ClientSpiritActiveRollMode, type ClientSpiritCodexEntry, type ClientSpiritDefinition, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritSlot, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientSpiritTraitRollMaterial, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
+import type { Prisma, PrismaClient, SpiritElement, SpiritRarity, SpiritRole } from '@prisma/client';
+import { APP_NAME, getBasicSpiritTraitRollGoldCost, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientCodexState, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientResolveSpiritTraitRollRequest, type ClientRollSpiritTraitsRequest, type ClientRollSpiritTraitsResponse, type ClientSceneVisibility, type ClientSetMainSpiritRequest, type ClientSpiritActiveRollMode, type ClientSpiritCodexEntry, type ClientSpiritDefinition, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritSlot, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientSpiritTraitRollMaterial, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
 import { AuditService } from '../audit/audit.service.js';
 import { DailyTaskLifecycleService } from '../client-read/daily-task-lifecycle.service.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
@@ -58,8 +58,6 @@ type SpiritReadResource = {
   rareSoul: number;
   legendarySoul: number;
   tianjiTalisman: number;
-  dailyRecoveryUsed: number;
-  dailyRecoveryDateKey: string | null;
   dailyIntelFreeUsed: number;
   dailyIntelTalismanUsed: number;
   dailyIntelDateKey: string | null;
@@ -144,8 +142,6 @@ export class SpiritService {
           select: {
             spiritSoul: true,
             tianjiTalisman: true,
-            dailyRecoveryUsed: true,
-            dailyRecoveryDateKey: true,
             dailyIntelFreeUsed: true,
             dailyIntelTalismanUsed: true,
             dailyIntelDateKey: true,
@@ -235,8 +231,6 @@ export class SpiritService {
             tianjiTalisman: true,
             resourceVersion: true,
             updatedAt: true,
-            dailyRecoveryUsed: true,
-            dailyRecoveryDateKey: true,
             dailyIntelFreeUsed: true,
             dailyIntelTalismanUsed: true,
             dailyIntelDateKey: true,
@@ -254,7 +248,6 @@ export class SpiritService {
             slotIndex: true,
             spiritDefinitionId: true,
             level: true,
-            currentHp: true,
             maxHp: true,
             slotVersion: true,
             spiritDefinition: {
@@ -298,7 +291,6 @@ export class SpiritService {
 
       const nextLevel = slot.level + 1;
       const nextMaxHp = calculateSpiritMaxHp(slot.spiritDefinition.baseHp, slot.spiritDefinition.growthHp, nextLevel);
-      const currentHp = Math.min(nextMaxHp, slot.currentHp + (nextMaxHp - slot.maxHp));
 
       await client.playerSpiritResource.update({
         where: { playerId },
@@ -312,7 +304,6 @@ export class SpiritService {
         data: {
           level: nextLevel,
           maxHp: nextMaxHp,
-          currentHp,
           slotVersion: { increment: 1 },
         },
       });
@@ -1172,63 +1163,6 @@ export class SpiritService {
     });
   }
 
-  async recoverSpirit(
-    playerId: string,
-    request: ClientRecoverSpiritRequest,
-    headerIdempotencyKey?: string,
-    _now: Date = new Date(),
-  ): Promise<ClientSpiritMutationResponse> {
-    validateSlotRequest(request, 'slotIndex');
-    const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
-
-    return this.prisma.transaction(async (client) => {
-      const requestHash = hashRequest({
-        endpoint: 'recover',
-        slotIndex: request.slotIndex,
-        slotVersion: request.slotVersion ?? null,
-        resourceVersion: request.resourceVersion ?? null,
-      });
-      const idempotencyRecord = await this.prepareIdempotencyRecord(client, playerId, 'spirit-recover', idempotencyKey, requestHash);
-      if (idempotencyRecord?.status === 'completed' && idempotencyRecord.responseSnapshotJson) {
-        return idempotencyRecord.responseSnapshotJson as unknown as ClientSpiritMutationResponse;
-      }
-
-      const slot = await client.playerSpiritSlot.findUnique({
-        where: {
-          playerId_slotIndex: {
-            playerId,
-            slotIndex: request.slotIndex,
-          },
-        },
-        select: {
-          id: true,
-          spiritDefinitionId: true,
-          slotVersion: true,
-          spiritDefinition: {
-            select: { label: true },
-          },
-        },
-      });
-
-      if (!slot || !slot.spiritDefinitionId) {
-        throw new BusinessError({
-          code: ErrorCode.NotFound,
-          message: 'Spirit slot not found.',
-          statusCode: 404,
-        });
-      }
-
-      assertVersion('slotVersion', request.slotVersion, slot.slotVersion);
-      const response = await this.buildSpiritMutationResponse(
-        client,
-        playerId,
-        (slot.spiritDefinition?.label ?? '灵宠') + ' 当前默认以满血状态参与战斗，无需恢复。',
-      );
-      await this.markIdempotencyCompleted(client, idempotencyRecord?.id, response, 'spirit-slot', slot.id);
-      return response;
-    });
-  }
-
   async dissolveSpirit(
     playerId: string,
     request: ClientDissolveSpiritRequest,
@@ -1305,9 +1239,7 @@ export class SpiritService {
           level: 1,
           exp: 0,
           element: null,
-          currentHp: 0,
           maxHp: 0,
-          status: 'DISSOLVED',
           dissolvedAt: new Date(),
           slotVersion: { increment: 1 },
         },
@@ -1458,9 +1390,7 @@ export class SpiritService {
           level: 1,
           exp: 0,
           element: toPrismaElement(request.element),
-          currentHp: maxHp,
           maxHp,
-          status: 'ACTIVE',
           acquiredAt: now,
           lastExpSettledAt: now,
           dissolvedAt: null,
@@ -1561,8 +1491,6 @@ export class SpiritService {
           rareSoul: true,
           legendarySoul: true,
           tianjiTalisman: true,
-          dailyRecoveryUsed: true,
-          dailyRecoveryDateKey: true,
           dailyIntelFreeUsed: true,
           dailyIntelTalismanUsed: true,
           dailyIntelDateKey: true,
@@ -1582,9 +1510,7 @@ export class SpiritService {
           satiatedUntil: true,
           lastExpSettledAt: true,
           element: true,
-          currentHp: true,
           maxHp: true,
-          status: true,
           slotVersion: true,
           spiritDefinition: {
             select: {
@@ -1825,9 +1751,7 @@ function buildSpiritState(
     satiatedUntil: Date | null;
     lastExpSettledAt: Date | null;
     element: SpiritElement | null;
-    currentHp: number;
     maxHp: number;
-    status: PlayerSpiritStatus;
     slotVersion: number;
     spiritDefinition: {
       spiritId: string;
@@ -1883,9 +1807,7 @@ function buildSpiritState(
       satiatedRemainingSeconds: Math.max(Math.floor(((settled.satiatedUntil?.getTime() ?? now.getTime()) - now.getTime()) / 1000), 0),
       satiatedExpBonusPercent: settled.satiatedUntil && settled.satiatedUntil.getTime() > now.getTime() ? 50 : 0,
       element: slot.element ? toClientElement(slot.element) : null,
-      currentHp: slot.maxHp,
       maxHp: slot.maxHp,
-      status: 'active',
       traits: mapTraits(slot.traits).filter((trait) => trait.slotIndex <= unlockedTraitSlots),
       unlockedTraitSlots,
       slotVersion: slot.slotVersion,
@@ -1920,7 +1842,6 @@ function buildSpiritState(
     rareSoul: resource.rareSoul,
     legendarySoul: resource.legendarySoul,
     tianjiTalisman: resource.tianjiTalisman,
-    dailyRecoveryUsed: 0,
     dailyIntelFreeUsed: getEffectiveDailyIntelFreeUsed(resource),
     dailyIntelTalismanUsed: getEffectiveDailyIntelTalismanUsed(resource),
     resourceVersion: resource.resourceVersion,

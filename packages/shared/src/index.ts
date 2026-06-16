@@ -14,7 +14,6 @@ export function formatSeasonLabel(seasonNumber: number): string {
 export type ClientSpiritRarity = 'common' | 'rare' | 'legendary';
 export type ClientSpiritRole = 'attack' | 'balanced' | 'health';
 export type ClientSpiritElement = 'metal' | 'wood' | 'water' | 'fire' | 'earth';
-export type ClientSpiritStatus = 'active' | 'wounded' | 'resting' | 'dissolved';
 export type ClientCodexState = 'hidden' | 'visible-progress' | 'unlocked';
 export type ClientSceneVisibility = 'masked' | 'named';
 export type ClientSpiritTraitCode =
@@ -182,9 +181,7 @@ export interface ClientSpiritSlot {
   satiatedRemainingSeconds?: number;
   satiatedExpBonusPercent?: number;
   element: ClientSpiritElement | null;
-  currentHp: number;
   maxHp: number;
-  status: ClientSpiritStatus;
   traits?: ClientSpiritTrait[];
   unlockedTraitSlots?: number;
   slotVersion: number;
@@ -260,7 +257,6 @@ export interface ClientSpiritState {
   rareSoul?: number;
   legendarySoul?: number;
   tianjiTalisman: number;
-  dailyRecoveryUsed: number;
   dailyIntelFreeUsed: number;
   dailyIntelTalismanUsed: number;
   resourceVersion: number;
@@ -303,13 +299,6 @@ export interface ClientUpgradeSpiritRequest {
 export interface ClientSetMainSpiritRequest {
   slotIndex: number;
   slotVersion?: number;
-  requestIdempotencyKey?: string;
-}
-
-export interface ClientRecoverSpiritRequest {
-  slotIndex: number;
-  slotVersion?: number;
-  resourceVersion?: number;
   requestIdempotencyKey?: string;
 }
 

@@ -51,7 +51,6 @@ async function main(): Promise<void> {
         element: 'WOOD',
         level: 1,
         exp: 0,
-        currentHp: spiritDefinition.baseHp,
         maxHp: spiritDefinition.baseHp,
         acquiredAt: new Date(),
       },
@@ -59,8 +58,6 @@ async function main(): Promise<void> {
         spiritDefinitionId: spiritDefinition.id,
         isMain: true,
         element: 'WOOD',
-        status: 'ACTIVE',
-        currentHp: spiritDefinition.baseHp,
         maxHp: spiritDefinition.baseHp,
         dissolvedAt: null,
       },
@@ -85,7 +82,6 @@ async function main(): Promise<void> {
         level: 9,
         exp: 50,
         breakthroughStage: 1,
-        currentHp: 1,
         maxHp: 999,
       },
     });
@@ -138,8 +134,8 @@ async function main(): Promise<void> {
     if (fields.some((field) => field.status !== 'EMPTY' || field.seedDefinitionId !== null || field.investedGold !== 0 || field.currentClaimableGold !== 0)) {
       throw new Error('Expected unlocked fields to reset to empty state.');
     }
-    if (slot.level !== 1 || slot.exp !== 0 || slot.breakthroughStage !== 0 || slot.maxHp !== spiritDefinition.baseHp || slot.currentHp !== spiritDefinition.baseHp) {
-      throw new Error('Expected spirit level/progress/hp to reset to level 1 base state.');
+    if (slot.level !== 1 || slot.exp !== 0 || slot.breakthroughStage !== 0 || slot.maxHp !== spiritDefinition.baseHp) {
+      throw new Error('Expected spirit level/progress to reset to level 1 base state.');
     }
     if (!slot.traits.some((trait) => trait.traitCode === 'verify_trait' && trait.traitValue === 12)) {
       throw new Error('Expected spirit traits to be retained.');

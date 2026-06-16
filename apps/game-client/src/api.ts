@@ -41,7 +41,6 @@
   type ClientMarkNotificationReadResponse,
   type ClientNotificationListResponse,
   type ClientRaidTargetDetailResponse,
-  type ClientRecoverSpiritRequest,
   type ClientRecruitArmyRequest,
   type ClientResetDemoStateResponse,
   type ClientSceneContentResponse,
@@ -1832,28 +1831,6 @@ export async function claimSpiritAdReward(input: ClientClaimSpiritAdRewardReques
 export async function setMainSpirit(input: ClientSetMainSpiritRequest): Promise<ClientSpiritMutationResponse> {
   const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('spirit-set-main');
   const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/set-main`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Idempotency-Key': idempotencyKey,
-    },
-    body: JSON.stringify({
-      ...input,
-      requestIdempotencyKey: idempotencyKey,
-    }),
-  });
-
-  mockHomeSnapshot = cloneHomeSummary(response.home);
-  mockSceneSnapshot = cloneSceneContent(response.scenes);
-  return {
-    ...response,
-    spirit: cloneSpiritState(response.spirit),
-  };
-}
-
-export async function recoverSpirit(input: ClientRecoverSpiritRequest): Promise<ClientSpiritMutationResponse> {
-  const idempotencyKey = input.requestIdempotencyKey ?? buildIdempotencyKey('spirit-recover');
-  const response = await fetchJson<ClientSpiritMutationResponse>(`${CLIENT_API_PREFIX}/spirit/recover`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

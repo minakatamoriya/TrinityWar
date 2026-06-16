@@ -81,7 +81,6 @@ function buildSpiritSnapshot(input: {
     slotIndex: 1,
     level: 1,
     element: null,
-    currentHp: 100,
     maxHp: 100,
     status: 'ACTIVE',
     spiritDefinition: {

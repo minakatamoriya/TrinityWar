@@ -237,7 +237,7 @@ export function PlayerDetailTables(props: {
           <div className="two-column">
             <InfoSection
               title="灵宠资源"
-              rows={recordRows(spirit?.resource, ['playerId', 'spiritSoul', 'dailyRecoveryUsed', 'dailyIntelFreeUsed', 'dailyIntelTalismanUsed', 'resourceVersion'])}
+              rows={recordRows(spirit?.resource, ['playerId', 'spiritSoul', 'dailyIntelFreeUsed', 'dailyIntelTalismanUsed', 'resourceVersion'])}
             />
             <InfoSection
               title="灵宠配置"
@@ -258,9 +258,7 @@ export function PlayerDetailTables(props: {
               { label: '稀有度 / rarity', key: 'rarity' },
               { label: '五行 / element', key: 'element' },
               { label: '等级 / level', key: 'level' },
-              { label: '生命 / currentHp', key: 'currentHp' },
               { label: '上限 / maxHp', key: 'maxHp' },
-              { label: '状态 / status', key: 'status' },
             ]}
             rows={spiritSlots}
             rowAction={(row) => (
@@ -286,9 +284,7 @@ export function PlayerDetailTables(props: {
               'element',
               'level',
               'exp',
-              'currentHp',
               'maxHp',
-              'status',
               'baseAttack',
               'baseHp',
               'growthAttack',

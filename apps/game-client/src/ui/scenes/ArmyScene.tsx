@@ -57,35 +57,35 @@ interface ArmySceneProps {
   onOpenSpiritUnlockSurface: () => void;
 }
 
-type DisplayRarity = '普通' | '稀有' | '传说';
-type DisplayElement = '金' | '木' | '水' | '火' | '土';
+type DisplayRarity = 'Common' | 'Rare' | 'Legendary';
+type DisplayElement = 'Metal' | 'Wood' | 'Water' | 'Fire' | 'Earth';
 type SpiritPetActionTab = 'overview' | 'growth' | 'breakthrough' | 'traits';
 type SpiritComposeStep = 'choose-spirit' | 'choose-element';
 
 const composeRarityGroups = [
-  { key: 'common', label: '普通', rarity: 'common' as const },
-  { key: 'rare', label: '稀有', rarity: 'rare' as const },
-  { key: 'legend', label: '传说', rarity: 'legendary' as const },
+  { key: 'common', label: 'Common', rarity: 'common' as const },
+  { key: 'rare', label: 'Rare', rarity: 'rare' as const },
+  { key: 'legend', label: 'Legendary', rarity: 'legendary' as const },
 ];
 
 const STARTER_SPIRIT_IDS = ['canglang', 'linglu', 'qingyuan'] as const;
 
 const elementChoices: Array<{ value: ClientSpiritElement; label: DisplayElement }> = [
-  { value: 'metal', label: '金' },
-  { value: 'wood', label: '木' },
-  { value: 'water', label: '水' },
-  { value: 'fire', label: '火' },
-  { value: 'earth', label: '土' },
+  { value: 'metal', label: 'Metal' },
+  { value: 'wood', label: 'Wood' },
+  { value: 'water', label: 'Water' },
+  { value: 'fire', label: 'Fire' },
+  { value: 'earth', label: 'Earth' },
 ];
 
 const SPIRIT_MAX_LEVEL = 50;
 const traitRollPlans: ClientSpiritTraitRollRule[] = CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER.map((mode) => CLIENT_SPIRIT_TRAIT_ROLL_RULES[mode]);
 
 const petActionTabs: Array<{ key: SpiritPetActionTab; label: string }> = [
-  { key: 'overview', label: '基础' },
-  { key: 'growth', label: '成长' },
-  { key: 'breakthrough', label: '突破' },
-  { key: 'traits', label: '洗点' },
+  { key: 'overview', label: 'Overview' },
+  { key: 'growth', label: 'Growth' },
+  { key: 'breakthrough', label: 'Breakthrough' },
+  { key: 'traits', label: 'Traits' },
 ];
 
 function formatNumber(value: number): string {
@@ -99,33 +99,21 @@ function getTraitRollGoldCost(baseGold: number, advantage?: ClientFactionAdvanta
 
 function formatTraitRollCost(cost: { marrow: number; jade: number; gold: number }, goldCost: number, options: { tianjiTalisman?: number } = {}): string {
   const parts: string[] = [];
-  if (cost.marrow > 0) {
-    parts.push(`灵髓 ${cost.marrow}`);
-  }
-  if (cost.jade > 0) {
-    parts.push(`灵玉 ${cost.jade}`);
-  }
-  if ((options.tianjiTalisman ?? 0) > 0) {
-    parts.push(`天机符 ${options.tianjiTalisman}`);
-  }
-  if (goldCost > 0) {
-    parts.push(`金币 ${formatNumber(goldCost)}`);
-  }
-  return parts.join(' · ');
+  if (cost.marrow > 0) parts.push(`Marrow ${cost.marrow}`);
+  if (cost.jade > 0) parts.push(`Jade ${cost.jade}`);
+  if ((options.tianjiTalisman ?? 0) > 0) parts.push(`Talisman ${options.tianjiTalisman}`);
+  if (goldCost > 0) parts.push(`Gold ${formatNumber(goldCost)}`);
+  return parts.join(' ? ');
 }
 
 function getTraitSlotDisplay(slot: ClientSpiritSlot, slotIndex: number): string {
   const trait = slot.traits?.find((item) => item.slotIndex === slotIndex);
-  return trait ? `${slotIndex}号 ${trait.label}` : `${slotIndex}号 空词条`;
+  return trait ? `Slot ${slotIndex}: ${trait.label}` : `Slot ${slotIndex}: Empty`;
 }
 
 function getSpiritRarityGrowthMultiplier(rarity: ClientSpiritRarity, level: number): number {
-  if (rarity === 'legendary') {
-    return level <= 10 ? 0.9 : level <= 30 ? 1.02 : 1.18;
-  }
-  if (rarity === 'rare') {
-    return level <= 10 ? 0.96 : level <= 30 ? 1.06 : 1.08;
-  }
+  if (rarity === 'legendary') return level <= 10 ? 0.9 : level <= 30 ? 1.02 : 1.18;
+  if (rarity === 'rare') return level <= 10 ? 0.96 : level <= 30 ? 1.06 : 1.08;
   return level <= 30 ? 1 : 0.92;
 }
 
@@ -137,10 +125,8 @@ function getSpiritAttackAtLevel(definition: ClientSpiritCodexEntry['definition']
 
 function getTraitBonusSummary(slot: ClientSpiritSlot): string {
   const traits = slot.traits ?? [];
-  if (traits.length <= 0) {
-    return '暂无洗点词条加成';
-  }
-  return traits.map((trait) => trait.description).join(' · ');
+  if (traits.length <= 0) return 'No trait bonuses yet';
+  return traits.map((trait) => trait.description).join(' ? ');
 }
 
 function formatDuration(seconds: number): string {
@@ -148,40 +134,25 @@ function formatDuration(seconds: number): string {
   const hours = Math.floor(safeSeconds / 3600);
   const minutes = Math.floor((safeSeconds % 3600) / 60);
   const remainingSeconds = safeSeconds % 60;
-
-  return `${hours}小时${String(minutes).padStart(2, '0')}分${String(remainingSeconds).padStart(2, '0')}秒`;
+  return `${hours}h ${String(minutes).padStart(2, '0')}m ${String(remainingSeconds).padStart(2, '0')}s`;
 }
 
 function getPassiveExpPerMinute(level: number): number {
-  if (level <= 2) {
-    return 5000;
-  }
-  if (level <= 10) {
-    return 1000;
-  }
-  if (level <= 20) {
-    return 500;
-  }
-  if (level <= 30) {
-    return 250;
-  }
+  if (level <= 2) return 5000;
+  if (level <= 10) return 1000;
+  if (level <= 20) return 500;
+  if (level <= 30) return 250;
   return 150;
 }
 
 function getBreakthroughStageForLevel(level: number): number | null {
-  if (level < 9 || level >= SPIRIT_MAX_LEVEL) {
-    return null;
-  }
-
+  if (level < 9 || level >= SPIRIT_MAX_LEVEL) return null;
   const stage = Math.floor((level + 1) / 10);
   return stage >= 1 && stage <= 5 && level === stage * 10 - 1 ? stage : null;
 }
 
 function getCompletedBreakthroughStageForLevel(level: number): number {
-  if (level >= SPIRIT_MAX_LEVEL) {
-    return 5;
-  }
-
+  if (level >= SPIRIT_MAX_LEVEL) return 5;
   return Math.min(Math.max(Math.floor(level / 10), 0), 4);
 }
 
@@ -194,7 +165,6 @@ function applyExpGain(level: number, exp: number, breakthroughStage: number, exp
   let nextLevel = level;
   let nextExp = Math.max(exp + Math.max(expGain, 0), 0);
   const nextBreakthroughStage = Math.max(breakthroughStage, getCompletedBreakthroughStageForLevel(nextLevel));
-
   while (nextLevel < SPIRIT_MAX_LEVEL && nextExp >= currentLevelExpRequired) {
     nextExp -= currentLevelExpRequired;
     nextLevel += 1;
@@ -203,12 +173,10 @@ function applyExpGain(level: number, exp: number, breakthroughStage: number, exp
       break;
     }
   }
-
   if (nextLevel >= SPIRIT_MAX_LEVEL) {
     nextLevel = SPIRIT_MAX_LEVEL;
     nextExp = 0;
   }
-
   return {
     level: nextLevel,
     exp: nextExp,
@@ -221,250 +189,134 @@ function getLiveSpiritSlot(slot: ClientSpiritSlot, nowMs: number): ClientSpiritS
   const currentLevelExpRequired = Math.max(slot.currentLevelExpRequired ?? 1, 1);
   const satiatedUntilMs = slot.satiatedUntil ? new Date(slot.satiatedUntil).getTime() : 0;
   const lastExpSettledAtMs = slot.lastExpSettledAt ? new Date(slot.lastExpSettledAt).getTime() : 0;
-  const satiatedRemainingSeconds = satiatedUntilMs > 0
-    ? Math.max(Math.floor((satiatedUntilMs - nowMs) / 1000), 0)
-    : 0;
-
+  const satiatedRemainingSeconds = satiatedUntilMs > 0 ? Math.max(Math.floor((satiatedUntilMs - nowMs) / 1000), 0) : 0;
   if (slot.level >= SPIRIT_MAX_LEVEL || !lastExpSettledAtMs || slot.isAtBreakthroughNode) {
-    return {
-      ...slot,
-      exp: slot.level >= SPIRIT_MAX_LEVEL ? 0 : Math.min(slot.exp, currentLevelExpRequired),
-      satiatedRemainingSeconds,
-      satiatedExpBonusPercent: satiatedRemainingSeconds > 0 ? 50 : 0,
-    };
+    return { ...slot, exp: slot.level >= SPIRIT_MAX_LEVEL ? 0 : Math.min(slot.exp, currentLevelExpRequired), satiatedRemainingSeconds, satiatedExpBonusPercent: satiatedRemainingSeconds > 0 ? 50 : 0 };
   }
-
   const elapsedSeconds = Math.max(Math.floor((nowMs - lastExpSettledAtMs) / 1000), 0);
   if (elapsedSeconds <= 0) {
-    return {
-      ...slot,
-      satiatedRemainingSeconds,
-      satiatedExpBonusPercent: satiatedRemainingSeconds > 0 ? 50 : 0,
-    };
+    return { ...slot, satiatedRemainingSeconds, satiatedExpBonusPercent: satiatedRemainingSeconds > 0 ? 50 : 0 };
   }
-
-  const satiatedSeconds = satiatedUntilMs > lastExpSettledAtMs
-    ? Math.max(Math.floor((Math.min(satiatedUntilMs, nowMs) - lastExpSettledAtMs) / 1000), 0)
-    : 0;
+  const satiatedSeconds = satiatedUntilMs > lastExpSettledAtMs ? Math.max(Math.floor((Math.min(satiatedUntilMs, nowMs) - lastExpSettledAtMs) / 1000), 0) : 0;
   const normalSeconds = Math.max(elapsedSeconds - satiatedSeconds, 0);
   const passiveExpPerMinute = getPassiveExpPerMinute(slot.level);
   const normalExpGain = Math.floor(passiveExpPerMinute * normalSeconds / 60);
   const satiatedExpGain = Math.floor(passiveExpPerMinute * satiatedSeconds * 15000 / 10000 / 60);
   const progressed = applyExpGain(slot.level, slot.exp, slot.breakthroughStage ?? 0, normalExpGain + satiatedExpGain, currentLevelExpRequired);
-
-  return {
-    ...slot,
-    ...progressed,
-    satiatedRemainingSeconds,
-    satiatedExpBonusPercent: satiatedRemainingSeconds > 0 ? 50 : 0,
-  };
+  return { ...slot, ...progressed, satiatedRemainingSeconds, satiatedExpBonusPercent: satiatedRemainingSeconds > 0 ? 50 : 0 };
 }
 
 function getLevelRemainingText(slot: ClientSpiritSlot): string {
-  if (slot.level >= SPIRIT_MAX_LEVEL) {
-    return '已达等级上限';
-  }
-
-  if (slot.isAtBreakthroughNode) {
-    return '等待突破';
-  }
-
+  if (slot.level >= SPIRIT_MAX_LEVEL) return 'Max level reached';
+  if (slot.isAtBreakthroughNode) return 'Waiting for breakthrough';
   const required = Math.max(slot.currentLevelExpRequired ?? 1, 1);
   const remainingExp = Math.max(required - slot.exp, 0);
-  if (remainingExp <= 0) {
-    return '即将升级';
-  }
-
+  if (remainingExp <= 0) return 'Ready to level up';
   const bonusRate = (slot.satiatedRemainingSeconds ?? 0) > 0 ? 1.5 : 1;
   const expPerMinute = Math.max(getPassiveExpPerMinute(slot.level) * bonusRate, 1);
-  return `约 ${formatDuration(Math.ceil(remainingExp / expPerMinute) * 60)} 后升级`;
+  return `Level up in ${formatDuration(Math.ceil(remainingExp / expPerMinute) * 60)}`;
 }
 
 function getExpGainText(slot: ClientSpiritSlot): string {
-  if (slot.level >= SPIRIT_MAX_LEVEL) {
-    return '当前已达等级上限';
-  }
-
-  if (slot.isAtBreakthroughNode) {
-    return '当前待突破，突破后恢复增长';
-  }
-
+  if (slot.level >= SPIRIT_MAX_LEVEL) return 'Max level reached';
+  if (slot.isAtBreakthroughNode) return 'Break through to continue gaining exp';
   const bonusRate = (slot.satiatedRemainingSeconds ?? 0) > 0 ? 1.5 : 1;
   const expPerMinute = Math.max(Math.floor(getPassiveExpPerMinute(slot.level) * bonusRate), 1);
   const expPerTenSeconds = Math.max(Math.floor(expPerMinute / 6), 1);
-  return `每 10 秒约 +${formatNumber(expPerTenSeconds)} 经验`;
+  return `About +${formatNumber(expPerTenSeconds)} exp per 10s`;
 }
 
 function getExpProgressPercent(slot: ClientSpiritSlot): number {
-  if (slot.level >= SPIRIT_MAX_LEVEL) {
-    return 100;
-  }
-
-  if (slot.isAtBreakthroughNode) {
-    return 100;
-  }
-
+  if (slot.level >= SPIRIT_MAX_LEVEL || slot.isAtBreakthroughNode) return 100;
   return Math.min((slot.exp / Math.max(slot.currentLevelExpRequired ?? 1, 1)) * 100, 100);
 }
 
 const spiritResourceItems = [
-  { key: 'spiritRoot', icon: '根', label: '灵根' },
-  { key: 'spiritMarrow', icon: '髓', label: '灵髓' },
-  { key: 'spiritJade', icon: '玉', label: '灵玉' },
-  { key: 'ordinarySoul', icon: '普', label: '普通兽魂' },
-  { key: 'rareSoul', icon: '稀', label: '稀有兽魂' },
-  { key: 'legendarySoul', icon: '传', label: '传说兽魂' },
+  { key: 'spiritRoot', icon: 'R', label: 'Spirit Root' },
+  { key: 'spiritMarrow', icon: 'M', label: 'Spirit Marrow' },
+  { key: 'spiritJade', icon: 'J', label: 'Spirit Jade' },
+  { key: 'ordinarySoul', icon: 'O', label: 'Ordinary Soul' },
+  { key: 'rareSoul', icon: 'R', label: 'Rare Soul' },
+  { key: 'legendarySoul', icon: 'L', label: 'Legendary Soul' },
 ] as const;
 
 function getElementLabel(element: ClientSpiritElement | null): DisplayElement | '' {
-  if (element === 'metal') {
-    return '金';
-  }
-  if (element === 'wood') {
-    return '木';
-  }
-  if (element === 'water') {
-    return '水';
-  }
-  if (element === 'fire') {
-    return '火';
-  }
-  if (element === 'earth') {
-    return '土';
-  }
+  if (element === 'metal') return 'Metal';
+  if (element === 'wood') return 'Wood';
+  if (element === 'water') return 'Water';
+  if (element === 'fire') return 'Fire';
+  if (element === 'earth') return 'Earth';
   return '';
 }
 
 function getElementChoiceText(element: DisplayElement): string {
-  if (element === '金') {
-    return '金克木';
-  }
-  if (element === '木') {
-    return '木克土';
-  }
-  if (element === '水') {
-    return '水克火';
-  }
-  if (element === '火') {
-    return '火克金';
-  }
-  return '土克水';
+  if (element === 'Metal') return 'Counters Wood';
+  if (element === 'Wood') return 'Counters Earth';
+  if (element === 'Water') return 'Counters Fire';
+  if (element === 'Fire') return 'Counters Metal';
+  return 'Counters Water';
 }
 
 function getElementControlledByText(element: DisplayElement): string {
-  if (element === '金') {
-    return '被火克';
-  }
-  if (element === '木') {
-    return '被金克';
-  }
-  if (element === '水') {
-    return '被土克';
-  }
-  if (element === '火') {
-    return '被水克';
-  }
-  return '被木克';
+  if (element === 'Metal') return 'Countered by Fire';
+  if (element === 'Wood') return 'Countered by Metal';
+  if (element === 'Water') return 'Countered by Earth';
+  if (element === 'Fire') return 'Countered by Water';
+  return 'Countered by Wood';
 }
 
 function getElementPositionClass(element: DisplayElement): string {
-  if (element === '金') {
-    return 'is-metal';
-  }
-  if (element === '木') {
-    return 'is-wood';
-  }
-  if (element === '水') {
-    return 'is-water';
-  }
-  if (element === '火') {
-    return 'is-fire';
-  }
+  if (element === 'Metal') return 'is-metal';
+  if (element === 'Wood') return 'is-wood';
+  if (element === 'Water') return 'is-water';
+  if (element === 'Fire') return 'is-fire';
   return 'is-earth';
 }
 
 function getElementClass(element: ClientSpiritElement | DisplayElement | null): string {
-  if (element === 'metal' || element === '金') {
-    return 'spirit-element-metal';
-  }
-  if (element === 'wood' || element === '木') {
-    return 'spirit-element-wood';
-  }
-  if (element === 'water' || element === '水') {
-    return 'spirit-element-water';
-  }
-  if (element === 'fire' || element === '火') {
-    return 'spirit-element-fire';
-  }
-  if (element === 'earth' || element === '土') {
-    return 'spirit-element-earth';
-  }
+  if (element === 'metal' || element === 'Metal') return 'spirit-element-metal';
+  if (element === 'wood' || element === 'Wood') return 'spirit-element-wood';
+  if (element === 'water' || element === 'Water') return 'spirit-element-water';
+  if (element === 'fire' || element === 'Fire') return 'spirit-element-fire';
+  if (element === 'earth' || element === 'Earth') return 'spirit-element-earth';
   return 'spirit-element-wood';
 }
 
 function getRarityLabel(rarity: ClientSpiritRarity): DisplayRarity {
-  if (rarity === 'legendary') {
-    return '传说';
-  }
-  if (rarity === 'rare') {
-    return '稀有';
-  }
-  return '普通';
+  if (rarity === 'legendary') return 'Legendary';
+  if (rarity === 'rare') return 'Rare';
+  return 'Common';
 }
 
 function getRarityClass(rarity: DisplayRarity): string {
-  if (rarity === '传说') {
-    return 'spirit-rarity-legend';
-  }
-  if (rarity === '稀有') {
-    return 'spirit-rarity-rare';
-  }
+  if (rarity === 'Legendary') return 'spirit-rarity-legend';
+  if (rarity === 'Rare') return 'spirit-rarity-rare';
   return 'spirit-rarity-common';
 }
 
 function getFactionLabel(faction: ClientSpiritCodexEntry['definition']['factionAffinity']): string {
-  if (faction === 'immortal') {
-    return '仙界';
-  }
-  if (faction === 'demon') {
-    return '魔界';
-  }
-  return '人界';
+  if (faction === 'immortal') return 'Immortal';
+  if (faction === 'demon') return 'Demon';
+  return 'Human';
 }
 
 function getRoleLabel(role: ClientSpiritRole): string {
-  if (role === 'attack') {
-    return '攻击型';
-  }
-  if (role === 'health') {
-    return '血量型';
-  }
-  return '均衡型';
+  if (role === 'attack') return 'Attack';
+  if (role === 'health') return 'Health';
+  return 'Balanced';
 }
 
 function getPhaseForLevel(level: number): string {
-  if (level >= 50) {
-    return '归真圆满';
-  }
-  if (level >= 40) {
-    return '神异觉醒期';
-  }
-  if (level >= 30) {
-    return '真形期';
-  }
-  if (level >= 20) {
-    return '化形期';
-  }
-  if (level >= 10) {
-    return '幼灵期';
-  }
-  return '灵胎期';
+  if (level >= 50) return 'Perfected';
+  if (level >= 40) return 'Awakened';
+  if (level >= 30) return 'True Form';
+  if (level >= 20) return 'Shapeshift';
+  if (level >= 10) return 'Young Spirit';
+  return 'Spirit Seed';
 }
 
 function getHealthRatio(slot: ClientSpiritSlot): number {
-  if (slot.maxHp <= 0) {
-    return 0;
-  }
+  if (slot.maxHp <= 0) return 0;
   return 100;
 }
 
@@ -473,9 +325,7 @@ function getHealthText(slot: ClientSpiritSlot): string {
 }
 
 function getHealthStatus(slot: ClientSpiritSlot): string {
-  if (slot.maxHp <= 0) {
-    return 'No spirit';
-  }
+  if (slot.maxHp <= 0) return 'No spirit';
   return 'Full HP each battle';
 }
 
@@ -485,31 +335,19 @@ function getRecoveryPlan(_dailyRecoveryUsed: number): {
   nextTalismanCost: number;
   totalRemaining: number;
 } {
-  return {
-    freeRemaining: 0,
-    talismanRemaining: 0,
-    nextTalismanCost: 0,
-    totalRemaining: 0,
-  };
+  return { freeRemaining: 0, talismanRemaining: 0, nextTalismanCost: 0, totalRemaining: 0 };
 }
 
 function getRecoveryButtonText(_plan: ReturnType<typeof getRecoveryPlan>): string {
-  return '????';
+  return 'No recovery needed';
 }
 
 function getFactionBonusLabel(faction: string): string {
-  if (faction === '仙界') {
-    return '生命 +8%';
-  }
-  if (faction === '魔界') {
-    return '攻击 +8%';
-  }
-  if (faction === '人界') {
-    return '血量 +8%';
-  }
-  return '未触发';
+  if (faction === 'Immortal') return 'HP +8%';
+  if (faction === 'Demon') return 'Attack +8%';
+  if (faction === 'Human') return 'Life +8%';
+  return 'Not active';
 }
-
 function SpiritStageCard(props: {
   name: string;
   phase: string;
@@ -613,7 +451,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
     ?? null;
   const selectedComposeEntryVisible = selectedComposeEntry ? isSpiritCodexVisible(selectedComposeEntry) : false;
   const canOpenOwnedPetDetail = uiRules.allowOwnedPetDetail;
-  const selectedComposeElementLabel = getElementLabel(composeElement) || '木';
+  const selectedComposeElementLabel = getElementLabel(composeElement) || 'Wood';
   const selectedSlotIsOnlyOwnedSpirit = occupiedCount <= 1;
   const selectedSlotCanDissolve = selectedSlot ? !selectedSlot.isMain && !selectedSlotIsOnlyOwnedSpirit : false;
   const selectedSlotDissolveLabel = selectedSlot?.isMain

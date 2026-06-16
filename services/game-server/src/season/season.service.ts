@@ -183,7 +183,6 @@ export class SeasonService {
           },
           spiritSlots: {
             where: {
-              status: { not: 'DISSOLVED' },
               spiritDefinitionId: { not: null },
             },
             select: {
@@ -617,7 +616,6 @@ export class SeasonService {
     const activeSpiritSlots = await client.playerSpiritSlot.findMany({
       where: {
         playerId,
-        status: { not: 'DISSOLVED' },
         spiritDefinitionId: { not: null },
       },
       select: {
@@ -749,9 +747,7 @@ export class SeasonService {
           breakthroughStage: 0,
           satiatedUntil: null,
           lastExpSettledAt: null,
-          currentHp: baseHp,
           maxHp: baseHp,
-          status: 'ACTIVE',
           slotVersion: { increment: 1 },
         },
       });

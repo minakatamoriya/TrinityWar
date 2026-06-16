@@ -600,9 +600,9 @@ function buildSpiritSnapshotFromSlot(slot: {
     slotIndex: slot.slotIndex,
     level: slot.level,
     element: isSpiritElement(slot.element) ? slot.element : null,
-    currentHp: slot.currentHp,
+    currentHp: slot.maxHp,
     maxHp: slot.maxHp,
-    status: slot.status,
+    status: 'ACTIVE',
     spiritDefinition: slot.spiritDefinition,
     traits: slot.traits ?? [],
   };

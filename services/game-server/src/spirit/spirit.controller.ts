@@ -13,7 +13,6 @@ import {
   ComposeSpiritRequestDto,
   DissolveSpiritRequestDto,
   FeedSpiritRequestDto,
-  RecoverSpiritRequestDto,
   ResolveSpiritTraitRollRequestDto,
   RollSpiritTraitsRequestDto,
   SetMainSpiritRequestDto,
@@ -191,23 +190,6 @@ export class SpiritController {
     return this.spiritService.setMainSpirit(currentPlayer.playerId, body, idempotencyKey);
   }
 
-  @Post('recover')
-  @UseGuards(AuthPlaceholderGuard)
-  @ApiBearerAuth()
-  @ApiBody({ type: RecoverSpiritRequestDto })
-  @ApiOkResponse({ description: 'Recover spirit health.' })
-  async recoverSpirit(
-    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
-    @Body() body: RecoverSpiritRequestDto,
-    @Headers('x-idempotency-key') idempotencyKey?: string,
-  ): Promise<ClientSpiritMutationResponse> {
-    if (!currentPlayer) {
-      throw createUnauthorizedError('Current player context is required.');
-    }
-
-    return this.spiritService.recoverSpirit(currentPlayer.playerId, body, idempotencyKey);
-  }
-
   @Post('dissolve')
   @UseGuards(AuthPlaceholderGuard)
   @ApiBearerAuth()
@@ -253,7 +235,6 @@ defineRouteParamTypes(SpiritController.prototype, 'resolveSpiritTraitRoll', [Obj
 defineRouteParamTypes(SpiritController.prototype, 'buySpiritShopItem', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'claimSpiritAdReward', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'setMainSpirit', [Object, Object, String]);
-defineRouteParamTypes(SpiritController.prototype, 'recoverSpirit', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'dissolveSpirit', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'composeSpirit', [Object, Object, String]);
 

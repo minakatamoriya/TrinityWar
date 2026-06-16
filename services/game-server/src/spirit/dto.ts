@@ -6,7 +6,6 @@ import type {
   ClientComposeSpiritRequest,
   ClientDissolveSpiritRequest,
   ClientFeedSpiritRequest,
-  ClientRecoverSpiritRequest,
   ClientResolveSpiritTraitRollRequest,
   ClientRollSpiritTraitsRequest,
   ClientSetMainSpiritRequest,
@@ -30,13 +29,6 @@ export class UpgradeSpiritRequestDto implements ClientUpgradeSpiritRequest {
 export class SetMainSpiritRequestDto implements ClientSetMainSpiritRequest {
   slotIndex!: number;
   slotVersion?: number;
-  requestIdempotencyKey?: string;
-}
-
-export class RecoverSpiritRequestDto implements ClientRecoverSpiritRequest {
-  slotIndex!: number;
-  slotVersion?: number;
-  resourceVersion?: number;
   requestIdempotencyKey?: string;
 }
 
