@@ -17,6 +17,7 @@ import {
   requestSocialFriend,
   visitSocialFriendFields,
 } from '../../api';
+import { buildIdempotencyKey } from '../../apiSupport/idempotency';
 import { formatSocialAssistSummary } from '../../utils/format';
 import { runSocialFieldAssists } from './socialAssist';
 
@@ -76,11 +77,20 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
     targetPlayerId: string,
     fields: ClientSocialFriendFieldVisitResponse['fields'],
   ): Promise<ReturnType<typeof runSocialFieldAssists> extends Promise<infer TResult> ? TResult : never> => {
+    const assistBatchKey = buildIdempotencyKey('social-assist-batch');
     const assistResult = await runSocialFieldAssists({
       targetPlayerId,
       fields,
-      reviveField: (fieldSlotId) => reviveSocialField({ targetPlayerId, fieldSlotId }),
-      harvestField: (fieldSlotId) => harvestSocialField({ targetPlayerId, fieldSlotId }),
+      reviveField: (fieldSlotId) => reviveSocialField({
+        targetPlayerId,
+        fieldSlotId,
+        requestIdempotencyKey: `${assistBatchKey}:revive:${fieldSlotId}`,
+      }),
+      harvestField: (fieldSlotId) => harvestSocialField({
+        targetPlayerId,
+        fieldSlotId,
+        requestIdempotencyKey: `${assistBatchKey}:harvest:${fieldSlotId}`,
+      }),
     });
 
     if (assistResult.latestCounts) {

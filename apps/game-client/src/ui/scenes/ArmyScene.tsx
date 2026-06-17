@@ -57,35 +57,35 @@ interface ArmySceneProps {
   onOpenSpiritUnlockSurface: () => void;
 }
 
-type DisplayRarity = 'Common' | 'Rare' | 'Legendary';
-type DisplayElement = 'Metal' | 'Wood' | 'Water' | 'Fire' | 'Earth';
+type DisplayRarity = '普通' | '稀有' | '传说';
+type DisplayElement = '金' | '木' | '水' | '火' | '土';
 type SpiritPetActionTab = 'overview' | 'growth' | 'breakthrough' | 'traits';
 type SpiritComposeStep = 'choose-spirit' | 'choose-element';
 
 const composeRarityGroups = [
-  { key: 'common', label: 'Common', rarity: 'common' as const },
-  { key: 'rare', label: 'Rare', rarity: 'rare' as const },
-  { key: 'legend', label: 'Legendary', rarity: 'legendary' as const },
+  { key: 'common', label: '普通', rarity: 'common' as const },
+  { key: 'rare', label: '稀有', rarity: 'rare' as const },
+  { key: 'legend', label: '传说', rarity: 'legendary' as const },
 ];
 
 const STARTER_SPIRIT_IDS = ['canglang', 'linglu', 'qingyuan'] as const;
 
 const elementChoices: Array<{ value: ClientSpiritElement; label: DisplayElement }> = [
-  { value: 'metal', label: 'Metal' },
-  { value: 'wood', label: 'Wood' },
-  { value: 'water', label: 'Water' },
-  { value: 'fire', label: 'Fire' },
-  { value: 'earth', label: 'Earth' },
+  { value: 'metal', label: '金' },
+  { value: 'wood', label: '木' },
+  { value: 'water', label: '水' },
+  { value: 'fire', label: '火' },
+  { value: 'earth', label: '土' },
 ];
 
 const SPIRIT_MAX_LEVEL = 50;
 const traitRollPlans: ClientSpiritTraitRollRule[] = CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER.map((mode) => CLIENT_SPIRIT_TRAIT_ROLL_RULES[mode]);
 
 const petActionTabs: Array<{ key: SpiritPetActionTab; label: string }> = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'growth', label: 'Growth' },
-  { key: 'breakthrough', label: 'Breakthrough' },
-  { key: 'traits', label: 'Traits' },
+  { key: 'overview', label: '总览' },
+  { key: 'growth', label: '成长' },
+  { key: 'breakthrough', label: '突破' },
+  { key: 'traits', label: '词条' },
 ];
 
 function formatNumber(value: number): string {
@@ -99,16 +99,16 @@ function getTraitRollGoldCost(baseGold: number, advantage?: ClientFactionAdvanta
 
 function formatTraitRollCost(cost: { marrow: number; jade: number; gold: number }, goldCost: number, options: { tianjiTalisman?: number } = {}): string {
   const parts: string[] = [];
-  if (cost.marrow > 0) parts.push(`Marrow ${cost.marrow}`);
-  if (cost.jade > 0) parts.push(`Jade ${cost.jade}`);
-  if ((options.tianjiTalisman ?? 0) > 0) parts.push(`Talisman ${options.tianjiTalisman}`);
-  if (goldCost > 0) parts.push(`Gold ${formatNumber(goldCost)}`);
-  return parts.join(' ? ');
+  if (cost.marrow > 0) parts.push(`灵髓 ${cost.marrow}`);
+  if (cost.jade > 0) parts.push(`灵玉 ${cost.jade}`);
+  if ((options.tianjiTalisman ?? 0) > 0) parts.push(`天机符 ${options.tianjiTalisman}`);
+  if (goldCost > 0) parts.push(`金币 ${formatNumber(goldCost)}`);
+  return parts.join(' · ');
 }
 
 function getTraitSlotDisplay(slot: ClientSpiritSlot, slotIndex: number): string {
   const trait = slot.traits?.find((item) => item.slotIndex === slotIndex);
-  return trait ? `Slot ${slotIndex}: ${trait.label}` : `Slot ${slotIndex}: Empty`;
+  return trait ? `${slotIndex}号槽：${trait.label}` : `${slotIndex}号槽：空词条`;
 }
 
 function getSpiritRarityGrowthMultiplier(rarity: ClientSpiritRarity, level: number): number {
@@ -125,8 +125,8 @@ function getSpiritAttackAtLevel(definition: ClientSpiritCodexEntry['definition']
 
 function getTraitBonusSummary(slot: ClientSpiritSlot): string {
   const traits = slot.traits ?? [];
-  if (traits.length <= 0) return 'No trait bonuses yet';
-  return traits.map((trait) => trait.description).join(' ? ');
+  if (traits.length <= 0) return '暂无词条加成';
+  return traits.map((trait) => trait.description).join(' · ');
 }
 
 function formatDuration(seconds: number): string {
@@ -134,7 +134,7 @@ function formatDuration(seconds: number): string {
   const hours = Math.floor(safeSeconds / 3600);
   const minutes = Math.floor((safeSeconds % 3600) / 60);
   const remainingSeconds = safeSeconds % 60;
-  return `${hours}h ${String(minutes).padStart(2, '0')}m ${String(remainingSeconds).padStart(2, '0')}s`;
+  return `${hours}小时 ${String(minutes).padStart(2, '0')}分 ${String(remainingSeconds).padStart(2, '0')}秒`;
 }
 
 function getPassiveExpPerMinute(level: number): number {
@@ -207,23 +207,23 @@ function getLiveSpiritSlot(slot: ClientSpiritSlot, nowMs: number): ClientSpiritS
 }
 
 function getLevelRemainingText(slot: ClientSpiritSlot): string {
-  if (slot.level >= SPIRIT_MAX_LEVEL) return 'Max level reached';
-  if (slot.isAtBreakthroughNode) return 'Waiting for breakthrough';
+  if (slot.level >= SPIRIT_MAX_LEVEL) return '已满级';
+  if (slot.isAtBreakthroughNode) return '等待突破';
   const required = Math.max(slot.currentLevelExpRequired ?? 1, 1);
   const remainingExp = Math.max(required - slot.exp, 0);
-  if (remainingExp <= 0) return 'Ready to level up';
+  if (remainingExp <= 0) return '即将升级';
   const bonusRate = (slot.satiatedRemainingSeconds ?? 0) > 0 ? 1.5 : 1;
   const expPerMinute = Math.max(getPassiveExpPerMinute(slot.level) * bonusRate, 1);
-  return `Level up in ${formatDuration(Math.ceil(remainingExp / expPerMinute) * 60)}`;
+  return `${formatDuration(Math.ceil(remainingExp / expPerMinute) * 60)}后升级`;
 }
 
 function getExpGainText(slot: ClientSpiritSlot): string {
-  if (slot.level >= SPIRIT_MAX_LEVEL) return 'Max level reached';
-  if (slot.isAtBreakthroughNode) return 'Break through to continue gaining exp';
+  if (slot.level >= SPIRIT_MAX_LEVEL) return '已满级';
+  if (slot.isAtBreakthroughNode) return '突破后继续获得经验';
   const bonusRate = (slot.satiatedRemainingSeconds ?? 0) > 0 ? 1.5 : 1;
   const expPerMinute = Math.max(Math.floor(getPassiveExpPerMinute(slot.level) * bonusRate), 1);
   const expPerTenSeconds = Math.max(Math.floor(expPerMinute / 6), 1);
-  return `About +${formatNumber(expPerTenSeconds)} exp per 10s`;
+  return `约每 10 秒 +${formatNumber(expPerTenSeconds)} 经验`;
 }
 
 function getExpProgressPercent(slot: ClientSpiritSlot): number {
@@ -232,87 +232,87 @@ function getExpProgressPercent(slot: ClientSpiritSlot): number {
 }
 
 const spiritResourceItems = [
-  { key: 'spiritRoot', icon: 'R', label: 'Spirit Root' },
-  { key: 'spiritMarrow', icon: 'M', label: 'Spirit Marrow' },
-  { key: 'spiritJade', icon: 'J', label: 'Spirit Jade' },
-  { key: 'ordinarySoul', icon: 'O', label: 'Ordinary Soul' },
-  { key: 'rareSoul', icon: 'R', label: 'Rare Soul' },
-  { key: 'legendarySoul', icon: 'L', label: 'Legendary Soul' },
+  { key: 'spiritRoot', icon: '根', label: '灵根' },
+  { key: 'spiritMarrow', icon: '髓', label: '灵髓' },
+  { key: 'spiritJade', icon: '玉', label: '灵玉' },
+  { key: 'ordinarySoul', icon: '普', label: '普通兽魂' },
+  { key: 'rareSoul', icon: '稀', label: '稀有兽魂' },
+  { key: 'legendarySoul', icon: '传', label: '传说兽魂' },
 ] as const;
 
 function getElementLabel(element: ClientSpiritElement | null): DisplayElement | '' {
-  if (element === 'metal') return 'Metal';
-  if (element === 'wood') return 'Wood';
-  if (element === 'water') return 'Water';
-  if (element === 'fire') return 'Fire';
-  if (element === 'earth') return 'Earth';
+  if (element === 'metal') return '金';
+  if (element === 'wood') return '木';
+  if (element === 'water') return '水';
+  if (element === 'fire') return '火';
+  if (element === 'earth') return '土';
   return '';
 }
 
 function getElementChoiceText(element: DisplayElement): string {
-  if (element === 'Metal') return 'Counters Wood';
-  if (element === 'Wood') return 'Counters Earth';
-  if (element === 'Water') return 'Counters Fire';
-  if (element === 'Fire') return 'Counters Metal';
-  return 'Counters Water';
+  if (element === '金') return '克制木';
+  if (element === '木') return '克制土';
+  if (element === '水') return '克制火';
+  if (element === '火') return '克制金';
+  return '克制水';
 }
 
 function getElementControlledByText(element: DisplayElement): string {
-  if (element === 'Metal') return 'Countered by Fire';
-  if (element === 'Wood') return 'Countered by Metal';
-  if (element === 'Water') return 'Countered by Earth';
-  if (element === 'Fire') return 'Countered by Water';
-  return 'Countered by Wood';
+  if (element === '金') return '被火克制';
+  if (element === '木') return '被金克制';
+  if (element === '水') return '被土克制';
+  if (element === '火') return '被水克制';
+  return '被木克制';
 }
 
 function getElementPositionClass(element: DisplayElement): string {
-  if (element === 'Metal') return 'is-metal';
-  if (element === 'Wood') return 'is-wood';
-  if (element === 'Water') return 'is-water';
-  if (element === 'Fire') return 'is-fire';
+  if (element === '金') return 'is-metal';
+  if (element === '木') return 'is-wood';
+  if (element === '水') return 'is-water';
+  if (element === '火') return 'is-fire';
   return 'is-earth';
 }
 
 function getElementClass(element: ClientSpiritElement | DisplayElement | null): string {
-  if (element === 'metal' || element === 'Metal') return 'spirit-element-metal';
-  if (element === 'wood' || element === 'Wood') return 'spirit-element-wood';
-  if (element === 'water' || element === 'Water') return 'spirit-element-water';
-  if (element === 'fire' || element === 'Fire') return 'spirit-element-fire';
-  if (element === 'earth' || element === 'Earth') return 'spirit-element-earth';
+  if (element === 'metal' || element === '金') return 'spirit-element-metal';
+  if (element === 'wood' || element === '木') return 'spirit-element-wood';
+  if (element === 'water' || element === '水') return 'spirit-element-water';
+  if (element === 'fire' || element === '火') return 'spirit-element-fire';
+  if (element === 'earth' || element === '土') return 'spirit-element-earth';
   return 'spirit-element-wood';
 }
 
 function getRarityLabel(rarity: ClientSpiritRarity): DisplayRarity {
-  if (rarity === 'legendary') return 'Legendary';
-  if (rarity === 'rare') return 'Rare';
-  return 'Common';
+  if (rarity === 'legendary') return '传说';
+  if (rarity === 'rare') return '稀有';
+  return '普通';
 }
 
 function getRarityClass(rarity: DisplayRarity): string {
-  if (rarity === 'Legendary') return 'spirit-rarity-legend';
-  if (rarity === 'Rare') return 'spirit-rarity-rare';
+  if (rarity === '传说') return 'spirit-rarity-legend';
+  if (rarity === '稀有') return 'spirit-rarity-rare';
   return 'spirit-rarity-common';
 }
 
 function getFactionLabel(faction: ClientSpiritCodexEntry['definition']['factionAffinity']): string {
-  if (faction === 'immortal') return 'Immortal';
-  if (faction === 'demon') return 'Demon';
-  return 'Human';
+  if (faction === 'immortal') return '仙界';
+  if (faction === 'demon') return '魔界';
+  return '人界';
 }
 
 function getRoleLabel(role: ClientSpiritRole): string {
-  if (role === 'attack') return 'Attack';
-  if (role === 'health') return 'Health';
-  return 'Balanced';
+  if (role === 'attack') return '攻击';
+  if (role === 'health') return '血量';
+  return '均衡';
 }
 
 function getPhaseForLevel(level: number): string {
-  if (level >= 50) return 'Perfected';
-  if (level >= 40) return 'Awakened';
-  if (level >= 30) return 'True Form';
-  if (level >= 20) return 'Shapeshift';
-  if (level >= 10) return 'Young Spirit';
-  return 'Spirit Seed';
+  if (level >= 50) return '圆满';
+  if (level >= 40) return '觉醒';
+  if (level >= 30) return '真形';
+  if (level >= 20) return '化形';
+  if (level >= 10) return '幼灵';
+  return '灵种';
 }
 
 function getHealthRatio(slot: ClientSpiritSlot): number {
@@ -321,12 +321,12 @@ function getHealthRatio(slot: ClientSpiritSlot): number {
 }
 
 function getHealthText(slot: ClientSpiritSlot): string {
-  return `HP ${formatNumber(slot.maxHp)}`;
+  return `血量 ${formatNumber(slot.maxHp)}`;
 }
 
 function getHealthStatus(slot: ClientSpiritSlot): string {
-  if (slot.maxHp <= 0) return 'No spirit';
-  return 'Full HP each battle';
+  if (slot.maxHp <= 0) return '未结契';
+  return '每场满血';
 }
 
 function getRecoveryPlan(_dailyRecoveryUsed: number): {
@@ -339,14 +339,14 @@ function getRecoveryPlan(_dailyRecoveryUsed: number): {
 }
 
 function getRecoveryButtonText(_plan: ReturnType<typeof getRecoveryPlan>): string {
-  return 'No recovery needed';
+  return '无需恢复';
 }
 
 function getFactionBonusLabel(faction: string): string {
-  if (faction === 'Immortal') return 'HP +8%';
-  if (faction === 'Demon') return 'Attack +8%';
-  if (faction === 'Human') return 'Life +8%';
-  return 'Not active';
+  if (faction === '仙界') return '血量 +8%';
+  if (faction === '魔界') return '攻击 +8%';
+  if (faction === '人界') return '生命 +8%';
+  return '未触发';
 }
 function SpiritStageCard(props: {
   name: string;
@@ -451,7 +451,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
     ?? null;
   const selectedComposeEntryVisible = selectedComposeEntry ? isSpiritCodexVisible(selectedComposeEntry) : false;
   const canOpenOwnedPetDetail = uiRules.allowOwnedPetDetail;
-  const selectedComposeElementLabel = getElementLabel(composeElement) || 'Wood';
+  const selectedComposeElementLabel = getElementLabel(composeElement) || '木';
   const selectedSlotIsOnlyOwnedSpirit = occupiedCount <= 1;
   const selectedSlotCanDissolve = selectedSlot ? !selectedSlot.isMain && !selectedSlotIsOnlyOwnedSpirit : false;
   const selectedSlotDissolveLabel = selectedSlot?.isMain
@@ -893,7 +893,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                         <div className="spirit-bonus-panel">
                           <div className="panel-head">
                             <h4>加成</h4>
-                            <span className="soft-tag">Buff</span>
+                            <span className="soft-tag">加成</span>
                           </div>
                           <div className="spirit-bonus-list">
                             <div className={`spirit-bonus-row${selectedSlotSameFaction ? '' : ' is-muted'}`}>
@@ -1229,7 +1229,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                                         onClick={() => setSelectedComposeSpiritId(entry.spiritId)}
                                         type="button"
                                       >
-                                        <span>{visible ? spiritName.slice(0, 2) : '？？'}</span>
+                                        <span>{visible ? spiritName.slice(0, 2) : '未知'}</span>
                                       </button>
                                       <small>{getSpiritCodexShardProgress(entry).replace(' / ', '/')}</small>
                                     </div>

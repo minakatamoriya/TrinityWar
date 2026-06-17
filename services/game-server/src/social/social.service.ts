@@ -84,6 +84,17 @@ interface HarvestedFieldResult {
   rewardGold: number;
 }
 
+interface SocialAssistFeedMetadata {
+  assistBatchKey?: string;
+  perspective?: 'target' | 'helper';
+  assistIds?: string[];
+  reviveCount?: number;
+  harvestCount?: number;
+  totalRewardGold?: number;
+  totalEffectSeconds?: number;
+  fieldSlotIds?: string[];
+}
+
 const revivableFieldSelect = {
   id: true,
   status: true,
@@ -461,8 +472,8 @@ export class SocialService {
   async reviveField(playerId: string, request: ClientSocialReviveFieldRequest, options: { now?: Date } = {}): Promise<ClientSocialAssistResponse> {
     const result = await this.prisma.transaction(async (client) => {
       const now = options.now ?? new Date();
-      await this.assertPlayerExists(client, playerId);
-      await this.assertPlayerExists(client, request.targetPlayerId);
+      const helper = await this.assertPlayerExists(client, playerId);
+      const target = await this.assertPlayerExists(client, request.targetPlayerId);
 
       if (playerId === request.targetPlayerId) {
         throw this.invalidRequest('Cannot assist your own field.');
@@ -498,21 +509,32 @@ export class SocialService {
         },
       });
 
-      await client.playerSocialFeed.create({
-        data: {
-          playerId: request.targetPlayerId,
-          actorPlayerId: playerId,
-          feedType: SocialFeedType.FRIEND_REVIVED_FIELD,
-          relatedEntityType: 'field_slot',
-          relatedEntityId: revivedField.fieldSlotId,
-          summary: '你的好友帮你复活了一块枯萎田，已重新进入成熟收取窗口。',
-          metadataJson: {
-            assistId: assist.id,
-            effectSeconds: revivedField.effectSeconds,
-            beforeStageEndsAt: revivedField.beforeStageEndsAt.toISOString(),
-            afterStageEndsAt: revivedField.afterStageEndsAt.toISOString(),
-          },
-        },
+      await this.recordFriendAssistFeed(client, {
+        playerId: request.targetPlayerId,
+        actorPlayerId: playerId,
+        counterpartNickname: helper.nickname,
+        perspective: 'target',
+        requestIdempotencyKey: request.requestIdempotencyKey,
+        fallbackRelatedEntityType: 'field_slot',
+        fallbackRelatedEntityId: revivedField.fieldSlotId,
+        assistId: assist.id,
+        fieldSlotId: revivedField.fieldSlotId,
+        reviveCount: 1,
+        totalEffectSeconds: revivedField.effectSeconds,
+      });
+
+      await this.recordFriendAssistFeed(client, {
+        playerId,
+        actorPlayerId: request.targetPlayerId,
+        counterpartNickname: target.nickname,
+        perspective: 'helper',
+        requestIdempotencyKey: request.requestIdempotencyKey,
+        fallbackRelatedEntityType: 'field_slot',
+        fallbackRelatedEntityId: revivedField.fieldSlotId,
+        assistId: assist.id,
+        fieldSlotId: revivedField.fieldSlotId,
+        reviveCount: 1,
+        totalEffectSeconds: revivedField.effectSeconds,
       });
 
       await this.bumpInteraction(client, playerId, request.targetPlayerId, assist.intimacyGain);
@@ -606,7 +628,7 @@ export class SocialService {
       app: APP_NAME,
       friend: this.mapPlayer(target),
       fields: fields.map((field) => this.mapHarvestableField(field)),
-      ruleText: '涓嶄細褰卞搷濂藉弸鏀舵垚',
+      ruleText: '不会影响好友收成',
     };
   }
 
@@ -697,40 +719,33 @@ export class SocialService {
         },
       });
 
-      await Promise.all([
-        client.playerSocialFeed.create({
-          data: {
-            playerId,
-            actorPlayerId: request.targetPlayerId,
-            feedType: SocialFeedType.FRIEND_WATERED_FIELD,
-            relatedEntityType: 'player_assist_record',
-            relatedEntityId: assist.id,
-            summary: `你拜访了 ${target.nickname} 的灵田，采摘到一缕灵田余韵。`,
-            metadataJson: {
-              assistId: assist.id,
-              assistType: 'harvest_field',
-              fieldSlotId: harvestResult.fieldSlotId,
-              rewardGold: harvestResult.rewardGold,
-            },
-          },
-        }),
-        client.playerSocialFeed.create({
-          data: {
-            playerId: request.targetPlayerId,
-            actorPlayerId: playerId,
-            feedType: SocialFeedType.FRIEND_WATERED_FIELD,
-            relatedEntityType: 'player_assist_record',
-            relatedEntityId: assist.id,
-            summary: `${helper.nickname} 拜访了你的灵田，采摘不会影响你的收成。`,
-            metadataJson: {
-              assistId: assist.id,
-              assistType: 'harvest_field',
-              fieldSlotId: harvestResult.fieldSlotId,
-              rewardGold: harvestResult.rewardGold,
-            },
-          },
-        }),
-      ]);
+      await this.recordFriendAssistFeed(client, {
+        playerId: request.targetPlayerId,
+        actorPlayerId: playerId,
+        counterpartNickname: helper.nickname,
+        perspective: 'target',
+        requestIdempotencyKey: request.requestIdempotencyKey,
+        fallbackRelatedEntityType: 'player_assist_record',
+        fallbackRelatedEntityId: assist.id,
+        assistId: assist.id,
+        fieldSlotId: harvestResult.fieldSlotId,
+        harvestCount: 1,
+        totalRewardGold: harvestResult.rewardGold,
+      });
+
+      await this.recordFriendAssistFeed(client, {
+        playerId,
+        actorPlayerId: request.targetPlayerId,
+        counterpartNickname: target.nickname,
+        perspective: 'helper',
+        requestIdempotencyKey: request.requestIdempotencyKey,
+        fallbackRelatedEntityType: 'player_assist_record',
+        fallbackRelatedEntityId: assist.id,
+        assistId: assist.id,
+        fieldSlotId: harvestResult.fieldSlotId,
+        harvestCount: 1,
+        totalRewardGold: harvestResult.rewardGold,
+      });
 
       await this.bumpInteraction(client, playerId, request.targetPlayerId, assist.intimacyGain);
       await grantFactionContribution(client, {
@@ -1254,7 +1269,7 @@ export class SocialService {
 
     return {
       fieldSlotId: field.id,
-      fieldCode: `鐢板湴 ${String(field.slotIndex).padStart(2, '0')}`,
+      fieldCode: `田地 ${String(field.slotIndex).padStart(2, '0')}`,
       slotIndex: field.slotIndex,
       status,
       tone,
@@ -1277,9 +1292,9 @@ export class SocialService {
     const rewardGold = calculateHarvestRewardGold(field);
     return {
       fieldSlotId: field.id,
-      fieldCode: `鐢板湴 ${field.slotIndex}`,
+      fieldCode: `田地 ${field.slotIndex}`,
       status: field.status as 'MATURE',
-      cropName: field.seedDefinition?.label ?? '鏈煡鐏垫',
+      cropName: field.seedDefinition?.label ?? '未知灵植',
       cropRarity: field.seedDefinition?.rarity ?? 'common',
       rewardPreview: { gold: rewardGold },
     };
@@ -1288,9 +1303,9 @@ export class SocialService {
   private mapHarvestedField(field: HarvestableField): HarvestedFieldResult {
     return {
       fieldSlotId: field.id,
-      fieldCode: `鐢板湴 ${field.slotIndex}`,
+      fieldCode: `田地 ${field.slotIndex}`,
       status: field.status,
-      cropName: field.seedDefinition?.label ?? '鏈煡鐏垫',
+      cropName: field.seedDefinition?.label ?? '未知灵植',
       cropRarity: field.seedDefinition?.rarity ?? 'common',
       rewardGold: calculateHarvestRewardGold(field),
     };
@@ -1496,26 +1511,30 @@ export class SocialService {
     };
   }
 
-  private buildFeedActions(feedType: SocialFeedType, targetPlayerId?: string, relatedEntityId?: string): ClientSocialFeedItem['actions'] {
+  private buildFeedActions(
+    feedType: SocialFeedType,
+    targetPlayerId?: string,
+    relatedEntityId?: string,
+  ): ClientSocialFeedItem['actions'] {
     if (feedType === SocialFeedType.FRIEND_REQUESTED) {
       return [
-        { label: '鍚屾剰', action: 'accept_friend', targetPlayerId, relatedEntityId },
-        { label: '鎷掔粷', action: 'reject_friend', targetPlayerId, relatedEntityId },
+        { label: '同意', action: 'accept_friend', targetPlayerId, relatedEntityId },
+        { label: '拒绝', action: 'reject_friend', targetPlayerId, relatedEntityId },
       ];
     }
     if (feedType === SocialFeedType.FRIEND_WATERED_FIELD || feedType === SocialFeedType.FRIEND_REVIVED_FIELD) {
-      return [{ label: '鍥炴祰', action: 'assist_back', targetPlayerId }];
+      return [];
     }
     if (feedType === SocialFeedType.REVENGE_AVAILABLE || feedType === SocialFeedType.ENEMY_RAIDED) {
       return [
-        { label: '澶嶄粐', action: 'revenge', targetPlayerId, relatedEntityId },
-        { label: '鍏虫敞', action: 'follow', targetPlayerId },
+        { label: '复仇', action: 'revenge', targetPlayerId, relatedEntityId },
+        { label: '关注', action: 'follow', targetPlayerId },
       ];
     }
     if (feedType === SocialFeedType.TEAM_CHALLENGE_INVITED) {
       return [{ label: '查看邀请', action: 'team_challenge', targetPlayerId, relatedEntityId }];
     }
-    return [{ label: '忽略', action: 'ignore', targetPlayerId, relatedEntityId }];
+    return [];
   }
 
   private mapRelationType(type: SocialRelationType): ClientSocialRelationItem['relationType'] {
@@ -1528,6 +1547,132 @@ export class SocialService {
 
   private mapFeedType(type: SocialFeedType): ClientSocialFeedItem['feedType'] {
     return type.toLowerCase() as ClientSocialFeedItem['feedType'];
+  }
+
+  private async recordFriendAssistFeed(
+    client: DbClient,
+    input: {
+      playerId: string;
+      actorPlayerId: string;
+      counterpartNickname: string;
+      perspective: 'target' | 'helper';
+      requestIdempotencyKey?: string;
+      fallbackRelatedEntityType: string;
+      fallbackRelatedEntityId: string;
+      assistId: string;
+      fieldSlotId: string;
+      reviveCount?: number;
+      harvestCount?: number;
+      totalRewardGold?: number;
+      totalEffectSeconds?: number;
+    },
+  ): Promise<void> {
+    const assistBatchKey = extractSocialAssistBatchKey(input.requestIdempotencyKey);
+    const nextMetadata = this.mergeSocialAssistFeedMetadata(null, {
+      assistBatchKey,
+      perspective: input.perspective,
+      assistId: input.assistId,
+      fieldSlotId: input.fieldSlotId,
+      reviveCount: input.reviveCount ?? 0,
+      harvestCount: input.harvestCount ?? 0,
+      totalRewardGold: input.totalRewardGold ?? 0,
+      totalEffectSeconds: input.totalEffectSeconds ?? 0,
+    });
+
+    if (!assistBatchKey) {
+      await client.playerSocialFeed.create({
+        data: {
+          playerId: input.playerId,
+          actorPlayerId: input.actorPlayerId,
+          feedType: this.resolveFriendAssistFeedType(nextMetadata),
+          relatedEntityType: input.fallbackRelatedEntityType,
+          relatedEntityId: input.fallbackRelatedEntityId,
+          summary: buildFriendAssistFeedSummary(input.perspective, input.counterpartNickname, nextMetadata),
+          metadataJson: nextMetadata,
+        },
+      });
+      return;
+    }
+
+    const existingFeed = await client.playerSocialFeed.findFirst({
+      where: {
+        playerId: input.playerId,
+        actorPlayerId: input.actorPlayerId,
+        relatedEntityType: 'social_assist_batch',
+        relatedEntityId: assistBatchKey,
+      },
+      select: {
+        id: true,
+        metadataJson: true,
+      },
+    });
+
+    if (!existingFeed) {
+      await client.playerSocialFeed.create({
+        data: {
+          playerId: input.playerId,
+          actorPlayerId: input.actorPlayerId,
+          feedType: this.resolveFriendAssistFeedType(nextMetadata),
+          relatedEntityType: 'social_assist_batch',
+          relatedEntityId: assistBatchKey,
+          summary: buildFriendAssistFeedSummary(input.perspective, input.counterpartNickname, nextMetadata),
+          metadataJson: nextMetadata,
+        },
+      });
+      return;
+    }
+
+    const mergedMetadata = this.mergeSocialAssistFeedMetadata(existingFeed.metadataJson, {
+      assistBatchKey,
+      perspective: input.perspective,
+      assistId: input.assistId,
+      fieldSlotId: input.fieldSlotId,
+      reviveCount: input.reviveCount ?? 0,
+      harvestCount: input.harvestCount ?? 0,
+      totalRewardGold: input.totalRewardGold ?? 0,
+      totalEffectSeconds: input.totalEffectSeconds ?? 0,
+    });
+
+    await client.playerSocialFeed.update({
+      where: { id: existingFeed.id },
+      data: {
+        feedType: this.resolveFriendAssistFeedType(mergedMetadata),
+        summary: buildFriendAssistFeedSummary(input.perspective, input.counterpartNickname, mergedMetadata),
+        metadataJson: mergedMetadata,
+      },
+    });
+  }
+
+  private mergeSocialAssistFeedMetadata(
+    current: unknown,
+    delta: {
+      assistBatchKey: string | null;
+      perspective: 'target' | 'helper';
+      assistId: string;
+      fieldSlotId: string;
+      reviveCount: number;
+      harvestCount: number;
+      totalRewardGold: number;
+      totalEffectSeconds: number;
+    },
+  ): SocialAssistFeedMetadata {
+    const currentMetadata = asSocialAssistFeedMetadata(current);
+    return {
+      assistBatchKey: delta.assistBatchKey ?? currentMetadata.assistBatchKey,
+      perspective: delta.perspective ?? currentMetadata.perspective,
+      assistIds: appendUniqueValue(currentMetadata.assistIds, delta.assistId),
+      reviveCount: (currentMetadata.reviveCount ?? 0) + delta.reviveCount,
+      harvestCount: (currentMetadata.harvestCount ?? 0) + delta.harvestCount,
+      totalRewardGold: (currentMetadata.totalRewardGold ?? 0) + delta.totalRewardGold,
+      totalEffectSeconds: (currentMetadata.totalEffectSeconds ?? 0) + delta.totalEffectSeconds,
+      fieldSlotIds: appendUniqueValue(currentMetadata.fieldSlotIds, delta.fieldSlotId),
+    };
+  }
+
+  private resolveFriendAssistFeedType(metadata: SocialAssistFeedMetadata): SocialFeedType.FRIEND_WATERED_FIELD | SocialFeedType.FRIEND_REVIVED_FIELD {
+    return (metadata.harvestCount ?? 0) > 0
+      ? SocialFeedType.FRIEND_WATERED_FIELD
+      : SocialFeedType.FRIEND_REVIVED_FIELD;
   }
 
   private mapTeamChallengeStatus(status: TeamChallengeStatus): ClientTeamChallengeItem['status'] {
@@ -1598,12 +1743,12 @@ function getFriendFieldBadge(status: ClientSocialFriendFieldVisitField['status']
     return '空闲';
   }
   if (status === 'GROWING') {
-    return '鎴愰暱';
+    return '成长';
   }
   if (status === 'MATURE') {
-    return '鎴愮啛';
+    return '成熟';
   }
-  return '鏋悗';
+  return '枯萎';
 }
 
 function getFriendFieldTitle(status: ClientSocialFriendFieldVisitField['status']): string {
@@ -1617,9 +1762,9 @@ function getFriendFieldTitle(status: ClientSocialFriendFieldVisitField['status']
     return '成长中';
   }
   if (status === 'MATURE') {
-    return '鎴愮啛鍙敹';
+    return '成熟可收';
   }
-  return '宸茬粡鏋悗';
+  return '已经枯萎';
 }
 
 function getFriendFieldTiming(field: FriendFieldVisitSlot, now: Date): { remainingSeconds: number; totalSeconds: number } {
@@ -1647,6 +1792,86 @@ function formatIntimacyGainClause(intimacyGain: number): string {
 
 function buildFriendIntimacyPairKey(playerId: string, targetPlayerId: string): string {
   return [playerId, targetPlayerId].sort().join(':');
+}
+
+function extractSocialAssistBatchKey(requestIdempotencyKey?: string | null): string | null {
+  const normalizedKey = requestIdempotencyKey?.trim();
+  if (!normalizedKey || !normalizedKey.startsWith('social-assist-batch-')) {
+    return null;
+  }
+
+  const separatorIndex = normalizedKey.indexOf(':');
+  return separatorIndex >= 0 ? normalizedKey.slice(0, separatorIndex) : normalizedKey;
+}
+
+function appendUniqueValue(values: string[] | undefined, nextValue: string): string[] {
+  if (!values || values.length === 0) {
+    return [nextValue];
+  }
+  if (values.includes(nextValue)) {
+    return values;
+  }
+  return [...values, nextValue];
+}
+
+function asSocialAssistFeedMetadata(value: unknown): SocialAssistFeedMetadata {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    assistBatchKey: typeof record.assistBatchKey === 'string' ? record.assistBatchKey : undefined,
+    perspective: record.perspective === 'target' || record.perspective === 'helper' ? record.perspective : undefined,
+    assistIds: toStringArray(record.assistIds),
+    reviveCount: toNumberOrUndefined(record.reviveCount),
+    harvestCount: toNumberOrUndefined(record.harvestCount),
+    totalRewardGold: toNumberOrUndefined(record.totalRewardGold),
+    totalEffectSeconds: toNumberOrUndefined(record.totalEffectSeconds),
+    fieldSlotIds: toStringArray(record.fieldSlotIds),
+  };
+}
+
+function toStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+function toNumberOrUndefined(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function buildFriendAssistFeedSummary(
+  perspective: 'target' | 'helper',
+  counterpartNickname: string,
+  metadata: SocialAssistFeedMetadata,
+): string {
+  const reviveCount = metadata.reviveCount ?? 0;
+  const harvestCount = metadata.harvestCount ?? 0;
+  const summaryParts: string[] = [];
+
+  if (reviveCount > 0) {
+    summaryParts.push(`复活 ${reviveCount} 块枯萎田`);
+  }
+  if (harvestCount > 0) {
+    summaryParts.push(`收取 ${harvestCount} 块成熟田`);
+  }
+
+  if (summaryParts.length === 0) {
+    return perspective === 'target'
+      ? `${counterpartNickname} 帮你回浇了灵田。`
+      : `你帮 ${counterpartNickname} 回浇了灵田。`;
+  }
+
+  if (perspective === 'target') {
+    const suffix = harvestCount > 0 ? '，采摘不会影响你的收成。' : '。';
+    return `${counterpartNickname} 帮你回浇了灵田，${summaryParts.join('，')}${suffix}`;
+  }
+
+  return `你帮 ${counterpartNickname} 回浇了灵田，${summaryParts.join('，')}。`;
 }
 
 

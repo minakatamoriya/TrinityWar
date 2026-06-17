@@ -1702,7 +1702,7 @@ export interface ClientSocialFeedItem {
   actor: ClientSocialPlayerSummary | null;
   actions: Array<{
     label: string;
-    action: 'assist_back' | 'accept_friend' | 'reject_friend' | 'revenge' | 'follow' | 'team_challenge' | 'view_report' | 'ignore';
+    action: 'accept_friend' | 'reject_friend' | 'revenge' | 'follow' | 'team_challenge' | 'view_report' | 'ignore';
     targetPlayerId?: string;
     relatedEntityId?: string;
   }>;

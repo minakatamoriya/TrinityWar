@@ -122,29 +122,28 @@ export function SocialScene({
                 <span className="card-label">{formatDateTime(item.createdAt)}</span>
               </div>
               <p>{item.summary}</p>
-              <div className="button-row">
-                {item.actions.map((action) => (
-                  <button
-                    className="ghost-button"
-                    disabled={isFeedActionDisabled(action, busy)}
-                    key={`${item.id}-${action.action}`}
-                    onClick={() => {
-                      if (action.action === 'assist_back' && action.targetPlayerId) {
-                        onOpenFieldVisit(action.targetPlayerId);
-                      }
-                      if (action.action === 'accept_friend' && action.relatedEntityId) {
-                        onAcceptFriendRequest(action.relatedEntityId);
-                      }
-                      if (action.action === 'reject_friend' && action.relatedEntityId) {
-                        onRejectFriendRequest(action.relatedEntityId);
-                      }
-                    }}
-                    type="button"
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
+              {item.actions.length > 0 ? (
+                <div className="button-row">
+                  {item.actions.map((action) => (
+                    <button
+                      className="ghost-button"
+                      disabled={isFeedActionDisabled(action, busy)}
+                      key={`${item.id}-${action.action}`}
+                      onClick={() => {
+                        if (action.action === 'accept_friend' && action.relatedEntityId) {
+                          onAcceptFriendRequest(action.relatedEntityId);
+                        }
+                        if (action.action === 'reject_friend' && action.relatedEntityId) {
+                          onRejectFriendRequest(action.relatedEntityId);
+                        }
+                      }}
+                      type="button"
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </article>
           )) : <EmptySocialState text="还没有新的社交动态。" />}
         </section>
@@ -345,10 +344,10 @@ function isFeedActionDisabled(action: ClientSocialFeedItem['actions'][number], b
   if (action.action === 'accept_friend' || action.action === 'reject_friend') {
     return !action.relatedEntityId;
   }
-  if (action.action === 'assist_back' || action.action === 'revenge' || action.action === 'follow') {
+  if (action.action === 'revenge' || action.action === 'follow') {
     return !action.targetPlayerId;
   }
-  return action.action === 'ignore';
+  return false;
 }
 
 function EmptySocialState({ actionLabel, onAction, text }: { actionLabel?: string; onAction?: () => void; text: string }): JSX.Element {

@@ -371,7 +371,7 @@ export const FACTION_ADVANTAGE_LEGACY_CONFIG = {
       spiritTraitRollGoldCostReductionPercent: 0,
       spiritBreakthroughSoulCostReductionPercent: 0,
       spiritPassiveExpBonusPercent: 10,
-      spiritFeedDurationBonusPercent: 25,
+      spiritFeedDurationBonusPercent: 0,
       battleDefenseLootLossReductionPercent: 0,
       battleDefenseMainSpiritMaxHpBonusPercent: 0,
       battleAttackBonusPercent: 0,

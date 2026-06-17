@@ -11,14 +11,13 @@ import {
   getFactionFarmMatureSeconds,
   getFactionFarmMatureYieldMultiplier,
   getFactionFarmCollectWindowSeconds,
-  getFactionSpiritFeedDurationSeconds,
   runWithFactionAdvantageRuleSet,
 } from '../lib/faction-advantage-formulas.js';
 import { FACTION_STIPEND_CONFIG, SPIRIT_ROOT_ECONOMY_CONFIG } from '../lib/game-balance.js';
 
 function main(): void {
   assert.equal(SPIRIT_ROOT_ECONOMY_CONFIG.feed.accelerateSecondsPerFeed, 2 * 60 * 60);
-  assert.equal(SPIRIT_ROOT_ECONOMY_CONFIG.feed.rootCostPerFeed, 20);
+  assert.equal(SPIRIT_ROOT_ECONOMY_CONFIG.feed.rootCostPerFeed, 10);
   assert.equal(SPIRIT_ROOT_ECONOMY_CONFIG.feed.expBonusBps, 5000);
   assert.deepEqual(FACTION_STIPEND_CONFIG.tiers.map((tier) => (
     tier.rewards.find((reward) => reward.kind === 'spirit-root')?.quantity
@@ -34,9 +33,6 @@ function main(): void {
 
   assert.equal(applyFactionSpiritPassiveExpBonus(5000, 'immortal'), 5500);
   assert.equal(applyFactionSpiritPassiveExpBonus(500, 'immortal'), 550);
-  assert.equal(getFactionSpiritFeedDurationSeconds(2 * 60 * 60, 'immortal'), 9000);
-  assert.equal(getFactionSpiritFeedDurationSeconds(2 * 60 * 60, 'human'), 7200);
-
   assert.equal(getFactionBattleAttackMultiplier('demon'), 1.05);
   assert.equal(getFactionBattleAttackMultiplier('human'), 1);
   assert.equal(applyFactionBattlePostRecovery(40, 100, 'demon'), 52);
@@ -48,7 +44,6 @@ function main(): void {
     assert.equal(applyFactionFarmHarvestSpiritRootBonus(10, 'immortal'), 11);
 
     assert.equal(applyFactionSpiritPassiveExpBonus(5000, 'immortal'), 5500);
-    assert.equal(getFactionSpiritFeedDurationSeconds(2 * 60 * 60, 'immortal'), 7200);
     assert.equal(applyFactionSpiritTraitRollGoldCost(500, 'human'), 450);
     assert.equal(applyFactionSpiritBreakthroughSoulCost(12, 'demon'), 11);
     assert.equal(applyFactionSpiritBreakthroughSoulCost(5, 'demon'), 5);
@@ -64,7 +59,6 @@ function main(): void {
     assert.equal(getFactionFarmMatureYieldMultiplier('human'), 1);
     assert.equal(getFactionFarmCollectWindowSeconds(1800, 600, 'human'), 2400);
     assert.equal(applyFactionSpiritPassiveExpBonus(5000, 'immortal'), 5000);
-    assert.equal(getFactionSpiritFeedDurationSeconds(2 * 60 * 60, 'immortal'), 7200);
     assert.equal(getFactionBattleAttackMultiplier('demon'), 1);
     assert.equal(applyFactionBattlePostRecovery(40, 100, 'demon'), 40);
   });

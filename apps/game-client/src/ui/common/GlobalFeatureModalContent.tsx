@@ -80,13 +80,6 @@ function SeasonResetRulesPanel(props: { title: string; reset: string[]; retained
             <li key={`reset-${item}`}>{item}</li>
           ))}
         </ul>
-        {props.onOpenSignIn ? (
-          <div className="button-row end">
-            <button className="secondary-button small" onClick={props.onOpenSignIn} type="button">
-              查看签到
-            </button>
-          </div>
-        ) : null}
       </article>
     </div>
   );
