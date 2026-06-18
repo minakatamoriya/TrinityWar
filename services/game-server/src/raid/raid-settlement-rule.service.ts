@@ -88,6 +88,8 @@ const TIER_CONFIG: Record<RaidOutcomeTier, {
   perfect_loss: { title: '完败', subtitle: '兵败如山', goldRatio: 0 },
 };
 
+const DEFAULT_RAID_BATTLE_PLACEHOLDER_MAX_HP = 120;
+
 @Injectable()
 export class RaidSettlementRuleService {
   calculate(input: RaidSettlementRuleInput): RaidSettlementRuleResult {
@@ -100,7 +102,7 @@ export class RaidSettlementRuleService {
     const tier = resolveTier(battle.result, scoreDeltaRatio);
     const config = TIER_CONFIG[tier];
     const lockedGold = Math.max(Math.floor(input.lockedGold), 0);
-    const rawLootGold = Math.min(lockedGold, Math.floor(lockedGold * config.goldRatio));
+    const rawLootGold = Math.min(lockedGold, Math.floor(lockedGold * getRaidRewardRatio(tier)));
     const lootGold = applyFactionRaidDefenseLootLossReduction(rawLootGold, normalizeFaction(input.defenderFactionName));
     const depositedGold = lootGold;
     const attackerNextHp = input.attackerSpirit ? clampHpForPersistence(battle.attackerHpAfter, input.attackerSpirit.maxHp) : null;
@@ -114,8 +116,16 @@ export class RaidSettlementRuleService {
     const shardDrop = input.suppressRandomRewards ? null : buildShardDrop(input.defenderSpirit, tier, input.shardDropDisplayLabel);
     const rewardItems = buildRewardItems(soulRewards, shardDrop);
     const rewardSummary = formatRewardSummary(soulRewards, shardDrop);
-    const attackerHpLossPercent = input.attackerSpirit ? Math.max(Math.round((1 - (attackerNextHp ?? 0) / Math.max(input.attackerSpirit.maxHp, 1)) * 100), 0) : 0;
-    const defenderHpLossPercent = input.defenderSpirit ? Math.max(Math.round((1 - (defenderNextHp ?? 0) / Math.max(input.defenderSpirit.maxHp, 1)) * 100), 0) : 0;
+    const attackerReplayMaxHp = Math.max(input.attackerSpirit?.maxHp ?? DEFAULT_RAID_BATTLE_PLACEHOLDER_MAX_HP, 1);
+    const defenderReplayMaxHp = Math.max(input.defenderSpirit?.maxHp ?? DEFAULT_RAID_BATTLE_PLACEHOLDER_MAX_HP, 1);
+    const attackerReplayHpAfter = input.attackerSpirit
+      ? attackerNextHp ?? 0
+      : clampHpForPersistence(battle.attackerHpAfter, attackerReplayMaxHp);
+    const defenderReplayHpAfter = input.defenderSpirit
+      ? defenderNextHp ?? 0
+      : clampHpForPersistence(battle.defenderHpAfter, defenderReplayMaxHp);
+    const attackerHpLossPercent = calculateHpLossPercent(attackerReplayHpAfter, attackerReplayMaxHp);
+    const defenderHpLossPercent = calculateHpLossPercent(defenderReplayHpAfter, defenderReplayMaxHp);
 
     return {
       result: battle.result,
@@ -495,12 +505,45 @@ function resolveTier(result: BattleResult, scoreDeltaRatio: number): RaidOutcome
   return 'minor_loss';
 }
 
+function getRaidRewardRatio(tier: RaidOutcomeTier): number {
+  const rewardMatrix = GAME_BALANCE.raid?.rewardMatrix ?? {};
+  switch (tier) {
+    case 'perfect_win':
+      return clampRatio(Number(rewardMatrix.perfectWin ?? 0.92), 0, 10);
+    case 'major_win':
+      return clampRatio(Number(rewardMatrix.majorWin ?? 0.72), 0, 10);
+    case 'minor_win':
+      return clampRatio(Number(rewardMatrix.minorWin ?? 0.46), 0, 10);
+    case 'draw':
+      return clampRatio(Number(rewardMatrix.draw ?? 0.24), 0, 10);
+    case 'minor_loss':
+      return clampRatio(Number(rewardMatrix.minorLoss ?? 0.1), 0, 10);
+    case 'major_loss':
+      return clampRatio(Number(rewardMatrix.majorLoss ?? 0.03), 0, 10);
+    case 'perfect_loss':
+      return clampRatio(Number(rewardMatrix.perfectLoss ?? 0.02), 0, 10);
+    default:
+      return 0;
+  }
+}
+
+function clampRatio(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+  return Math.max(Math.min(value, max), min);
+}
+
 function clampPercent(value: number): number {
   return Math.max(Math.min(value, 100), 0);
 }
 
 function clampHpForPersistence(value: number, maxHp: number): number {
   return Math.max(Math.min(Math.floor(value), Math.max(maxHp, 0)), 0);
+}
+
+function calculateHpLossPercent(currentHp: number, maxHp: number): number {
+  return Math.max(Math.round((1 - currentHp / Math.max(maxHp, 1)) * 100), 0);
 }
 
 function randomChance(chance: number): boolean {

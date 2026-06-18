@@ -3,6 +3,8 @@ import { AuthService } from '../auth/auth.service.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
 import { AppModule } from '../modules/app/app.module.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { buildRaidBattleReplay } from '../raid/raid-battle-replay.js';
+import { RaidSettlementRuleService } from '../raid/raid-settlement-rule.service.js';
 
 const TUTORIAL_TARGET_PROVIDER_USER_ID = 'dev-tutorial-target';
 const TUTORIAL_TARGET_NAME = '守田人';
@@ -103,6 +105,8 @@ async function main(): Promise<void> {
       'existing player targets should all be opposing faction players',
     );
 
+    verifyPlaceholderRaidReplay();
+
     console.log(JSON.stringify({
       ok: true,
       newPlayer: newPlayer.player.nickname,
@@ -113,6 +117,86 @@ async function main(): Promise<void> {
   } finally {
     await app.close();
   }
+}
+
+function verifyPlaceholderRaidReplay(): void {
+  const settlementRuleService = new RaidSettlementRuleService();
+  const settlement = settlementRuleService.calculate({
+    lockedGold: 100,
+    vaultGold: 0,
+    attackerFactionName: null,
+    defenderFactionName: null,
+    attackerSpirit: {
+      slotId: 'attacker-slot',
+      slotIndex: 0,
+      level: 12,
+      element: 'WOOD',
+      currentHp: 336,
+      maxHp: 336,
+      status: 'ACTIVE',
+      spiritDefinition: {
+        id: 'spirit-canglang',
+        spiritId: 'canglang',
+        label: '苍狼',
+        rarity: 'COMMON',
+        factionAffinity: 'human',
+        role: 'attack',
+        baseAttack: 84,
+        baseHp: 336,
+        growthAttack: 0,
+        growthHp: 0,
+      },
+      traits: [],
+    },
+    defenderSpirit: null,
+    suppressRandomRewards: true,
+  });
+
+  assert(settlement.defenderHpLossPercent > 0, 'placeholder defender should record hp loss percent');
+
+  const replay = buildRaidBattleReplay('verify-placeholder-order', {
+    result: settlement.result,
+    lootGold: settlement.lootGold,
+    attackerLoss: settlement.attackerHpLossPercent,
+    defenderLoss: settlement.defenderHpLossPercent,
+    reportSummary: settlement.reportSummary,
+    rewardItemsJson: settlement.battleEvents.map((event) => ({ ...event, type: 'battleEvent' })),
+  }, {
+    attackerSnapshotJson: {
+      mainSpirit: settlement.attackerSpiritSlotId ? {
+        slotId: 'attacker-slot',
+        slotIndex: 0,
+        level: 12,
+        element: 'WOOD',
+        currentHp: 336,
+        maxHp: 336,
+        status: 'ACTIVE',
+        spiritDefinition: {
+          id: 'spirit-canglang',
+          spiritId: 'canglang',
+          label: '苍狼',
+          rarity: 'COMMON',
+          factionAffinity: 'human',
+          role: 'attack',
+          baseAttack: 84,
+          baseHp: 336,
+          growthAttack: 0,
+          growthHp: 0,
+        },
+        traits: [],
+      } : null,
+      mainSpiritSceneVisibilityForDefender: 'named',
+    },
+    defenderSnapshotJson: {
+      targetSnapshotJson: { tutorialTarget: true },
+      mainSpirit: null,
+      mainSpiritSceneVisibilityForAttacker: 'masked',
+    },
+    attacker: { nickname: '主循环测试号' },
+    defender: { nickname: 'tutorial-target' },
+  }, 'attacker');
+
+  assert(replay.defender.hpAfter < replay.defender.hpBefore, 'placeholder defender replay hp should decrease');
 }
 
 function assert(condition: unknown, message: string): asserts condition {

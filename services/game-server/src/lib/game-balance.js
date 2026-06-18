@@ -326,6 +326,41 @@ export const FACTION_STIPEND_CONFIG = {
   ],
 };
 
+export const RAID_BALANCE_CONFIG = {
+  dateKeyTimezone: 'Asia/Shanghai',
+  dailyAttemptLimit: 10,
+  dailySuccessfulDefenseLimit: 5,
+  freeRefreshesPerDay: 0,
+  // V1 普通目标池以同段和相邻段为主体，额外混入少量更高档次挑战目标。
+  targetPoolBandMix: {
+    sameBandWeight: 6,
+    adjacentBandWeight: 3,
+    higherBandWeight: 2,
+    secondHigherBandWeight: 1,
+  },
+  rewardMatrix: {
+    perfectWin: 1.0,
+    majorWin: 0.8,
+    minorWin: 0.6,
+    draw: 0.25,
+    minorLoss: 0.15,
+    majorLoss: 0.05,
+    perfectLoss: 0.02,
+  },
+  // 基础奖励 B 的精确数值后续可继续调优，这里先为各等级段预留配置入口。
+  baseRewardByLevelBand: {
+    '1-10': 60,
+    '11-20': 90,
+    '21-30': 130,
+    '31-40': 180,
+    '41+': 240,
+  },
+  tianjiPurchase: {
+    extraAttempts: [],
+    extraRefreshes: [],
+  },
+};
+
 export const FACTION_ADVANTAGE_LEGACY_CONFIG = {
   human: {
     factionCode: 'human',
@@ -732,7 +767,17 @@ export const GAME_BALANCE = {
   },
   raid: {
     temporaryClaimMinutes: 0,
-    freeRaidCountPerDay: 3,
+    // Legacy compatibility name. New raid rules should prefer dailyAttemptLimit.
+    freeRaidCountPerDay: RAID_BALANCE_CONFIG.dailyAttemptLimit,
+    dateKeyTimezone: RAID_BALANCE_CONFIG.dateKeyTimezone,
+    dailyAttemptLimit: RAID_BALANCE_CONFIG.dailyAttemptLimit,
+    dailySuccessfulDefenseLimit: RAID_BALANCE_CONFIG.dailySuccessfulDefenseLimit,
+    freeRefreshesPerDay: RAID_BALANCE_CONFIG.freeRefreshesPerDay,
+    targetPoolBandMix: RAID_BALANCE_CONFIG.targetPoolBandMix,
+    rewardMatrix: RAID_BALANCE_CONFIG.rewardMatrix,
+    baseRewardByLevelBand: RAID_BALANCE_CONFIG.baseRewardByLevelBand,
+    tianjiPurchase: RAID_BALANCE_CONFIG.tianjiPurchase,
+    // Legacy compatibility field. Normal anonymous raid will stop depending on protection time.
     protectionHoursAfterRaid: 1,
     spiritShardDropChance: 100,
   },
@@ -826,6 +871,24 @@ export function getFactionDividendPerHour(factionContribution) {
     contributionStep,
     total: base + bonus,
   };
+}
+
+export function getDateKeyTimezone() {
+  return GAME_BALANCE.raid?.dateKeyTimezone ?? FACTION_STIPEND_CONFIG.dateKeyTimezone ?? 'Asia/Shanghai';
+}
+
+export function getRaidLevelBand(level) {
+  const normalizedLevel = Math.max(Math.floor(level), 1);
+  if (normalizedLevel <= 10) return '1-10';
+  if (normalizedLevel <= 20) return '11-20';
+  if (normalizedLevel <= 30) return '21-30';
+  if (normalizedLevel <= 40) return '31-40';
+  return '41+';
+}
+
+export function getRaidBaseRewardByLevel(level) {
+  const band = getRaidLevelBand(level);
+  return Math.max(Math.floor(GAME_BALANCE.raid?.baseRewardByLevelBand?.[band] ?? 0), 0);
 }
 
 export function getCastleLevelConfig(level) {

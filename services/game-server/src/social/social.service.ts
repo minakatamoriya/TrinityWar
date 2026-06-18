@@ -1588,7 +1588,7 @@ export class SocialService {
           relatedEntityType: input.fallbackRelatedEntityType,
           relatedEntityId: input.fallbackRelatedEntityId,
           summary: buildFriendAssistFeedSummary(input.perspective, input.counterpartNickname, nextMetadata),
-          metadataJson: nextMetadata,
+          metadataJson: nextMetadata as Prisma.InputJsonValue,
         },
       });
       return;
@@ -1616,7 +1616,7 @@ export class SocialService {
           relatedEntityType: 'social_assist_batch',
           relatedEntityId: assistBatchKey,
           summary: buildFriendAssistFeedSummary(input.perspective, input.counterpartNickname, nextMetadata),
-          metadataJson: nextMetadata,
+          metadataJson: nextMetadata as Prisma.InputJsonValue,
         },
       });
       return;
@@ -1638,7 +1638,7 @@ export class SocialService {
       data: {
         feedType: this.resolveFriendAssistFeedType(mergedMetadata),
         summary: buildFriendAssistFeedSummary(input.perspective, input.counterpartNickname, mergedMetadata),
-        metadataJson: mergedMetadata,
+        metadataJson: mergedMetadata as Prisma.InputJsonValue,
       },
     });
   }
@@ -1669,7 +1669,7 @@ export class SocialService {
     };
   }
 
-  private resolveFriendAssistFeedType(metadata: SocialAssistFeedMetadata): SocialFeedType.FRIEND_WATERED_FIELD | SocialFeedType.FRIEND_REVIVED_FIELD {
+  private resolveFriendAssistFeedType(metadata: SocialAssistFeedMetadata): 'FRIEND_WATERED_FIELD' | 'FRIEND_REVIVED_FIELD' {
     return (metadata.harvestCount ?? 0) > 0
       ? SocialFeedType.FRIEND_WATERED_FIELD
       : SocialFeedType.FRIEND_REVIVED_FIELD;

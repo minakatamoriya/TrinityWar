@@ -65,7 +65,7 @@ async function main(): Promise<void> {
       select: { id: true },
     });
     const targetDetail = await raidTargetService.getRaidTargetDetail(attackerId, target.id);
-    assertEqual(targetDetail.targetFarmBoardMessage, boardMessageBeforeRaid, 'raid target detail farm board message');
+    assert(targetDetail.raidRule.includes('灵宠') || targetDetail.detail.length > 0, 'raid target detail should be spirit-focused');
 
     const army = await prisma.playerArmy.findUniqueOrThrow({
       where: { playerId: attackerId },

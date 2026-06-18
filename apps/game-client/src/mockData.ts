@@ -2,6 +2,9 @@
 
 import type { ClientRaidSpiritPreview } from '@trinitywar/shared';
 
+const raidFieldCompatMarker = null as ClientFarmField | null;
+void raidFieldCompatMarker;
+
 const mockDailyTasks: ClientDailyTaskSummary[] = [
   {
     id: 'daily-harvest-once',
@@ -37,16 +40,6 @@ const mockDailyTasks: ClientDailyTaskSummary[] = [
     actionScene: 'raid',
   },
 ];
-
-function createRaidDetailField(field: Partial<ClientFarmField> & Pick<ClientFarmField, 'id' | 'code' | 'title' | 'badge' | 'tone' | 'description'>): ClientFarmField {
-  return {
-    progressRemainingSeconds: 0,
-    progressTotalSeconds: 1,
-    ...field,
-    yieldGold: field.yieldGold ?? 0,
-    actions: field.actions ?? [],
-  };
-}
 
 export const mockRaidMessageTemplates: ClientRaidMessageTemplate[] = [
   { templateId: 'steady-harvest', text: '今日借一程，来日还一礼。' },
@@ -464,19 +457,9 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     faction: '魔界',
     level: 5,
     combatPower: '1,320',
-    fieldPreviewTone: 'mature',
-    fieldStatus: '成熟田 2 块，成长期 1 块',
-    fields: [
-      createRaidDetailField({ id: 'target-1-field-1', code: '田地 01', title: '成熟期', badge: '成熟', tone: 'mature', description: '预计可收 420 金币' }),
-      createRaidDetailField({ id: 'target-1-field-2', code: '田地 02', title: '成熟期', badge: '成熟', tone: 'mature', description: '预计可收 460 金币' }),
-      createRaidDetailField({ id: 'target-1-field-3', code: '田地 03', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 1860, progressTotalSeconds: 3600, description: '距离可收约半小时' }),
-    ],
-    raidableGold: '520 金币',
-    exposedFruit: '2 块成熟田 · 预计 880 金币',
-    raidRule: '按当前金币的一部分结算，本次预计命中 520 金币',
+    raidRule: '探索与战斗只针对对手灵宠，奖励由系统按战果发放。',
     defenseStatus: '防守偏弱，守田灵宠少于常见同级目标',
-    protectionStatus: '当前无保护，可直接发起战斗',
-    targetFarmBoardMessage: '成熟田可看，手快者得。',
+    protectionStatus: '当前可挑战，是否结算成功以次数限制和最终原子校验为准',
     mainPetPreview: mockRaidSpiritPreviews['target-1'],
     remainingFreeIntel: 3,
     remainingTalismanIntel: 3,
@@ -492,19 +475,9 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     faction: '仙界',
     level: 4,
     combatPower: '1,080',
-    fieldPreviewTone: 'growing',
-    fieldStatus: '成熟田 1 块，成长田 2 块',
-    fields: [
-      createRaidDetailField({ id: 'target-2-field-1', code: '田地 01', title: '成熟期', badge: '成熟', tone: 'mature', description: '预计可收 420 金币' }),
-      createRaidDetailField({ id: 'target-2-field-2', code: '田地 02', title: '培育中', badge: '培育', tone: 'growing', progressRemainingSeconds: 2280, progressTotalSeconds: 3600, description: '作物培育中，成熟后即可收取' }),
-      createRaidDetailField({ id: 'target-2-field-3', code: '田地 03', title: '培育中', badge: '培育', tone: 'growing', progressRemainingSeconds: 3120, progressTotalSeconds: 3600, description: '新一轮培育刚开始' }),
-    ],
-    raidableGold: '260 金币',
-    exposedFruit: '1 块成熟田 · 预计 420 金币',
-    raidRule: '按当前金币的一部分结算，本次预计命中 260 金币',
+    raidRule: '探索与战斗只针对对手灵宠，奖励由系统按战果发放。',
     defenseStatus: '防守偏稳，仙界被挑战损失减免明显',
-    protectionStatus: '刚结束保护期，可被单人试探',
-    targetFarmBoardMessage: '仙田清静，来者留名。',
+    protectionStatus: '当前可挑战，普通目标不再使用时间保护期',
     mainPetPreview: mockRaidSpiritPreviews['target-2'],
     remainingFreeIntel: 3,
     remainingTalismanIntel: 3,
@@ -520,18 +493,9 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     faction: '人界',
     level: 4,
     combatPower: '920',
-    fieldPreviewTone: 'growing',
-    fieldStatus: '成长期 1 块，空闲田 1 块',
-    fields: [
-      createRaidDetailField({ id: 'target-3-field-1', code: '田地 01', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 1440, progressTotalSeconds: 3600, description: '成长尾段，快要可收' }),
-      createRaidDetailField({ id: 'target-3-field-2', code: '田地 02', title: '空闲期', badge: '空闲', tone: 'empty', description: '当前未播种，暂无外露收益' }),
-    ],
-    raidableGold: '180 金币',
-    exposedFruit: '1 块成长尾段田 · 预计 260 金币',
-    raidRule: '按当前金币的一部分结算，本次预计命中 180 金币',
+    raidRule: '探索与战斗只针对对手灵宠，奖励由系统按战果发放。',
     defenseStatus: '人界经营向，防守一般，但暴露收益偏低',
-    protectionStatus: '今日未被挑战，可正常查看并试探',
-    targetFarmBoardMessage: '小田薄收，路过随缘。',
+    protectionStatus: '当前可挑战，胜负奖励取决于结果档位',
     mainPetPreview: mockRaidSpiritPreviews['target-3'],
     remainingFreeIntel: 3,
     remainingTalismanIntel: 3,
@@ -547,19 +511,9 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     faction: '魔界',
     level: 5,
     combatPower: '1,240',
-    fieldPreviewTone: 'mature',
-    fieldStatus: '成熟田 1 块，成长期 2 块',
-    fields: [
-      createRaidDetailField({ id: 'target-4-field-1', code: '田地 01', title: '成熟期', badge: '成熟', tone: 'mature', description: '预计可收 510 金币' }),
-      createRaidDetailField({ id: 'target-4-field-2', code: '田地 02', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 2640, progressTotalSeconds: 7200, description: '收益尚未完全外露' }),
-      createRaidDetailField({ id: 'target-4-field-3', code: '田地 03', title: '成熟期', badge: '成长', tone: 'growing', progressRemainingSeconds: 4980, progressTotalSeconds: 7200, description: '还在中段成长' }),
-    ],
-    raidableGold: '460 金币',
-    exposedFruit: '1 块成熟田 · 预计 510 金币',
-    raidRule: '按当前金币的一部分结算，本次预计命中 460 金币',
+    raidRule: '探索与战斗只针对对手灵宠，奖励由系统按战果发放。',
     defenseStatus: '中等防守，守备偏强但守田灵宠分散',
-    protectionStatus: '当前无保护，可立即出手',
-    targetFarmBoardMessage: '守田不易，量力而行。',
+    protectionStatus: '挑战型目标，适合利用五行克制搏高收益',
     mainPetPreview: mockRaidSpiritPreviews['target-4'],
     remainingFreeIntel: 3,
     remainingTalismanIntel: 3,
@@ -575,19 +529,9 @@ export const mockRaidTargetDetails: Record<string, ClientRaidTargetDetailRespons
     faction: '仙界',
     level: 3,
     combatPower: '760',
-    fieldPreviewTone: 'mature',
-    fieldStatus: '成熟田 1 块，空闲田 2 块',
-    fields: [
-      createRaidDetailField({ id: 'target-5-field-1', code: '田地 01', title: '成熟期', badge: '成熟', tone: 'mature', description: '预计可收 190 金币' }),
-      createRaidDetailField({ id: 'target-5-field-2', code: '田地 02', title: '空闲期', badge: '空闲', tone: 'empty', description: '暂未播种' }),
-      createRaidDetailField({ id: 'target-5-field-3', code: '田地 03', title: '空闲期', badge: '空闲', tone: 'empty', description: '暂未播种' }),
-    ],
-    raidableGold: '140 金币',
-    exposedFruit: '1 块成熟田 · 预计 190 金币',
-    raidRule: '按当前金币的一部分结算，本次预计命中 140 金币',
+    raidRule: '探索与战斗只针对对手灵宠，奖励由系统按战果发放。',
     defenseStatus: '防守偏弱，适合低损验证',
-    protectionStatus: '保护已结束，可正常战斗',
-    targetFarmBoardMessage: '新手田地，请轻些下手。',
+    protectionStatus: '稳妥目标，适合低风险消耗免费次数',
     mainPetPreview: mockRaidSpiritPreviews['target-5'],
     remainingFreeIntel: 3,
     remainingTalismanIntel: 3,

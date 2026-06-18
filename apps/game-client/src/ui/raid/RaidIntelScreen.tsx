@@ -2,7 +2,6 @@ import type { ClientRaidDeepIntelResponse, ClientRaidSpiritIntel, ClientRaidSpir
 import { useEffect, useState } from 'react';
 import { ActionButton } from '../ActionButton';
 import { FullScreenToolShell } from '../common/ModalShell';
-import { buildFarmFieldStatusView, FarmStatusCard } from '../farm/FarmStatusCard';
 
 interface RaidIntelScreenProps {
   mode: 'raid' | 'revenge';
@@ -107,42 +106,12 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
             </article>
           ) : null}
 
-          <div className="raid-intel-summary-card panel-card">
-            <div className="panel-head">
-              <h4>对手田地</h4>
-              <span className="soft-tag">{detail.fieldStatus}</span>
-            </div>
-            <div className="farm-field-grid raid-intel-field-grid">
-              {detail.fields.map((field) => (
-                <FarmStatusCard className="raid-intel-field-card" key={field.id} view={buildFarmFieldStatusView(field)} />
-              ))}
-            </div>
-          </div>
-
-          <div className="raid-asset-strip raid-intel-assets">
-            <div className="target-meta raid-asset-card raid-visual-card">
-              <span>可争夺收益</span>
-              <div className="raid-gold-preview" aria-hidden="true">
-                <span className="raid-gold-stack raid-gold-stack-back" />
-                <span className="raid-gold-stack raid-gold-stack-mid" />
-                <span className="raid-gold-stack raid-gold-stack-front" />
-              </div>
-              <strong>{detail.raidableGold}</strong>
-              <em>{detail.exposedFruit}</em>
-            </div>
-          </div>
-
           <div className="raid-detail-status-list raid-intel-status-list">
             <p><strong>主宠情报：</strong>默认只显示卡面外观与等级，不直接展示五行、状态和攻击评级。</p>
-            <p><strong>保护状态：</strong>{detail.protectionStatus}</p>
+            <p><strong>对战规则：</strong>{detail.raidRule}</p>
+            <p><strong>风险提示：</strong>{detail.defenseStatus}</p>
+            <p><strong>挑战提示：</strong>{detail.protectionStatus}</p>
           </div>
-
-          {detail.targetFarmBoardMessage ? (
-            <article className="panel-card raid-farm-board-note">
-              <p className="eyebrow">菜田留言</p>
-              <p>{detail.targetFarmBoardMessage}</p>
-            </article>
-          ) : null}
 
           <article className="panel-card raid-intel-note">
             <p className="panel-text">{detail.detail}</p>

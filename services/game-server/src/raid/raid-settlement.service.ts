@@ -4,6 +4,7 @@ import type { ClientCodexPrompt } from '@trinitywar/shared';
 import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { grantFactionContribution } from '../faction/contribution.service.js';
+import { getLocalDateKey } from '../lib/date-key.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { buildRaidBattleReplay } from './raid-battle-replay.js';
 import { RaidRepository } from './raid.repository.js';
@@ -101,8 +102,6 @@ export class RaidSettlementService {
         shardDropDisplayLabel,
       });
       const nextVaultGold = raidOrder.attacker.wallet.vaultGold + settlementResult.depositedGold;
-      await this.applyDefenderLootConsumption(client, raidOrder, settlementResult.lootGold, now);
-      const defenderProtectedUntil = new Date(now.getTime() + 60 * 60 * 1000);
       const codexPrompts = await this.applySpiritSettlement(client, raidOrder, settlementResult);
 
       const rewardItemsJson = [
@@ -138,11 +137,6 @@ export class RaidSettlementService {
         reportSummary: settlementResult.reportSummary,
       }, client);
 
-      await client.player.update({
-        where: { id: raidOrder.defenderPlayerId },
-        data: { protectedUntil: defenderProtectedUntil },
-      });
-
       if (settlementResult.depositedGold > 0) {
         await client.playerWallet.update({
           where: { playerId: raidOrder.attackerPlayerId },
@@ -170,7 +164,7 @@ export class RaidSettlementService {
 
       await client.raidAssetLock.updateMany({
         where: { raidOrderId: raidOrder.id, status: 'ACTIVE' },
-        data: { status: settlementResult.lootGold > 0 ? 'CONSUMED' : 'RELEASED' },
+        data: { status: 'RELEASED' },
       });
 
       await this.raidRepository.createBattleReports([
@@ -205,6 +199,45 @@ export class RaidSettlementService {
           summary: buildDefenseReportSummary(raidOrder.attacker.nickname, now, settlementResult),
         },
       });
+
+      const dateKey = getLocalDateKey(now);
+      await client.playerRaidPairDailyState.upsert({
+        where: {
+          attackerPlayerId_defenderPlayerId_dateKey: {
+            attackerPlayerId: raidOrder.attackerPlayerId,
+            defenderPlayerId: raidOrder.defenderPlayerId,
+            dateKey,
+          },
+        },
+        create: {
+          attackerPlayerId: raidOrder.attackerPlayerId,
+          defenderPlayerId: raidOrder.defenderPlayerId,
+          dateKey,
+          settledCount: 1,
+        },
+        update: {
+          settledCount: { increment: 1 },
+        },
+      });
+
+      if (settlementResult.result === 'WIN') {
+        await client.playerRaidDailyState.upsert({
+          where: {
+            playerId_dateKey: {
+              playerId: raidOrder.defenderPlayerId,
+              dateKey,
+            },
+          },
+          create: {
+            playerId: raidOrder.defenderPlayerId,
+            dateKey,
+            successfulDefenseRaidCount: 1,
+          },
+          update: {
+            successfulDefenseRaidCount: { increment: 1 },
+          },
+        });
+      }
 
       await client.raidOrder.update({
         where: { id: raidOrder.id },
@@ -263,92 +296,6 @@ export class RaidSettlementService {
     }
 
     return { settled, failed };
-  }
-
-  private async applyDefenderLootConsumption(
-    client: Prisma.TransactionClient,
-    raidOrder: NonNullable<Awaited<ReturnType<RaidRepository['findRaidOrderForSettlement']>>>,
-    lootGold: number,
-    now: Date,
-  ): Promise<void> {
-    let remainingLoot = Math.max(Math.floor(lootGold), 0);
-
-    if (remainingLoot <= 0) {
-      return;
-    }
-
-    const deductionPlan = buildDefenderFieldDeductionPlan(raidOrder);
-    if (deductionPlan.length > 0) {
-      const fieldStateMap = new Map(
-        (await client.playerFieldSlot.findMany({
-          where: {
-            playerId: raidOrder.defenderPlayerId,
-            id: { in: deductionPlan.map((entry) => entry.fieldId) },
-          },
-          select: {
-            id: true,
-            currentClaimableGold: true,
-          },
-        })).map((field) => [field.id, field]),
-      );
-
-      for (const entry of deductionPlan) {
-        if (remainingLoot <= 0) {
-          break;
-        }
-
-        const field = fieldStateMap.get(entry.fieldId);
-        if (!field) {
-          continue;
-        }
-
-        const actualDeduction = Math.min(field.currentClaimableGold, entry.requestedGold, remainingLoot);
-        if (actualDeduction <= 0) {
-          continue;
-        }
-
-        await client.playerFieldSlot.update({
-          where: { id: entry.fieldId },
-          data: {
-            currentClaimableGold: { decrement: actualDeduction },
-            raidedGoldTotal: { increment: actualDeduction },
-            lastCalculatedAt: now,
-          },
-        });
-
-        field.currentClaimableGold -= actualDeduction;
-        remainingLoot -= actualDeduction;
-      }
-    }
-
-    if (remainingLoot > 0) {
-      const defenderWallet = await client.playerWallet.findUnique({
-        where: { playerId: raidOrder.defenderPlayerId },
-        select: { vaultGold: true },
-      });
-      const vaultDeduction = Math.min(defenderWallet?.vaultGold ?? 0, remainingLoot);
-      if (vaultDeduction > 0) {
-        await client.playerWallet.update({
-          where: { playerId: raidOrder.defenderPlayerId },
-          data: {
-            vaultGold: { decrement: vaultDeduction },
-            balanceVersion: { increment: 1 },
-          },
-        });
-        await this.auditService.createWalletChangeLog(client, {
-          playerId: raidOrder.defenderPlayerId,
-          walletBucket: 'vault',
-          changeType: 'raid-settlement',
-          deltaGold: -vaultDeduction,
-          beforeGold: defenderWallet?.vaultGold ?? 0,
-          afterGold: (defenderWallet?.vaultGold ?? 0) - vaultDeduction,
-          relatedEntityType: 'raid-order',
-          relatedEntityId: raidOrder.id,
-          requestIdempotencyKey: raidOrder.requestIdempotencyKey,
-          note: 'Raid settlement deducted defender vault gold.',
-        });
-      }
-    }
   }
 
   private async applySpiritSettlement(
@@ -487,64 +434,6 @@ export class RaidSettlementService {
   }
 }
 
-interface DefenderFieldDeductionPlanEntry {
-  fieldId: string;
-  requestedGold: number;
-}
-
-function buildDefenderFieldDeductionPlan(
-  raidOrder: NonNullable<Awaited<ReturnType<RaidRepository['findRaidOrderForSettlement']>>>,
-): DefenderFieldDeductionPlanEntry[] {
-  const plan = new Map<string, number>();
-
-  for (const lock of raidOrder.assetLocks) {
-    const fallbackFieldId = lock.sourceFieldSlotId ?? raidOrder.defenderFieldSlotId ?? null;
-    if (fallbackFieldId) {
-      appendFieldDeduction(plan, fallbackFieldId, lock.lockedGold);
-      continue;
-    }
-
-    const lockedFields = readLockedFieldSnapshots(lock.lockedItemJson);
-    let remainingGold = lock.lockedGold;
-
-    for (const field of lockedFields) {
-      if (remainingGold <= 0) {
-        break;
-      }
-
-      const requestedGold = Math.min(field.currentClaimableGold, remainingGold);
-      appendFieldDeduction(plan, field.id, requestedGold);
-      remainingGold -= requestedGold;
-    }
-  }
-
-  return Array.from(plan.entries()).map(([fieldId, requestedGold]) => ({ fieldId, requestedGold }));
-}
-
-function readLockedFieldSnapshots(value: Prisma.JsonValue | null): Array<{ id: string; currentClaimableGold: number }> {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((entry) => entry as { id?: string; currentClaimableGold?: number })
-    .filter((entry): entry is { id: string; currentClaimableGold?: number } => typeof entry.id === 'string' && entry.id.length > 0)
-    .map((entry) => ({
-      id: entry.id,
-      currentClaimableGold: Math.max(Number(entry.currentClaimableGold ?? 0), 0),
-    }))
-    .sort((left, right) => right.currentClaimableGold - left.currentClaimableGold);
-}
-
-function appendFieldDeduction(plan: Map<string, number>, fieldId: string, requestedGold: number): void {
-  const normalizedGold = Math.max(Math.floor(requestedGold), 0);
-  if (!fieldId || normalizedGold <= 0) {
-    return;
-  }
-
-  plan.set(fieldId, (plan.get(fieldId) ?? 0) + normalizedGold);
-}
-
 function readFactionName(value: Prisma.JsonValue): string | null {
   const snapshot = value as { factionName?: string; faction?: string };
   return snapshot.factionName ?? snapshot.faction ?? null;
@@ -571,9 +460,9 @@ function buildSpiritSnapshotFromSlot(slot: {
   slotIndex: number;
   level: number;
   element: string | null;
-  currentHp: number;
   maxHp: number;
-  status: string;
+  currentHp?: number;
+  status?: string;
   spiritDefinition: {
     id: string;
     spiritId: string;
@@ -600,9 +489,9 @@ function buildSpiritSnapshotFromSlot(slot: {
     slotIndex: slot.slotIndex,
     level: slot.level,
     element: isSpiritElement(slot.element) ? slot.element : null,
-    currentHp: slot.maxHp,
+    currentHp: slot.currentHp ?? slot.maxHp,
     maxHp: slot.maxHp,
-    status: 'ACTIVE',
+    status: slot.status ?? 'ACTIVE',
     spiritDefinition: slot.spiritDefinition,
     traits: slot.traits ?? [],
   };
@@ -697,7 +586,7 @@ function buildDefenseReportSummary(
   happenedAt: Date,
   settlementResult: ReturnType<RaidSettlementRuleService['calculate']>,
 ): string {
-  return `${formatBattleReportTime(happenedAt)}，${attackerName} 对你发起掠夺：${invertSettlementTitle(settlementResult.title)} · ${settlementResult.subtitle}，损失 ${settlementResult.lootGold} 金币。己方灵宠受到 ${settlementResult.defenderHpLossPercent}% 伤害，对方灵宠受到 ${settlementResult.attackerHpLossPercent}% 伤害。`;
+  return `${formatBattleReportTime(happenedAt)}，${attackerName} 对你发起掠夺：${invertSettlementTitle(settlementResult.title)} · ${settlementResult.subtitle}。本次挑战奖励由系统发放，你未损失金币。己方灵宠受到 ${settlementResult.defenderHpLossPercent}% 伤害，对方灵宠受到 ${settlementResult.attackerHpLossPercent}% 伤害。`;
 }
 
 function formatRewardSummary(settlementResult: ReturnType<RaidSettlementRuleService['calculate']>): string {

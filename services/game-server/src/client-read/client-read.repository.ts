@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { ArmyTrainingStatus, DailyFactionTaskType, FieldStatus, Prisma, PrismaClient, TaskStatus } from '@prisma/client';
+import { getLocalDateKey, getStartOfDateKey } from '../lib/date-key.js';
 import type { FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 import { getFieldReadyAt } from '../lib/field-timing.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -785,16 +786,9 @@ export class ClientReadRepository {
 }
 
 function getLocalDateKeyForRepository(now = new Date()): string {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-
-  return formatter.format(now);
+  return getLocalDateKey(now);
 }
 
 function startOfDateKey(dateKey: string): Date {
-  return new Date(`${dateKey}T00:00:00+08:00`);
+  return getStartOfDateKey(dateKey);
 }

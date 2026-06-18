@@ -3,6 +3,7 @@ import type { Prisma, PrismaClient, SpiritElement } from '@prisma/client';
 import { APP_NAME, type ClientBootstrapResponse, type ClientPlantResearchState, type ClientSceneContentResponse, type ClientSeasonRewardsResponse, type ClientSeasonSignInResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
+import { GAME_BALANCE, getRaidLevelBand } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SeasonService } from '../season/season.service.js';
 import { SEED_DEFINITION_SEEDS } from '../seed/seed-data/seeds.js';
@@ -292,6 +293,7 @@ export class ClientReadService {
     options: { force?: boolean; now?: Date } = {},
   ): Promise<void> {
     const now = options.now ?? new Date();
+    const dateKey = getLocalDateKey(now);
     const isTutorialPlayer = await this.isPlayerInRaidTutorial(client, playerId);
     const playerFactionId = await this.getPlayerFactionId(client, playerId);
 
@@ -324,12 +326,6 @@ export class ClientReadService {
       where: {
         ownerPlayerId: playerId,
         expiresAt: { gt: now },
-        targetPlayer: {
-          OR: [
-            { protectedUntil: null },
-            { protectedUntil: { lte: now } },
-          ],
-        },
       },
       select: { targetPlayerId: true },
     });
@@ -347,16 +343,7 @@ export class ClientReadService {
     await client.raidTargetPool.deleteMany({
       where: {
         ownerPlayerId: playerId,
-        OR: options.force
-          ? undefined
-          : [
-            { expiresAt: { lte: now } },
-            {
-              targetPlayer: {
-                protectedUntil: { gt: now },
-              },
-            },
-          ],
+        expiresAt: options.force ? undefined : { lte: now },
       },
     });
 
@@ -366,12 +353,6 @@ export class ClientReadService {
         where: {
           ownerPlayerId: playerId,
           expiresAt: { gt: now },
-          targetPlayer: {
-            OR: [
-              { protectedUntil: null },
-              { protectedUntil: { lte: now } },
-            ],
-          },
         },
         select: { targetPlayerId: true },
       });
@@ -395,20 +376,35 @@ export class ClientReadService {
           providerUserId: TUTORIAL_TARGET_PROVIDER_USER_ID,
         },
       },
+      raidPairStatesAsDefender: {
+        none: {
+          attackerPlayerId: playerId,
+          dateKey,
+        },
+      },
       OR: [
-        { protectedUntil: null },
-        { protectedUntil: { lte: now } },
+        {
+          raidDailyStates: {
+            none: {
+              dateKey,
+            },
+          },
+        },
+        {
+          raidDailyStates: {
+            some: {
+              dateKey,
+              successfulDefenseRaidCount: {
+                lt: Math.max(Math.floor(GAME_BALANCE.raid?.dailySuccessfulDefenseLimit ?? 5), 0),
+              },
+            },
+          },
+        },
       ],
     };
-    const candidateCount = await client.player.count({ where: candidateWhere });
-    const candidateOffset = options.force && candidateCount > 0
-      ? ((refreshBatchNo - 1) * RAID_TARGET_POOL_SIZE) % candidateCount
-      : 0;
-    const candidates = await client.player.findMany({
+    const rawCandidates = await client.player.findMany({
       where: candidateWhere,
       orderBy: [{ lastLoginAt: 'desc' }, { createdAt: 'asc' }],
-      take: targetsToCreate,
-      skip: candidateOffset,
       select: {
         id: true,
         nickname: true,
@@ -428,32 +424,23 @@ export class ClientReadService {
         },
       },
     });
-    if (options.force && candidates.length < targetsToCreate && candidateOffset > 0) {
-      const wrappedCandidates = await client.player.findMany({
-        where: candidateWhere,
-        orderBy: [{ lastLoginAt: 'desc' }, { createdAt: 'asc' }],
-        take: targetsToCreate - candidates.length,
-        select: {
-          id: true,
-          nickname: true,
-          castleLevelCache: true,
-          faction: { select: { name: true } },
-          wallet: { select: { vaultGold: true, walletGold: true } },
-          army: { select: { totalCount: true, availableCount: true } },
-          fieldSlots: {
-            orderBy: { slotIndex: 'asc' },
-            select: {
-              id: true,
-              slotIndex: true,
-              status: true,
-              currentClaimableGold: true,
-              seedDefinition: { select: { label: true } },
-            },
-          },
-        },
-      });
-      candidates.push(...wrappedCandidates.filter((target) => !candidates.some((candidate) => candidate.id === target.id)));
-    }
+
+    const owner = await client.player.findUnique({
+      where: { id: playerId },
+      select: { castleLevelCache: true },
+    });
+    const ownerLevel = owner?.castleLevelCache ?? 1;
+    const sortedCandidates = sortRaidCandidatesByLevelBand(rawCandidates, ownerLevel);
+    const candidateCount = sortedCandidates.length;
+    const candidateOffset = options.force && candidateCount > 0
+      ? ((refreshBatchNo - 1) * RAID_TARGET_POOL_SIZE) % candidateCount
+      : 0;
+    const candidates = candidateCount > 0
+      ? [
+        ...sortedCandidates.slice(candidateOffset),
+        ...sortedCandidates.slice(0, candidateOffset),
+      ].slice(0, targetsToCreate)
+      : [];
 
     if (candidates.length <= 0) {
       return;
@@ -469,7 +456,7 @@ export class ClientReadService {
         cropName: field.seedDefinition?.label ?? null,
         currentClaimableGold: field.currentClaimableGold,
       }));
-      const raidableGold = Math.max(...target.fieldSlots.map((field) => field.currentClaimableGold), 0);
+      const targetBandLabel = getRaidLevelBand(target.castleLevelCache);
 
       await client.raidTargetPool.create({
         data: {
@@ -482,12 +469,10 @@ export class ClientReadService {
             faction: target.faction?.name ?? '未知阵营',
             level: target.castleLevelCache,
             combatPower: target.army?.totalCount ?? 0,
-            raidableGold,
-            exposedFruit: fields.length > 0 ? '可侦察农场收益' : '暂无暴露田地',
-            raidRule: '目标池为空时自动补入现存玩家，便于开发测试。',
+            raidRule: `探索与战斗只针对对手灵宠。当前目标段位 ${targetBandLabel}。`,
             defenseStatus: `可用战力 ${target.army?.availableCount ?? 0}`,
             protectionStatus: '可发起战斗',
-            detail: '由当前数据库玩家自动生成的探索测试目标。',
+            detail: '系统按等级段与挑战风险生成的普通目标。',
           },
           fieldSnapshotJson: fields,
           riskSnapshotJson: {
@@ -986,4 +971,62 @@ function getPlantUnlockRequirement(seedId: string, rarity: string, sortOrder: nu
   }
 
   return { harvestRequired: 10, contributionRequired: 0 };
+}
+
+function sortRaidCandidatesByLevelBand<T extends { castleLevelCache: number }>(candidates: T[], ownerLevel: number): T[] {
+  const mix = GAME_BALANCE.raid?.targetPoolBandMix ?? {
+    sameBandWeight: 6,
+    adjacentBandWeight: 3,
+    higherBandWeight: 2,
+    secondHigherBandWeight: 1,
+  };
+
+  const ownerBandIndex = getRaidBandIndex(ownerLevel);
+
+  return [...candidates].sort((left, right) => {
+    const leftScore = getRaidBandCandidateScore(ownerBandIndex, left.castleLevelCache, mix);
+    const rightScore = getRaidBandCandidateScore(ownerBandIndex, right.castleLevelCache, mix);
+
+    if (leftScore !== rightScore) {
+      return rightScore - leftScore;
+    }
+
+    return left.castleLevelCache - right.castleLevelCache;
+  });
+}
+
+function getRaidBandCandidateScore(
+  ownerBandIndex: number,
+  candidateLevel: number,
+  mix: {
+    sameBandWeight?: number;
+    adjacentBandWeight?: number;
+    higherBandWeight?: number;
+    secondHigherBandWeight?: number;
+  },
+): number {
+  const candidateBandIndex = getRaidBandIndex(candidateLevel);
+  const delta = candidateBandIndex - ownerBandIndex;
+  if (delta === 0) {
+    return Number(mix.sameBandWeight ?? 6);
+  }
+  if (delta === 1) {
+    return Number(mix.higherBandWeight ?? 2);
+  }
+  if (delta === 2) {
+    return Number(mix.secondHigherBandWeight ?? 1);
+  }
+  if (Math.abs(delta) === 1) {
+    return Number(mix.adjacentBandWeight ?? 3);
+  }
+  return 0;
+}
+
+function getRaidBandIndex(level: number): number {
+  const band = getRaidLevelBand(level);
+  if (band === '1-10') return 0;
+  if (band === '11-20') return 1;
+  if (band === '21-30') return 2;
+  if (band === '31-40') return 3;
+  return 4;
 }

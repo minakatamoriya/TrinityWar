@@ -53,17 +53,17 @@ export class RaidRepository {
                     baseAttack: true,
                     baseHp: true,
                     growthAttack: true,
-                growthHp: true,
+                    growthHp: true,
+                  },
+                },
+                traits: {
+                  select: {
+                    traitCode: true,
+                    traitValue: true,
+                  },
+                },
               },
             },
-            traits: {
-              select: {
-                traitCode: true,
-                traitValue: true,
-              },
-            },
-          },
-        },
             wallet: { select: { vaultGold: true, walletGold: true } },
             army: {
               select: {
@@ -212,6 +212,12 @@ export class RaidRepository {
                 level: true,
                 element: true,
                 maxHp: true,
+                traits: {
+                  select: {
+                    traitCode: true,
+                    traitValue: true,
+                  },
+                },
                 spiritDefinition: {
                   select: {
                     id: true,

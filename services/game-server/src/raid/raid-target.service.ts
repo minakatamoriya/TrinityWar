@@ -15,7 +15,8 @@ import {
 } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
-import { getLocalDateKey } from '../lib/date-key.js';
+import { getLocalDateKey, getStartOfDateKey } from '../lib/date-key.js';
+import { GAME_BALANCE, getRaidBaseRewardByLevel } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RaidSettlementQueueService } from './raid-settlement-queue.service.js';
 import { RaidSettlementService } from './raid-settlement.service.js';
@@ -24,7 +25,6 @@ import { RaidRepository } from './raid.repository.js';
 
 const RAID_INTEL_FREE_LIMIT = 3;
 const RAID_INTEL_TALISMAN_LIMIT = 3;
-const RAID_WALLET_EXPOSURE_RATIO = 0.05;
 
 @Injectable()
 export class RaidTargetService {
@@ -230,14 +230,6 @@ export class RaidTargetService {
       });
     }
 
-    if (target.targetPlayer.protectedUntil && target.targetPlayer.protectedUntil.getTime() > now.getTime()) {
-      throw new BusinessError({
-        code: ErrorCode.RaidNotAllowed,
-        message: 'Target is under raid protection.',
-        statusCode: 409,
-      });
-    }
-
     const response = await this.prisma.transaction(async (client) => {
       const currentArmy = await client.playerArmy.findUnique({
         where: { playerId: input.playerId },
@@ -289,25 +281,94 @@ export class RaidTargetService {
         });
       }
 
-      const defenderProtectedUntil = new Date(now.getTime() + 60 * 60 * 1000);
-      const protectionClaim = await client.player.updateMany({
-        where: {
-          id: targetInTransaction.targetPlayerId,
-          OR: [
-            { protectedUntil: null },
-            { protectedUntil: { lte: now } },
-          ],
-        },
-        data: { protectedUntil: defenderProtectedUntil },
-      });
+      const dateKey = getLocalDateKey(now);
+      const dayStart = getStartOfDateKey(dateKey);
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      const [attackerDailyState, defenderDailyState, existingPairOrder] = await Promise.all([
+        client.playerRaidDailyState.findUnique({
+          where: {
+            playerId_dateKey: {
+              playerId: input.playerId,
+              dateKey,
+            },
+          },
+          select: {
+            normalRaidAttemptsUsed: true,
+            extraRaidAttemptsPurchased: true,
+          },
+        }),
+        client.playerRaidDailyState.findUnique({
+          where: {
+            playerId_dateKey: {
+              playerId: targetInTransaction.targetPlayerId,
+              dateKey,
+            },
+          },
+          select: {
+            successfulDefenseRaidCount: true,
+          },
+        }),
+        client.raidOrder.findFirst({
+          where: {
+            attackerPlayerId: input.playerId,
+            defenderPlayerId: targetInTransaction.targetPlayerId,
+            dispatchedAt: {
+              gte: dayStart,
+              lt: dayEnd,
+            },
+            status: {
+              in: ['CREATED', 'LOCKED', 'SETTLING', 'SETTLED'],
+            },
+          },
+          select: { id: true },
+        }),
+      ]);
 
-      if (protectionClaim.count !== 1) {
+      const dailyAttemptLimit = Math.max(Math.floor(GAME_BALANCE.raid?.dailyAttemptLimit ?? 10), 0);
+      const attackerAttemptsUsed = attackerDailyState?.normalRaidAttemptsUsed ?? 0;
+      const extraAttemptsPurchased = attackerDailyState?.extraRaidAttemptsPurchased ?? 0;
+      const attackerAttemptCap = dailyAttemptLimit + extraAttemptsPurchased;
+      if (attackerAttemptsUsed >= attackerAttemptCap) {
         throw new BusinessError({
           code: ErrorCode.RaidNotAllowed,
-          message: 'Target is under raid protection.',
+          message: '你今日挑战次数已用完，明日再来。',
           statusCode: 409,
         });
       }
+
+      if (existingPairOrder) {
+        throw new BusinessError({
+          code: ErrorCode.RaidNotAllowed,
+          message: '你今天已经挑战过这个目标了，换一个试试。',
+          statusCode: 409,
+        });
+      }
+
+      const defenderDailySuccessLimit = Math.max(Math.floor(GAME_BALANCE.raid?.dailySuccessfulDefenseLimit ?? 5), 0);
+      if ((defenderDailyState?.successfulDefenseRaidCount ?? 0) >= defenderDailySuccessLimit) {
+        throw new BusinessError({
+          code: ErrorCode.RaidNotAllowed,
+          message: '该目标今日已达到挑战上限，请刷新候选。',
+          statusCode: 409,
+        });
+      }
+
+      await client.playerRaidDailyState.upsert({
+        where: {
+          playerId_dateKey: {
+            playerId: input.playerId,
+            dateKey,
+          },
+        },
+        create: {
+          playerId: input.playerId,
+          dateKey,
+          normalRaidAttemptsUsed: 1,
+        },
+        update: {
+          normalRaidAttemptsUsed: { increment: 1 },
+        },
+      });
 
       target = targetInTransaction;
 
@@ -402,7 +463,8 @@ export class RaidTargetService {
       const nextDispatchedCount = 1;
       const settleAt = now;
       const frozenUnitSnapshot = { dispatchedCount: nextDispatchedCount };
-      const lockedGold = resolveLockedGold(target, primaryField);
+      const targetLevel = readTargetLevel(target);
+      const lockedGold = getRaidBaseRewardByLevel(targetLevel);
       const raidOrder = await this.raidRepository.createRaidOrder({
         attacker: { connect: { id: input.playerId } },
         defender: { connect: { id: target.targetPlayerId } },
@@ -513,7 +575,7 @@ export class RaidTargetService {
           const order = await orderPromise;
           const home = {} as Awaited<ReturnType<ClientReadService['getHomeSummary']>>;
           const scenes = {} as Awaited<ReturnType<ClientReadService['getSceneContent']>>;
-          return buildSettledRaidActionResponse(response.result.orderId, settlement, order, order?.defender.nickname ?? response.result.targetName, order?.defender.protectedUntil ?? null, home, scenes);
+          return buildSettledRaidActionResponse(response.result.orderId, settlement, order, order?.defender.nickname ?? response.result.targetName, null, home, scenes);
         }
 
         const [home, scenes, order] = await Promise.all([
@@ -522,7 +584,7 @@ export class RaidTargetService {
           orderPromise,
         ]);
 
-        return buildSettledRaidActionResponse(response.result.orderId, settlement, order, order?.defender.nickname ?? response.result.targetName, order?.defender.protectedUntil ?? null, home, scenes);
+        return buildSettledRaidActionResponse(response.result.orderId, settlement, order, order?.defender.nickname ?? response.result.targetName, null, home, scenes);
       } catch (error) {
         if (error instanceof BusinessError) {
           throw error;
@@ -702,7 +764,7 @@ export class RaidTargetService {
     });
 
     const replay = order?.settlement
-      ? buildRaidBattleReplay(
+      ? resolveRaidBattleReplay(
         raidOrderId,
         {
           result: order.settlement.result,
@@ -711,6 +773,7 @@ export class RaidTargetService {
           defenderLoss: order.settlement.defenderLoss,
           reportSummary: order.settlement.reportSummary,
           rewardItemsJson: order.settlement.rewardItemsJson,
+          battleReplayJson: order.settlement.battleReplayJson,
         },
         {
           attackerSnapshotJson: order.attackerSnapshotJson,
@@ -720,7 +783,7 @@ export class RaidTargetService {
         },
         order.attackerPlayerId === input.playerId ? 'attacker' : 'defender',
       )
-      : parseRaidBattleReplay(order?.settlement?.battleReplayJson);
+      : undefined;
     if (!order || !replay) {
       throw new BusinessError({
         code: ErrorCode.NotFound,
@@ -750,8 +813,6 @@ function buildRaidTargetDetailResponse(
     faction?: string;
     level?: number;
     combatPower?: number;
-    raidableGold?: number;
-    exposedFruit?: string;
     raidRule?: string;
     defenseStatus?: string;
     protectionStatus?: string;
@@ -759,20 +820,6 @@ function buildRaidTargetDetailResponse(
     tutorialTarget?: boolean;
   } | null;
   const mainPetPreview = buildRaidSpiritPreview(target?.targetPlayer.spiritSlots[0] ?? null, sceneVisibility);
-  const fields = target?.targetPlayer.fieldSlots.map((field) => ({
-    id: field.id,
-    fieldVersion: undefined,
-    code: `田地 ${String(field.slotIndex).padStart(2, '0')}`,
-    title: field.seedDefinition?.label ?? (field.status === 'EMPTY' ? '空地' : '未解锁'),
-    badge: mapFieldStatusBadge(field.status),
-    cropName: field.seedDefinition?.label,
-    tone: mapFieldStatusTone(field.status),
-    progressRemainingSeconds: 0,
-    progressTotalSeconds: 1,
-    yieldGold: field.currentClaimableGold,
-    description: `${mapFieldStatusBadge(field.status)} · 当前暴露 ${field.currentClaimableGold} 金币`,
-    actions: [],
-  })) ?? [];
 
   return {
     app: APP_NAME,
@@ -782,15 +829,9 @@ function buildRaidTargetDetailResponse(
     level: targetSnapshot?.level ?? target?.targetPlayer.castleLevelCache ?? 1,
     tutorialTarget: targetSnapshot?.tutorialTarget === true,
     combatPower: String(targetSnapshot?.combatPower ?? 0),
-    fieldPreviewTone: 'growing',
-    fieldStatus: '目标已接入真实目标池',
-    fields,
-    targetFarmBoardMessage: target?.targetPlayer.farmBoard?.hiddenAt ? '' : target?.targetPlayer.farmBoard?.message ?? '',
-    raidableGold: `${targetSnapshot?.raidableGold ?? 0} 金币`,
-    exposedFruit: targetSnapshot?.exposedFruit ?? '暂无',
-    raidRule: targetSnapshot?.raidRule ?? '已接入真实目标池。',
+    raidRule: targetSnapshot?.raidRule ?? '探索与战斗只针对对手灵宠，奖励由系统按战果发放。',
     defenseStatus: targetSnapshot?.defenseStatus ?? '等待结算',
-    protectionStatus: targetSnapshot?.protectionStatus ?? '可发起掠夺',
+    protectionStatus: targetSnapshot?.protectionStatus ?? '当前可挑战，是否成功结算以后端最终校验为准。',
     mainPetPreview,
     remainingFreeIntel: intelQuota.remainingFreeIntel,
     remainingTalismanIntel: intelQuota.remainingTalismanIntel,
@@ -832,7 +873,7 @@ function buildRaidActionResponse(
   home?: Awaited<ReturnType<ClientReadService['getHomeSummary']>>,
   scenes?: Awaited<ReturnType<ClientReadService['getSceneContent']>>,
 ): ClientRaidActionResponse {
-  const targetSnapshot = target?.targetSnapshotJson as { name?: string; raidableGold?: number } | null;
+  const targetSnapshot = target?.targetSnapshotJson as { name?: string } | null;
 
   return {
     app: APP_NAME,
@@ -856,6 +897,49 @@ function buildRaidActionResponse(
       reportSummary: '已进入异步结算队列。',
     },
   };
+}
+
+function resolveRaidBattleReplay(
+  orderId: string,
+  settlement: {
+    result: string;
+    lootGold: number;
+    attackerLoss: number;
+    defenderLoss: number;
+    reportSummary: string;
+    rewardItemsJson: unknown;
+    battleReplayJson?: unknown;
+  },
+  order: {
+    attackerSnapshotJson: unknown;
+    defenderSnapshotJson: unknown;
+    attacker: { nickname: string };
+    defender: { nickname: string };
+  } | null,
+  viewer: 'attacker' | 'defender',
+) {
+  const storedReplay = parseRaidBattleReplay(settlement.battleReplayJson);
+  if (storedReplay) {
+    return storedReplay;
+  }
+
+  if (!order) {
+    return undefined;
+  }
+
+  return buildRaidBattleReplay(orderId, {
+    result: settlement.result,
+    lootGold: settlement.lootGold,
+    attackerLoss: settlement.attackerLoss,
+    defenderLoss: settlement.defenderLoss,
+    reportSummary: settlement.reportSummary,
+    rewardItemsJson: settlement.rewardItemsJson,
+  }, {
+    attackerSnapshotJson: order.attackerSnapshotJson,
+    defenderSnapshotJson: order.defenderSnapshotJson,
+    attacker: { nickname: order.attacker.nickname },
+    defender: { nickname: order.defender.nickname },
+  }, viewer);
 }
 
 function buildSettledRaidActionResponse(
@@ -886,21 +970,7 @@ function buildSettledRaidActionResponse(
   const rewards = normalizeRaidRewards(settlement.rewardItemsJson);
   const battleEvents = normalizeRaidBattleEvents(settlement.rewardItemsJson);
   const codexPrompts = normalizeCodexPrompts(settlement.rewardItemsJson);
-  const battleReplay = order
-    ? buildRaidBattleReplay(orderId, {
-      result: settlement.result,
-      lootGold: settlement.lootGold,
-      attackerLoss: settlement.attackerLoss,
-      defenderLoss: settlement.defenderLoss,
-      reportSummary: settlement.reportSummary,
-      rewardItemsJson: settlement.rewardItemsJson,
-    }, {
-      attackerSnapshotJson: order.attackerSnapshotJson,
-      defenderSnapshotJson: order.defenderSnapshotJson,
-      attacker: { nickname: order.attacker.nickname },
-      defender: { nickname: order.defender.nickname },
-    }, 'attacker')
-    : parseRaidBattleReplay(settlement.battleReplayJson);
+  const battleReplay = resolveRaidBattleReplay(orderId, settlement, order, 'attacker');
 
   return {
     app: APP_NAME,
@@ -996,46 +1066,6 @@ function normalizeRaidBattleEvents(value: unknown): NonNullable<ClientRaidAction
     }));
 }
 
-function mapFieldStatusBadge(status: string): string {
-  if (status === 'LOCKED') {
-    return '锁定';
-  }
-
-  if (status === 'EMPTY') {
-    return '空闲';
-  }
-
-  if (status === 'GROWING') {
-    return '成长';
-  }
-
-  if (status === 'MATURE') {
-    return '成熟';
-  }
-
-  return '枯萎';
-}
-
-function mapFieldStatusTone(status: string): 'growing' | 'mature' | 'withered' | 'empty' | 'locked' {
-  if (status === 'LOCKED') {
-    return 'locked';
-  }
-
-  if (status === 'EMPTY') {
-    return 'empty';
-  }
-
-  if (status === 'GROWING') {
-    return 'growing';
-  }
-
-  if (status === 'MATURE') {
-    return 'mature';
-  }
-
-  return 'withered';
-}
-
 function mapRaidOrderStatus(status: string): 'queued' | 'settling' | 'settled' | 'failed' {
   if (status === 'SETTLED') {
     return 'settled';
@@ -1094,9 +1124,9 @@ function buildSpiritBattleSnapshot(
     slotIndex: number;
     level: number;
     element: string | null;
-    currentHp: number;
     maxHp: number;
-    status: string;
+    currentHp?: number;
+    status?: string;
     spiritDefinition: {
       id: string;
       spiritId: string;
@@ -1124,9 +1154,9 @@ function buildSpiritBattleSnapshot(
     slotIndex: slot.slotIndex,
     level: slot.level,
     element: slot.element,
-    currentHp: slot.maxHp,
+    currentHp: slot.currentHp ?? slot.maxHp,
     maxHp: slot.maxHp,
-    status: 'ACTIVE',
+    status: slot.status ?? 'ACTIVE',
     spiritDefinition: slot.spiritDefinition,
     traits: slot.traits ?? [],
   };
@@ -1243,14 +1273,6 @@ function mapScoreRating(score: number): string {
   return '未知';
 }
 
-function buildHealthStatus(slot: { currentHp: number; maxHp: number; status: string } | null): string {
-  if (!slot || slot.maxHp <= 0) {
-    return '??';
-  }
-
-  return '????';
-}
-
 function pickPrimaryRaidField(target: NonNullable<Awaited<ReturnType<RaidRepository['findVisibleTargetPoolEntry']>>>) {
   const candidateFields = target.targetPlayer.fieldSlots.filter(
     (field) => field.isUnlocked && field.currentClaimableGold > 0,
@@ -1271,15 +1293,9 @@ function pickPrimaryRaidField(target: NonNullable<Awaited<ReturnType<RaidReposit
   return candidateFields[0] ?? null;
 }
 
-function resolveLockedGold(
+function readTargetLevel(
   target: NonNullable<Awaited<ReturnType<RaidRepository['findVisibleTargetPoolEntry']>>>,
-  primaryField: ReturnType<typeof pickPrimaryRaidField>,
 ): number {
-  const snapshotGold = Number((target.targetSnapshotJson as { raidableGold?: number }).raidableGold ?? 0);
-  const fieldGold = primaryField?.currentClaimableGold ?? 0;
-  const totalFieldGold = target.targetPlayer.fieldSlots.reduce((sum, field) => sum + Math.max(field.currentClaimableGold, 0), 0);
-  const vaultGold = Math.max(Number(target.targetPlayer.wallet?.vaultGold ?? 0), 0);
-  const walletExposureGold = Math.floor(vaultGold * RAID_WALLET_EXPOSURE_RATIO);
-
-  return Math.max(Math.floor(fieldGold || snapshotGold || totalFieldGold), walletExposureGold, 0);
+  const snapshotLevel = Number((target.targetSnapshotJson as { level?: number }).level ?? 0);
+  return Math.max(Math.floor(snapshotLevel || target.targetPlayer.castleLevelCache || 1), 1);
 }

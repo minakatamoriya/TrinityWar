@@ -217,102 +217,11 @@ function claimMockDailyTask(taskId: string): ClientDailyTaskSummary | null {
   return task;
 }
 
-function createRaidDetailField(field: Partial<ClientFarmField> & Pick<ClientFarmField, 'id' | 'code' | 'title' | 'badge' | 'tone' | 'description'>): ClientFarmField {
-  return {
-    progressRemainingSeconds: 0,
-    progressTotalSeconds: 1,
-    yieldGold: 0,
-    actions: [],
-    ...field,
-  };
-}
-
-function buildFallbackRaidFields(detail: ClientRaidTargetDetailResponse): ClientFarmField[] {
-  const fieldTones: Array<{ label: string; tone: ClientFarmField['tone']; badge: string }> = [
-    { label: '成熟田', tone: 'mature', badge: '成熟' },
-    { label: '培育中', tone: 'growing', badge: '培育' },
-    { label: '成长田', tone: 'growing', badge: '培育' },
-    { label: '空闲田', tone: 'empty', badge: '空闲' },
-    { label: '枯萎田', tone: 'withered', badge: '枯萎' },
-  ];
-  const fields: ClientFarmField[] = [];
-
-  fieldTones.forEach(({ label, tone, badge }) => {
-    const match = detail.fieldStatus.match(new RegExp(`${label}\s*(\\d+)\s*块`));
-    const count = match ? Number(match[1]) : 0;
-
-    for (let index = 0; index < count; index += 1) {
-      fields.push(createRaidDetailField({
-        id: `${detail.targetId}-field-${fields.length + 1}`,
-        code: `田地 ${String(fields.length + 1).padStart(2, '0')}`,
-        title: badge,
-        badge,
-        tone,
-        description: detail.exposedFruit,
-      }));
-    }
-  });
-
-  if (fields.length > 0) {
-    while (fields.length < 4) {
-      fields.push(createRaidDetailField({
-        id: `${detail.targetId}-field-${fields.length + 1}`,
-        code: `田地 ${String(fields.length + 1).padStart(2, '0')}`,
-        title: '空闲期',
-        badge: '空闲',
-        tone: 'empty',
-        description: '暂未播种，暂无外露收益',
-      }));
-    }
-
-    return fields;
-  }
-
-  return [
-    createRaidDetailField({
-      id: `${detail.targetId}-field-1`,
-      code: '田地 01',
-      title: detail.fieldStatus,
-      badge: '田地',
-      tone: detail.fieldPreviewTone,
-      description: detail.exposedFruit,
-    }),
-    createRaidDetailField({
-      id: `${detail.targetId}-field-2`,
-      code: '田地 02',
-      title: '空闲期',
-      badge: '空闲',
-      tone: 'empty',
-      description: '暂未播种，暂无外露收益',
-    }),
-    createRaidDetailField({
-      id: `${detail.targetId}-field-3`,
-      code: '田地 03',
-      title: '空闲期',
-      badge: '空闲',
-      tone: 'empty',
-      description: '暂未播种，暂无外露收益',
-    }),
-    createRaidDetailField({
-      id: `${detail.targetId}-field-4`,
-      code: '田地 04',
-      title: '空闲期',
-      badge: '空闲',
-      tone: 'empty',
-      description: '暂未播种，暂无外露收益',
-    }),
-  ];
-}
-
 function normalizeRaidTargetDetail(detail: ClientRaidTargetDetailResponse): ClientRaidTargetDetailResponse {
   return {
     ...detail,
     remainingFreeIntel: detail.remainingFreeIntel ?? 0,
     remainingTalismanIntel: detail.remainingTalismanIntel ?? 0,
-    fields: Array.isArray(detail.fields) && detail.fields.length > 0 ? detail.fields.map((field) => ({
-      ...field,
-      actions: [...field.actions],
-    })) : buildFallbackRaidFields(detail),
   };
 }
 
@@ -1080,12 +989,12 @@ void applyMockRecruitArmy;
   const vault = parseCurrentAndCapacity(vaultResource.value);
   const army = parseCurrentAndCapacity(armyResource.value);
   const combatPower = parseNumberText(target.combatPower);
-  const raidableGold = parseNumberText(targetDetail.raidableGold);
+  const targetBaseReward = Math.max(target.level * 30, 60);
   const powerRatio = army.current / Math.max(combatPower, 1);
   const successChance = clamp(0.18 + powerRatio * 0.72, 0.18, 0.88);
   const success = Math.random() < successChance;
   const lootRatio = clamp(0.08 + powerRatio * 0.22 + (success ? 0.08 : 0), 0.05, 0.4);
-  const rawGoldLoot = Math.max(Math.round(raidableGold * lootRatio), 20);
+  const rawGoldLoot = Math.max(Math.round(targetBaseReward * (0.3 + lootRatio + (success ? 0.25 : 0))), 20);
   const depositedGold = Math.min(rawGoldLoot, Math.max(vault.capacity - vault.current, 0));
   const overflowGold = Math.max(rawGoldLoot - depositedGold, 0);
   const casualtyRatio = clamp(0.1 + (combatPower / Math.max(army.current, 1)) * 0.04 - (success ? 0.03 : 0), 0.08, 0.42);
@@ -1121,7 +1030,7 @@ void applyMockRecruitArmy;
     tag: success ? '战斗胜利' : '强袭试探',
     tone: success ? 'success' : 'neutral',
     createdAt: new Date().toISOString(),
-    summary: `你对${target.name}发起战斗，带回 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库${overflowGold > 0 ? `，另有 ${formatNumber(overflowGold)} 已转入待领取` : ''}，折损 ${formatNumber(casualties)} 只灵宠${rewards.length > 0 ? `，额外获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : ''}。目标已进入 1 小时防护。`,
+    summary: `你对${target.name}发起战斗，获得 ${formatNumber(rawGoldLoot)} 金币系统奖励，其中 ${formatNumber(depositedGold)} 已入库${overflowGold > 0 ? `，另有 ${formatNumber(overflowGold)} 已转入待领取` : ''}，折损 ${formatNumber(casualties)} 只灵宠${rewards.length > 0 ? `，额外获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : ''}。本次不会扣除对方金币。`,
     actions: [{ label: '查看详情', target: 'report', tone: 'ghost' }],
   });
   mockSceneSnapshot.report.attack = mockSceneSnapshot.report.attack.slice(0, 6);
@@ -1131,24 +1040,24 @@ void applyMockRecruitArmy;
       defenseReport.tag = '已复仇';
       defenseReport.unread = false;
       defenseReport.revengeable = false;
-      defenseReport.summary = '已完成复仇，目标进入防护中。';
+      defenseReport.summary = '已完成复仇，本次挑战奖励由系统发放。';
       defenseReport.actions = [{ label: '查看详情', target: 'report', tone: 'ghost' }];
     }
   }
-  targetDetail.protectionStatus = '防护中，约 60 分钟后解除';
-  targetDetail.actions = [{ label: '保护中', target: 'raid', tone: 'ghost' }];
+  targetDetail.protectionStatus = '普通目标改为次数限制与系统奖励结算，不再使用时间保护期。';
+  targetDetail.actions = [{ label: '今日已结算', target: 'raid', tone: 'ghost' }];
   const remainingRaidCount = Math.max(mockSceneSnapshot.raid.targets.length, 0);
   mockSceneSnapshot.raid.hero.title = `剩余可探索目标 ${formatNumber(remainingRaidCount)} 个`;
-  const protectedUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-  mockHomeSnapshot.protectedUntil = protectedUntil;
+  const protectedUntil = new Date().toISOString();
+  mockHomeSnapshot.protectedUntil = null;
 
   const rewardSummary = rewards.length > 0 ? `，额外获得 ${rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}` : '';
   const reportSummary = `你对${target.name}发起战斗，带回 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库${overflowGold > 0 ? `，另有 ${formatNumber(overflowGold)} 已转入待领取` : ''}，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`;
   return {
     app: mockHomeSnapshot.app,
     summary: overflowGold > 0
-      ? `${target.name} 已进入 1 小时防护，本次战斗获得 ${formatNumber(rawGoldLoot)} 金币，其中 ${formatNumber(depositedGold)} 已入库，另有 ${formatNumber(overflowGold)} 转入待领取，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`
-      : `${target.name} 已进入 1 小时防护，本次获得 ${formatNumber(rawGoldLoot)} 金币，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`,
+      ? `${target.name} 本次战斗获得 ${formatNumber(rawGoldLoot)} 金币系统奖励，其中 ${formatNumber(depositedGold)} 已入库，另有 ${formatNumber(overflowGold)} 转入待领取，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`
+      : `${target.name} 本次获得 ${formatNumber(rawGoldLoot)} 金币系统奖励，折损 ${formatNumber(casualties)} 只灵宠${rewardSummary}。`,
     home: cloneHomeSummary(mockHomeSnapshot),
     scenes: cloneSceneContent(mockSceneSnapshot),
     result: {

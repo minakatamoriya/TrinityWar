@@ -16,6 +16,7 @@ import {
   getFieldReadyAt,
   getMatureStartedAt,
 } from '../lib/field-timing.js';
+import { getLocalDateKey } from '../lib/date-key.js';
 import type { SceneContentReadModel } from './client-read.repository.js';
 
 type ExtensionKey = 'protectionTech' | 'farmYieldTech' | 'collectWindowTech' | 'factionOfferingTech';
@@ -105,9 +106,9 @@ export class SceneContentAssembler {
       ownedCurrent: boolean;
       ownedEver: boolean;
     }> = [],
-    now: Date = new Date(),
+    _now: Date = new Date(),
   ): ClientSceneContentResponse['raid']['targets'] {
-    return readModel.raidTargetPools.filter((targetPool) => !targetPool.targetPlayer.protectedUntil || targetPool.targetPlayer.protectedUntil <= now).map((targetPool) => {
+    return readModel.raidTargetPools.map((targetPool) => {
       const snapshot = targetPool.targetSnapshotJson as {
         name?: string;
         faction?: string;
@@ -122,7 +123,6 @@ export class SceneContentAssembler {
       const targetName = snapshot.name ?? targetPool.targetPlayer.nickname;
       const factionName = snapshot.faction ?? targetPool.targetPlayer.faction?.name ?? '\u672a\u77e5\u9635\u8425';
       const combatPower = snapshot.combatPower ?? targetPool.targetPlayer.army?.totalCount ?? 0;
-      const raidableGold = snapshot.raidableGold ?? 0;
       const mainSlot = targetPool.targetPlayer.spiritSlots[0] ?? null;
       let sceneVisibility: ClientSceneVisibility = 'masked';
       const spiritId = mainSlot?.spiritDefinition?.spiritId;
@@ -143,7 +143,7 @@ export class SceneContentAssembler {
         summary: mainPetPreview
           ? `${factionName} | ${mainPetPreview.label}`
           : `${factionName} Lv.${snapshot.level ?? targetPool.targetPlayer.castleLevelCache}`,
-        loot: `${formatNumber(Math.max(Math.floor(raidableGold * 0.35), 0))}~${formatNumber(raidableGold)} \u91d1\u5e01`,
+        loot: '系统奖励结算',
         risk: snapshot.risk ?? '\u5f02\u6b65\u6218\u6597',
         detail: snapshot.detail ?? `\u76ee\u6807\u6709\u6548\u671f\u81f3 ${targetPool.expiresAt.toISOString()}`,
         action: { label: '\u53d1\u8d77\u6218\u6597', target: 'raid', tone: 'primary' },
@@ -619,12 +619,7 @@ function getContributionSourceLabel(sourceType: string): string {
 }
 
 function getLocalDateKeyForAssembler(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
+  return getLocalDateKey(new Date());
 }
 
 function getFieldTiming(
@@ -852,7 +847,7 @@ function resolveSpiritSceneVisibility(entry: {
   spiritDefinition: {
     spiritId: string;
   };
-  hasSeen: boolean;
+  hasSeen?: boolean;
   shardCount: number;
   readyToCompose: boolean;
   ownedCurrent: boolean;
@@ -865,7 +860,7 @@ function resolveSpiritCodexState(entry: {
   spiritDefinition: {
     spiritId: string;
   };
-  hasSeen: boolean;
+  hasSeen?: boolean;
   shardCount: number;
   readyToCompose: boolean;
   ownedCurrent: boolean;

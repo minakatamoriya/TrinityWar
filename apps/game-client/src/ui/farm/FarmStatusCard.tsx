@@ -1,5 +1,5 @@
 import type { KeyboardEventHandler, MouseEventHandler, ReactNode } from 'react';
-import type { ClientFarmField, ClientRaidTargetDetailResponse } from '@trinitywar/shared';
+import type { ClientFarmField } from '@trinitywar/shared';
 
 export interface FarmStatusViewModel {
   id: string;
@@ -32,14 +32,6 @@ const farmStageImageMap: Record<ClientFarmField['tone'], string> = {
   withered: '/assets/farm/kuwei.png',
   empty: '/assets/farm/weibozhong.png',
   locked: '/assets/farm/weibozhong.png',
-};
-
-const raidFieldBadgeMap: Record<ClientFarmField['tone'], string> = {
-  growing: '成长',
-  mature: '成熟',
-  withered: '枯萎',
-  empty: '空闲',
-  locked: '待解锁',
 };
 
 function formatDuration(seconds: number): string {
@@ -96,22 +88,6 @@ export function buildFarmFieldStatusView(field: ClientFarmField): FarmStatusView
       : undefined,
     centerActionLabel: field.tone === 'empty' ? primaryAction?.label : undefined,
     harvestable: field.tone === 'mature' || field.tone === 'withered' || Boolean(primaryAction?.label?.includes('收取')),
-  };
-}
-
-export function buildRaidFieldStatusView(detail: ClientRaidTargetDetailResponse): FarmStatusViewModel {
-  return {
-    id: detail.targetId,
-    badge: raidFieldBadgeMap[detail.fieldPreviewTone],
-    title: detail.fieldStatus,
-    cropName: undefined,
-    tone: detail.fieldPreviewTone,
-    progressRemainingSeconds: 0,
-    progressTotalSeconds: 1,
-    yieldGold: 0,
-    description: detail.exposedFruit,
-    emphasis: `可争夺收益 ${detail.raidableGold}`,
-    note: detail.raidRule,
   };
 }
 

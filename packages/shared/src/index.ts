@@ -1544,15 +1544,33 @@ export interface ClientRaidTargetDetailResponse {
   level: number;
   tutorialTarget?: boolean;
   combatPower: string;
-  fieldPreviewTone: ClientFarmField['tone'];
-  fieldStatus: string;
-  fields: ClientFarmField[];
-  raidableGold: string;
-  exposedFruit: string;
+  /**
+   * @deprecated Raid detail is now spirit-only. Farm preview should not be used in new code.
+   */
+  fieldPreviewTone?: ClientFarmField['tone'];
+  /**
+   * @deprecated Raid detail is now spirit-only. Farm preview should not be used in new code.
+   */
+  fieldStatus?: string;
+  /**
+   * @deprecated Raid detail is now spirit-only. Farm preview should not be used in new code.
+   */
+  fields?: ClientFarmField[];
+  /**
+   * @deprecated Raid detail no longer exposes pre-estimated loot in new code.
+   */
+  raidableGold?: string;
+  /**
+   * @deprecated Raid detail no longer exposes farm-based reward hints in new code.
+   */
+  exposedFruit?: string;
   raidRule: string;
   defenseStatus: string;
   protectionStatus: string;
-  targetFarmBoardMessage: string;
+  /**
+   * @deprecated Raid detail is now spirit-only. Farm board message should not be used in new code.
+   */
+  targetFarmBoardMessage?: string;
   mainPetPreview: ClientRaidSpiritPreview | null;
   remainingFreeIntel: number;
   remainingTalismanIntel: number;
