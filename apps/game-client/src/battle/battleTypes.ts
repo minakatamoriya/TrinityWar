@@ -1,8 +1,8 @@
-import type { ClientRaidBattleReplay } from '@trinitywar/shared';
+import type { ClientRaidBattleFloatingTone, ClientRaidBattleReplay } from '@trinitywar/shared';
 
 export type RaidBattleReplay = ClientRaidBattleReplay;
 export type RaidBattleSide = ClientRaidBattleReplay['attacker']['side'];
-export type RaidBattlePhase = 'enter' | 'clash' | 'damage' | 'return' | 'result';
+export type RaidBattlePhase = 'enter' | 'notice' | 'clash' | 'damage' | 'return' | 'result';
 
 export interface BattlePlaybackState {
   phase: RaidBattlePhase;
@@ -12,7 +12,12 @@ export interface BattlePlaybackState {
     id: string;
     side: RaidBattleSide;
     text: string;
-    tone: 'damage' | 'miss' | 'crit' | 'buff';
+    tone: ClientRaidBattleFloatingTone;
   }>;
+  notice: {
+    title: string;
+    summary?: string;
+    tone: 'default' | 'blood';
+  } | null;
   resultVisible: boolean;
 }

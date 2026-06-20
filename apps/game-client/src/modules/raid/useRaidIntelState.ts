@@ -8,13 +8,16 @@ import type { RaidTargetModalState } from '../../shell/appStateTypes';
 type ToastTone = 'info' | 'success' | 'error';
 
 interface UseRaidIntelStateOptions {
+  followTarget: (targetPlayerId: string) => Promise<{ summary: string }>;
   loadDetail: (targetId: string) => Promise<ClientRaidTargetDetailResponse>;
   onDetailLoaded: (detail: ClientRaidTargetDetailResponse) => void;
+  onFollowChanged?: () => void;
   onToast: (message: string, tone?: ToastTone) => void;
+  unfollowTarget: (targetPlayerId: string) => Promise<{ summary: string }>;
 }
 
 export function useRaidIntelState(options: UseRaidIntelStateOptions) {
-  const { loadDetail, onDetailLoaded, onToast } = options;
+  const { followTarget, loadDetail, onDetailLoaded, onFollowChanged, onToast, unfollowTarget } = options;
   const [selectedTargetId, setSelectedTargetId] = useState<string>('');
   const [modal, setModal] = useState<RaidTargetModalState | null>(null);
   const [detail, setDetail] = useState<ClientRaidTargetDetailResponse | null>(null);
@@ -102,12 +105,22 @@ export function useRaidIntelState(options: UseRaidIntelStateOptions) {
   };
 
   const toggleFollowTarget = (target: ClientRaidTarget): void => {
-    const isFollowing = followedTargetIds.includes(target.id);
-
+    const targetPlayerId = target.targetPlayerId;
+    const isFollowing = followedTargetIds.includes(targetPlayerId);
     setFollowedTargetIds((current) => isFollowing
-      ? current.filter((targetId) => targetId !== target.id)
-      : [...current, target.id]);
-    onToast(isFollowing ? `已取消关注 ${target.name}。` : `已关注 ${target.name}，可在社交页的关系列表持续观察。`, 'success');
+      ? current.filter((followedPlayerId) => followedPlayerId !== targetPlayerId)
+      : current.includes(targetPlayerId) ? current : [...current, targetPlayerId]);
+
+    const action = isFollowing ? unfollowTarget(targetPlayerId) : followTarget(targetPlayerId);
+    void action.then((result) => {
+      onToast(result.summary, 'success');
+      onFollowChanged?.();
+    }).catch((mutationError) => {
+      setFollowedTargetIds((current) => isFollowing
+        ? current.includes(targetPlayerId) ? current : [...current, targetPlayerId]
+        : current.filter((followedPlayerId) => followedPlayerId !== targetPlayerId));
+      onToast(mutationError instanceof Error && mutationError.message ? mutationError.message : '当前无法更新关注，请稍后重试。', 'error');
+    });
   };
 
   const clearDetails = (): void => {
@@ -187,6 +200,7 @@ export function useRaidIntelState(options: UseRaidIntelStateOptions) {
     reset,
     selectedTargetId,
     setSelectedTargetId,
+    setFollowedTargetIds,
     toggleFollowTarget,
   };
 }

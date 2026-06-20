@@ -1,15 +1,14 @@
-import { CLIENT_SPIRIT_TRAIT_ROLL_RULES, type ClientSpiritActiveRollMode, type ClientSpiritTraitCode, type ClientSpiritTraitRollCandidate } from '@trinitywar/shared';
+import {
+  CLIENT_SPIRIT_TRAIT_ROLL_RULES,
+  LEGACY_SPIRIT_BATTLE_TRAIT_DEFINITIONS,
+  SPIRIT_BATTLE_TRAIT_DEFINITIONS,
+  type ClientSpiritActiveRollMode,
+  type ClientSpiritTraitCode,
+  type ClientSpiritTraitRollCandidate,
+} from '@trinitywar/shared';
 
-export const SPIRIT_TRAIT_DEFINITIONS: Array<{ code: ClientSpiritTraitCode; label: string; value: number; description: string }> = [
-  { code: 'claw', label: '利爪', value: 10, description: '攻击 +10%' },
-  { code: 'thick_skin', label: '厚皮', value: 10, description: '生命 +10%' },
-  { code: 'crit', label: '暴击', value: 6, description: '暴击率 +6%' },
-  { code: 'crit_damage', label: '爆伤', value: 20, description: '暴击伤害 +20%' },
-  { code: 'dodge', label: '闪避', value: 5, description: '闪避率 +5%' },
-  { code: 'counter', label: '反击', value: 10, description: '受击 +10% 概率反击，造成 50% 伤害' },
-  { code: 'lifesteal', label: '吸血', value: 10, description: '造成伤害的 10% 回复自身' },
-  { code: 'tenacity', label: '韧性', value: 10, description: '受暴击时伤害降低 10%' },
-];
+export const SPIRIT_TRAIT_DEFINITIONS = SPIRIT_BATTLE_TRAIT_DEFINITIONS;
+const LEGACY_TRAIT_DEFINITIONS = LEGACY_SPIRIT_BATTLE_TRAIT_DEFINITIONS;
 
 export const SPIRIT_TRAIT_ROLL_RULES: Record<ClientSpiritActiveRollMode, {
   candidateCount: number;
@@ -40,7 +39,7 @@ export function isActiveTraitRollMode(mode: string): mode is ClientSpiritActiveR
 }
 
 export function getTraitDefinition(code: string) {
-  const definition = SPIRIT_TRAIT_DEFINITIONS.find((trait) => trait.code === code);
+  const definition = [...SPIRIT_TRAIT_DEFINITIONS, ...LEGACY_TRAIT_DEFINITIONS].find((trait) => trait.code === code);
   if (!definition) {
     return SPIRIT_TRAIT_DEFINITIONS[0];
   }

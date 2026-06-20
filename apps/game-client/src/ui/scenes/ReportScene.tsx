@@ -15,6 +15,7 @@ interface ReportSceneProps {
   isTutorial: boolean;
   targets: ClientRaidTarget[];
   followedTargetIds: string[];
+  friendTargetIds: string[];
   reportEntries: ClientReportEntry[];
   uiRules: TutorialRaidUiRules;
   onChangeTab: (tab: RaidHubTabKey) => void;
@@ -35,6 +36,7 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
     isTutorial,
     targets,
     followedTargetIds,
+    friendTargetIds,
     reportEntries,
     uiRules,
     onChangeTab,
@@ -95,10 +97,11 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
             <div className="target-list target-list-raid">
               {visibleTargets.map((target) => (
                 <RaidTargetCard
-                  followed={followedTargetIds.includes(target.id)}
+                  followed={followedTargetIds.includes(target.targetPlayerId)}
+                  friend={friendTargetIds.includes(target.targetPlayerId)}
                   key={target.id}
                   onSelect={onOpenTarget}
-                  onToggleFollow={uiRules.allowFollow ? onToggleFollowTarget : undefined}
+                  onToggleFollow={uiRules.allowFollow && !friendTargetIds.includes(target.targetPlayerId) ? onToggleFollowTarget : undefined}
                   target={target}
                 />
               ))}

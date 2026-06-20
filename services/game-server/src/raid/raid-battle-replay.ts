@@ -1,3 +1,4 @@
+import { getSpiritBattleTraitLabel } from '@trinitywar/shared';
 import type {
   ClientRaidBattleEvent,
   ClientRaidBattleFloatingTone,
@@ -113,7 +114,7 @@ export function normalizeRaidBattleEvents(value: unknown): ClientRaidBattleEvent
     return [];
   }
 
-  const supportedTypes = new Set<ClientRaidBattleEvent['type']>(['dodge', 'execute', 'element', 'critical', 'lifesteal', 'counter', 'damage', 'soul-drop', 'status']);
+  const supportedTypes = new Set<ClientRaidBattleEvent['type']>(['dodge', 'execute', 'element', 'critical', 'lifesteal', 'counter', 'damage', 'soul-drop', 'status', 'blood', 'trait']);
 
   return value
     .map((item) => item as { type?: string; label?: string; description?: string })
@@ -189,18 +190,7 @@ function buildBattleTraits(spirit: SpiritBattleSnapshot | null): NonNullable<Cli
 }
 
 function getTraitLabel(code: string): string {
-  const labels: Record<string, string> = {
-    claw: '利爪',
-    thick_skin: '厚皮',
-    crit: '暴击',
-    crit_damage: '暴伤',
-    dodge: '闪避',
-    counter: '反击',
-    lifesteal: '吸血',
-    tenacity: '韧性',
-  };
-
-  return labels[code] ?? code;
+  return getSpiritBattleTraitLabel(code);
 }
 
 function buildBattleStats(spirit: SpiritBattleSnapshot | null): { attack: number } {
@@ -259,7 +249,8 @@ function normalizeBattleResult(result: string): ClientRaidBattleReplay['result']
 function resolveBattleEventTone(event: ClientRaidBattleEvent): ClientRaidBattleFloatingTone {
   if (event.type === 'dodge') return 'miss';
   if (event.type === 'critical') return 'crit';
-  if (event.type === 'element' || event.type === 'lifesteal' || event.type === 'counter' || event.type === 'status') return 'buff';
+  if (event.type === 'blood') return 'blood';
+  if (event.type === 'element' || event.type === 'lifesteal' || event.type === 'counter' || event.type === 'status' || event.type === 'trait') return 'buff';
   return 'damage';
 }
 

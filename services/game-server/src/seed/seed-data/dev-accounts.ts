@@ -91,7 +91,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
   {
     providerUserId: 'dev-main-loop',
     nickname: '主循环测试号',
-    factionCode: 'immortal',
+    factionCode: 'human',
     castleLevel: 10,
     wallet: { vaultGold: 1800, walletGold: 160, pendingTaxGold: 80, pendingDividendGold: 32 },
     building: {
@@ -151,7 +151,7 @@ export const DEV_ACCOUNT_SEEDS: DevAccountSeedData[] = [
   {
     providerUserId: 'dev-stable-flow-2',
     nickname: '稳定测试号2',
-    factionCode: 'human',
+    factionCode: 'immortal',
     castleLevel: 10,
     wallet: { vaultGold: 1600, walletGold: 180, pendingTaxGold: 60, pendingDividendGold: 24 },
     building: {

@@ -200,18 +200,20 @@ export class AuthService {
             providerUserId,
           },
         },
-        include: { player: true },
+        include: { player: { include: { factionMembers: true } } },
       });
 
       const shouldRepairNickname = existingIdentity
         ? isMojibakeText(existingIdentity.player.nickname) && !isMojibakeText(nickname)
         : false;
+      const shouldSyncStableFaction = Boolean(stableAccount && existingIdentity && existingIdentity.player.factionId !== faction.id);
       const player = existingIdentity
         ? await client.player.update({
           where: { id: existingIdentity.playerId },
           data: {
             lastLoginAt: new Date(),
             ...(shouldRepairNickname ? { nickname } : {}),
+            ...(shouldSyncStableFaction ? { factionId: faction.id } : {}),
           },
         })
         : await client.player.create({
@@ -234,6 +236,35 @@ export class AuthService {
             },
           },
         });
+
+      if (stableAccount && existingIdentity) {
+        const preservedContribution = existingIdentity.player.factionMembers.reduce(
+          (maxContribution, member) => Math.max(maxContribution, member.contributionScore),
+          0,
+        );
+        await client.factionMember.deleteMany({
+          where: {
+            playerId: player.id,
+            factionId: { not: faction.id },
+          },
+        });
+        await client.factionMember.upsert({
+          where: {
+            factionId_playerId: {
+              factionId: faction.id,
+              playerId: player.id,
+            },
+          },
+          create: {
+            factionId: faction.id,
+            playerId: player.id,
+            contributionScore: preservedContribution,
+          },
+          update: {
+            contributionScore: preservedContribution,
+          },
+        });
+      }
 
       const initialization = stableAccount && !existingIdentity
         ? buildStableDevAccountInitialization(stableAccount)
@@ -630,51 +661,65 @@ async function upsertActiveFriendPair(
     return;
   }
 
+  const existingRelations = await client.playerSocialRelation.findMany({
+    where: {
+      relationType: SocialRelationType.FRIEND,
+      OR: [
+        {
+          playerId: input.firstPlayerId,
+          targetPlayerId: input.secondPlayerId,
+        },
+        {
+          playerId: input.secondPlayerId,
+          targetPlayerId: input.firstPlayerId,
+        },
+      ],
+    },
+    select: {
+      playerId: true,
+      targetPlayerId: true,
+      status: true,
+    },
+  });
+
+  if (existingRelations.some((relation) => relation.status !== SocialRelationStatus.ACTIVE)) {
+    return;
+  }
+
+  const hasFirstToSecond = existingRelations.some((relation) => (
+    relation.playerId === input.firstPlayerId && relation.targetPlayerId === input.secondPlayerId
+  ));
+  const hasSecondToFirst = existingRelations.some((relation) => (
+    relation.playerId === input.secondPlayerId && relation.targetPlayerId === input.firstPlayerId
+  ));
+
   await Promise.all([
-    client.playerSocialRelation.upsert({
-      where: {
-        playerId_targetPlayerId_relationType: {
+    hasFirstToSecond
+      ? Promise.resolve()
+      : client.playerSocialRelation.create({
+        data: {
           playerId: input.firstPlayerId,
           targetPlayerId: input.secondPlayerId,
           relationType: SocialRelationType.FRIEND,
+          status: SocialRelationStatus.ACTIVE,
+          sourceType: input.sourceType,
+          intimacy: 20,
+          lastInteractedAt: input.now,
         },
-      },
-      create: {
-        playerId: input.firstPlayerId,
-        targetPlayerId: input.secondPlayerId,
-        relationType: SocialRelationType.FRIEND,
-        status: SocialRelationStatus.ACTIVE,
-        sourceType: input.sourceType,
-        intimacy: 20,
-        lastInteractedAt: input.now,
-      },
-      update: {
-        status: SocialRelationStatus.ACTIVE,
-        sourceType: input.sourceType,
-      },
-    }),
-    client.playerSocialRelation.upsert({
-      where: {
-        playerId_targetPlayerId_relationType: {
+      }),
+    hasSecondToFirst
+      ? Promise.resolve()
+      : client.playerSocialRelation.create({
+        data: {
           playerId: input.secondPlayerId,
           targetPlayerId: input.firstPlayerId,
           relationType: SocialRelationType.FRIEND,
+          status: SocialRelationStatus.ACTIVE,
+          sourceType: input.sourceType,
+          intimacy: 20,
+          lastInteractedAt: input.now,
         },
-      },
-      create: {
-        playerId: input.secondPlayerId,
-        targetPlayerId: input.firstPlayerId,
-        relationType: SocialRelationType.FRIEND,
-        status: SocialRelationStatus.ACTIVE,
-        sourceType: input.sourceType,
-        intimacy: 20,
-        lastInteractedAt: input.now,
-      },
-      update: {
-        status: SocialRelationStatus.ACTIVE,
-        sourceType: input.sourceType,
-      },
-    }),
+      }),
   ]);
 }
 

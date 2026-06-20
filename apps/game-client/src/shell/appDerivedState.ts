@@ -62,8 +62,8 @@ export function buildAppDerivedState(input: BuildAppDerivedStateInput) {
     .filter((entry) => entry.title !== '系统结算')
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
   const visibleRaidTargets = scenes.raid.targets.slice(0, isTutorialUser ? 1 : 3);
-  const raidBattleLimit = 5;
-  const raidBattleUsed = Math.min(mergedReportEntries.length, raidBattleLimit);
+  const raidBattleLimit = scenes.raid.daily?.attemptLimit ?? 10;
+  const raidBattleUsed = scenes.raid.daily?.attemptsUsed ?? Math.min(mergedReportEntries.length, raidBattleLimit);
   const activeBackgroundImage = `url(${getSceneBackground(activeScene, home.factionName)})`;
   const tutorialUiRules = getTutorialUiRules(tutorialStage, isTutorialUser);
   const vaultResource = findResourceByTone('vault', home.resources);

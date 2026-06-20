@@ -197,11 +197,31 @@ export interface SceneContentReadModel {
     name: string;
     contributionScore: number;
   }>;
+  factionRankings: Array<{
+    playerId: string;
+    contributionScore: number;
+    player: {
+      id: string;
+      nickname: string;
+      castleLevelCache: number;
+      faction: {
+        name: string;
+      } | null;
+    };
+  }>;
+  raidDailyState: {
+    dateKey: string;
+    normalRaidAttemptsUsed: number;
+    raidRefreshesUsed: number;
+    extraRaidAttemptsPurchased: number;
+    extraRefreshesPurchased: number;
+  } | null;
   raidTargetPools: Array<{
     id: string;
     targetSnapshotJson: Prisma.JsonValue;
     expiresAt: Date;
       targetPlayer: {
+        id: string;
         nickname: string;
         protectedUntil: Date | null;
         castleLevelCache: number;
@@ -601,7 +621,7 @@ export class ClientReadRepository {
       return null;
     }
 
-    const [factions, factionContributionTotals, factionStipendClaimCount] = await Promise.all([
+    const [factions, factionContributionTotals, factionStipendClaimCount, factionRankings] = await Promise.all([
       client.faction.findMany({
         orderBy: [{ contributionScore: 'desc' }, { name: 'asc' }],
         select: {
@@ -620,6 +640,29 @@ export class ClientReadRepository {
           claimedAt: { not: null },
         },
       }),
+      player.faction
+        ? client.factionMember.findMany({
+          where: { factionId: player.faction.id },
+          orderBy: [
+            { contributionScore: 'desc' },
+            { joinedAt: 'asc' },
+            { playerId: 'asc' },
+          ],
+          take: 50,
+          select: {
+            playerId: true,
+            contributionScore: true,
+            player: {
+              select: {
+                id: true,
+                nickname: true,
+                castleLevelCache: true,
+                faction: { select: { name: true } },
+              },
+            },
+          },
+        })
+        : Promise.resolve([]),
     ]);
     const contributionTotalByFactionId = new Map(
       factionContributionTotals.map((total) => [total.factionId, total._sum.contributionScore ?? 0]),
@@ -634,11 +677,26 @@ export class ClientReadRepository {
         return contributionDelta !== 0 ? contributionDelta : left.name.localeCompare(right.name, 'zh-Hans-CN');
       });
 
-    const [plantHarvestCount, raidTargetPools] = await Promise.all([
+    const [plantHarvestCount, raidDailyState, raidTargetPools] = await Promise.all([
       client.fieldHarvestLog.count({
         where: {
           playerId,
           seedId: { not: null },
+        },
+      }),
+      client.playerRaidDailyState.findUnique({
+        where: {
+          playerId_dateKey: {
+            playerId,
+            dateKey,
+          },
+        },
+        select: {
+          dateKey: true,
+          normalRaidAttemptsUsed: true,
+          raidRefreshesUsed: true,
+          extraRaidAttemptsPurchased: true,
+          extraRefreshesPurchased: true,
         },
       }),
       client.raidTargetPool.findMany({
@@ -654,6 +712,7 @@ export class ClientReadRepository {
         expiresAt: true,
         targetPlayer: {
           select: {
+            id: true,
             nickname: true,
             protectedUntil: true,
             castleLevelCache: true,
@@ -778,6 +837,8 @@ export class ClientReadRepository {
       factionStipendStates: player.factionStipendStates,
       factionStipendClaimCount,
       factions: factionsWithMemberContributionTotals,
+      factionRankings,
+      raidDailyState,
       raidTargetPools,
       raidMessageTemplates,
       battleReports,

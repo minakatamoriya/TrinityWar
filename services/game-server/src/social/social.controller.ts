@@ -73,6 +73,15 @@ export class SocialController {
     return this.socialService.follow(this.requirePlayerId(currentPlayer), body);
   }
 
+  @Delete('following/:targetPlayerId')
+  @ApiOkResponse({ description: 'Unfollow another player.' })
+  async unfollow(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Param('targetPlayerId') targetPlayerId: string,
+  ): Promise<ClientSocialRelationMutationResponse> {
+    return this.socialService.unfollow(this.requirePlayerId(currentPlayer), targetPlayerId);
+  }
+
   @Post('friend-request')
   @ApiBody({ type: SocialFriendRequestDto })
   @ApiOkResponse({ description: 'Create or confirm a friend relation.' })
@@ -203,6 +212,7 @@ defineRouteParamTypes(SocialController.prototype, 'getFriends', [Object]);
 defineRouteParamTypes(SocialController.prototype, 'getFollowing', [Object]);
 defineRouteParamTypes(SocialController.prototype, 'getEnemies', [Object]);
 defineRouteParamTypes(SocialController.prototype, 'follow', [Object, Object]);
+defineRouteParamTypes(SocialController.prototype, 'unfollow', [Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'requestFriend', [Object, Object]);
 defineRouteParamTypes(SocialController.prototype, 'acceptFriendRequest', [Object, String]);
 defineRouteParamTypes(SocialController.prototype, 'rejectFriendRequest', [Object, String]);

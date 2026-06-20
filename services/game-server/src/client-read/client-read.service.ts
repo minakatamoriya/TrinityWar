@@ -3,7 +3,7 @@ import type { Prisma, PrismaClient, SpiritElement } from '@prisma/client';
 import { APP_NAME, type ClientBootstrapResponse, type ClientPlantResearchState, type ClientSceneContentResponse, type ClientSeasonRewardsResponse, type ClientSeasonSignInResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
-import { GAME_BALANCE, getRaidLevelBand } from '../lib/game-balance.js';
+import { GAME_BALANCE, getRaidBaseRewardByLevel, getRaidLevelBand } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SeasonService } from '../season/season.service.js';
 import { SEED_DEFINITION_SEEDS } from '../seed/seed-data/seeds.js';
@@ -430,7 +430,10 @@ export class ClientReadService {
       select: { castleLevelCache: true },
     });
     const ownerLevel = owner?.castleLevelCache ?? 1;
-    const sortedCandidates = sortRaidCandidatesByLevelBand(rawCandidates, ownerLevel);
+    const sortedCandidates = sortRaidCandidatesByLevelBand(
+      rawCandidates.filter((candidate) => isRaidCandidateWithinLevelBand(candidate.castleLevelCache, ownerLevel)),
+      ownerLevel,
+    );
     const candidateCount = sortedCandidates.length;
     const candidateOffset = options.force && candidateCount > 0
       ? ((refreshBatchNo - 1) * RAID_TARGET_POOL_SIZE) % candidateCount
@@ -457,6 +460,8 @@ export class ClientReadService {
         currentClaimableGold: field.currentClaimableGold,
       }));
       const targetBandLabel = getRaidLevelBand(target.castleLevelCache);
+      const targetKind = resolveRaidTargetKind(ownerLevel, target.castleLevelCache);
+      const baseReward = getRaidBaseRewardByLevel(target.castleLevelCache);
 
       await client.raidTargetPool.create({
         data: {
@@ -472,7 +477,8 @@ export class ClientReadService {
             raidRule: `探索与战斗只针对对手灵宠。当前目标段位 ${targetBandLabel}。`,
             defenseStatus: `可用战力 ${target.army?.availableCount ?? 0}`,
             protectionStatus: '可发起战斗',
-            detail: '系统按等级段与挑战风险生成的普通目标。',
+            risk: targetKind.label,
+            detail: `系统按等级段与挑战风险生成的普通目标。基础奖励 ${baseReward} 金币，最终奖励按战果系数结算。`,
           },
           fieldSnapshotJson: fields,
           riskSnapshotJson: {
@@ -991,7 +997,13 @@ function sortRaidCandidatesByLevelBand<T extends { castleLevelCache: number }>(c
       return rightScore - leftScore;
     }
 
-    return left.castleLevelCache - right.castleLevelCache;
+    const leftDistance = Math.abs(left.castleLevelCache - ownerLevel);
+    const rightDistance = Math.abs(right.castleLevelCache - ownerLevel);
+    if (leftDistance !== rightDistance) {
+      return leftDistance - rightDistance;
+    }
+
+    return right.castleLevelCache - left.castleLevelCache;
   });
 }
 
@@ -1020,6 +1032,22 @@ function getRaidBandCandidateScore(
     return Number(mix.adjacentBandWeight ?? 3);
   }
   return 0;
+}
+
+function isRaidCandidateWithinLevelBand(candidateLevel: number, ownerLevel: number): boolean {
+  const delta = getRaidBandIndex(candidateLevel) - getRaidBandIndex(ownerLevel);
+  return delta >= -1 && delta <= 2;
+}
+
+function resolveRaidTargetKind(ownerLevel: number, candidateLevel: number): { label: string; code: 'steady' | 'ambitious' | 'overlevel' } {
+  const delta = getRaidBandIndex(candidateLevel) - getRaidBandIndex(ownerLevel);
+  if (delta >= 2) {
+    return { code: 'overlevel', label: '越级目标' };
+  }
+  if (delta === 1) {
+    return { code: 'ambitious', label: '挑战目标' };
+  }
+  return { code: 'steady', label: '稳妥目标' };
 }
 
 function getRaidBandIndex(level: number): number {

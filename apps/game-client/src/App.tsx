@@ -8,7 +8,6 @@ import type {
   ClientRaidActionRequest,
   ClientRaidDeepIntelResponse,
   ClientRaidBattleReplay,
-  ClientFactionDonateRequest,
   ClientBuildingUpgradeId,
   ClientRaidTarget,
   ClientSceneAction,
@@ -26,9 +25,9 @@ import type {
   HomeSummaryResponse,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, claimFactionStipend, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, devLogin, dissolveSpirit, donateFactionResources, feedSpirit, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, claimFactionStipend, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, devLogin, dissolveSpirit, feedSpirit, followSocialTarget, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unfollowSocialTarget, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
-import type { SocialRelationFilter, SocialTabKey } from './ui/scenes/SocialScene';
+import type { SocialTabKey } from './ui/scenes/SocialScene';
 import type { ShareAssistAudience } from './ui/share/ShareAssistPage';
 import { CharacterDialogProvider } from './dialog/CharacterDialogProvider';
 import { useCharacterDialog } from './dialog/useCharacterDialog';
@@ -165,8 +164,7 @@ function App(): JSX.Element {
   const [tutorialStage, setTutorialStage] = useState<TutorialStage>(() => getInitialTutorialStage(storedLoginSession));
   const [raidHubTab, setRaidHubTab] = useState<RaidHubTabKey>('targets');
   const [factionTab, setFactionTab] = useState<FactionTabKey>('overview');
-  const [socialTab, setSocialTab] = useState<SocialTabKey>('feed');
-  const [socialRelationFilter, setSocialRelationFilter] = useState<SocialRelationFilter>('all');
+  const [socialTab, setSocialTab] = useState<SocialTabKey>('friends');
   const [shareAssistDemo, setShareAssistDemo] = useState<ShareAssistDemoState | null>(null);
   const [pendingShareInvite, setPendingShareInvite] = useState<PendingShareInviteState | null>(null);
   const [pendingFriendInvite, setPendingFriendInvite] = useState<PendingFriendInviteState | null>(null);
@@ -189,12 +187,24 @@ function App(): JSX.Element {
     onError: (message) => showToast(message, 'error'),
   });
   const raidIntel = useRaidIntelState({
+    followTarget: (targetPlayerId) => followSocialTarget({ targetPlayerId }),
     loadDetail: loadRaidTargetDetail,
     onDetailLoaded: (detail) => {
       setViewModel((current) => applyRaidTargetDetailToViewModel(current, detail));
     },
+    onFollowChanged: () => {
+      void social.loadBundle();
+    },
     onToast: showToast,
+    unfollowTarget: unfollowSocialTarget,
   });
+
+  useEffect(() => {
+    raidIntel.setFollowedTargetIds(social.following
+      .filter((relation) => relation.status === 'active')
+      .map((relation) => relation.target.playerId));
+  }, [social.following]);
+
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null);
   const [farmTick, setFarmTick] = useState(0);
   const [seedInventory, setSeedInventory] = useState<Record<string, number>>(emptySeedInventory);
@@ -226,49 +236,266 @@ function App(): JSX.Element {
   const characterDialogPortalRef = useRef<HTMLDivElement | null>(null);
   const welcomeDialogSessionIdRef = useRef<string | null>(null);
   const farmEnterDialogRef = useRef<{ sceneId: string; at: number } | null>(null);
+  const battleDemoScenarioIndexRef = useRef(0);
 
   const handleOpenBattleDemo = (): void => {
+    const trait = (code: string, label: string, value: number) => ({ code, label, value });
+    const demoScenarios = [
+      {
+        name: '快攻爆杀',
+        seed: 20260621,
+        attacker: {
+          side: 'attacker' as const,
+          playerName: loginSession?.player.nickname ?? '测试玩家',
+          spiritId: 'canglang',
+          spiritName: '苍狼',
+          rarity: 'common',
+          element: 'fire' as const,
+          level: 20,
+          attack: 132,
+          maxHp: 780,
+          traits: [
+            trait('claw', '利爪', 12),
+            trait('sharp_blade', '利刃', 30),
+            trait('crit', '暴击', 8),
+            trait('crit_damage', '暴伤', 25),
+            trait('harvest', '收割', 18),
+          ],
+        },
+        defender: {
+          side: 'defender' as const,
+          playerName: '守田者',
+          spiritId: 'chenghuang',
+          spiritName: '乘黄',
+          rarity: 'rare',
+          element: 'metal' as const,
+          level: 20,
+          attack: 96,
+          maxHp: 1120,
+          traits: [
+            trait('thick_skin', '厚皮', 12),
+            trait('lifesteal', '吸血', 12),
+            trait('dodge', '闪避', 6),
+            trait('suppress', '压制', 8),
+            trait('iron_bone', '铁骨', 30),
+          ],
+        },
+      },
+      {
+        name: '血牛拖燃',
+        seed: 20260622,
+        attacker: {
+          side: 'attacker' as const,
+          playerName: loginSession?.player.nickname ?? '测试玩家',
+          spiritId: 'hegui',
+          spiritName: '岩龟',
+          rarity: 'common',
+          element: 'earth' as const,
+          level: 20,
+          attack: 68,
+          maxHp: 1800,
+          traits: [
+            trait('thick_skin', '厚皮', 12),
+            trait('thick_skin', '厚皮', 12),
+            trait('iron_bone', '铁骨', 30),
+            trait('lifesteal', '吸血', 12),
+            trait('blaze', '炽燃', 3),
+          ],
+        },
+        defender: {
+          side: 'defender' as const,
+          playerName: '守田者',
+          spiritId: 'xueyan',
+          spiritName: '血魇',
+          rarity: 'legendary',
+          element: 'water' as const,
+          level: 20,
+          attack: 82,
+          maxHp: 1780,
+          traits: [
+            trait('claw', '利爪', 12),
+            trait('crit', '暴击', 8),
+            trait('crit_damage', '暴伤', 25),
+            trait('lifesteal', '吸血', 12),
+            trait('sharp_blade', '利刃', 30),
+          ],
+        },
+      },
+      {
+        name: '反血牛',
+        seed: 20260623,
+        attacker: {
+          side: 'attacker' as const,
+          playerName: loginSession?.player.nickname ?? '测试玩家',
+          spiritId: 'zhuyan',
+          spiritName: '朱厌',
+          rarity: 'rare',
+          element: 'wood' as const,
+          level: 20,
+          attack: 116,
+          maxHp: 920,
+          traits: [
+            trait('blood_breaker', '破血', 18),
+            trait('blood_breaker', '破血', 18),
+            trait('wound', '裂伤', 8),
+            trait('claw', '利爪', 12),
+            trait('crit', '暴击', 8),
+          ],
+        },
+        defender: {
+          side: 'defender' as const,
+          playerName: '守田者',
+          spiritId: 'yinglong',
+          spiritName: '应龙',
+          rarity: 'legendary',
+          element: 'earth' as const,
+          level: 20,
+          attack: 96,
+          maxHp: 1550,
+          traits: [
+            trait('thick_skin', '厚皮', 12),
+            trait('thick_skin', '厚皮', 12),
+            trait('iron_bone', '铁骨', 30),
+            trait('lifesteal', '吸血', 12),
+            trait('disruption', '断续', 20),
+          ],
+        },
+      },
+      {
+        name: '残血反打',
+        seed: 20260624,
+        attacker: {
+          side: 'attacker' as const,
+          playerName: loginSession?.player.nickname ?? '测试玩家',
+          spiritId: 'qingyuan',
+          spiritName: '青猿',
+          rarity: 'common',
+          element: 'water' as const,
+          level: 20,
+          attack: 108,
+          maxHp: 980,
+          traits: [
+            trait('last_stand', '背水', 25),
+            trait('last_stand', '背水', 25),
+            trait('lifesteal', '吸血', 12),
+            trait('crit', '暴击', 8),
+            trait('crit_damage', '暴伤', 25),
+          ],
+        },
+        defender: {
+          side: 'defender' as const,
+          playerName: '守田者',
+          spiritId: 'yingbao',
+          spiritName: '影豹',
+          rarity: 'common',
+          element: 'fire' as const,
+          level: 20,
+          attack: 126,
+          maxHp: 900,
+          traits: [
+            trait('harvest', '收割', 18),
+            trait('claw', '利爪', 12),
+            trait('crit', '暴击', 8),
+            trait('crit_damage', '暴伤', 25),
+            trait('dodge', '闪避', 6),
+          ],
+        },
+      },
+      {
+        name: '干扰压制',
+        seed: 20260625,
+        attacker: {
+          side: 'attacker' as const,
+          playerName: loginSession?.player.nickname ?? '测试玩家',
+          spiritId: 'guishou',
+          spiritName: '讹兽',
+          rarity: 'rare',
+          element: 'metal' as const,
+          level: 20,
+          attack: 104,
+          maxHp: 1080,
+          traits: [
+            trait('suppress', '压制', 8),
+            trait('disruption', '断续', 20),
+            trait('wound', '裂伤', 8),
+            trait('thick_skin', '厚皮', 12),
+            trait('harvest', '收割', 18),
+          ],
+        },
+        defender: {
+          side: 'defender' as const,
+          playerName: '守田者',
+          spiritId: 'xuanhu',
+          spiritName: '玄虎',
+          rarity: 'common',
+          element: 'wood' as const,
+          level: 20,
+          attack: 130,
+          maxHp: 900,
+          traits: [
+            trait('claw', '利爪', 12),
+            trait('sharp_blade', '利刃', 30),
+            trait('crit', '暴击', 8),
+            trait('crit_damage', '暴伤', 25),
+            trait('lifesteal', '吸血', 12),
+          ],
+        },
+      },
+      {
+        name: '闪避赌命',
+        seed: 20260626,
+        attacker: {
+          side: 'attacker' as const,
+          playerName: loginSession?.player.nickname ?? '测试玩家',
+          spiritId: 'shuanghu',
+          spiritName: '霜狐',
+          rarity: 'common',
+          element: 'fire' as const,
+          level: 20,
+          attack: 100,
+          maxHp: 980,
+          traits: [
+            trait('dodge', '闪避', 6),
+            trait('dodge', '闪避', 6),
+            trait('dodge', '闪避', 6),
+            trait('crit', '暴击', 8),
+            trait('lifesteal', '吸血', 12),
+          ],
+        },
+        defender: {
+          side: 'defender' as const,
+          playerName: '守田者',
+          spiritId: 'canglang',
+          spiritName: '苍狼',
+          rarity: 'common',
+          element: 'water' as const,
+          level: 20,
+          attack: 125,
+          maxHp: 900,
+          traits: [
+            trait('claw', '利爪', 12),
+            trait('sharp_blade', '利刃', 30),
+            trait('crit', '暴击', 8),
+            trait('crit_damage', '暴伤', 25),
+            trait('harvest', '收割', 18),
+          ],
+        },
+      },
+    ];
+    const scenario = demoScenarios[battleDemoScenarioIndexRef.current % demoScenarios.length] ?? demoScenarios[0];
+    battleDemoScenarioIndexRef.current += 1;
     const replay = buildSpiritCollisionBattleReplay({
       orderId: `demo-collision-${Date.now()}`,
-      seed: Date.now() % 2147483647,
+      seed: scenario.seed,
       goldPool: 1000,
-      attacker: {
-        side: 'attacker',
-        playerName: loginSession?.player.nickname ?? '测试玩家',
-        spiritId: 'demo-attacker',
-        spiritName: '赤焰灵狐',
-        rarity: 'rare',
-        element: 'fire',
-        level: 18,
-        attack: 132,
-        maxHp: 760,
-        traits: [
-          { code: 'claw', label: '利爪', value: 8 },
-          { code: 'crit', label: '暴击', value: 18 },
-          { code: 'crit_damage', label: '暴伤', value: 20 },
-        ],
-      },
-      defender: {
-        side: 'defender',
-        playerName: '守田者',
-        spiritId: 'demo-defender',
-        spiritName: '玄甲石灵',
-        rarity: 'common',
-        element: 'earth',
-        level: 18,
-        attack: 104,
-        maxHp: 980,
-        traits: [
-          { code: 'thick_skin', label: '厚皮', value: 10 },
-          { code: 'counter', label: '反击', value: 6 },
-        ],
-      },
+      attacker: scenario.attacker,
+      defender: scenario.defender,
     });
 
     setPendingRaidRewardModal(null);
     setRaidBattleAutoStart(false);
     setRaidBattleReplay(replay);
-    showToast('已生成 10 回合互撞测试。', 'info');
+    showToast(`已生成${scenario.name}对撞测试。`, 'info');
   };
 
   const advanceTutorialStage = (nextStage: TutorialStage): void => {
@@ -703,8 +930,7 @@ function App(): JSX.Element {
     setActiveScene('home');
     setRaidHubTab('targets');
     setFactionTab('overview');
-    setSocialTab('feed');
-    setSocialRelationFilter('all');
+    setSocialTab('friends');
     raidIntel.reset();
     setSeedRewardModal(null);
     setSeedSelectionState(null);
@@ -1134,28 +1360,6 @@ function App(): JSX.Element {
     });
   };
 
-  const handleFactionDonate = async (goldAmount: number): Promise<void> => {
-    if (pendingActionKey === 'faction:donate') {
-      return;
-    }
-
-    const input: ClientFactionDonateRequest = {
-      goldAmount,
-    };
-
-    setPendingActionKey('faction:donate');
-
-    try {
-      const result = await donateFactionResources(input);
-      applyMutationResult(result);
-    } catch {
-      showToast('当前无法完成阵营贡献同步，请稍后重试。', 'error');
-    } finally {
-      setPendingActionKey(null);
-    }
-  };
-
-
   const handleUnlockPlant = async (plantId: string): Promise<void> => {
     const actionKey = `plant-unlock:${plantId}`;
     if (pendingActionKey === actionKey) {
@@ -1375,10 +1579,6 @@ function App(): JSX.Element {
         quantity: reward.quantity,
       })),
     });
-  };
-
-  const handleTransferFaction = (factionName: string): void => {
-    showToast(`转阵营到${factionName}的功能待定，当前先保留入口。`);
   };
 
   const handleConfirmFactionStipendClaim = async (): Promise<void> => {
@@ -2333,14 +2533,12 @@ function App(): JSX.Element {
             raidHubTab={raidHubTab}
             reportEntries={mergedReportEntries}
             scenes={scenes}
-            socialEnemies={social.enemies}
             socialError={social.error}
             socialFeed={social.feed}
             socialFieldVisit={social.fieldVisit}
             socialFollowing={social.following}
             socialFriends={social.friends}
             socialLoading={social.loading}
-            socialRelationFilter={socialRelationFilter}
             socialSummary={social.summary}
             socialTab={socialTab}
             spiritState={spiritState}
@@ -2365,7 +2563,6 @@ function App(): JSX.Element {
             }}
             onChangeFactionTab={setFactionTab}
             onChangeRaidHubTab={setRaidHubTab}
-            onChangeSocialRelationFilter={setSocialRelationFilter}
             onChangeSocialTab={setSocialTab}
             onClaimFactionStipend={() => {
               void handleClaimFactionStipend();
@@ -2384,14 +2581,14 @@ function App(): JSX.Element {
             onDissolveSpirit={(slotIndex, slotVersion) => {
               void handleDissolveSpiritAction(slotIndex, slotVersion);
             }}
-            onDonateFaction={(goldAmount) => {
-              void handleFactionDonate(goldAmount);
-            }}
             onFarmAction={(action, fieldId, fieldCode) => {
               void handleFarmAction(action, fieldId, fieldCode);
             }}
             onFeedSpirit={(slotIndex, slotVersion, actionType) => {
               void handleFeedSpiritAction(slotIndex, slotVersion, actionType);
+            }}
+            onFollowSocialTarget={(targetPlayerId) => {
+              void social.followTarget(targetPlayerId);
             }}
             onNavigate={navigateToScene}
             onOpenContributionGuide={() => {
@@ -2427,8 +2624,10 @@ function App(): JSX.Element {
             }}
             onOpenSpiritUnlockSurface={openPendingSpiritCodexReveal}
             onToggleFollowTarget={raidIntel.toggleFollowTarget}
-            onTransferFaction={handleTransferFaction}
             onTutorialAction={handleTutorialTaskAction}
+            onUnfollowSocialTarget={(targetPlayerId) => {
+              void social.unfollowTarget(targetPlayerId);
+            }}
           />
 
           <BottomDock
@@ -2443,6 +2642,9 @@ function App(): JSX.Element {
             detail={raidIntel.detail}
             error={raidIntel.error}
             followedTargetIds={raidIntel.followedTargetIds}
+            friendTargetIds={social.friends
+              .filter((relation) => relation.status === 'active')
+              .map((relation) => relation.target.playerId)}
             loading={raidIntel.loading}
             modal={raidIntel.modal}
             raidTargetsById={raidTargetsById}

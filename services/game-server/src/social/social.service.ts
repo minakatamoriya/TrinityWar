@@ -40,6 +40,17 @@ const DAILY_FRIEND_ASSIST_LIMIT = 20;
 const FRIEND_HARVEST_REWARD_GOLD = 10;
 const REVIVE_WINDOW_SECONDS = 30 * 60;
 const TEAM_CHALLENGE_EXPIRES_MS = 2 * 60 * 60 * 1000;
+const FRIEND_REQUEST_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+export const SOCIAL_FOLLOW_LIMIT_CONFIG = {
+  baseLimit: 30,
+  expansionStep: 10,
+  hardLimit: 100,
+} as const;
+export const SOCIAL_FRIEND_LIMIT_CONFIG = {
+  baseLimit: 50,
+  expansionStep: 10,
+  hardLimit: 150,
+} as const;
 const SOCIAL_CONTRIBUTION_REWARDS = {
   reviveField: 1,
   harvestField: 2,
@@ -246,22 +257,91 @@ export class SocialService {
   }
 
   async follow(playerId: string, request: ClientSocialFollowRequest): Promise<ClientSocialRelationMutationResponse> {
-    const relation = await this.upsertRelation(playerId, request.targetPlayerId, SocialRelationType.FOLLOWING, 'manual-follow', SocialRelationStatus.ACTIVE);
+    const relation = await this.prisma.transaction(async (client) => {
+      await this.assertPlayerExists(client, playerId);
+      await this.assertPlayerExists(client, request.targetPlayerId);
+      if (playerId === request.targetPlayerId) {
+        throw this.invalidRequest('Cannot create a social relation to yourself.');
+      }
+
+      const activeFriend = await client.playerSocialRelation.findUnique({
+        where: {
+          playerId_targetPlayerId_relationType: {
+            playerId,
+            targetPlayerId: request.targetPlayerId,
+            relationType: SocialRelationType.FRIEND,
+          },
+        },
+        include: { targetPlayer: this.playerSummaryInclude() },
+      });
+
+      if (activeFriend?.status === SocialRelationStatus.ACTIVE) {
+        throw this.invalidRequest('Already friends. Friends do not need to be followed.');
+      }
+
+      const existingFollowing = await client.playerSocialRelation.findUnique({
+        where: {
+          playerId_targetPlayerId_relationType: {
+            playerId,
+            targetPlayerId: request.targetPlayerId,
+            relationType: SocialRelationType.FOLLOWING,
+          },
+        },
+      });
+
+      if (existingFollowing?.status !== SocialRelationStatus.ACTIVE) {
+        await this.assertFollowingCapacity(client, playerId);
+      }
+
+      return this.upsertRelationRecord(client, {
+        playerId,
+        targetPlayerId: request.targetPlayerId,
+        relationType: SocialRelationType.FOLLOWING,
+        sourceType: 'manual-follow',
+        status: SocialRelationStatus.ACTIVE,
+        now: new Date(),
+      });
+    });
+
     return {
       app: APP_NAME,
-      summary: `Followed ${relation.target.nickname}.`,
-      relation,
+      summary: `已关注 ${relation.targetPlayer.nickname}。`,
+      relation: this.mapRelation(relation),
+    };
+  }
+
+  async unfollow(playerId: string, targetPlayerId: string): Promise<ClientSocialRelationMutationResponse> {
+    const relation = await this.prisma.transaction(async (client) => {
+      await this.assertPlayerExists(client, playerId);
+      await this.assertPlayerExists(client, targetPlayerId);
+      if (playerId === targetPlayerId) {
+        throw this.invalidRequest('Cannot remove yourself from following list.');
+      }
+
+      return this.upsertRelationRecord(client, {
+        playerId,
+        targetPlayerId,
+        relationType: SocialRelationType.FOLLOWING,
+        sourceType: 'manual-unfollow',
+        status: SocialRelationStatus.MUTED,
+        now: new Date(),
+      });
+    });
+
+    return {
+      app: APP_NAME,
+      summary: `已取消关注 ${relation.targetPlayer.nickname}。`,
+      relation: this.mapRelation(relation),
     };
   }
 
   async requestFriend(playerId: string, request: ClientSocialFriendRequest): Promise<ClientSocialRelationMutationResponse> {
     const result = await this.prisma.transaction(async (client) => {
-      const player = await this.assertPlayerExists(client, playerId);
+      await this.assertPlayerExists(client, playerId);
       const target = await this.assertPlayerExists(client, request.targetPlayerId);
       if (playerId === request.targetPlayerId) {
         throw this.invalidRequest('Cannot create a social relation to yourself.');
       }
-      this.assertSameFactionForFriend(playerId, target.id, player, target);
 
       const existingRelation = await client.playerSocialRelation.findUnique({
         where: {
@@ -287,6 +367,13 @@ export class SocialService {
         (existingRelation?.status === SocialRelationStatus.PENDING && existingRelation.sourceType.endsWith(':incoming'));
       const now = new Date();
       const sourceBase = request.sourceType ?? 'manual-friend-request';
+      if (!shouldActivate) {
+        this.assertFriendRequestNotPending(existingRelation, reverseRelation);
+        this.assertFriendRequestCooldown(existingRelation, reverseRelation, now);
+      }
+      if (existingRelation?.status !== SocialRelationStatus.ACTIVE) {
+        await this.assertFriendCapacityForPair(client, playerId, request.targetPlayerId, shouldActivate);
+      }
       const relation = await this.upsertRelationRecord(client, {
         playerId,
         targetPlayerId: request.targetPlayerId,
@@ -305,6 +392,7 @@ export class SocialService {
       });
 
       if (shouldActivate) {
+        await this.muteFollowingBetween(client, playerId, request.targetPlayerId, now);
         await this.createFriendAcceptedFeeds(client, playerId, request.targetPlayerId);
         await this.expireFriendRequestFeeds(client, playerId, request.targetPlayerId, now);
       } else if (existingRelation?.status !== SocialRelationStatus.PENDING) {
@@ -339,11 +427,11 @@ export class SocialService {
 
   async acceptFriendRequest(playerId: string, relationId: string): Promise<ClientSocialRelationMutationResponse> {
     const result = await this.prisma.transaction(async (client) => {
-      const currentPlayer = await this.assertPlayerExists(client, playerId);
+      await this.assertPlayerExists(client, playerId);
       const existing = await this.findPendingIncomingFriendRelation(client, playerId, relationId);
       const target = existing.targetPlayer;
-      this.assertSameFactionForFriend(playerId, existing.targetPlayerId, currentPlayer, target);
       const now = new Date();
+      await this.assertFriendCapacityForPair(client, playerId, existing.targetPlayerId, true);
       const relation = await this.upsertRelationRecord(client, {
         playerId,
         targetPlayerId: existing.targetPlayerId,
@@ -361,6 +449,7 @@ export class SocialService {
         now,
       });
 
+      await this.muteFollowingBetween(client, playerId, existing.targetPlayerId, now);
       await this.createFriendAcceptedFeeds(client, playerId, existing.targetPlayerId);
       await this.expireFriendRequestFeeds(client, playerId, existing.targetPlayerId, now);
       return { target, relation, reverseRelation };
@@ -458,6 +547,7 @@ export class SocialService {
       });
 
       await this.expireFriendRequestFeeds(client, playerId, targetPlayerId, now);
+      await this.createFriendDeletedFeeds(client, playerId, targetPlayerId);
       return { target, relation, reverseRelation };
     });
 
@@ -889,31 +979,6 @@ export class SocialService {
     };
   }
 
-  private async upsertRelation(
-    playerId: string,
-    targetPlayerId: string,
-    relationType: SocialRelationType,
-    sourceType: string,
-    status: SocialRelationStatus,
-  ): Promise<ClientSocialRelationItem> {
-    if (playerId === targetPlayerId) {
-      throw this.invalidRequest('Cannot create a social relation to yourself.');
-    }
-
-    await this.assertPlayerExists(this.prisma.db, playerId);
-    await this.assertPlayerExists(this.prisma.db, targetPlayerId);
-    const relation = await this.upsertRelationRecord(this.prisma.db, {
-      playerId,
-      targetPlayerId,
-      relationType,
-      sourceType,
-      status,
-      now: new Date(),
-    });
-
-    return this.mapRelation(relation);
-  }
-
   private async upsertRelationRecord(
     client: DbClient,
     input: {
@@ -950,6 +1015,36 @@ export class SocialService {
     });
   }
 
+  private assertFriendRequestNotPending(
+    existingRelation: PlayerSocialRelation | null,
+    reverseRelation: PlayerSocialRelation | null,
+  ): void {
+    if (existingRelation?.status === SocialRelationStatus.PENDING || reverseRelation?.status === SocialRelationStatus.PENDING) {
+      throw this.invalidRequest('好友申请已发送，请等待对方处理。');
+    }
+  }
+
+  private assertFriendRequestCooldown(
+    existingRelation: PlayerSocialRelation | null,
+    reverseRelation: PlayerSocialRelation | null,
+    now: Date,
+  ): void {
+    const latestTouchedAt = [existingRelation?.updatedAt, reverseRelation?.updatedAt]
+      .filter((value): value is Date => Boolean(value))
+      .sort((left, right) => right.getTime() - left.getTime())[0];
+
+    if (!latestTouchedAt) {
+      return;
+    }
+
+    const nextAllowedAt = new Date(latestTouchedAt.getTime() + FRIEND_REQUEST_COOLDOWN_MS);
+    if (nextAllowedAt.getTime() <= now.getTime()) {
+      return;
+    }
+
+    throw this.invalidRequest(`好友申请过于频繁，${formatFriendRequestCooldownMessage(nextAllowedAt, now)}`);
+  }
+
   private async createFriendAcceptedFeeds(client: DbClient, firstPlayerId: string, secondPlayerId: string): Promise<void> {
     await Promise.all([
       client.playerSocialFeed.create({
@@ -977,6 +1072,33 @@ export class SocialService {
     ]);
   }
 
+  private async createFriendDeletedFeeds(client: DbClient, actorPlayerId: string, targetPlayerId: string): Promise<void> {
+    await Promise.all([
+      client.playerSocialFeed.create({
+        data: {
+          playerId: actorPlayerId,
+          actorPlayerId: targetPlayerId,
+          feedType: SocialFeedType.FRIEND_DELETED,
+          relatedEntityType: 'player',
+          relatedEntityId: targetPlayerId,
+          summary: '你已解除这段好友关系。',
+          metadataJson: { friendPlayerId: targetPlayerId, perspective: 'actor' },
+        },
+      }),
+      client.playerSocialFeed.create({
+        data: {
+          playerId: targetPlayerId,
+          actorPlayerId,
+          feedType: SocialFeedType.FRIEND_DELETED,
+          relatedEntityType: 'player',
+          relatedEntityId: actorPlayerId,
+          summary: '对方已解除与你的好友关系。',
+          metadataJson: { friendPlayerId: actorPlayerId, perspective: 'target' },
+        },
+      }),
+    ]);
+  }
+
   private async expireFriendRequestFeeds(client: DbClient, firstPlayerId: string, secondPlayerId: string, now: Date): Promise<void> {
     await client.playerSocialFeed.updateMany({
       where: {
@@ -992,6 +1114,98 @@ export class SocialService {
         isRead: true,
       },
     });
+  }
+
+  private async assertFollowingCapacity(client: DbClient, playerId: string): Promise<void> {
+    const [activeFollowing, limit] = await Promise.all([
+      client.playerSocialRelation.count({
+        where: {
+          playerId,
+          relationType: SocialRelationType.FOLLOWING,
+          status: SocialRelationStatus.ACTIVE,
+        },
+      }),
+      this.getFollowingLimit(client, playerId),
+    ]);
+
+    if (activeFollowing >= limit) {
+      throw new BusinessError({
+        code: ErrorCode.Conflict,
+        message: `关注人数已达上限（${activeFollowing}/${limit}）。后续可通过天机符扩容，但最高不超过 ${SOCIAL_FOLLOW_LIMIT_CONFIG.hardLimit}。`,
+        statusCode: 409,
+      });
+    }
+  }
+
+  private async getFollowingLimit(_client: DbClient, _playerId: string): Promise<number> {
+    // Future Tianji expansion can add expansion levels here:
+    // baseLimit + expansionLevel * expansionStep, capped by hardLimit.
+    return SOCIAL_FOLLOW_LIMIT_CONFIG.baseLimit;
+  }
+
+  private async assertFriendCapacityForPair(client: DbClient, playerId: string, targetPlayerId: string, checkTarget: boolean): Promise<void> {
+    await this.assertFriendCapacity(client, playerId);
+    if (checkTarget) {
+      await this.assertFriendCapacity(client, targetPlayerId);
+    }
+  }
+
+  private async assertFriendCapacity(client: DbClient, playerId: string): Promise<void> {
+    const [activeFriends, limit] = await Promise.all([
+      client.playerSocialRelation.count({
+        where: {
+          playerId,
+          relationType: SocialRelationType.FRIEND,
+          status: SocialRelationStatus.ACTIVE,
+        },
+      }),
+      this.getFriendLimit(client, playerId),
+    ]);
+
+    if (activeFriends >= limit) {
+      throw new BusinessError({
+        code: ErrorCode.Conflict,
+        message: `好友人数已达上限（${activeFriends}/${limit}）。后续可通过天机符扩容，但最高不超过 ${SOCIAL_FRIEND_LIMIT_CONFIG.hardLimit}。`,
+        statusCode: 409,
+      });
+    }
+  }
+
+  private async getFriendLimit(_client: DbClient, _playerId: string): Promise<number> {
+    // Future Tianji expansion can add expansion levels here:
+    // baseLimit + expansionLevel * expansionStep, capped by hardLimit.
+    return SOCIAL_FRIEND_LIMIT_CONFIG.baseLimit;
+  }
+
+  private async muteFollowingBetween(client: DbClient, firstPlayerId: string, secondPlayerId: string, now: Date): Promise<void> {
+    await Promise.all([
+      client.playerSocialRelation.updateMany({
+        where: {
+          playerId: firstPlayerId,
+          targetPlayerId: secondPlayerId,
+          relationType: SocialRelationType.FOLLOWING,
+          status: { not: SocialRelationStatus.MUTED },
+        },
+        data: {
+          status: SocialRelationStatus.MUTED,
+          sourceType: 'friend-accepted:auto-unfollow',
+          lastInteractedAt: now,
+        },
+      }),
+      client.playerSocialRelation.updateMany({
+        where: {
+          playerId: secondPlayerId,
+          targetPlayerId: firstPlayerId,
+          relationType: SocialRelationType.FOLLOWING,
+          status: { not: SocialRelationStatus.MUTED },
+        },
+        data: {
+          status: SocialRelationStatus.MUTED,
+          sourceType: 'friend-accepted:auto-unfollow',
+          lastInteractedAt: now,
+        },
+      }),
+    ]);
   }
 
   private async findPendingIncomingFriendRelation(client: DbClient, playerId: string, relationId: string): Promise<RelationWithTarget> {
@@ -1011,17 +1225,6 @@ export class SocialService {
     }
 
     return relation;
-  }
-
-  private assertSameFactionForFriend(
-    playerId: string,
-    targetPlayerId: string,
-    player: PlayerSummaryProjection,
-    target: PlayerSummaryProjection,
-  ): void {
-    if (!player.factionId || !target.factionId || player.factionId !== target.factionId) {
-      throw this.invalidRequest(`Players ${playerId} and ${targetPlayerId} are in different factions. Manual friend requests only support same-faction players; invite links can still bind real friends.`);
-    }
   }
 
   private async assertActiveFriendRelation(client: DbClient, playerId: string, targetPlayerId: string): Promise<void> {
@@ -1323,7 +1526,11 @@ export class SocialService {
     return {
       feedUnread,
       friends,
+      friendLimit: await this.getFriendLimit(client, playerId),
+      friendMaxLimit: SOCIAL_FRIEND_LIMIT_CONFIG.hardLimit,
       following,
+      followingLimit: await this.getFollowingLimit(client, playerId),
+      followingMaxLimit: SOCIAL_FOLLOW_LIMIT_CONFIG.hardLimit,
       enemies,
       pendingTeamChallenges,
     };
@@ -1792,6 +1999,18 @@ function formatIntimacyGainClause(intimacyGain: number): string {
 
 function buildFriendIntimacyPairKey(playerId: string, targetPlayerId: string): string {
   return [playerId, targetPlayerId].sort().join(':');
+}
+
+function formatFriendRequestCooldownMessage(nextAllowedAt: Date, now: Date): string {
+  const remainingMs = Math.max(nextAllowedAt.getTime() - now.getTime(), 0);
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const clockToleranceMs = 60 * 1000;
+  if (remainingMs >= oneDayMs) {
+    const remainingDays = Math.max(1, Math.ceil((remainingMs - clockToleranceMs) / oneDayMs));
+    return `请 ${remainingDays} 天后再试。`;
+  }
+
+  return '请稍后再试。';
 }
 
 function extractSocialAssistBatchKey(requestIdempotencyKey?: string | null): string | null {

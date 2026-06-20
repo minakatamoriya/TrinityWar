@@ -282,6 +282,10 @@ export class RaidTargetService {
       }
 
       const dateKey = getLocalDateKey(now);
+      await Promise.all([
+        client.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`raid-attempt:${input.playerId}`}), hashtext(${dateKey}))`,
+        client.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`raid-pair:${input.playerId}:${targetInTransaction.targetPlayerId}`}), hashtext(${dateKey}))`,
+      ]);
       const dayStart = getStartOfDateKey(dateKey);
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
       const [attackerDailyState, defenderDailyState, existingPairOrder] = await Promise.all([
@@ -1054,7 +1058,7 @@ function normalizeRaidBattleEvents(value: unknown): NonNullable<ClientRaidAction
     return [];
   }
 
-  const supportedTypes = new Set<ClientRaidBattleEvent['type']>(['dodge', 'execute', 'element', 'critical', 'lifesteal', 'counter', 'damage', 'soul-drop', 'status']);
+  const supportedTypes = new Set<ClientRaidBattleEvent['type']>(['dodge', 'execute', 'element', 'critical', 'lifesteal', 'counter', 'damage', 'soul-drop', 'status', 'blood', 'trait']);
 
   return value
     .map((item) => item as { type?: string; label?: string; description?: string })

@@ -25,7 +25,6 @@
   type ClientRaidBattleReplayResponse,
   type ClientRaidDeepIntelResponse,
   type ClientDissolveSpiritRequest,
-  type ClientFactionDonateRequest,
   type ClientFactionTaskSubmitRequest,
   type ClientFactionTaskSubmitResponse,
   type ClientClaimPendingRequest,
@@ -62,6 +61,7 @@
   type PublicShareAssistConfirmResponse,
   type ClientSocialAssistResponse,
   type ClientSocialFeedResponse,
+  type ClientSocialFollowRequest,
   type ClientSocialFriendRequest,
   type ClientSocialFriendFieldVisitResponse,
   type ClientSocialHarvestFieldPreviewResponse,
@@ -693,7 +693,7 @@ function syncMockFactionScene(): void {
   ];
   mockSceneSnapshot.faction.donate = {
     title: '阵营贡献',
-    description: '贡献主要来自种田、灵宠、互助和对战行为，旧版资源兑换入口已停用。',
+    description: '贡献主要来自种田、灵宠、互助和对战行为。',
     goldStep: 100,
     contributionRule: '当前没有资源兑换入口，贡献由日常行为积累。',
   };
@@ -714,12 +714,12 @@ function syncMockFactionScene(): void {
     action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
   };
   mockSceneSnapshot.faction.rankings = [
-    { label: '1. 烬牙', value: '86', note: '魔界' },
-    { label: '2. 玄潮', value: '72', note: '魔界' },
-    { label: '3. 云栖', value: '65', note: '仙界' },
-    { label: '4. 你', value: formatNumber(mockFactionContribution), note: '人界' },
-  ].sort((left, right) => parseNumberText(right.value) - parseNumberText(left.value)).map((entry, index) => ({
+    { playerId: 'mock-faction-player-1', label: '1. 临风', value: '86 贡献', note: 'Lv.5', factionName: '人界', contributionScore: 86, castleLevel: 5 },
+    { playerId: 'mock-faction-player-2', label: '2. 青槐', value: '72 贡献', note: 'Lv.4', factionName: '人界', contributionScore: 72, castleLevel: 4 },
+    { playerId: 'mock-current-player', label: '3. 你', value: `${formatNumber(mockFactionContribution)} 贡献`, note: 'Lv.4', factionName: '人界', contributionScore: mockFactionContribution, castleLevel: 4, isCurrentPlayer: true },
+  ].sort((left, right) => (right.contributionScore ?? parseNumberText(right.value)) - (left.contributionScore ?? parseNumberText(left.value))).map((entry, index) => ({
     ...entry,
+    rank: index + 1,
     label: `${index + 1}. ${entry.label.replace(/^\d+\.\s*/, '')}`,
   }));
 }
@@ -1075,10 +1075,6 @@ void applyMockRecruitArmy;
   };
 }
 
-function applyMockFactionDonate(_input: ClientFactionDonateRequest): ClientStateMutationResponse {
-  return buildMockMutation('旧版阵营入口已退役，当前贡献由日常行为积累。');
-}
-
 export async function collectFieldEarnings(input: ClientCollectFieldRequest): Promise<ClientCollectFieldResponse> {
   const idempotencyKey = buildIdempotencyKey('collect-field');
   const response = await fetchJson<ClientCollectFieldResponse>(`${CLIENT_API_PREFIX}/actions/collect-field`, {
@@ -1158,24 +1154,6 @@ export async function upgradeClientBuilding(input: ClientUpgradeBuildingRequest)
       ...input,
       requestIdempotencyKey: idempotencyKey,
     }),
-  });
-
-  mockHomeSnapshot = cloneHomeSummary(response.home);
-  mockSceneSnapshot = cloneSceneContent(response.scenes);
-  return response;
-}
-
-export async function donateFactionResources(input: ClientFactionDonateRequest): Promise<ClientStateMutationResponse> {
-  if (forceMockCommands) {
-    return applyMockFactionDonate(input);
-  }
-
-  const response = await fetchJson<ClientStateMutationResponse>(`${CLIENT_API_PREFIX}/actions/faction-donate`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(input),
   });
 
   mockHomeSnapshot = cloneHomeSummary(response.home);
@@ -1518,6 +1496,22 @@ export async function loadSocialFeed(): Promise<ClientSocialFeedResponse> {
 
 export async function loadSocialRelations(kind: 'friends' | 'following' | 'enemies'): Promise<ClientSocialRelationListResponse> {
   return fetchJson<ClientSocialRelationListResponse>(`${CLIENT_API_PREFIX}/social/${kind}`);
+}
+
+export async function followSocialTarget(input: ClientSocialFollowRequest): Promise<ClientSocialRelationMutationResponse> {
+  return fetchJson<ClientSocialRelationMutationResponse>(`${CLIENT_API_PREFIX}/social/follow`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function unfollowSocialTarget(targetPlayerId: string): Promise<ClientSocialRelationMutationResponse> {
+  return fetchJson<ClientSocialRelationMutationResponse>(`${CLIENT_API_PREFIX}/social/following/${encodeURIComponent(targetPlayerId)}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function requestSocialFriend(input: ClientSocialFriendRequest): Promise<ClientSocialRelationMutationResponse> {
@@ -1865,7 +1859,7 @@ function buildDevLoginRequest(mode: DevLoginMode, options?: { factionCode?: DevF
     return {
       providerUserId: 'dev-main-loop',
       nickname: '主循环测试号',
-      factionCode: 'immortal',
+      factionCode: 'human',
     };
   }
 
@@ -1873,7 +1867,7 @@ function buildDevLoginRequest(mode: DevLoginMode, options?: { factionCode?: DevF
     return {
       providerUserId: 'dev-stable-flow-2',
       nickname: '稳定测试号2',
-      factionCode: 'human',
+      factionCode: 'immortal',
     };
   }
 

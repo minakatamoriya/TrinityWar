@@ -13,6 +13,7 @@ interface RaidIntelScreenProps {
   onAction: (action: ClientSceneAction) => void;
   onRevealDeepIntel: (targetId: string) => Promise<ClientRaidDeepIntelResponse>;
   followed: boolean;
+  friend?: boolean;
   onToggleFollow: () => void;
   allowFollow?: boolean;
   allowDeepIntel?: boolean;
@@ -22,7 +23,21 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
   const [intelState, setIntelState] = useState<ClientRaidSpiritIntel | null>(null);
   const [intelLoading, setIntelLoading] = useState(false);
   const [intelError, setIntelError] = useState<string | null>(null);
-  const { mode, targetName, detail, loading, error, onClose, onAction, onRevealDeepIntel, followed, onToggleFollow, allowFollow = true, allowDeepIntel = true } = props;
+  const {
+    mode,
+    targetName,
+    detail,
+    loading,
+    error,
+    onClose,
+    onAction,
+    onRevealDeepIntel,
+    followed,
+    friend = false,
+    onToggleFollow,
+    allowFollow = true,
+    allowDeepIntel = true,
+  } = props;
   const title = mode === 'revenge' ? '复仇' : '战斗';
   const visibleActions = detail ? detail.actions.filter((action) => action.label !== '分享目标') : [];
   const spiritPreview = detail ? getRaidSpiritPreview(detail) : null;
@@ -125,7 +140,8 @@ export function RaidIntelScreen(props: RaidIntelScreenProps): JSX.Element {
             {visibleActions.map((action) => (
               <ActionButton action={action} key={`${detail.targetId}-${action.label}`} onClick={onAction} />
             ))}
-            {allowFollow ? (
+            {friend ? <span className="soft-tag">好友</span> : null}
+            {allowFollow && !friend ? (
               <button className="action-button ghost" onClick={onToggleFollow} type="button">{followed ? '取消关注' : '关注'}</button>
             ) : null}
           </div>

@@ -179,15 +179,6 @@ export const mockSceneContent: ClientSceneContentResponse = {
         costText: '消耗 360 金币',
         action: { label: '修习法术', target: 'building', tone: 'secondary' },
       },
-      {
-        id: 'factionOfferingTech',
-        title: '同心诀',
-        levelText: 'Lv.0 -> Lv.1',
-        description: '凝聚同道心念，提升个人阵营贡献获取效率。',
-        effectText: '当前 0%，修习后 3%。',
-        costText: '消耗 360 金币',
-        action: { label: '修习法术', target: 'building', tone: 'secondary' },
-      },
     ],
   },
   army: {
@@ -280,6 +271,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
     targets: [
       {
         id: 'target-1',
+        targetPlayerId: 'mock-player-target-1',
         name: '烬牙',
         faction: '魔界',
         level: 5,
@@ -293,6 +285,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
       },
       {
         id: 'target-2',
+        targetPlayerId: 'mock-player-target-2',
         name: '云栖',
         faction: '仙界',
         level: 4,
@@ -306,6 +299,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
       },
       {
         id: 'target-3',
+        targetPlayerId: 'mock-player-target-3',
         name: '临风',
         faction: '人界',
         level: 4,
@@ -319,6 +313,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
       },
       {
         id: 'target-4',
+        targetPlayerId: 'mock-player-target-4',
         name: '玄潮',
         faction: '魔界',
         level: 5,
@@ -332,6 +327,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
       },
       {
         id: 'target-5',
+        targetPlayerId: 'mock-player-target-5',
         name: '青槐',
         faction: '仙界',
         level: 3,
@@ -418,7 +414,7 @@ export const mockSceneContent: ClientSceneContentResponse = {
     ],
     donate: {
       title: '阵营贡献',
-      description: '贡献主要来自种田、灵宠、互助和对战行为，旧版资源兑换入口已停用。',
+      description: '贡献主要来自种田、灵宠、互助和对战行为。',
       goldStep: 100,
       contributionRule: '当前没有资源兑换入口，贡献由日常行为积累。',
     },
@@ -441,10 +437,9 @@ export const mockSceneContent: ClientSceneContentResponse = {
       action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
     },
     rankings: [
-      { label: '1. 烬牙', value: '86', note: '魔界' },
-      { label: '2. 玄潮', value: '72', note: '魔界' },
-      { label: '3. 云栖', value: '65', note: '仙界' },
-      { label: '4. 你', value: '40', note: '人界' },
+      { playerId: 'mock-faction-player-1', rank: 1, label: '1. 临风', value: '86 贡献', note: 'Lv.5', factionName: '人界', contributionScore: 86, castleLevel: 5 },
+      { playerId: 'mock-faction-player-2', rank: 2, label: '2. 青槐', value: '72 贡献', note: 'Lv.4', factionName: '人界', contributionScore: 72, castleLevel: 4 },
+      { playerId: 'mock-current-player', rank: 3, label: '3. 你', value: '40 贡献', note: 'Lv.4', factionName: '人界', contributionScore: 40, castleLevel: 4, isCurrentPlayer: true },
     ],
   },
 };

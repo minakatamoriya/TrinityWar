@@ -4,11 +4,12 @@ interface RaidTargetCardProps {
   target: ClientRaidTarget;
   onSelect: (target: ClientRaidTarget) => void;
   followed?: boolean;
+  friend?: boolean;
   onToggleFollow?: (target: ClientRaidTarget) => void;
 }
 
 export function RaidTargetCard(props: RaidTargetCardProps): JSX.Element {
-  const { target, onSelect, followed = false, onToggleFollow } = props;
+  const { target, onSelect, followed = false, friend = false, onToggleFollow } = props;
   const mainPet = target.mainPetPreview;
   const mainPetName = mainPet?.displayName ?? mainPet?.label ?? '未发现主宠';
 
@@ -32,12 +33,14 @@ export function RaidTargetCard(props: RaidTargetCardProps): JSX.Element {
         </div>
       </button>
 
-      {onToggleFollow ? (
+      {onToggleFollow || friend ? (
         <div className="target-card-actions">
-          <span className="target-card-follow-state">{followed ? '已关注' : '未关注'}</span>
-          <button className="secondary-button small" onClick={() => onToggleFollow(target)} type="button">
-            {followed ? '取消关注' : '关注'}
-          </button>
+          <span className="target-card-follow-state">{friend ? '好友' : followed ? '已关注' : '未关注'}</span>
+          {onToggleFollow && !friend ? (
+            <button className="secondary-button small" onClick={() => onToggleFollow(target)} type="button">
+              {followed ? '取消关注' : '关注'}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </article>

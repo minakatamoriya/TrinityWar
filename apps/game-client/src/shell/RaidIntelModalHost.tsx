@@ -13,6 +13,7 @@ interface RaidIntelModalHostProps {
   detail: ClientRaidTargetDetailResponse | null;
   error: string | null;
   followedTargetIds: string[];
+  friendTargetIds: string[];
   loading: boolean;
   modal: RaidTargetModalState | null;
   raidTargetsById: Map<string, ClientRaidTarget>;
@@ -29,6 +30,7 @@ export function RaidIntelModalHost(props: RaidIntelModalHostProps): JSX.Element 
     detail,
     error,
     followedTargetIds,
+    friendTargetIds,
     loading,
     modal,
     raidTargetsById,
@@ -42,21 +44,24 @@ export function RaidIntelModalHost(props: RaidIntelModalHostProps): JSX.Element 
     return null;
   }
 
+  const target = raidTargetsById.get(modal.targetId);
+  const isFriend = target ? friendTargetIds.includes(target.targetPlayerId) : false;
+
   return (
     <RaidIntelScreen
       allowDeepIntel={allowDeepIntel}
-      allowFollow={allowFollow}
+      allowFollow={allowFollow && !isFriend}
       detail={detail}
       error={error}
-      followed={followedTargetIds.includes(modal.targetId)}
+      followed={target ? followedTargetIds.includes(target.targetPlayerId) : false}
+      friend={isFriend}
       loading={loading}
       mode={modal.mode}
       onAction={(action) => onAction(action, detail?.name)}
       onClose={onClose}
       onRevealDeepIntel={onRevealDeepIntel}
       onToggleFollow={() => {
-        const target = raidTargetsById.get(modal.targetId);
-        if (target) {
+        if (target && !isFriend) {
           onToggleFollowTarget(target);
         }
       }}

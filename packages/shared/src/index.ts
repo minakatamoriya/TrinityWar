@@ -1,3 +1,6 @@
+import { SPIRIT_BATTLE_INNATE_RULES } from './spiritBattleRules.js';
+import type { AnySpiritBattleTraitCode, SpiritBattleInnateRule } from './spiritBattleRules.js';
+
 export const APP_NAME = 'TrinityWar';
 export const API_PREFIX = '/api';
 export const CLIENT_API_PREFIX = `${API_PREFIX}/client`;
@@ -16,15 +19,7 @@ export type ClientSpiritRole = 'attack' | 'balanced' | 'health';
 export type ClientSpiritElement = 'metal' | 'wood' | 'water' | 'fire' | 'earth';
 export type ClientCodexState = 'hidden' | 'visible-progress' | 'unlocked';
 export type ClientSceneVisibility = 'masked' | 'named';
-export type ClientSpiritTraitCode =
-  | 'claw'
-  | 'thick_skin'
-  | 'crit'
-  | 'crit_damage'
-  | 'dodge'
-  | 'counter'
-  | 'lifesteal'
-  | 'tenacity';
+export type ClientSpiritTraitCode = AnySpiritBattleTraitCode;
 export type ClientSpiritActiveRollMode = 'basic' | 'normal' | 'advanced';
 export type ClientSpiritRollMode = ClientSpiritActiveRollMode;
 export type ClientSpiritTraitRollMaterial = 'gold' | 'lingsui' | 'lingyu';
@@ -119,20 +114,36 @@ export interface ClientSpiritInnateTrait {
   label: string;
   description: string;
   effects: Array<{
-    stat: 'attack' | 'maxHp';
+    stat: 'attack' | 'damage' | 'maxHp' | 'damageTaken' | 'crit' | 'lifesteal' | 'bloodLoss';
     valueType: 'percent';
     value: number;
   }>;
 }
 
-export const CLIENT_SPIRIT_INNATE_TRAITS: Record<string, ClientSpiritInnateTrait> = {
-  canglang: {
-    spiritId: 'canglang',
-    label: '苍狼本能',
-    description: '攻击 +4%',
-    effects: [{ stat: 'attack', valueType: 'percent', value: 4 }],
-  },
-};
+export const CLIENT_SPIRIT_INNATE_TRAITS: Record<string, ClientSpiritInnateTrait> = Object.fromEntries(
+  Object.entries(SPIRIT_BATTLE_INNATE_RULES).map(([spiritId, rules]) => [
+    spiritId,
+    {
+      spiritId,
+      label: rules[0]?.label ?? spiritId,
+      description: [...new Set(rules.map((rule) => rule.description))].join('；'),
+      effects: rules.flatMap(toClientSpiritInnateEffects),
+    },
+  ]),
+) as Record<string, ClientSpiritInnateTrait>;
+
+function toClientSpiritInnateEffects(rule: SpiritBattleInnateRule): ClientSpiritInnateTrait['effects'] {
+  const effects: ClientSpiritInnateTrait['effects'] = [];
+  if (typeof rule.attackPercent === 'number') effects.push({ stat: 'attack', valueType: 'percent', value: rule.attackPercent });
+  if (typeof rule.damagePercent === 'number') effects.push({ stat: 'damage', valueType: 'percent', value: rule.damagePercent });
+  if (typeof rule.maxHpPercent === 'number') effects.push({ stat: 'maxHp', valueType: 'percent', value: rule.maxHpPercent });
+  if (typeof rule.damageTakenPercent === 'number') effects.push({ stat: 'damageTaken', valueType: 'percent', value: rule.damageTakenPercent });
+  if (typeof rule.critPercent === 'number') effects.push({ stat: 'crit', valueType: 'percent', value: rule.critPercent });
+  if (typeof rule.lifestealPercent === 'number') effects.push({ stat: 'lifesteal', valueType: 'percent', value: rule.lifestealPercent });
+  if (typeof rule.bloodLossReductionRatio === 'number') effects.push({ stat: 'bloodLoss', valueType: 'percent', value: -Math.round(rule.bloodLossReductionRatio * 100) });
+  if (typeof rule.fixedHealRatio === 'number') effects.push({ stat: 'maxHp', valueType: 'percent', value: Math.round(rule.fixedHealRatio * 100) });
+  return effects;
+}
 
 export function getClientSpiritInnateTrait(spiritId: string | null | undefined): ClientSpiritInnateTrait | null {
   if (!spiritId) {
@@ -1292,13 +1303,13 @@ export interface ClientRaidRewardItem {
 }
 
 export interface ClientRaidBattleEvent {
-  type: 'dodge' | 'execute' | 'element' | 'critical' | 'lifesteal' | 'counter' | 'damage' | 'soul-drop' | 'status';
+  type: 'dodge' | 'execute' | 'element' | 'critical' | 'lifesteal' | 'counter' | 'damage' | 'soul-drop' | 'status' | 'blood' | 'trait';
   label: string;
   description: string;
 }
 
 export type ClientRaidBattleSide = 'attacker' | 'defender';
-export type ClientRaidBattleFloatingTone = 'damage' | 'miss' | 'crit' | 'buff';
+export type ClientRaidBattleFloatingTone = 'damage' | 'miss' | 'crit' | 'buff' | 'blood' | 'element';
 
 export interface ClientRaidBattleUnitSnapshot {
   side: ClientRaidBattleSide;
@@ -1329,9 +1340,10 @@ export interface ClientRaidBattleUnitSnapshot {
 
 export type ClientRaidBattleStep =
   | { type: 'enter'; durationMs: number }
-  | { type: 'clash'; durationMs: number }
-  | { type: 'floatingText'; side: ClientRaidBattleSide; text: string; tone: ClientRaidBattleFloatingTone; durationMs: number }
-  | { type: 'hpChange'; side: ClientRaidBattleSide; from: number; to: number; max: number; durationMs: number }
+  | { type: 'clash'; durationMs: number; round?: number }
+  | { type: 'notice'; title: string; summary?: string; tone?: 'default' | 'blood'; durationMs: number }
+  | { type: 'floatingText'; side: ClientRaidBattleSide; text: string; tone: ClientRaidBattleFloatingTone; durationMs: number; round?: number; bloodRound?: number }
+  | { type: 'hpChange'; side: ClientRaidBattleSide; from: number; to: number; max: number; durationMs: number; floatingText?: string | false; floatingTone?: ClientRaidBattleFloatingTone; round?: number; bloodRound?: number }
   | { type: 'return'; durationMs: number }
   | { type: 'result'; title: string; summary: string; durationMs: number };
 
@@ -1523,6 +1535,7 @@ export interface ClientPlantInventoryItem {
 
 export interface ClientRaidTarget {
   id: string;
+  targetPlayerId: string;
   name: string;
   faction: string;
   level: number;
@@ -1646,9 +1659,15 @@ export interface ClientFactionDonatePanel {
 }
 
 export interface ClientFactionLeaderboardEntry {
+  playerId?: string;
+  rank?: number;
   label: string;
   value: string;
   note?: string;
+  factionName?: string;
+  contributionScore?: number;
+  castleLevel?: number;
+  isCurrentPlayer?: boolean;
 }
 
 export interface ClientFactionDonateRequest {
@@ -1677,6 +1696,7 @@ export type ClientSocialFeedType =
   | 'friend_requested'
   | 'friend_accepted'
   | 'friend_rejected'
+  | 'friend_deleted'
   | 'team_challenge_invited'
   | 'team_challenge_accepted'
   | 'enemy_raided'
@@ -1731,7 +1751,11 @@ export interface ClientSocialSummaryResponse {
   counts: {
     feedUnread: number;
     friends: number;
+    friendLimit: number;
+    friendMaxLimit: number;
     following: number;
+    followingLimit: number;
+    followingMaxLimit: number;
     enemies: number;
     pendingTeamChallenges: number;
   };
@@ -1985,6 +2009,7 @@ export interface ClientUnlockPlantResponse extends ClientStateMutationResponse {
 }
 
 export * from './spiritCollisionBattle.js';
+export * from './spiritBattleRules.js';
 
 export interface ClientArmyTrainingQueue {
   queuedUnits: number;
@@ -2020,6 +2045,15 @@ export interface ClientSceneContentResponse {
   raid: {
     hero: ClientFarmHero;
     advantage?: ClientFactionAdvantagePanel;
+    daily?: {
+      dateKey: string;
+      attemptLimit: number;
+      attemptsUsed: number;
+      attemptsRemaining: number;
+      refreshLimit: number;
+      refreshesUsed: number;
+      refreshesRemaining: number;
+    };
     targets: ClientRaidTarget[];
     detail: ClientRaidDetail;
     messageTemplates: ClientRaidMessageTemplate[];

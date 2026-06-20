@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import {
-  applyFactionRaidDefenseLootLossReduction,
   areFactionAdvantagesEnabled,
   getCurrentFactionAdvantageConfig,
   getFactionBattleAttackMultiplier,
@@ -102,8 +101,11 @@ export class RaidSettlementRuleService {
     const tier = resolveTier(battle.result, scoreDeltaRatio);
     const config = TIER_CONFIG[tier];
     const lockedGold = Math.max(Math.floor(input.lockedGold), 0);
-    const rawLootGold = Math.min(lockedGold, Math.floor(lockedGold * getRaidRewardRatio(tier)));
-    const lootGold = applyFactionRaidDefenseLootLossReduction(rawLootGold, normalizeFaction(input.defenderFactionName));
+    const rewardRatio = getRaidRewardRatio(tier);
+    const rawLootGold = rewardRatio > 0 && lockedGold > 0
+      ? Math.max(Math.floor(lockedGold * rewardRatio), 1)
+      : 0;
+    const lootGold = Math.min(lockedGold, rawLootGold);
     const depositedGold = lootGold;
     const attackerNextHp = input.attackerSpirit ? clampHpForPersistence(battle.attackerHpAfter, input.attackerSpirit.maxHp) : null;
     const defenderNextHp = input.defenderSpirit ? clampHpForPersistence(battle.defenderHpAfter, input.defenderSpirit.maxHp) : null;

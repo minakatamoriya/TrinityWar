@@ -8,6 +8,7 @@ import type {
 import {
   acceptSocialFriendRequest,
   deleteSocialFriend,
+  followSocialTarget,
   harvestSocialField,
   loadSocialFeed,
   loadSocialRelations,
@@ -15,6 +16,7 @@ import {
   rejectSocialFriendRequest,
   reviveSocialField,
   requestSocialFriend,
+  unfollowSocialTarget,
   visitSocialFriendFields,
 } from '../../api';
 import { buildIdempotencyKey } from '../../apiSupport/idempotency';
@@ -31,7 +33,6 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
   const [feed, setFeed] = useState<ClientSocialFeedItem[]>([]);
   const [friends, setFriends] = useState<ClientSocialRelationItem[]>([]);
   const [following, setFollowing] = useState<ClientSocialRelationItem[]>([]);
-  const [enemies, setEnemies] = useState<ClientSocialRelationItem[]>([]);
   const [fieldVisit, setFieldVisit] = useState<ClientSocialFriendFieldVisitResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +43,6 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
     setFeed([]);
     setFriends([]);
     setFollowing([]);
-    setEnemies([]);
     setFieldVisit(null);
     setError(null);
     setLoading(false);
@@ -53,19 +53,17 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
     setError(null);
 
     try {
-      const [nextSummary, feedResult, friendsResult, followingResult, enemiesResult] = await Promise.all([
+      const [nextSummary, feedResult, friendsResult, followingResult] = await Promise.all([
         loadSocialSummary(),
         loadSocialFeed(),
         loadSocialRelations('friends'),
         loadSocialRelations('following'),
-        loadSocialRelations('enemies'),
       ]);
 
       setSummary(nextSummary);
       setFeed(feedResult.items);
       setFriends(friendsResult.items);
       setFollowing(followingResult.items);
-      setEnemies(enemiesResult.items);
     } catch (loadError) {
       setError(loadError instanceof Error && loadError.message ? loadError.message : '当前无法读取社交数据，请稍后重试。');
     } finally {
@@ -231,9 +229,12 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
       () => deleteSocialFriend(targetPlayerId),
       '当前无法删除好友，请稍后重试。',
     ),
-    enemies,
     error,
     feed,
+    followTarget: (targetPlayerId: string) => mutateRelation(
+      () => followSocialTarget({ targetPlayerId }),
+      '当前无法关注该玩家，请稍后重试。',
+    ),
     fieldVisit,
     following,
     friends,
@@ -250,5 +251,9 @@ export function useSocialSceneState(options: UseSocialSceneStateOptions) {
     ),
     reset,
     summary,
+    unfollowTarget: (targetPlayerId: string) => mutateRelation(
+      () => unfollowSocialTarget(targetPlayerId),
+      '当前无法取消关注，请稍后重试。',
+    ),
   };
 }

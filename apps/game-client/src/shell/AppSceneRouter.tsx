@@ -25,7 +25,7 @@ import { FactionScene } from '../ui/scenes/FactionScene';
 import { FarmScene } from '../ui/scenes/FarmScene';
 import { HomeScene } from '../ui/scenes/HomeScene';
 import { ReportScene } from '../ui/scenes/ReportScene';
-import { SocialScene, type SocialRelationFilter, type SocialTabKey } from '../ui/scenes/SocialScene';
+import { SocialScene, type SocialTabKey } from '../ui/scenes/SocialScene';
 import type { TutorialTask, TutorialUiRules } from '../tutorial/tutorialFlow';
 import type { FactionTabKey, FarmCollectPresentationState, RaidHubTabKey } from './appStateTypes';
 
@@ -46,14 +46,12 @@ interface AppSceneRouterProps {
   raidHubTab: RaidHubTabKey;
   reportEntries: ClientViewModel['scenes']['report']['attack'];
   scenes: ClientViewModel['scenes'];
-  socialEnemies: ClientSocialRelationItem[];
   socialError: string | null;
   socialFeed: ClientSocialFeedItem[];
   socialFieldVisit: ClientSocialFriendFieldVisitResponse | null;
   socialFollowing: ClientSocialRelationItem[];
   socialFriends: ClientSocialRelationItem[];
   socialLoading: boolean;
-  socialRelationFilter: SocialRelationFilter;
   socialSummary: ClientSocialSummaryResponse | null;
   socialTab: SocialTabKey;
   spiritState: ClientSpiritState | null;
@@ -74,7 +72,6 @@ interface AppSceneRouterProps {
   ) => void;
   onChangeFactionTab: (tab: FactionTabKey) => void;
   onChangeRaidHubTab: (tab: RaidHubTabKey) => void;
-  onChangeSocialRelationFilter: (filter: SocialRelationFilter) => void;
   onChangeSocialTab: (tab: SocialTabKey) => void;
   onClaimFactionStipend: () => void;
   onComposeSpirit: (spiritId: string, slotIndex: number, element: ClientSpiritElement) => void;
@@ -82,9 +79,9 @@ interface AppSceneRouterProps {
   onCreateFriendInvite: () => void;
   onDeleteSocialFriend: (targetPlayerId: string) => void;
   onDissolveSpirit: (slotIndex: number, slotVersion: number) => void;
-  onDonateFaction: (goldAmount: number) => void;
   onFarmAction: (action: ClientSceneAction, fieldId: string, fieldCode: string) => void;
   onFeedSpirit: (slotIndex: number, slotVersion: number, actionType: 'feed_once' | 'fill_full') => void;
+  onFollowSocialTarget: (targetPlayerId: string) => void;
   onOpenContributionGuide: () => void;
   onOpenFarmBoard: () => void;
   onOpenRaidTarget: (target: ClientRaidTarget) => void;
@@ -110,10 +107,10 @@ interface AppSceneRouterProps {
   onSetMainSpirit: (slotIndex: number, slotVersion: number) => void;
   onOpenSpiritUnlockSurface: () => void;
   onToggleFollowTarget: (target: ClientRaidTarget) => void;
-  onTransferFaction: (factionName: string) => void;
   onTutorialAction: () => void;
   onNavigate: (scene: ClientSceneKey, nextRaidHubTab?: RaidHubTabKey) => void;
   onCloseSocialFieldVisit: () => void;
+  onUnfollowSocialTarget: (targetPlayerId: string) => void;
 }
 
 export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
@@ -134,14 +131,12 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
     raidHubTab,
     reportEntries,
     scenes,
-    socialEnemies,
     socialError,
     socialFeed,
     socialFieldVisit,
     socialFollowing,
     socialFriends,
     socialLoading,
-    socialRelationFilter,
     socialSummary,
     socialTab,
     spiritState,
@@ -156,7 +151,6 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
     onBuildingUpgradeAction,
     onChangeFactionTab,
     onChangeRaidHubTab,
-    onChangeSocialRelationFilter,
     onChangeSocialTab,
     onClaimFactionStipend,
     onComposeSpirit,
@@ -164,9 +158,9 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
     onCreateFriendInvite,
     onDeleteSocialFriend,
     onDissolveSpirit,
-    onDonateFaction,
     onFarmAction,
     onFeedSpirit,
+    onFollowSocialTarget,
     onOpenContributionGuide,
     onOpenFarmBoard,
     onOpenRaidTarget,
@@ -181,10 +175,10 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
     onSetMainSpirit,
     onOpenSpiritUnlockSurface,
     onToggleFollowTarget,
-    onTransferFaction,
     onTutorialAction,
     onNavigate,
     onCloseSocialFieldVisit,
+    onUnfollowSocialTarget,
   } = props;
 
   return (
@@ -250,6 +244,9 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
           onAction={onRaidAction}
           onChangeTab={onChangeRaidHubTab}
           followedTargetIds={followedTargetIds}
+          friendTargetIds={socialFriends
+            .filter((relation) => relation.status === 'active')
+            .map((relation) => relation.target.playerId)}
           onOpenTarget={onOpenRaidTarget}
           onToggleFollowTarget={onToggleFollowTarget}
           onRefresh={onRefreshRaidTargets}
@@ -265,9 +262,6 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
       {activeScene === 'faction' ? (
         <FactionScene
           contribution={scenes.faction.contribution}
-          currentGold={vaultGold}
-          donate={scenes.faction.donate}
-          donating={pendingActionKey === 'faction:donate'}
           factionTab={factionTab}
           hero={scenes.faction.hero}
           onChangeTab={onChangeFactionTab}
@@ -275,12 +269,16 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
           onClaimStipend={onClaimFactionStipend}
           claimingStipend={pendingActionKey === 'faction:stipend'}
           stipend={scenes.faction.stipend}
-          onDonate={onDonateFaction}
-          onTransferFaction={onTransferFaction}
           comparison={scenes.faction.comparison}
           contributionLogs={scenes.faction.contributionLogs ?? []}
+          followedTargetIds={followedTargetIds}
+          friendTargetIds={socialFriends
+            .filter((relation) => relation.status === 'active')
+            .map((relation) => relation.target.playerId)}
           rankings={scenes.faction.rankings}
           uiRules={tutorialUiRules.faction}
+          onFollowRankingPlayer={onFollowSocialTarget}
+          onUnfollowRankingPlayer={onUnfollowSocialTarget}
         />
       ) : null}
 
@@ -288,29 +286,27 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
         <SocialScene
           activeTab={socialTab}
           busy={socialLoading}
-          enemies={socialEnemies}
           error={socialError}
           feed={socialFeed}
           following={socialFollowing}
           friendInviteUrl={friendInviteNewUserUrl}
           friends={socialFriends}
           fieldVisit={socialFieldVisit}
-          playerFactionName={home.factionName}
           portalTarget={portalTarget}
           onAssistFriend={onAssistSocialFriend}
           onAssistAllFields={onAssistAllSocialFields}
           onAcceptFriendRequest={onAcceptFriendRequest}
           onChangeTab={onChangeSocialTab}
-          onChangeRelationFilter={onChangeSocialRelationFilter}
           onRejectFriendRequest={onRejectFriendRequest}
           onRefresh={onRefreshSocial}
           onDeleteFriend={onDeleteSocialFriend}
+          onFollowTarget={onFollowSocialTarget}
           onInviteFriend={onCreateFriendInvite}
           onCopyFriendInviteUrl={onCopyFriendInviteUrl}
           onCloseFieldVisit={onCloseSocialFieldVisit}
           onRequestFriend={onRequestFriend}
+          onUnfollowTarget={onUnfollowSocialTarget}
           onOpenFieldVisit={onOpenSocialFieldVisit}
-          relationFilter={socialRelationFilter}
           summary={socialSummary}
         />
       ) : null}

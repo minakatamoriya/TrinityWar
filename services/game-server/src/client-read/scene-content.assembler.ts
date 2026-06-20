@@ -20,6 +20,7 @@ import { getLocalDateKey } from '../lib/date-key.js';
 import type { SceneContentReadModel } from './client-read.repository.js';
 
 type ExtensionKey = 'protectionTech' | 'farmYieldTech' | 'collectWindowTech' | 'factionOfferingTech';
+type VisibleExtensionKey = Exclude<ExtensionKey, 'factionOfferingTech'>;
 
 const FIELD_STATUS_COPY: Record<FieldStatus, { title: string; badge: string; tone: ClientFarmField['tone'] }> = {
   LOCKED: { title: '\u672a\u89e3\u9501', badge: '\u5f85\u89e3\u9501', tone: 'locked' },
@@ -65,6 +66,7 @@ export class SceneContentAssembler {
       raid: {
         hero: this.buildRaidHero(readModel),
         advantage: this.buildFactionAdvantage(readModel, 'raid'),
+        daily: this.buildRaidDaily(readModel),
         targets: visibleRaidTargets,
         detail: {
           advice: visibleRaidTargets.length > 0
@@ -82,6 +84,26 @@ export class SceneContentAssembler {
         ],
       },
       faction: this.buildFaction(readModel),
+    };
+  }
+
+  private buildRaidDaily(readModel: SceneContentReadModel): NonNullable<ClientSceneContentResponse['raid']['daily']> {
+    const dateKey = readModel.raidDailyState?.dateKey ?? getLocalDateKeyForAssembler();
+    const baseAttemptLimit = Math.max(Math.floor(GAME_BALANCE.raid?.dailyAttemptLimit ?? 10), 0);
+    const baseRefreshLimit = Math.max(Math.floor(GAME_BALANCE.raid?.freeRefreshesPerDay ?? 0), 0);
+    const attemptLimit = baseAttemptLimit + Math.max(Math.floor(readModel.raidDailyState?.extraRaidAttemptsPurchased ?? 0), 0);
+    const refreshLimit = baseRefreshLimit + Math.max(Math.floor(readModel.raidDailyState?.extraRefreshesPurchased ?? 0), 0);
+    const attemptsUsed = Math.max(Math.floor(readModel.raidDailyState?.normalRaidAttemptsUsed ?? 0), 0);
+    const refreshesUsed = Math.max(Math.floor(readModel.raidDailyState?.raidRefreshesUsed ?? 0), 0);
+
+    return {
+      dateKey,
+      attemptLimit,
+      attemptsUsed,
+      attemptsRemaining: Math.max(attemptLimit - attemptsUsed, 0),
+      refreshLimit,
+      refreshesUsed,
+      refreshesRemaining: Math.max(refreshLimit - refreshesUsed, 0),
     };
   }
 
@@ -134,6 +156,7 @@ export class SceneContentAssembler {
 
       return {
         id: targetPool.id,
+        targetPlayerId: targetPool.targetPlayer.id,
         name: targetName,
         faction: factionName,
         level: snapshot.level ?? targetPool.targetPlayer.castleLevelCache,
@@ -214,14 +237,13 @@ export class SceneContentAssembler {
 
   private buildExtensions(readModel: SceneContentReadModel): ClientSceneContentResponse['building']['extensions'] {
     const buildings = readModel.buildings;
-    const levels: Record<ExtensionKey, number> = {
+    const levels: Record<VisibleExtensionKey, number> = {
       protectionTech: buildings?.protectionTechLevel ?? 0,
       farmYieldTech: buildings?.farmYieldTechLevel ?? 0,
       collectWindowTech: buildings?.collectWindowTechLevel ?? 0,
-      factionOfferingTech: buildings?.pendingClaimTechLevel ?? 0,
     };
 
-    return (Object.keys(levels) as ExtensionKey[]).map((trackId) => {
+    return (Object.keys(levels) as VisibleExtensionKey[]).map((trackId) => {
       const currentLevel = levels[trackId];
       const track = getCastleExtensionTrack(trackId);
       const expectedNextLevel = currentLevel + 1;
@@ -392,7 +414,6 @@ export class SceneContentAssembler {
     const stipendTier = getFactionStipendTier(contribution);
     const stipendState = readModel.factionStipendStates[0] ?? null;
     const donateGoldStep = GAME_BALANCE.faction.donateGoldStep;
-    const contributionBonusPercent = getCurrentExtensionEffect('factionOfferingTech', readModel.buildings?.pendingClaimTechLevel ?? 0);
     const stipendRewards = toPublicFactionStipendRewards((stipendTier?.rewards ?? []) as ClientFactionStipendReward[])
       .filter((reward) => readModel.factionStipendClaimCount > 0 || reward.kind !== 'spirit-shard');
     const visibleStipendRewards = stipendState?.claimedAt
@@ -426,11 +447,9 @@ export class SceneContentAssembler {
       })),
       donate: {
         title: '\u9635\u8425\u8d21\u732e',
-        description: '\u8d21\u732e\u4e3b\u8981\u6765\u81ea\u79cd\u7530\u3001\u7075\u5ba0\u3001\u4e92\u52a9\u548c\u5bf9\u6218\u884c\u4e3a\uff0c\u65e7\u7248\u8d44\u6e90\u5151\u6362\u5165\u53e3\u5df2\u505c\u7528\u3002',
+        description: '\u8d21\u732e\u4e3b\u8981\u6765\u81ea\u79cd\u7530\u3001\u7075\u5ba0\u3001\u4e92\u52a9\u548c\u5bf9\u6218\u884c\u4e3a\u3002',
         goldStep: donateGoldStep,
-        contributionRule: contributionBonusPercent > 0
-          ? `\u5f53\u524d +${formatNumber(contributionBonusPercent)}% \u8d21\u732e\u52a0\u6210\uff0c\u5df2\u8ba1\u5165\u8d21\u732e\u6536\u76ca\u3002`
-          : '\u8d21\u732e\u4e3b\u8981\u6765\u81ea\u65e5\u5e38\u884c\u4e3a\uff0c\u65e7\u7248\u8d44\u6e90\u5151\u6362\u5165\u53e3\u5df2\u505c\u7528\u3002',
+        contributionRule: '\u8d21\u732e\u7531\u65e5\u5e38\u884c\u4e3a\u7d2f\u79ef\u3002',
       },
       tasks: [],
       contributionLogs: readModel.contributionLogs.map((log) => ({
@@ -454,9 +473,16 @@ export class SceneContentAssembler {
           action: stipendState?.claimedAt ? null : { label: '\u9886\u53d6\u4ff8\u7984', target: 'faction', tone: 'primary' },
         }
         : undefined,
-      rankings: readModel.factions.map((faction, index) => ({
-        label: `${index + 1}. ${faction.name}`,
-        value: `${formatNumber(faction.contributionScore)} \u8d21\u732e`,
+      rankings: readModel.factionRankings.map((ranking, index) => ({
+        playerId: ranking.player.id,
+        rank: index + 1,
+        label: `${index + 1}. ${ranking.player.id === readModel.player.id ? '\u4f60' : ranking.player.nickname}`,
+        value: `${formatNumber(ranking.contributionScore)} \u8d21\u732e`,
+        note: `Lv.${formatNumber(ranking.player.castleLevelCache)}`,
+        factionName: ranking.player.faction?.name ?? currentFaction?.name,
+        contributionScore: ranking.contributionScore,
+        castleLevel: ranking.player.castleLevelCache,
+        isCurrentPlayer: ranking.player.id === readModel.player.id,
       })),
     };
   }
