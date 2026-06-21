@@ -6,6 +6,7 @@
   "description": "TrinityWar web validation client",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 6001",
+    "dev:canvas-demo": "vite --host 127.0.0.1 --port 6001 --open /battle-canvas-demo.html",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 6001"
   },

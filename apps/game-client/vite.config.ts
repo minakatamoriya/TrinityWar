@@ -4,9 +4,18 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        battleCanvasDemo: resolve(__dirname, 'battle-canvas-demo.html'),
+      },
+    },
+  },
   resolve: {
     alias: {
       '@trinitywar/shared': resolve(__dirname, '../../packages/shared/src/index.ts'),
+      '@trinitywar/battle-canvas-core': resolve(__dirname, '../../packages/battle-canvas-core/src/index.ts'),
     },
   },
   server: {
