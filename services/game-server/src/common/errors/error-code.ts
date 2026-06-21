@@ -20,6 +20,7 @@ export enum ErrorCode {
   RaidTargetExpired = 'RAID_TARGET_EXPIRED',
   ProtectionActive = 'PROTECTION_ACTIVE',
   RaidNotAllowed = 'RAID_NOT_ALLOWED',
+  SeasonRolledOver = 'SEASON_ROLLED_OVER',
   StateVersionConflict = 'STATE_VERSION_CONFLICT',
   ConfigurationError = 'CONFIGURATION_ERROR',
   PrismaClientUnavailable = 'PRISMA_CLIENT_UNAVAILABLE',

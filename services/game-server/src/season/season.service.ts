@@ -1,6 +1,17 @@
 ﻿import { Injectable } from '@nestjs/common';
 import { Prisma, type PrismaClient } from '@prisma/client';
-import { APP_NAME, formatSeasonLabel, type ClientSeasonMedal, type ClientSeasonRewardGrant, type ClientSeasonRewardItem, type ClientSeasonRewardsResponse, type ClientSeasonSignInState } from '@trinitywar/shared';
+import {
+  APP_NAME,
+  formatSeasonLabel,
+  type ClientSeasonMedal,
+  type ClientSeasonStartupState,
+  type ClientSeasonStatus,
+  type ClientSeasonRewardGrant,
+  type ClientSeasonRewardItem,
+  type ClientSeasonRewardsResponse,
+  type ClientSeasonSignInState,
+  type ClientSeasonTransition,
+} from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { COMMON_NON_STARTER_SPIRIT_IDS, SPIRIT_DEFINITION_SEEDS } from '../seed/seed-data/spirits.js';
@@ -8,6 +19,7 @@ import { COMMON_NON_STARTER_SPIRIT_IDS, SPIRIT_DEFINITION_SEEDS } from '../seed/
 const SEASON_LENGTH_DAYS = 28;
 const SEASON_START_UTC = new Date('2026-05-03T16:00:00.000Z');
 const SEASON_MS = SEASON_LENGTH_DAYS * 24 * 60 * 60 * 1000;
+const DEV_SEASON_NEAR_ROLLOVER_MS = 60 * 1000;
 
 type PrismaClientLike = Prisma.TransactionClient | PrismaClient;
 type SeasonRewardDomain = 'participation' | 'farming' | 'spirit' | 'combat' | 'contribution';
@@ -79,34 +91,46 @@ export interface SeasonSignInClaimResult {
   resourceVersion: number;
 }
 
+export interface EnsurePlayerSeasonResult {
+  season: CurrentSeasonState;
+  transition: ClientSeasonTransition;
+  startup: ClientSeasonStartupState;
+}
+
 @Injectable()
 export class SeasonService {
-  getCurrentSeason(now: Date = new Date()): CurrentSeasonState {
-    const elapsedMs = Math.max(now.getTime() - SEASON_START_UTC.getTime(), 0);
-    const seasonIndex = Math.floor(elapsedMs / SEASON_MS);
-    const seasonNumber = seasonIndex + 1;
-    const startsAt = new Date(SEASON_START_UTC.getTime() + seasonIndex * SEASON_MS);
-    const endsAt = new Date(startsAt.getTime() + SEASON_MS);
-    const elapsedInSeasonMs = Math.max(now.getTime() - startsAt.getTime(), 0);
-    const currentDay = Math.min(Math.floor(elapsedInSeasonMs / (24 * 60 * 60 * 1000)) + 1, SEASON_LENGTH_DAYS);
+  private devSeasonStartOverrideUtc: Date | null = null;
+  private devForcedRolloverSeasonNumber: number | null = null;
+  private devForcedRolloverConsumed = false;
 
-    return {
-      seasonNumber,
-      currentWeek: Math.min(Math.ceil(currentDay / 7), 4),
-      totalWeeks: 4,
-      startsAt,
-      endsAt,
-    };
+  getCurrentSeason(now: Date = new Date()): CurrentSeasonState {
+    return this.getCurrentSeasonFromStartUtc(this.getSeasonStartUtc(), now);
   }
 
   async ensurePlayerSeason(client: PrismaClientLike, playerId: string, now: Date = new Date()): Promise<CurrentSeasonState> {
+    const result = await this.ensurePlayerSeasonWithTransition(client, playerId, now);
+    return result.season;
+  }
+
+  async ensurePlayerSeasonWithTransition(
+    client: PrismaClientLike,
+    playerId: string,
+    now: Date = new Date(),
+  ): Promise<EnsurePlayerSeasonResult> {
     const season = this.getCurrentSeason(now);
 
     await this.ensureCurrentSeasonRecord(client, season);
 
     const state = await client.playerSeasonState.findUnique({
       where: { playerId },
-      select: { lastResetSeasonNumber: true },
+      select: {
+        startupCompletedSeasonNumber: true,
+        startupIntroConfirmedSeasonNumber: true,
+        factionChoiceRequiredSeasonNumber: true,
+        factionChoiceUsedSeasonNumber: true,
+        factionChoiceUsedAt: true,
+        lastResetSeasonNumber: true,
+      },
     });
 
     if (!state) {
@@ -115,23 +139,127 @@ export class SeasonService {
           playerId,
           currentSeasonNumber: season.seasonNumber,
           lastResetSeasonNumber: season.seasonNumber,
+          startupIntroConfirmedSeasonNumber: season.seasonNumber,
+          startupCompletedSeasonNumber: season.seasonNumber,
         },
       });
-      return season;
+      const startup = this.buildSeasonStartupState({
+        season,
+        state: {
+          startupCompletedSeasonNumber: season.seasonNumber,
+          startupIntroConfirmedSeasonNumber: season.seasonNumber,
+          factionChoiceRequiredSeasonNumber: null,
+          factionChoiceUsedSeasonNumber: null,
+          factionChoiceUsedAt: null,
+        },
+      });
+      return {
+        season,
+        transition: this.buildSeasonTransition({
+          season,
+          previousSeasonNumber: null,
+          resetApplied: false,
+          factionChoiceStatus: startup.factionChoiceStatus,
+          factionChoiceDeadlineAt: startup.factionChoiceDeadlineAt,
+        }),
+        startup,
+      };
     }
+
+    let previousSeasonNumber: number | null = null;
+    let resetApplied = false;
 
     if (state.lastResetSeasonNumber < season.seasonNumber) {
+      previousSeasonNumber = state.lastResetSeasonNumber;
       await this.generateSeasonSnapshotsBeforeReset(client, state.lastResetSeasonNumber);
       await this.resetPlayerForNewSeason(client, playerId, season.seasonNumber, now);
-      return season;
+      resetApplied = true;
+    } else {
+      await client.playerSeasonState.update({
+        where: { playerId },
+        data: { currentSeasonNumber: season.seasonNumber },
+      });
     }
 
-    await client.playerSeasonState.update({
+    const nextState = await client.playerSeasonState.findUniqueOrThrow({
       where: { playerId },
-      data: { currentSeasonNumber: season.seasonNumber },
+      select: {
+        startupCompletedSeasonNumber: true,
+        startupIntroConfirmedSeasonNumber: true,
+        factionChoiceRequiredSeasonNumber: true,
+        factionChoiceUsedSeasonNumber: true,
+        factionChoiceUsedAt: true,
+      },
+    });
+    const startup = this.buildSeasonStartupState({
+      season,
+      state: nextState,
     });
 
-    return season;
+    return {
+      season,
+      transition: this.buildSeasonTransition({
+        season,
+        previousSeasonNumber,
+        resetApplied,
+        factionChoiceStatus: startup.factionChoiceStatus,
+        factionChoiceDeadlineAt: startup.factionChoiceDeadlineAt,
+      }),
+      startup,
+    };
+  }
+
+  setDevelopmentSeasonNearRollover(
+    now: Date = new Date(),
+    durationMs: number = DEV_SEASON_NEAR_ROLLOVER_MS,
+    activeSeasonNumber?: number,
+  ): CurrentSeasonState {
+    const currentSeason = this.getCurrentSeason(now);
+    const baseSeasonNumber = Math.max(activeSeasonNumber ?? currentSeason.seasonNumber, currentSeason.seasonNumber);
+    const safeDurationMs = Math.max(Math.floor(durationMs), 1_000);
+    const overrideEndsAt = new Date(now.getTime() + safeDurationMs);
+    const overrideSeasonStartUtc = new Date(overrideEndsAt.getTime() - baseSeasonNumber * SEASON_MS);
+    this.devSeasonStartOverrideUtc = overrideSeasonStartUtc;
+    this.devForcedRolloverSeasonNumber = baseSeasonNumber + 1;
+    this.devForcedRolloverConsumed = false;
+    return this.getCurrentSeason(now);
+  }
+
+  clearDevelopmentSeasonOverride(now: Date = new Date()): CurrentSeasonState {
+    const overrideSeason = this.getCurrentSeason(now);
+    const defaultSeason = this.getCurrentSeasonFromStartUtc(SEASON_START_UTC, now);
+    if (overrideSeason.seasonNumber > defaultSeason.seasonNumber) {
+      throw new BusinessError({
+        code: ErrorCode.Conflict,
+        message: '调试赛季已经真正跨过去，不能直接回拨。请继续验证，或重置测试环境后再恢复。',
+        statusCode: 409,
+      });
+    }
+
+    this.devSeasonStartOverrideUtc = null;
+    this.devForcedRolloverSeasonNumber = null;
+    this.devForcedRolloverConsumed = false;
+    return this.getCurrentSeason(now);
+  }
+
+  isDevelopmentSeasonOverrideActive(): boolean {
+    return this.devSeasonStartOverrideUtc !== null;
+  }
+
+  toClientSeasonStatus(input: {
+    season: CurrentSeasonState;
+    transition?: ClientSeasonTransition;
+    startup?: ClientSeasonStartupState;
+  }): ClientSeasonStatus {
+    return {
+      seasonNumber: input.season.seasonNumber,
+      currentWeek: input.season.currentWeek,
+      totalWeeks: input.season.totalWeeks,
+      startsAt: input.season.startsAt.toISOString(),
+      endsAt: input.season.endsAt.toISOString(),
+      transition: input.transition,
+      startup: input.startup,
+    };
   }
 
   async generateSeasonSnapshots(
@@ -350,21 +478,39 @@ export class SeasonService {
         await this.generateSeasonSnapshotsBeforeReset(client, season.seasonNumber - 1);
       }
 
-      await client.gameSeason.create({
-        data: {
-          seasonNumber: season.seasonNumber,
-          startsAt: season.startsAt,
-          endsAt: season.endsAt,
-        },
-      });
-
-      if (season.seasonNumber > 1) {
-        await client.faction.updateMany({
-          data: { contributionScore: 0 },
+      let createdSeason = false;
+      try {
+        await client.gameSeason.create({
+          data: {
+            seasonNumber: season.seasonNumber,
+            startsAt: season.startsAt,
+            endsAt: season.endsAt,
+          },
         });
+        createdSeason = true;
+      } catch (error) {
+        if (!isPrismaUniqueConstraintError(error)) {
+          throw error;
+        }
+      }
+
+      if (createdSeason && season.seasonNumber > 1) {
+        await this.resetGlobalFactionContributionState(client);
+      }
+
+      if (createdSeason || this.shouldForceDevelopmentRolloverReset(season.seasonNumber)) {
+        if (!createdSeason) {
+          await this.resetGlobalFactionContributionState(client);
+        }
+        this.consumeForcedDevelopmentRollover(season.seasonNumber);
       }
 
       return;
+    }
+
+    if (this.shouldForceDevelopmentRolloverReset(season.seasonNumber)) {
+      await this.resetGlobalFactionContributionState(client);
+      this.consumeForcedDevelopmentRollover(season.seasonNumber);
     }
 
     await client.gameSeason.update({
@@ -382,6 +528,112 @@ export class SeasonService {
     }
 
     await this.generateSeasonSnapshots(client, seasonNumber, { preserveExisting: true });
+  }
+
+  private buildSeasonTransition(input: {
+    season: CurrentSeasonState;
+    previousSeasonNumber: number | null;
+    resetApplied: boolean;
+    factionChoiceStatus: ClientSeasonTransition['factionChoiceStatus'];
+    factionChoiceDeadlineAt: string | null;
+  }): ClientSeasonTransition {
+    return {
+      currentSeasonNumber: input.season.seasonNumber,
+      previousSeasonNumber: input.previousSeasonNumber,
+      resetApplied: input.resetApplied,
+      refreshRequired: input.resetApplied,
+      seasonStartsAt: input.season.startsAt.toISOString(),
+      seasonEndsAt: input.season.endsAt.toISOString(),
+      factionChoiceStatus: input.factionChoiceStatus,
+      factionChoiceDeadlineAt: input.factionChoiceDeadlineAt,
+    };
+  }
+
+  buildSeasonStartupState(input: {
+    season: CurrentSeasonState;
+    state: {
+      startupCompletedSeasonNumber: number | null;
+      startupIntroConfirmedSeasonNumber: number | null;
+      factionChoiceRequiredSeasonNumber: number | null;
+      factionChoiceUsedSeasonNumber: number | null;
+      factionChoiceUsedAt: Date | null;
+    };
+    now?: Date;
+  }): ClientSeasonStartupState {
+    void input.now;
+    const factionChoiceRequired = input.state.factionChoiceRequiredSeasonNumber === input.season.seasonNumber;
+    const introConfirmed = input.state.startupIntroConfirmedSeasonNumber === input.season.seasonNumber;
+    const completed = input.state.startupCompletedSeasonNumber === input.season.seasonNumber;
+    const factionChoiceStatus = !factionChoiceRequired
+      ? 'not_needed'
+      : input.state.factionChoiceUsedSeasonNumber === input.season.seasonNumber
+        ? 'used'
+        : 'available';
+    const factionChoiceDeadlineAt = null;
+    const blocking = !completed;
+    const requiresFactionConfirm = factionChoiceStatus === 'available';
+    const currentStep = completed
+      ? null
+      : !introConfirmed
+        ? 'season-intro'
+        : requiresFactionConfirm
+          ? 'faction-confirm'
+          : null;
+
+    return {
+      seasonNumber: input.season.seasonNumber,
+      blocking,
+      completed,
+      currentStep,
+      availableSteps: requiresFactionConfirm ? ['season-intro', 'faction-confirm'] : ['season-intro'],
+      introConfirmed,
+      factionChoiceStatus,
+      factionChoiceDeadlineAt,
+    };
+  }
+
+  private getSeasonStartUtc(): Date {
+    return this.devSeasonStartOverrideUtc ?? SEASON_START_UTC;
+  }
+
+  private shouldForceDevelopmentRolloverReset(seasonNumber: number): boolean {
+    return this.devForcedRolloverSeasonNumber === seasonNumber && !this.devForcedRolloverConsumed;
+  }
+
+  private consumeForcedDevelopmentRollover(seasonNumber: number): void {
+    if (this.devForcedRolloverSeasonNumber !== seasonNumber) {
+      return;
+    }
+
+    this.devForcedRolloverConsumed = true;
+  }
+
+  private async resetGlobalFactionContributionState(client: PrismaClientLike): Promise<void> {
+    await client.faction.updateMany({
+      data: { contributionScore: 0 },
+    });
+    await client.factionMember.updateMany({
+      data: { contributionScore: 0 },
+    });
+    await client.factionContributionLog.deleteMany({});
+  }
+
+  private getCurrentSeasonFromStartUtc(seasonStartUtc: Date, now: Date): CurrentSeasonState {
+    const elapsedMs = Math.max(now.getTime() - seasonStartUtc.getTime(), 0);
+    const seasonIndex = Math.floor(elapsedMs / SEASON_MS);
+    const seasonNumber = seasonIndex + 1;
+    const startsAt = new Date(seasonStartUtc.getTime() + seasonIndex * SEASON_MS);
+    const endsAt = new Date(startsAt.getTime() + SEASON_MS);
+    const elapsedInSeasonMs = Math.max(now.getTime() - startsAt.getTime(), 0);
+    const currentDay = Math.min(Math.floor(elapsedInSeasonMs / (24 * 60 * 60 * 1000)) + 1, SEASON_LENGTH_DAYS);
+
+    return {
+      seasonNumber,
+      currentWeek: Math.min(Math.ceil(currentDay / 7), 4),
+      totalWeeks: 4,
+      startsAt,
+      endsAt,
+    };
   }
 
   async recordPlayerActivity(
@@ -692,6 +944,9 @@ export class SeasonService {
     await client.dailyFactionTask.deleteMany({
       where: { playerId },
     });
+    await client.playerRaidDailyState.deleteMany({
+      where: { playerId },
+    });
     await client.playerSeedInventory.updateMany({
       where: { playerId },
       data: {
@@ -730,10 +985,20 @@ export class SeasonService {
         playerId,
         currentSeasonNumber: seasonNumber,
         lastResetSeasonNumber: seasonNumber,
+        startupIntroConfirmedSeasonNumber: null,
+        startupCompletedSeasonNumber: null,
+        factionChoiceRequiredSeasonNumber: seasonNumber,
+        factionChoiceUsedSeasonNumber: null,
+        factionChoiceUsedAt: null,
       },
       update: {
         currentSeasonNumber: seasonNumber,
         lastResetSeasonNumber: seasonNumber,
+        startupIntroConfirmedSeasonNumber: null,
+        startupCompletedSeasonNumber: null,
+        factionChoiceRequiredSeasonNumber: seasonNumber,
+        factionChoiceUsedSeasonNumber: null,
+        factionChoiceUsedAt: null,
       },
     });
 

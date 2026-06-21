@@ -20,6 +20,7 @@ interface ErrorResponseBody {
     code: ErrorCode | string;
     message: string;
     details?: unknown;
+    seasonTransition?: unknown;
   };
   path?: string;
   method?: string;
@@ -59,12 +60,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
   private toResponseBody(exception: unknown, request: HttpRequestLike, timestamp: string): ErrorResponseBody {
     if (exception instanceof BusinessError) {
+      const seasonTransition = extractSeasonTransition(exception.details);
       return {
         success: false,
         error: {
           code: exception.code,
           message: exception.message,
           details: exception.details,
+          seasonTransition,
         },
         path: request.url,
         method: request.method,
@@ -117,4 +120,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     return ErrorCode.BadRequest;
   }
+}
+
+function extractSeasonTransition(details: unknown): unknown {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) {
+    return undefined;
+  }
+
+  return (details as { seasonTransition?: unknown }).seasonTransition;
 }

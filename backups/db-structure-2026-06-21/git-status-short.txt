@@ -1,0 +1,41 @@
+﻿ M apps/game-client/src/App.tsx
+ M apps/game-client/src/api.ts
+ M apps/game-client/src/apiSupport/clientSnapshot.ts
+ M apps/game-client/src/apiSupport/httpClient.ts
+ M apps/game-client/src/mockData.ts
+ M apps/game-client/src/modules/notifications/notificationPresentation.ts
+ M apps/game-client/src/modules/social/useSocialSceneState.ts
+ M apps/game-client/src/shell/GlobalFeatureModalHost.tsx
+ M apps/game-client/src/shell/SettingsModal.tsx
+ M apps/game-client/src/shell/appStateTypes.ts
+ M apps/game-client/src/styles.css
+ M apps/game-client/src/ui/common/NotificationCenter.tsx
+ M packages/shared/src/index.ts
+ M services/game-server/package.json
+ M services/game-server/prisma/schema.prisma
+ M services/game-server/src/client-command/client-command.controller.ts
+ M services/game-server/src/client-command/client-command.service.ts
+ M services/game-server/src/client-command/dto.ts
+ M services/game-server/src/client-read/client-read.service.ts
+ M services/game-server/src/common/errors/error-code.ts
+ M services/game-server/src/common/errors/global-exception.filter.ts
+ M services/game-server/src/player/player.module.ts
+ M services/game-server/src/player/player.service.ts
+ M services/game-server/src/raid/raid-target.service.ts
+ M services/game-server/src/raid/raid.module.ts
+ M services/game-server/src/season/season.module.ts
+ M services/game-server/src/season/season.service.ts
+ M services/game-server/src/social/social.module.ts
+ M services/game-server/src/social/social.service.ts
+ M services/game-server/src/spirit/spirit.module.ts
+ M services/game-server/src/spirit/spirit.service.ts
+ M services/game-server/src/verification/verify-season-rollover.ts
+?? apps/game-client/src/shell/SeasonCountdownBanner.tsx
+?? apps/game-client/src/shell/SeasonStartupFlow.tsx
+?? backups/db-structure-2026-06-21/
+?? "docs/dev/2026-06-21 \346\226\260\350\265\233\345\255\243\345\220\257\345\212\250\346\265\201\347\250\213\343\200\201\351\230\265\350\220\245\347\241\256\350\256\244\344\270\216\350\265\233\345\255\243\350\241\245\345\201\277\345\256\236\346\226\275\350\256\241\345\210\222 v0.1.md"
+?? services/game-server/prisma/migrations/068_season_startup_flow/
+?? services/game-server/src/season/season-guard.service.ts
+?? services/game-server/src/verification/verify-season-command-guard.ts
+?? services/game-server/src/verification/verify-season-compensation.ts
+?? services/game-server/src/verification/verify-season-startup-flow.ts

@@ -22,10 +22,12 @@ import type {
   ClientSpiritState,
   ClientSeasonRewardsResponse,
   ClientSeasonSignInState,
+  ClientSeasonTransition,
+  NotificationAttachment,
   HomeSummaryResponse,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, claimFactionStipend, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, createShareAssistCampaign, devLogin, dissolveSpirit, feedSpirit, followSocialTarget, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unfollowSocialTarget, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, changeSeasonFaction, claimFactionStipend, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, confirmSeasonFaction, confirmSeasonStartupIntro, createShareAssistCampaign, devLogin, dissolveSpirit, feedSpirit, followSocialTarget, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, resetDevelopmentSeasonTiming, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setDevelopmentSeasonNearRollover, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unfollowSocialTarget, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import type { SocialTabKey } from './ui/scenes/SocialScene';
 import type { ShareAssistAudience } from './ui/share/ShareAssistPage';
@@ -147,9 +149,13 @@ import { ReturningFriendInvitePrompt } from './shell/ReturningFriendInvitePrompt
 import { SeedRewardModalHost } from './shell/SeedRewardModalHost';
 import { SettingsModal } from './shell/SettingsModal';
 import { ShareAssistDemoScreen } from './shell/ShareAssistDemoScreen';
+import { SeasonCountdownBanner } from './shell/SeasonCountdownBanner';
+import { SeasonStartupFlow } from './shell/SeasonStartupFlow';
 import { TopDock } from './shell/TopDock';
 import { ProfileModal } from './shell/ProfileModal';
 import { useFeedbackLayer } from './shell/useFeedbackLayer';
+
+const SEASON_END_WARNING_THRESHOLD_MS = 60 * 60 * 1000;
 
 function App(): JSX.Element {
   const storedLoginSession = getStoredDevLoginSession();
@@ -182,6 +188,9 @@ function App(): JSX.Element {
     onToast: showToast,
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [seasonTimingOverrideActive, setSeasonTimingOverrideActive] = useState(false);
+  const [seasonStartupSelectedFaction, setSeasonStartupSelectedFaction] = useState<DevFactionChoice>('human');
+  const [seasonStartupStepOverride, setSeasonStartupStepOverride] = useState<'faction-select' | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const notifications = useNotificationCenter({
     onError: (message) => showToast(message, 'error'),
@@ -231,12 +240,15 @@ function App(): JSX.Element {
   const [pendingSpiritCodexRevealIds, setPendingSpiritCodexRevealIds] = useState<string[]>([]);
   const [seasonSignInState, setSeasonSignInState] = useState<ClientSeasonSignInState | null>(null);
   const [seasonRewardsState, setSeasonRewardsState] = useState<ClientSeasonRewardsResponse | null>(null);
+  const [seasonCountdownNow, setSeasonCountdownNow] = useState(() => Date.now());
   const characterDialog = useCharacterDialog();
   const { playDialogScene } = characterDialog;
   const characterDialogPortalRef = useRef<HTMLDivElement | null>(null);
   const welcomeDialogSessionIdRef = useRef<string | null>(null);
   const farmEnterDialogRef = useRef<{ sceneId: string; at: number } | null>(null);
   const battleDemoScenarioIndexRef = useRef(0);
+  const seasonRefreshInFlightRef = useRef(false);
+  const seasonNoticeSeasonNumberRef = useRef<number | null>(null);
 
   const handleOpenBattleDemo = (): void => {
     const trait = (code: string, label: string, value: number) => ({ code, label, value });
@@ -625,11 +637,16 @@ function App(): JSX.Element {
 
   const applyClientBundle = (data: { viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState; seasonSignIn: ClientSeasonSignInState; seasonRewards: ClientSeasonRewardsResponse }): void => {
     applyClientViewModel(data.viewModel);
+    setSeasonStartupSelectedFaction(factionCodeByName[data.viewModel.home.factionName] ?? 'human');
+    setSeasonStartupStepOverride(null);
     setSeasonSignInState(data.seasonSignIn);
     setSeasonRewardsState(data.seasonRewards);
     setPendingSpiritCodexRevealIds([]);
     applySpiritState(data.spirit);
     setFarmBoard(data.farmBoard);
+    if (data.viewModel.bootstrap.season.transition?.resetApplied && !data.viewModel.bootstrap.season.startup?.blocking) {
+      showSeasonTransitionNotice(data.viewModel.bootstrap.season.transition);
+    }
   };
 
   const handleOpenNotificationClaim = (notificationId: string): void => {
@@ -639,7 +656,9 @@ function App(): JSX.Element {
       return;
     }
 
-    setSeedRewardModal(buildNotificationClaimRewardModal(notification));
+    setSeedRewardModal(buildNotificationClaimRewardModal(notification, {
+      resolveAttachmentLabel: (attachment) => resolveNotificationAttachmentLabel(attachment, spiritState, pendingSpiritCodexRevealIds),
+    }));
   };
 
   const handleConfirmNotificationClaim = async (): Promise<void> => {
@@ -650,6 +669,13 @@ function App(): JSX.Element {
     }
 
     try {
+      const notification = notifications.list?.items.find((item) => item.id === notificationId) ?? null;
+      const spiritShardIds = Array.from(new Set(
+        (notification?.attachments ?? [])
+          .filter((attachment) => attachment.kind === 'spiritShard' && attachment.spiritId)
+          .map((attachment) => attachment.spiritId as string),
+      ));
+      const beforeSpiritState = spiritState;
       const result = await notifications.claim(notificationId);
       const [nextViewModel, nextSpirit, nextSeasonRewards] = await Promise.all([
         loadClientViewModel(),
@@ -662,6 +688,14 @@ function App(): JSX.Element {
       applySpiritState(nextSpirit);
       setSeasonRewardsState(nextSeasonRewards);
       setSeedRewardModal(null);
+      const newlyVisibleSpiritIds = findNewlyVisibleSpiritCodexIds({
+        before: beforeSpiritState,
+        after: nextSpirit,
+        spiritIds: spiritShardIds,
+      });
+      if (newlyVisibleSpiritIds.length > 0) {
+        enqueueSpiritCodexRevealIds(newlyVisibleSpiritIds);
+      }
       showToast(result.summary, 'success');
     } catch (error) {
       showToast(error instanceof Error && error.message ? error.message : '当前无法领取附件，请稍后重试。', 'error');
@@ -669,8 +703,8 @@ function App(): JSX.Element {
   };
 
   const loadClientBundle = async (): Promise<{ viewModel: ClientViewModel; spirit: ClientSpiritState; farmBoard: ClientFarmBoardState; seasonSignIn: ClientSeasonSignInState; seasonRewards: ClientSeasonRewardsResponse }> => {
-    const [nextViewModel, nextSpirit, nextFarmBoard, nextSeasonSignIn, nextSeasonRewards] = await Promise.all([
-      loadClientViewModel(),
+    const nextViewModel = await loadClientViewModel();
+    const [nextSpirit, nextFarmBoard, nextSeasonSignIn, nextSeasonRewards] = await Promise.all([
       loadSpiritState(),
       loadFarmBoard(),
       loadSeasonSignIn(),
@@ -686,6 +720,135 @@ function App(): JSX.Element {
     };
   };
 
+  const buildSeasonTransitionNotice = (transition: ClientSeasonTransition): GlobalFeatureModalState => ({
+    title: '新赛季开始',
+    eyebrow: `第 ${transition.currentSeasonNumber} 赛季`,
+    returnHomeOnClose: true,
+    description: [
+      '旧赛季竞争状态已经结算并重置。',
+      '本次刷新后，金币、田地、贡献、签到和临时战斗经营状态已按新赛季重新开始。',
+      '天机符会保留，灵宠词条会保留，灵宠等级会重置，旧赛季快照也已保留。',
+    ].join(' '),
+  });
+
+  const buildFallbackSeasonTransition = (input: {
+    previousSeasonNumber: number | null;
+    season: ClientViewModel['bootstrap']['season'];
+  }): ClientSeasonTransition => ({
+    currentSeasonNumber: input.season.seasonNumber,
+    previousSeasonNumber: input.previousSeasonNumber,
+    resetApplied: true,
+    refreshRequired: true,
+    seasonStartsAt: input.season.startsAt,
+    seasonEndsAt: input.season.endsAt,
+    factionChoiceStatus: 'not_needed',
+    factionChoiceDeadlineAt: null,
+  });
+
+  const clearTransientUiForSeasonRefresh = (): void => {
+    setFarmOptimisticMutations([]);
+    setFarmCollectPresentation(null);
+    setSeedSelectionState(null);
+    setFarmBoardEditor(null);
+    setSeedRewardModal(null);
+    setPendingRaidRewardModal(null);
+    setRaidBattleReplay(null);
+    setGlobalUnlockModal(null);
+    setTopResourcePanel(null);
+    setSeedCodexState(null);
+    raidIntel.dismissModal();
+    raidIntel.clearDetails();
+  };
+
+  const showSeasonTransitionNotice = (transition: ClientSeasonTransition): void => {
+    if (seasonNoticeSeasonNumberRef.current === transition.currentSeasonNumber) {
+      return;
+    }
+
+    seasonNoticeSeasonNumberRef.current = transition.currentSeasonNumber;
+    setGlobalFeatureModal(buildSeasonTransitionNotice(transition));
+  };
+
+  const handleCloseGlobalFeatureModal = (): void => {
+    if (globalFeatureModal?.returnHomeOnClose) {
+      setActiveScene('home');
+      setRaidHubTab('targets');
+      setFactionTab('overview');
+      setSocialTab('friends');
+      raidIntel.dismissModal();
+      setTopResourcePanel(null);
+    }
+
+    setGlobalFeatureModal(null);
+  };
+
+  const refreshAfterPossibleSeasonRollover = async (
+    options: {
+      seasonTransition?: ClientSeasonTransition | null;
+      showToastMessage?: boolean;
+    } = {},
+  ): Promise<boolean> => {
+    if (!loginSession || seasonRefreshInFlightRef.current) {
+      return false;
+    }
+
+    seasonRefreshInFlightRef.current = true;
+    const previousSeasonNumber = viewModel?.bootstrap.season.seasonNumber ?? null;
+
+    try {
+      const bundle = await loadClientBundle();
+      const changedSeason = previousSeasonNumber !== null
+        && previousSeasonNumber !== bundle.viewModel.bootstrap.season.seasonNumber;
+      const nextTransition = options.seasonTransition
+        ?? bundle.viewModel.bootstrap.season.transition
+        ?? (changedSeason ? buildFallbackSeasonTransition({
+          previousSeasonNumber,
+          season: bundle.viewModel.bootstrap.season,
+        }) : null);
+
+      const rolledOver = Boolean(nextTransition?.resetApplied || changedSeason);
+      if (rolledOver) {
+        clearTransientUiForSeasonRefresh();
+      }
+
+      applyClientBundle(bundle);
+
+      if (nextTransition && rolledOver && !bundle.viewModel.bootstrap.season.startup?.blocking) {
+        showSeasonTransitionNotice(nextTransition);
+      }
+      if (rolledOver) {
+        await notifications.refreshUnreadCount();
+        if (notifications.open) {
+          await notifications.loadPage(1);
+        }
+      }
+      if (rolledOver && options.showToastMessage) {
+        showToast('新赛季已经开始，已为你刷新到最新状态。', 'info');
+      }
+
+      return rolledOver;
+    } catch (error) {
+      if (options.showToastMessage) {
+        showToast(error instanceof Error && error.message ? error.message : '当前无法刷新赛季状态，请稍后重试。', 'error');
+      }
+      return false;
+    } finally {
+      seasonRefreshInFlightRef.current = false;
+    }
+  };
+
+  const handleSeasonRolledOverError = async (error: unknown): Promise<boolean> => {
+    if (!(error instanceof ApiError) || error.code !== 'SEASON_ROLLED_OVER') {
+      return false;
+    }
+
+    await refreshAfterPossibleSeasonRollover({
+      seasonTransition: error.seasonTransition ?? null,
+      showToastMessage: true,
+    });
+    return true;
+  };
+
   const handleDevLogin = async (mode: DevLoginMode, options?: { factionCode?: DevFactionChoice }): Promise<void> => {
     setLoginLoadingMode(mode);
     setLoginError(null);
@@ -695,6 +858,7 @@ function App(): JSX.Element {
       const data = await loadClientBundle();
       setTutorialStage(getInitialTutorialStage(session));
       setLoginSession(session);
+      setSeasonTimingOverrideActive(false);
       applyClientBundle(data);
     } catch {
       setLoginError('无法连接开发登录接口，请确认后端已启动，并且 VITE_API_BASE_URL 指向正确地址。');
@@ -921,6 +1085,7 @@ function App(): JSX.Element {
     setSettingsOpen(false);
     clearDevLoginSession();
     setLoginSession(null);
+    setSeasonTimingOverrideActive(false);
     setTutorialStage('completed');
     setSeasonSignInState(null);
     setViewModel(null);
@@ -996,6 +1161,58 @@ function App(): JSX.Element {
 
     return () => {
       active = false;
+    };
+  }, [loginSession]);
+
+  useEffect(() => {
+    if (!loginSession) {
+      return;
+    }
+
+    const seasonEndsAt = viewModel?.bootstrap.season.endsAt;
+    if (!seasonEndsAt) {
+      return;
+    }
+
+    const delay = Math.max(new Date(seasonEndsAt).getTime() - Date.now(), 200);
+    const timer = window.setTimeout(() => {
+      void refreshAfterPossibleSeasonRollover({ showToastMessage: true });
+    }, delay);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [loginSession, viewModel?.bootstrap.season.endsAt, viewModel?.bootstrap.season.seasonNumber]);
+
+  useEffect(() => {
+    if (!loginSession || !viewModel?.bootstrap.season.endsAt) {
+      return;
+    }
+
+    setSeasonCountdownNow(Date.now());
+    const timer = window.setInterval(() => {
+      setSeasonCountdownNow(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [loginSession, viewModel?.bootstrap.season.endsAt]);
+
+  useEffect(() => {
+    if (!loginSession) {
+      return;
+    }
+
+    const handleVisibility = (): void => {
+      if (document.visibilityState === 'visible') {
+        void refreshAfterPossibleSeasonRollover();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [loginSession]);
 
@@ -1245,6 +1462,7 @@ function App(): JSX.Element {
   }
 
   const { home, scenes } = viewModel;
+  const seasonStartup = viewModel.bootstrap.season.startup ?? null;
   const {
     activeBackgroundImage,
     backpackResourceItems,
@@ -1293,6 +1511,11 @@ function App(): JSX.Element {
     viewModel,
   });
   const avatarInitial = getAvatarInitial(currentAccountName);
+  const seasonEndReminder = buildSeasonEndReminder({
+    endsAt: viewModel.bootstrap.season.endsAt,
+    nowMs: seasonCountdownNow,
+    suppress: Boolean(seasonStartup?.blocking),
+  });
 
   const runPendingAction = async (actionKey: string, action: () => Promise<void>): Promise<void> => {
     if (pendingActionKey === actionKey) {
@@ -1316,7 +1539,10 @@ function App(): JSX.Element {
           slotVersion,
         });
         applySpiritMutationResult(result);
-      } catch {
+      } catch (error) {
+        if (await handleSeasonRolledOverError(error)) {
+          return;
+        }
         showToast('当前无法切换主位灵宠，请稍后重试。', 'error');
       }
     });
@@ -1330,7 +1556,10 @@ function App(): JSX.Element {
           slotVersion,
         });
         applySpiritMutationResult(result);
-      } catch {
+      } catch (error) {
+        if (await handleSeasonRolledOverError(error)) {
+          return;
+        }
         showToast('当前无法解散灵宠，请稍后重试。', 'error');
       }
     });
@@ -1354,7 +1583,10 @@ function App(): JSX.Element {
             spiritId,
           }));
         }
-      } catch {
+      } catch (error) {
+        if (await handleSeasonRolledOverError(error)) {
+          return;
+        }
         showToast('当前无法合成灵宠，请稍后重试。', 'error');
       }
     });
@@ -1372,6 +1604,9 @@ function App(): JSX.Element {
       applyMutationResult(result);
       syncSeedBackpackState(result.bootstrap.backpack);
     } catch (error) {
+      if (await handleSeasonRolledOverError(error)) {
+        return;
+      }
       const message = error instanceof Error && error.message ? error.message : '当前无法解锁灵植，请稍后重试。';
       showToast(message, 'error');
     } finally {
@@ -1395,7 +1630,10 @@ function App(): JSX.Element {
         });
         applySpiritMutationResult(result);
         showToast(result.summary, 'success');
-      } catch {
+      } catch (error) {
+        if (await handleSeasonRolledOverError(error)) {
+          return;
+        }
         showToast('当前无法投喂灵宠，请稍后重试。', 'error');
       }
     });
@@ -1418,6 +1656,9 @@ function App(): JSX.Element {
         applySpiritMutationResult(result);
         showToast(result.summary, 'success');
       } catch (error) {
+        if (await handleSeasonRolledOverError(error)) {
+          return;
+        }
         if (error instanceof ApiError && error.code === 'STATE_VERSION_CONFLICT') {
           const nextSpirit = await loadSpiritState().catch(() => null);
           if (nextSpirit) {
@@ -1466,7 +1707,10 @@ function App(): JSX.Element {
         applySpiritMutationResult(result);
         showToast(result.summary, 'success');
         rollPreview = result;
-      } catch {
+      } catch (error) {
+        if (await handleSeasonRolledOverError(error)) {
+          return;
+        }
         showToast('当前无法洗练词条，请确认材料是否足够。', 'error');
       }
     });
@@ -1490,7 +1734,10 @@ function App(): JSX.Element {
         applySpiritMutationResult(result);
         showToast(result.summary, 'success');
         resolved = true;
-      } catch {
+      } catch (error) {
+        if (await handleSeasonRolledOverError(error)) {
+          return;
+        }
         showToast('当前无法确认洗练结果，请刷新后重试。', 'error');
       }
     });
@@ -1511,7 +1758,10 @@ function App(): JSX.Element {
         });
         applySpiritMutationResult(result);
         showToast(result.summary, 'success');
-      } catch {
+      } catch (error) {
+        if (await handleSeasonRolledOverError(error)) {
+          return;
+        }
         showToast('当前无法兑换商品，请确认天机符或限购次数。', 'error');
       }
     });
@@ -1533,6 +1783,9 @@ function App(): JSX.Element {
       });
       showToast(result.summary, 'success');
     } catch (error) {
+      if (await handleSeasonRolledOverError(error)) {
+        return;
+      }
       showToast(error instanceof Error && error.message ? error.message : '当前无法完成赛季签到，请稍后重试。', 'error');
     } finally {
       setPendingActionKey(null);
@@ -1556,6 +1809,9 @@ function App(): JSX.Element {
         applySpiritMutationResult(result);
         showToast(result.summary, 'success');
       } catch (error) {
+        if (await handleSeasonRolledOverError(error)) {
+          return;
+        }
         showToast(error instanceof Error && error.message ? error.message : '当前无法领取广告奖励，可能今日次数已用完。', 'error');
       }
     });
@@ -1617,7 +1873,10 @@ function App(): JSX.Element {
       if (tutorialStage === 'faction') {
         runTutorialFlowActions(getTutorialFlowActions('factionStipendClaimed'));
       }
-    } catch {
+    } catch (error) {
+      if (await handleSeasonRolledOverError(error)) {
+        return;
+      }
       showToast('当前无法领取阵营俸禄，请稍后重试。', 'error');
     } finally {
       setPendingActionKey(null);
@@ -1663,6 +1922,121 @@ function App(): JSX.Element {
     }
   };
 
+  const handleSetDevelopmentSeasonNearRollover = async (): Promise<void> => {
+    if (pendingActionKey === 'system:season-near-rollover') {
+      return;
+    }
+
+    setPendingActionKey('system:season-near-rollover');
+
+    try {
+      const response = await setDevelopmentSeasonNearRollover();
+      const data = await loadClientBundle();
+      applyClientBundle(data);
+      setSeasonTimingOverrideActive(response.overrideActive);
+      showToast(response.summary, 'success');
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法设置赛季倒计时，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleResetDevelopmentSeasonTiming = async (): Promise<void> => {
+    if (pendingActionKey === 'system:season-reset-timing') {
+      return;
+    }
+
+    setPendingActionKey('system:season-reset-timing');
+
+    try {
+      const response = await resetDevelopmentSeasonTiming();
+      const data = await loadClientBundle();
+      applyClientBundle(data);
+      setSeasonTimingOverrideActive(response.overrideActive);
+      showToast(response.summary, 'success');
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法恢复赛季时间，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleConfirmSeasonStartupIntro = async (): Promise<void> => {
+    if (pendingActionKey === 'season-startup:intro') {
+      return;
+    }
+
+    setPendingActionKey('season-startup:intro');
+    try {
+      const result = await confirmSeasonStartupIntro();
+      const data = await loadClientBundle();
+      applyClientBundle(data);
+      await notifications.refreshUnreadCount();
+      if (result.startup.completed) {
+        setActiveScene('home');
+        setRaidHubTab('targets');
+        setFactionTab('overview');
+        setSocialTab('friends');
+      }
+      if (result.startup.currentStep === 'faction-confirm') {
+        showToast(result.summary, 'info');
+      }
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法确认新赛季说明，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleConfirmKeepCurrentSeasonFaction = async (): Promise<void> => {
+    if (pendingActionKey === 'season-startup:keep-faction') {
+      return;
+    }
+
+    setPendingActionKey('season-startup:keep-faction');
+    try {
+      const result = await confirmSeasonFaction();
+      const data = await loadClientBundle();
+      applyClientBundle(data);
+      await notifications.refreshUnreadCount();
+      setActiveScene('home');
+      setRaidHubTab('targets');
+      setFactionTab('overview');
+      setSocialTab('friends');
+      showToast(result.summary, 'success');
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法确认当前阵营，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleConfirmSeasonFactionChange = async (): Promise<void> => {
+    if (pendingActionKey === 'season-startup:change-faction') {
+      return;
+    }
+
+    setPendingActionKey('season-startup:change-faction');
+    try {
+      const result = await changeSeasonFaction({
+        factionCode: seasonStartupSelectedFaction,
+      });
+      const data = await loadClientBundle();
+      applyClientBundle(data);
+      await notifications.refreshUnreadCount();
+      setActiveScene('home');
+      setRaidHubTab('targets');
+      setFactionTab('overview');
+      setSocialTab('friends');
+      showToast(result.summary, 'success');
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : '当前无法调整赛季阵营，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
   const handleRefreshRaidTargets = async (): Promise<void> => {
     if (pendingActionKey === 'raid:refresh-targets') {
       return;
@@ -1676,7 +2050,10 @@ function App(): JSX.Element {
       raidIntel.setSelectedTargetId(result.scenes.raid.targets[0]?.id ?? '');
       raidIntel.clearDetails();
       showToast(result.summary || '目标列表已刷新，可以重新挑选战斗对象。', 'success');
-    } catch {
+    } catch (error) {
+      if (await handleSeasonRolledOverError(error)) {
+        return;
+      }
       showToast('当前无法刷新目标列表，请稍后重试。', 'error');
     } finally {
       setPendingActionKey(null);
@@ -1700,6 +2077,10 @@ function App(): JSX.Element {
       .map((prompt) => prompt.subjectId)
       .filter((subjectId) => subjectId.length > 0);
 
+    enqueueSpiritCodexRevealIds(revealedSpiritIds);
+  };
+
+  const enqueueSpiritCodexRevealIds = (revealedSpiritIds: string[]): void => {
     if (revealedSpiritIds.length <= 0) {
       return;
     }
@@ -1838,6 +2219,9 @@ function App(): JSX.Element {
       showToast(result.summary, 'success');
       runTutorialFlowActions(getTutorialFlowActions('starterSeedsClaimed'));
     } catch (error) {
+      if (await handleSeasonRolledOverError(error)) {
+        return;
+      }
       const message = error instanceof Error && error.message ? error.message : '当前无法领取启灵芽，请稍后重试。';
       showToast(message, 'error');
     } finally {
@@ -1904,7 +2288,10 @@ function App(): JSX.Element {
         const result = await upgradeClientBuilding(buildUpgradeRequest(targetType, upgradeId, home.stateVersions.buildingVersion, home.stateVersions.walletVersion));
         applyMutationResult(result);
         applyLocalTianjiSpend(costText);
-      } catch {
+      } catch (error) {
+        if (await handleSeasonRolledOverError(error)) {
+          return;
+        }
         showToast(`${context} 当前修习失败，请稍后重试。`, 'error');
       } finally {
         setPendingActionKey(null);
@@ -2031,6 +2418,10 @@ function App(): JSX.Element {
           return nextAssignments;
         });
       } catch (error) {
+        if (await handleSeasonRolledOverError(error)) {
+          setFarmCollectPresentation(null);
+          return;
+        }
         if (error instanceof ApiError && error.code === 'STATE_VERSION_CONFLICT') {
           const nextViewModel = await loadClientViewModel().catch(() => null);
           if (nextViewModel) {
@@ -2116,6 +2507,9 @@ function App(): JSX.Element {
             setSeedRewardModal(settledRaidRewardModal);
           }
         } catch (error) {
+          if (await handleSeasonRolledOverError(error)) {
+            return;
+          }
           if (error instanceof ApiError && error.code === 'RAID_NOT_ALLOWED') {
             showToast(error.message, 'error');
           } else {
@@ -2226,6 +2620,10 @@ function App(): JSX.Element {
       setFarmBoardEditor(null);
       showToast(result.summary, 'success');
     } catch (error) {
+      if (await handleSeasonRolledOverError(error)) {
+        setFarmBoardEditor((current) => current ? { ...current, saving: false } : current);
+        return;
+      }
       showToast(error instanceof Error && error.message ? error.message : '当前无法修改留言，请稍后重试。', 'error');
       setFarmBoardEditor((current) => current ? { ...current, saving: false } : current);
     }
@@ -2258,7 +2656,10 @@ function App(): JSX.Element {
       if (tutorialStage === 'farm') {
         runTutorialFlowActions(getTutorialFlowActions('fieldCultivationStarted'));
       }
-    } catch {
+    } catch (error) {
+      if (await handleSeasonRolledOverError(error)) {
+        return;
+      }
       showToast(`${fieldCode} 当前无法开始培育，请稍后重试。`, 'error');
     } finally {
       setPendingActionKey(null);
@@ -2330,6 +2731,11 @@ function App(): JSX.Element {
           ...current,
           ...nextAssignments,
         }));
+      }
+
+      if (await handleSeasonRolledOverError(error)) {
+        setSeedSelectionState(null);
+        return;
       }
 
       if (error instanceof ApiError && error.code === 'STATE_VERSION_CONFLICT') {
@@ -2464,6 +2870,11 @@ function App(): JSX.Element {
             }}
           />
 
+          <SeasonCountdownBanner
+            remainingLabel={seasonEndReminder.remainingLabel}
+            visible={seasonEndReminder.visible}
+          />
+
           <NotificationCenter
             actionId={notifications.actionId}
             busy={notifications.busy}
@@ -2483,13 +2894,52 @@ function App(): JSX.Element {
               void notifications.loadPage(page);
             }}
             open={notifications.open}
+            resolveAttachmentLabel={(attachment) => resolveNotificationAttachmentLabel(attachment, spiritState, pendingSpiritCodexRevealIds)}
+          />
+
+          <SeasonStartupFlow
+            currentFactionName={home.factionName}
+            pendingActionKey={pendingActionKey}
+            selectedFactionCode={seasonStartupSelectedFaction}
+            startup={seasonStartup ?? {
+              seasonNumber: viewModel.bootstrap.season.seasonNumber,
+              blocking: false,
+              completed: true,
+              currentStep: null,
+              availableSteps: [],
+              introConfirmed: true,
+              factionChoiceStatus: 'not_needed',
+              factionChoiceDeadlineAt: null,
+            }}
+            onChangeSelectedFaction={setSeasonStartupSelectedFaction}
+            onConfirmIntro={() => {
+              void handleConfirmSeasonStartupIntro();
+            }}
+            onConfirmKeepCurrentFaction={() => {
+              void handleConfirmKeepCurrentSeasonFaction();
+            }}
+            onConfirmSeasonFactionChange={() => {
+              void handleConfirmSeasonFactionChange();
+            }}
+            onOpenFactionSelect={() => setSeasonStartupStepOverride('faction-select')}
+            onBackToFactionConfirm={() => setSeasonStartupStepOverride(null)}
+            stepOverride={seasonStartupStepOverride}
           />
 
           <SettingsModal
             currentAccountName={currentAccountName}
+            currentSeasonEndsAt={viewModel?.bootstrap.season.endsAt ?? null}
             devLoginModeLabel={devLoginModeLabel}
             open={settingsOpen}
+            pendingActionKey={pendingActionKey}
+            seasonTimingOverrideActive={seasonTimingOverrideActive}
             onClose={() => setSettingsOpen(false)}
+            onResetSeasonTiming={() => {
+              void handleResetDevelopmentSeasonTiming();
+            }}
+            onSetSeasonNearRollover={() => {
+              void handleSetDevelopmentSeasonNearRollover();
+            }}
             onSwitchDevUser={handleSwitchDevUser}
           />
 
@@ -2695,7 +3145,7 @@ function App(): JSX.Element {
             onClaimSpiritAdReward={() => {
               void handleClaimSpiritAdRewardAction();
             }}
-            onClose={() => setGlobalFeatureModal(null)}
+            onClose={handleCloseGlobalFeatureModal}
             onOpenSeasonSignIn={() => {
               setGlobalFeatureModal({
                 title: '赛季签到',
@@ -2786,6 +3236,88 @@ function App(): JSX.Element {
 function getAvatarInitial(name: string): string {
   const [firstChar] = Array.from(name.trim());
   return firstChar ? firstChar.toLocaleUpperCase('zh-CN') : '人';
+}
+
+function buildSeasonEndReminder(input: {
+  endsAt: string;
+  nowMs: number;
+  suppress: boolean;
+}): { visible: boolean; remainingLabel: string } {
+  if (input.suppress) {
+    return { visible: false, remainingLabel: '' };
+  }
+
+  const endMs = new Date(input.endsAt).getTime();
+  if (!Number.isFinite(endMs)) {
+    return { visible: false, remainingLabel: '' };
+  }
+
+  const remainingMs = endMs - input.nowMs;
+  if (remainingMs <= 0 || remainingMs > SEASON_END_WARNING_THRESHOLD_MS) {
+    return { visible: false, remainingLabel: '' };
+  }
+
+  return {
+    visible: true,
+    remainingLabel: `${formatRemainingSeasonTime(remainingMs)} 后结算`,
+  };
+}
+
+function formatRemainingSeasonTime(remainingMs: number): string {
+  const totalSeconds = Math.max(Math.ceil(remainingMs / 1000), 0);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${padCountdownPart(minutes)}:${padCountdownPart(seconds)}`;
+  }
+
+  return `${padCountdownPart(minutes)}:${padCountdownPart(seconds)}`;
+}
+
+function padCountdownPart(value: number): string {
+  return value.toString().padStart(2, '0');
+}
+
+function findNewlyVisibleSpiritCodexIds(input: {
+  before: ClientSpiritState | null;
+  after: ClientSpiritState;
+  spiritIds: string[];
+}): string[] {
+  if (input.spiritIds.length <= 0) {
+    return [];
+  }
+
+  return input.spiritIds.filter((spiritId) => {
+    const beforeEntry = input.before?.codex.find((entry) => entry.spiritId === spiritId) ?? null;
+    const afterEntry = input.after.codex.find((entry) => entry.spiritId === spiritId) ?? null;
+
+    return afterEntry?.codexState !== undefined
+      && afterEntry.codexState !== 'hidden'
+      && (!beforeEntry || beforeEntry.codexState === 'hidden');
+  });
+}
+
+function resolveNotificationAttachmentLabel(
+  attachment: NotificationAttachment,
+  spirit: ClientSpiritState | null,
+  pendingRevealIds: string[],
+): string | null {
+  if (attachment.kind !== 'spiritShard' || !attachment.spiritId) {
+    return null;
+  }
+
+  if (pendingRevealIds.includes(attachment.spiritId)) {
+    return '??? 精魄';
+  }
+
+  const codexEntry = spirit?.codex.find((entry) => entry.spiritId === attachment.spiritId) ?? null;
+  if (codexEntry && codexEntry.sceneVisibility === 'named') {
+    return null;
+  }
+
+  return '??? 精魄';
 }
 
 export default App;

@@ -18,6 +18,7 @@ import { ClientReadService } from '../client-read/client-read.service.js';
 import { getLocalDateKey, getStartOfDateKey } from '../lib/date-key.js';
 import { GAME_BALANCE, getRaidBaseRewardByLevel } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SeasonGuardService } from '../season/season-guard.service.js';
 import { RaidSettlementQueueService } from './raid-settlement-queue.service.js';
 import { RaidSettlementService } from './raid-settlement.service.js';
 import { buildRaidBattleReplay, parseRaidBattleReplay } from './raid-battle-replay.js';
@@ -32,6 +33,7 @@ export class RaidTargetService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(RaidRepository) private readonly raidRepository: RaidRepository,
     @Inject(ClientReadService) private readonly clientReadService: ClientReadService,
+    @Inject(SeasonGuardService) private readonly seasonGuardService: SeasonGuardService,
     @Inject(RaidSettlementQueueService) private readonly raidSettlementQueueService: RaidSettlementQueueService,
     @Inject(RaidSettlementService) private readonly raidSettlementService: RaidSettlementService,
   ) {}
@@ -77,6 +79,7 @@ export class RaidTargetService {
   }
 
   async getRaidTargetDeepIntel(playerId: string, targetId: string): Promise<ClientRaidDeepIntelResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.prisma.transaction(async (client) => {
       const [target, resource, codex] = await Promise.all([
         this.raidRepository.findVisibleTargetPoolEntry({
@@ -205,6 +208,7 @@ export class RaidTargetService {
     skipQueue?: boolean;
     now?: Date;
   }): Promise<ClientRaidActionResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     const requestIdempotencyKey = input.requestIdempotencyKey?.trim();
     const now = input.now ?? new Date();
 
@@ -610,6 +614,7 @@ export class RaidTargetService {
     raidOrderId: string;
     messageTemplateId: string;
   }): Promise<ClientRaidOrderMessageResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     const templateId = input.messageTemplateId.trim();
 
     if (!templateId) {

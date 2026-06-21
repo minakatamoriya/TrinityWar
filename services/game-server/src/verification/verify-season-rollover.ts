@@ -68,6 +68,38 @@ async function main(): Promise<void> {
       where: { playerId },
       data: { contributionScore: 777 },
     });
+    await prisma.playerFactionStipendState.create({
+      data: {
+        playerId,
+        dateKey: '2026-06-21',
+        contributionSnapshot: 777,
+        tierKey: 'contribution-300',
+        rewardJson: [],
+        claimedAt: new Date(),
+      },
+    });
+    await prisma.playerRaidDailyState.upsert({
+      where: {
+        playerId_dateKey: {
+          playerId,
+          dateKey: '2026-06-21',
+        },
+      },
+      create: {
+        playerId,
+        dateKey: '2026-06-21',
+        normalRaidAttemptsUsed: 3,
+        raidRefreshesUsed: 2,
+        extraRaidAttemptsPurchased: 1,
+        extraRefreshesPurchased: 1,
+      },
+      update: {
+        normalRaidAttemptsUsed: 3,
+        raidRefreshesUsed: 2,
+        extraRaidAttemptsPurchased: 1,
+        extraRefreshesPurchased: 1,
+      },
+    });
     await prisma.playerFieldSlot.updateMany({
       where: { playerId, isUnlocked: true },
       data: {
@@ -116,6 +148,8 @@ async function main(): Promise<void> {
     });
     const seasonState = await prisma.playerSeasonState.findUniqueOrThrow({ where: { playerId } });
     const factionMember = await prisma.factionMember.findFirstOrThrow({ where: { playerId } });
+    const stipendStateCount = await prisma.playerFactionStipendState.count({ where: { playerId } });
+    const raidDailyStateCount = await prisma.playerRaidDailyState.count({ where: { playerId } });
     const fields = await prisma.playerFieldSlot.findMany({ where: { playerId, isUnlocked: true } });
     const slot = await prisma.playerSpiritSlot.findUniqueOrThrow({
       where: { id: firstSlot.id },
@@ -125,11 +159,23 @@ async function main(): Promise<void> {
     if (bootstrap.season.seasonNumber !== currentSeason.seasonNumber || seasonState.lastResetSeasonNumber !== currentSeason.seasonNumber) {
       throw new Error('Expected player season state to advance to current season.');
     }
+    if (bootstrap.season.startsAt !== currentSeason.startsAt.toISOString() || bootstrap.season.endsAt !== currentSeason.endsAt.toISOString()) {
+      throw new Error('Expected bootstrap season timing to match current season.');
+    }
+    if (!bootstrap.season.transition?.resetApplied || bootstrap.season.transition.previousSeasonNumber !== previousSeasonNumber) {
+      throw new Error('Expected bootstrap season transition to describe the applied rollover.');
+    }
     if (previousSeasonSnapshot.contributionScore !== 777) {
       throw new Error(`Expected previous season snapshot to preserve contribution 777 before reset, got ${previousSeasonSnapshot.contributionScore}.`);
     }
     if (factionMember.contributionScore !== 0) {
       throw new Error(`Expected faction contribution reset to 0, got ${factionMember.contributionScore}.`);
+    }
+    if (stipendStateCount !== 0) {
+      throw new Error(`Expected faction stipend state reset, got ${stipendStateCount}.`);
+    }
+    if (raidDailyStateCount !== 0) {
+      throw new Error(`Expected raid daily state reset, got ${raidDailyStateCount}.`);
     }
     if (fields.some((field) => field.status !== 'EMPTY' || field.seedDefinitionId !== null || field.investedGold !== 0 || field.currentClaimableGold !== 0)) {
       throw new Error('Expected unlocked fields to reset to empty state.');

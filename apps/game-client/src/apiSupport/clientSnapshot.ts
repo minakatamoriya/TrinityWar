@@ -8,7 +8,11 @@ import type {
 export function normalizeBootstrap(bootstrap: ClientBootstrapResponse): ClientBootstrapResponse {
   return {
     ...bootstrap,
-    season: { ...bootstrap.season },
+    season: {
+      ...bootstrap.season,
+      transition: bootstrap.season.transition ? { ...bootstrap.season.transition } : undefined,
+      startup: bootstrap.season.startup ? { ...bootstrap.season.startup, availableSteps: [...bootstrap.season.startup.availableSteps] } : undefined,
+    },
     backpack: {
       seedInventory: { ...bootstrap.backpack.seedInventory },
       essenceInventory: { ...(bootstrap.backpack.essenceInventory ?? bootstrap.backpack.seedInventory) },

@@ -31,6 +31,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { grantFactionContribution } from '../faction/contribution.service.js';
 import { FieldLifecycleService } from '../client-read/field-lifecycle.service.js';
+import { SeasonGuardService } from '../season/season-guard.service.js';
 
 const SOCIAL_PAGE_SIZE = 30;
 const HARVEST_INTIMACY_GAIN = 2;
@@ -171,6 +172,7 @@ export class SocialService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(FieldLifecycleService) private readonly fieldLifecycleService: FieldLifecycleService,
+    @Inject(SeasonGuardService) private readonly seasonGuardService: SeasonGuardService,
   ) {}
 
   async getSummary(playerId: string): Promise<ClientSocialSummaryResponse> {
@@ -257,6 +259,7 @@ export class SocialService {
   }
 
   async follow(playerId: string, request: ClientSocialFollowRequest): Promise<ClientSocialRelationMutationResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     const relation = await this.prisma.transaction(async (client) => {
       await this.assertPlayerExists(client, playerId);
       await this.assertPlayerExists(client, request.targetPlayerId);
@@ -311,6 +314,7 @@ export class SocialService {
   }
 
   async unfollow(playerId: string, targetPlayerId: string): Promise<ClientSocialRelationMutationResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     const relation = await this.prisma.transaction(async (client) => {
       await this.assertPlayerExists(client, playerId);
       await this.assertPlayerExists(client, targetPlayerId);
@@ -336,6 +340,7 @@ export class SocialService {
   }
 
   async requestFriend(playerId: string, request: ClientSocialFriendRequest): Promise<ClientSocialRelationMutationResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     const result = await this.prisma.transaction(async (client) => {
       await this.assertPlayerExists(client, playerId);
       const target = await this.assertPlayerExists(client, request.targetPlayerId);
@@ -426,6 +431,7 @@ export class SocialService {
   }
 
   async acceptFriendRequest(playerId: string, relationId: string): Promise<ClientSocialRelationMutationResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     const result = await this.prisma.transaction(async (client) => {
       await this.assertPlayerExists(client, playerId);
       const existing = await this.findPendingIncomingFriendRelation(client, playerId, relationId);
@@ -464,6 +470,7 @@ export class SocialService {
   }
 
   async rejectFriendRequest(playerId: string, relationId: string): Promise<ClientSocialRelationMutationResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     const result = await this.prisma.transaction(async (client) => {
       const existing = await this.findPendingIncomingFriendRelation(client, playerId, relationId);
       const target = existing.targetPlayer;
@@ -521,6 +528,7 @@ export class SocialService {
   }
 
   async deleteFriend(playerId: string, targetPlayerId: string): Promise<ClientSocialRelationMutationResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     if (playerId === targetPlayerId) {
       throw this.invalidRequest('Cannot delete yourself from friend list.');
     }
@@ -560,6 +568,7 @@ export class SocialService {
   }
 
   async reviveField(playerId: string, request: ClientSocialReviveFieldRequest, options: { now?: Date } = {}): Promise<ClientSocialAssistResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     const result = await this.prisma.transaction(async (client) => {
       const now = options.now ?? new Date();
       const helper = await this.assertPlayerExists(client, playerId);
@@ -723,6 +732,7 @@ export class SocialService {
   }
 
   async harvestField(playerId: string, request: ClientSocialHarvestFieldRequest, options: { now?: Date } = {}): Promise<ClientSocialAssistResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     const result = await this.prisma.transaction(async (client) => {
       const now = options.now ?? new Date();
       const helper = await this.assertPlayerExists(client, playerId);
@@ -875,6 +885,7 @@ export class SocialService {
   }
 
   async createTeamChallenge(playerId: string, request: ClientTeamChallengeRequest): Promise<ClientTeamChallengeResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     const challenge = await this.prisma.transaction(async (client) => {
       await this.assertPlayerExists(client, playerId);
       await this.assertPlayerExists(client, request.allyPlayerId);
@@ -918,10 +929,12 @@ export class SocialService {
   }
 
   async acceptTeamChallenge(playerId: string, challengeId: string): Promise<ClientTeamChallengeResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.updateTeamChallengeStatus(playerId, challengeId, TeamChallengeStatus.ACCEPTED, 'Team challenge accepted.');
   }
 
   async rejectTeamChallenge(playerId: string, challengeId: string): Promise<ClientTeamChallengeResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.updateTeamChallengeStatus(playerId, challengeId, TeamChallengeStatus.REJECTED, 'Team challenge rejected.');
   }
 

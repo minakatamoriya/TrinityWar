@@ -2,6 +2,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   APP_NAME,
+  type ClientDevelopmentSeasonControlResponse,
+  type ClientSeasonStartupActionResponse,
   type ClientClaimSeasonSignInResponse,
   type ClientClaimStarterSeedResponse,
   type ClientClaimDailyTaskResponse,
@@ -13,6 +15,7 @@ import {
   type ClientFactionTaskSubmitResponse,
   type ClientFactionStipendReward,
   type ClientFactionDonateRequest,
+  type ClientChangeSeasonFactionRequest,
   type ClientResetDemoStateResponse,
   type ClientStateMutationResponse,
   type ClientUnlockPlantResponse,
@@ -33,6 +36,7 @@ import {
 import { buildFieldReadyAtUpdate, getCultivationSeconds } from '../lib/field-timing.js';
 import { getVaultCapacityGain } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SeasonGuardService } from '../season/season-guard.service.js';
 import { PlayerInitializationService } from '../seed/player-initialization.service.js';
 import { SeasonService } from '../season/season.service.js';
 import { TaskConfigService } from '../task-config/task-config.service.js';
@@ -150,11 +154,13 @@ export class ClientCommandService {
     @Inject(ClientReadService) private readonly clientReadService: ClientReadService,
     @Inject(DailyTaskLifecycleService) private readonly dailyTaskLifecycleService: DailyTaskLifecycleService,
     @Inject(PlayerInitializationService) private readonly playerInitializationService: PlayerInitializationService,
+    @Inject(SeasonGuardService) private readonly seasonGuardService: SeasonGuardService,
     @Inject(SeasonService) private readonly seasonService: SeasonService,
     @Inject(TaskConfigService) private readonly taskConfigService: TaskConfigService,
   ) {}
 
   async claimSeasonSignIn(input: { playerId: string }): Promise<ClientClaimSeasonSignInResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     return this.prisma.transaction<ClientClaimSeasonSignInResponse>(async (client) => {
       const result = await this.seasonService.claimSeasonSignIn(client, input.playerId);
 
@@ -167,12 +173,15 @@ export class ClientCommandService {
   }
 
   async refreshRaidTargets(input: { playerId: string }): Promise<ClientStateMutationResponse> {
-    return this.prisma.transaction<ClientStateMutationResponse>(async (client) => ({
-      app: APP_NAME,
-      summary: '目标列表已刷新。',
-      home: await this.clientReadService.getHomeSummary(input.playerId, client),
-      scenes: await this.clientReadService.refreshRaidTargetPool(input.playerId, client),
-    }));
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
+    return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
+      return {
+        app: APP_NAME,
+        summary: '目标列表已刷新。',
+        home: await this.clientReadService.getHomeSummary(input.playerId, client),
+        scenes: await this.clientReadService.refreshRaidTargetPool(input.playerId, client),
+      };
+    });
   }
 
   async claimPending(input: ClaimPendingCommandInput): Promise<ClientClaimPendingResponse> {
@@ -181,6 +190,7 @@ export class ClientCommandService {
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashClaimPendingRequest(input.request);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     return this.prisma.transaction<ClientClaimPendingResponse>(async (client) => {
       const idempotencyRecord = idempotencyKey
         ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
@@ -285,6 +295,7 @@ export class ClientCommandService {
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashClaimDailyTaskRequest(input.request);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     return this.prisma.transaction<ClientClaimDailyTaskResponse>(async (client) => {
       const idempotencyRecord = idempotencyKey
         ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
@@ -432,6 +443,7 @@ export class ClientCommandService {
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashClaimStarterSeedRequest(input.request);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     return this.prisma.transaction<ClientClaimStarterSeedResponse>(async (client) => {
       const now = new Date();
       const idempotencyRecord = idempotencyKey
@@ -591,6 +603,7 @@ export class ClientCommandService {
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashCollectFieldRequest(input.request);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     return this.prisma.transaction<ClientCollectFieldResponse>(async (client) => {
       const idempotencyRecord = idempotencyKey
         ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
@@ -776,6 +789,7 @@ export class ClientCommandService {
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
     const requestHash = hashStartCultivationRequest(input.request);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
       const idempotencyRecord = idempotencyKey
         ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
@@ -953,6 +967,7 @@ export class ClientCommandService {
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashRecruitArmyRequest(input.request);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
       const idempotencyRecord = idempotencyKey
         ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
@@ -1128,6 +1143,7 @@ export class ClientCommandService {
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashRequest(input.request);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
       const idempotencyRecord = idempotencyKey
         ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
@@ -1285,6 +1301,7 @@ export class ClientCommandService {
 
   async donateFaction(input: FactionDonateCommandInput): Promise<ClientStateMutationResponse> {
     validateFactionDonateRequest(input.request);
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     return this.prisma.transaction<ClientStateMutationResponse>(async (client) => {
       return {
         app: APP_NAME,
@@ -1301,6 +1318,7 @@ export class ClientCommandService {
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashFactionTaskSubmitRequest(input.request);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     return this.prisma.transaction<ClientFactionTaskSubmitResponse>(async (client) => {
       const idempotencyRecord = idempotencyKey
         ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
@@ -1337,6 +1355,7 @@ export class ClientCommandService {
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashClaimFactionStipendRequest(input.request);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     return this.prisma.transaction<ClientClaimFactionStipendResponse>(async (client) => {
       const idempotencyRecord = idempotencyKey
         ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
@@ -1619,6 +1638,7 @@ export class ClientCommandService {
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey ?? input.request.requestIdempotencyKey);
     const requestHash = hashUnlockPlantRequest(input.request);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
     return this.prisma.transaction<ClientUnlockPlantResponse>(async (client) => {
       const idempotencyRecord = idempotencyKey
         ? await this.prepareIdempotencyRecord(client, input.playerId, endpointKey, idempotencyKey, requestHash)
@@ -1784,6 +1804,266 @@ export class ClientCommandService {
         scenes: await this.clientReadService.getSceneContent(input.playerId, client),
       };
     });
+  }
+
+  async setDevelopmentSeasonNearRollover(input: { playerId: string }): Promise<ClientDevelopmentSeasonControlResponse> {
+    void input.playerId;
+    if (!['development', 'test'].includes(process.env.NODE_ENV ?? 'development')) {
+      throw new BusinessError({
+        code: ErrorCode.Forbidden,
+        message: 'Season timing debug controls are only available in development and test environments.',
+        statusCode: 403,
+      });
+    }
+
+    const [latestSeasonRecord, currentSeason] = await Promise.all([
+      this.prisma.db.gameSeason.aggregate({
+        _max: { seasonNumber: true },
+      }),
+      Promise.resolve(this.seasonService.getCurrentSeason()),
+    ]);
+    const activeSeasonNumber = Math.max(
+      latestSeasonRecord._max.seasonNumber ?? 0,
+      currentSeason.seasonNumber,
+    );
+    const season = this.seasonService.setDevelopmentSeasonNearRollover(new Date(), undefined, activeSeasonNumber);
+    return {
+      app: APP_NAME,
+      summary: '已将当前赛季设置为 60 秒后结束。请保持在线验证自动跨赛季流程。',
+      serverTime: new Date().toISOString(),
+      season: this.seasonService.toClientSeasonStatus({ season }),
+      overrideActive: this.seasonService.isDevelopmentSeasonOverrideActive(),
+    };
+  }
+
+  async resetDevelopmentSeasonTiming(input: { playerId: string }): Promise<ClientDevelopmentSeasonControlResponse> {
+    void input.playerId;
+    if (!['development', 'test'].includes(process.env.NODE_ENV ?? 'development')) {
+      throw new BusinessError({
+        code: ErrorCode.Forbidden,
+        message: 'Season timing debug controls are only available in development and test environments.',
+        statusCode: 403,
+      });
+    }
+
+    const season = this.seasonService.clearDevelopmentSeasonOverride();
+    return {
+      app: APP_NAME,
+      summary: '已恢复正常赛季时间。',
+      serverTime: new Date().toISOString(),
+      season: this.seasonService.toClientSeasonStatus({ season }),
+      overrideActive: this.seasonService.isDevelopmentSeasonOverrideActive(),
+    };
+  }
+
+  async confirmSeasonStartupIntro(input: { playerId: string }): Promise<ClientSeasonStartupActionResponse> {
+    return this.prisma.transaction(async (client) => {
+      const result = await this.seasonService.ensurePlayerSeasonWithTransition(client, input.playerId);
+      const startup = result.startup;
+
+      if (startup.introConfirmed && startup.currentStep !== 'season-intro') {
+        return this.buildSeasonStartupActionResponse({
+          season: result.season,
+          startup,
+          summary: startup.completed ? '新赛季启动流程已完成。' : '已进入下一步。',
+        });
+      }
+
+      const introConfirmedSeasonNumber = result.season.seasonNumber;
+      const shouldCompleteStartup = startup.factionChoiceStatus !== 'available';
+      const updatedState = await client.playerSeasonState.update({
+        where: { playerId: input.playerId },
+        data: {
+          startupIntroConfirmedSeasonNumber: introConfirmedSeasonNumber,
+          startupCompletedSeasonNumber: shouldCompleteStartup ? introConfirmedSeasonNumber : undefined,
+        },
+        select: {
+          startupCompletedSeasonNumber: true,
+          startupIntroConfirmedSeasonNumber: true,
+          factionChoiceRequiredSeasonNumber: true,
+          factionChoiceUsedSeasonNumber: true,
+          factionChoiceUsedAt: true,
+        },
+      });
+      const nextStartup = this.seasonService.buildSeasonStartupState({
+        season: result.season,
+        state: updatedState,
+      });
+
+      return this.buildSeasonStartupActionResponse({
+        season: result.season,
+        startup: nextStartup,
+        summary: shouldCompleteStartup ? '新赛季说明已确认。' : '新赛季说明已确认，请完成阵营确认。',
+      });
+    });
+  }
+
+  async confirmSeasonFaction(input: { playerId: string }): Promise<ClientSeasonStartupActionResponse> {
+    return this.prisma.transaction(async (client) => {
+      const result = await this.seasonService.ensurePlayerSeasonWithTransition(client, input.playerId);
+      if (result.startup.factionChoiceStatus !== 'available') {
+        throw new BusinessError({
+          code: ErrorCode.Conflict,
+          message: '当前赛季无需确认阵营，或阵营确认窗口已关闭。',
+          statusCode: 409,
+        });
+      }
+      if (!result.startup.introConfirmed) {
+        throw new BusinessError({
+          code: ErrorCode.Conflict,
+          message: '请先确认新赛季说明。',
+          statusCode: 409,
+        });
+      }
+
+      const seasonNumber = result.season.seasonNumber;
+      const updatedState = await client.playerSeasonState.update({
+        where: { playerId: input.playerId },
+        data: {
+          startupIntroConfirmedSeasonNumber: seasonNumber,
+          startupCompletedSeasonNumber: seasonNumber,
+          factionChoiceUsedSeasonNumber: seasonNumber,
+          factionChoiceUsedAt: new Date(),
+        },
+        select: {
+          startupCompletedSeasonNumber: true,
+          startupIntroConfirmedSeasonNumber: true,
+          factionChoiceRequiredSeasonNumber: true,
+          factionChoiceUsedSeasonNumber: true,
+          factionChoiceUsedAt: true,
+        },
+      });
+      const nextStartup = this.seasonService.buildSeasonStartupState({
+        season: result.season,
+        state: updatedState,
+      });
+
+      return this.buildSeasonStartupActionResponse({
+        season: result.season,
+        startup: nextStartup,
+        summary: '已确认保持当前阵营，本赛季启动流程完成。',
+      });
+    });
+  }
+
+  async changeSeasonFaction(input: {
+    playerId: string;
+    request: ClientChangeSeasonFactionRequest;
+  }): Promise<ClientSeasonStartupActionResponse> {
+    return this.prisma.transaction(async (client) => {
+      const result = await this.seasonService.ensurePlayerSeasonWithTransition(client, input.playerId);
+      if (result.startup.factionChoiceStatus !== 'available') {
+        throw new BusinessError({
+          code: ErrorCode.Conflict,
+          message: '当前赛季阵营调整不可用。',
+          statusCode: 409,
+        });
+      }
+      if (!result.startup.introConfirmed) {
+        throw new BusinessError({
+          code: ErrorCode.Conflict,
+          message: '请先确认新赛季说明。',
+          statusCode: 409,
+        });
+      }
+
+      const targetCode = input.request.factionCode?.trim();
+      if (targetCode !== 'human' && targetCode !== 'immortal' && targetCode !== 'demon') {
+        throw new BusinessError({
+          code: ErrorCode.BadRequest,
+          message: 'factionCode is invalid.',
+          statusCode: 400,
+        });
+      }
+
+      const [player, targetFaction] = await Promise.all([
+        client.player.findUnique({
+          where: { id: input.playerId },
+          select: {
+            factionId: true,
+          },
+        }),
+        client.faction.findUnique({
+          where: { code: targetCode },
+          select: { id: true, name: true },
+        }),
+      ]);
+
+      if (!player || !targetFaction) {
+        throw new BusinessError({
+          code: ErrorCode.NotFound,
+          message: 'Target faction or player not found.',
+          statusCode: 404,
+        });
+      }
+
+      const seasonNumber = result.season.seasonNumber;
+      let summary = '已确认当前阵营。';
+
+      if (player.factionId !== targetFaction.id) {
+        await client.player.update({
+          where: { id: input.playerId },
+          data: {
+            factionId: targetFaction.id,
+            stateVersion: { increment: 1 },
+          },
+        });
+        await client.factionMember.deleteMany({
+          where: { playerId: input.playerId },
+        });
+        await client.factionMember.create({
+          data: {
+            factionId: targetFaction.id,
+            playerId: input.playerId,
+            contributionScore: 0,
+          },
+        });
+        summary = `本赛季已调整为${targetFaction.name}。`;
+      }
+
+      const updatedState = await client.playerSeasonState.update({
+        where: { playerId: input.playerId },
+        data: {
+          startupIntroConfirmedSeasonNumber: seasonNumber,
+          startupCompletedSeasonNumber: seasonNumber,
+          factionChoiceUsedSeasonNumber: seasonNumber,
+          factionChoiceUsedAt: new Date(),
+        },
+        select: {
+          startupCompletedSeasonNumber: true,
+          startupIntroConfirmedSeasonNumber: true,
+          factionChoiceRequiredSeasonNumber: true,
+          factionChoiceUsedSeasonNumber: true,
+          factionChoiceUsedAt: true,
+        },
+      });
+      const nextStartup = this.seasonService.buildSeasonStartupState({
+        season: result.season,
+        state: updatedState,
+      });
+
+      return this.buildSeasonStartupActionResponse({
+        season: result.season,
+        startup: nextStartup,
+        summary,
+      });
+    });
+  }
+
+  private buildSeasonStartupActionResponse(input: {
+    season: Awaited<ReturnType<SeasonService['ensurePlayerSeasonWithTransition']>>['season'];
+    startup: Awaited<ReturnType<SeasonService['ensurePlayerSeasonWithTransition']>>['startup'];
+    summary: string;
+  }): ClientSeasonStartupActionResponse {
+    return {
+      app: APP_NAME,
+      summary: input.summary,
+      season: this.seasonService.toClientSeasonStatus({
+        season: input.season,
+        startup: input.startup,
+      }),
+      startup: input.startup,
+    };
   }
 
   private async prepareIdempotencyRecord(

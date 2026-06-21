@@ -1,4 +1,4 @@
-import type { ClientNotificationItem, ClientNotificationListResponse } from '@trinitywar/shared';
+import type { ClientNotificationItem, ClientNotificationListResponse, NotificationAttachment } from '@trinitywar/shared';
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -40,6 +40,7 @@ export function NotificationCenter(props: {
   onDelete: (notificationId: string) => void;
   onMarkRead: (notificationId: string) => void;
   onPageChange: (page: number) => void;
+  resolveAttachmentLabel?: (attachment: NotificationAttachment) => string | null;
 }): JSX.Element | null {
   if (!props.open) {
     return null;
@@ -82,7 +83,7 @@ export function NotificationCenter(props: {
                   <div className="notification-attachment-list">
                     {item.attachments.map((attachment, index) => (
                       <span className="notification-attachment-pill" key={`${item.id}:${attachment.kind}:${index}`}>
-                        {attachment.name ?? attachment.label} x{attachment.quantity}
+                        {props.resolveAttachmentLabel?.(attachment) ?? attachment.name ?? attachment.label} x{attachment.quantity}
                       </span>
                     ))}
                   </div>

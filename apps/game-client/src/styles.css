@@ -814,6 +814,35 @@ button {
   text-overflow: ellipsis;
 }
 
+.season-countdown-banner {
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 12px 8px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 192, 95, 0.34);
+  background:
+    linear-gradient(90deg, rgba(124, 49, 35, 0.88), rgba(54, 43, 34, 0.88)),
+    repeating-linear-gradient(135deg, rgba(255, 225, 166, 0.12) 0 1px, transparent 1px 8px);
+  color: #fff3d7;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+}
+
+.season-countdown-banner span {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.season-countdown-banner strong {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: #ffd36b;
+}
+
 .resource-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -7440,7 +7469,7 @@ button.spirit-element-chip {
 }
 
 .settings-panel .centered-modal-actions {
-  justify-content: flex-end;
+  justify-content: stretch;
 }
 
 .settings-row {
@@ -7454,10 +7483,218 @@ button.spirit-element-chip {
   border: 1px solid rgba(243, 181, 111, 0.12);
 }
 
-.settings-actions {
-  display: flex;
-  justify-content: flex-end;
+.settings-row span {
+  color: rgba(255, 233, 204, 0.72);
+  flex: 0 0 88px;
+}
+
+.settings-row strong {
+  min-width: 0;
+  flex: 1 1 auto;
+  text-align: right;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.settings-action-stack {
+  width: 100%;
+  display: grid;
   gap: 10px;
+}
+
+.settings-action-stack .secondary-button,
+.settings-action-stack .ghost-button {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.season-startup-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  background:
+    radial-gradient(circle at 50% 12%, rgba(255, 207, 126, 0.22), transparent 34%),
+    linear-gradient(180deg, rgba(22, 13, 9, 0.94) 0%, rgba(12, 12, 10, 0.98) 100%),
+    url('/assets/backgrounds/zhenying.png') center center / cover no-repeat;
+  color: var(--text-primary);
+}
+
+.season-startup-layout {
+  width: min(980px, 100%);
+  height: min(840px, 100%);
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 18px;
+}
+
+.season-startup-hero {
+  display: grid;
+  gap: 8px;
+  max-width: 680px;
+  padding-top: clamp(10px, 5dvh, 48px);
+}
+
+.season-startup-hero h2 {
+  margin: 0;
+  color: #fff3d2;
+  font-size: clamp(30px, 7vw, 62px);
+  line-height: 1.05;
+  text-shadow: 0 8px 32px rgba(0, 0, 0, 0.44);
+}
+
+.season-startup-hero p:not(.eyebrow) {
+  margin: 0;
+  max-width: 54ch;
+  color: #eadbc6;
+  font-size: clamp(14px, 2.4vw, 18px);
+  line-height: 1.65;
+}
+
+.season-startup-main {
+  min-height: 0;
+  display: grid;
+  align-content: center;
+  gap: 14px;
+}
+
+.season-startup-main-scroll {
+  align-content: start;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.season-startup-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.season-startup-summary-item,
+.season-startup-current-panel,
+.season-startup-note {
+  border: 1px solid rgba(255, 232, 184, 0.18);
+  background: rgba(26, 21, 18, 0.72);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.26);
+}
+
+.season-startup-summary-item {
+  min-height: 138px;
+  display: grid;
+  align-content: space-between;
+  gap: 18px;
+  padding: 18px;
+  border-radius: 18px;
+}
+
+.season-startup-summary-item span,
+.season-startup-current-panel span {
+  color: #ffd89a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.season-startup-summary-item strong {
+  color: #fff2d8;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.season-startup-current-panel {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 10px;
+  padding: 22px;
+  border-radius: 18px;
+}
+
+.season-startup-current-panel strong {
+  color: #fff2d8;
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.season-startup-note {
+  width: min(520px, 100%);
+  padding: 14px 16px;
+  border-radius: 14px;
+  color: #e9d8bd;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.season-startup-footer {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 10px;
+  padding-bottom: clamp(4px, 3dvh, 28px);
+}
+
+.season-startup-footer .secondary-button,
+.season-startup-footer .ghost-button {
+  width: 100%;
+  min-height: 50px;
+  min-width: 0;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.season-startup-action-stack {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+}
+
+.season-startup-action-stack .secondary-button,
+.season-startup-action-stack .ghost-button {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.season-startup-copy-list,
+.season-startup-faction-grid {
+  margin-top: 8px;
+}
+
+.season-startup-faction-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 780px) {
+  .season-startup-screen {
+    place-items: stretch;
+  }
+
+  .season-startup-layout {
+    height: 100%;
+  }
+
+  .season-startup-summary-grid,
+  .season-startup-faction-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .season-startup-main {
+    align-content: start;
+    overflow-y: auto;
+  }
+
+  .season-startup-summary-item {
+    min-height: 104px;
+  }
 }
 
 .social-scene {

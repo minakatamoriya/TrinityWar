@@ -59,7 +59,8 @@ export class ClientReadService {
       });
     }
 
-    const season = await this.seasonService.ensurePlayerSeason(db, playerId);
+    const seasonResult = await this.seasonService.ensurePlayerSeasonWithTransition(db, playerId);
+    const season = seasonResult.season;
     await this.seasonService.recordPlayerActivity(db, playerId, season);
 
     const seedDefinitions = await db.seedDefinition.findMany({
@@ -157,11 +158,11 @@ export class ClientReadService {
       env: 'local',
       version: '0.1.0',
       serverTime: new Date().toISOString(),
-      season: {
-        seasonNumber: season.seasonNumber,
-        currentWeek: season.currentWeek,
-        totalWeeks: season.totalWeeks,
-      },
+      season: this.seasonService.toClientSeasonStatus({
+        season,
+        transition: seasonResult.transition,
+        startup: seasonResult.startup,
+      }),
       backpack: {
         seedInventory,
         essenceInventory: seedInventory,
@@ -189,6 +190,8 @@ export class ClientReadService {
       return this.prisma.transaction(async (transactionClient) => this.getHomeSummary(playerId, transactionClient, now));
     }
 
+    const season = await this.seasonService.ensurePlayerSeason(client, playerId, now);
+    await this.seasonService.recordPlayerActivity(client, playerId, season, now);
     await this.armyTrainingLifecycleService.settlePlayerTrainingQueues(client, playerId, now);
     await this.passiveIncomeLifecycleService.settlePlayerPassiveIncome(client, playerId, now);
     await this.fieldLifecycleService.settlePlayerFields(client, playerId, now);
@@ -234,6 +237,8 @@ export class ClientReadService {
       return this.prisma.transaction(async (transactionClient) => this.getSceneContent(playerId, transactionClient, now));
     }
 
+    const season = await this.seasonService.ensurePlayerSeason(client, playerId, now);
+    await this.seasonService.recordPlayerActivity(client, playerId, season, now);
     await this.armyTrainingLifecycleService.settlePlayerTrainingQueues(client, playerId, now);
     await this.passiveIncomeLifecycleService.settlePlayerPassiveIncome(client, playerId, now);
     await this.fieldLifecycleService.settlePlayerFields(client, playerId, now);

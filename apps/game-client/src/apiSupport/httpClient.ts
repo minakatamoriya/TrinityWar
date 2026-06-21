@@ -1,3 +1,4 @@
+import type { ClientSeasonTransition } from '@trinitywar/shared';
 import { getDevLoginAccessToken } from './devAuthSession';
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
@@ -14,13 +15,15 @@ export class ApiError extends Error {
   readonly status: number;
   readonly code?: string;
   readonly details?: unknown;
+  readonly seasonTransition?: ClientSeasonTransition;
 
-  constructor(message: string, status: number, code?: string, details?: unknown) {
+  constructor(message: string, status: number, code?: string, details?: unknown, seasonTransition?: ClientSeasonTransition) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.details = details;
+    this.seasonTransition = seasonTransition;
   }
 }
 
@@ -59,14 +62,33 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
         code?: string;
         message?: string;
         details?: unknown;
+        seasonTransition?: ClientSeasonTransition;
       };
     } | null;
     const code = payload?.error?.code;
     const message = payload?.error?.message?.trim() || payload?.message?.trim() || `HTTP ${response.status}`;
-    throw new ApiError(toUserFacingApiMessage(message, code), response.status, code, payload?.error?.details);
+    const details = payload?.error?.details;
+    const seasonTransition = extractSeasonTransition(payload?.error?.seasonTransition, details);
+    throw new ApiError(toUserFacingApiMessage(message, code), response.status, code, details, seasonTransition);
   }
 
   return (await response.json()) as T;
+}
+
+function extractSeasonTransition(
+  directSeasonTransition: ClientSeasonTransition | undefined,
+  details: unknown,
+): ClientSeasonTransition | undefined {
+  if (directSeasonTransition) {
+    return directSeasonTransition;
+  }
+
+  if (!details || typeof details !== 'object' || Array.isArray(details)) {
+    return undefined;
+  }
+
+  const seasonTransition = (details as { seasonTransition?: ClientSeasonTransition }).seasonTransition;
+  return seasonTransition;
 }
 
 export function getFallbackReason(error: unknown): string {

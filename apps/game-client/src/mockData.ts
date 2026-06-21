@@ -66,6 +66,28 @@ export const mockBootstrap: ClientBootstrapResponse = {
     seasonNumber: 3,
     currentWeek: 1,
     totalWeeks: 4,
+    startsAt: new Date('2026-06-01T16:00:00.000Z').toISOString(),
+    endsAt: new Date('2026-06-29T16:00:00.000Z').toISOString(),
+    transition: {
+      currentSeasonNumber: 3,
+      previousSeasonNumber: null,
+      resetApplied: false,
+      refreshRequired: false,
+      seasonStartsAt: new Date('2026-06-01T16:00:00.000Z').toISOString(),
+      seasonEndsAt: new Date('2026-06-29T16:00:00.000Z').toISOString(),
+      factionChoiceStatus: 'not_needed',
+      factionChoiceDeadlineAt: null,
+    },
+    startup: {
+      seasonNumber: 3,
+      blocking: false,
+      completed: true,
+      currentStep: null,
+      availableSteps: ['season-intro'],
+      introConfirmed: true,
+      factionChoiceStatus: 'not_needed',
+      factionChoiceDeadlineAt: null,
+    },
   },
   backpack: {
     seedInventory: {

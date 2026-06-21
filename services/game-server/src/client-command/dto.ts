@@ -3,6 +3,8 @@ import type {
   ClientClaimDailyTaskRequest,
   ClientClaimPendingRequest,
   ClientClaimFactionStipendRequest,
+  ClientChangeSeasonFactionRequest,
+  ClientConfirmSeasonFactionRequest,
   ClientCollectFieldRequest,
   ClientFactionDonateRequest,
   ClientFactionTaskSubmitRequest,
@@ -53,6 +55,14 @@ export class ClaimDailyTaskRequestDto implements ClientClaimDailyTaskRequest {
 
 export class ClaimStarterSeedRequestDto implements ClientClaimStarterSeedRequest {
   requestIdempotencyKey?: string;
+}
+
+export class ConfirmSeasonFactionRequestDto implements ClientConfirmSeasonFactionRequest {
+  mode!: 'keep-current';
+}
+
+export class ChangeSeasonFactionRequestDto implements ClientChangeSeasonFactionRequest {
+  factionCode!: 'human' | 'immortal' | 'demon';
 }
 
 export class CollectFieldRequestDto implements ClientCollectFieldRequest {

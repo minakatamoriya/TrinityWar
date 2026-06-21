@@ -2,9 +2,12 @@
   API_PREFIX,
   CLIENT_API_PREFIX,
   formatSeasonLabel,
+  type ClientChangeSeasonFactionRequest,
   type ClientClaimNotificationResponse,
   type ClientClaimStarterSeedRequest,
   type ClientClaimStarterSeedResponse,
+  type ClientConfirmSeasonFactionRequest,
+  type ClientDevelopmentSeasonControlResponse,
   type ClientCompleteShareInviteTutorialRequest,
   type ClientCompleteShareInviteTutorialResponse,
   type ClientDeleteNotificationResponse,
@@ -30,6 +33,7 @@
   type ClientClaimPendingRequest,
   type ClientClaimPendingResponse,
   type ClientClaimSeasonSignInResponse,
+  type ClientSeasonStartupActionResponse,
   type ClientCollectFieldRequest,
   type ClientCollectFieldResponse,
   type ClientDailyTaskSummary,
@@ -258,13 +262,13 @@ export async function loadClientViewModel(): Promise<ClientViewModel> {
     syncMockFieldLifecycle();
   }
 
-  const [bootstrap, home, scenes] = await Promise.all([
-    fetchReadEndpoint<ClientBootstrapResponse>({
-      endpoint: 'bootstrap',
-      path: `${CLIENT_API_PREFIX}/bootstrap`,
-      fallback: mockBootstrapSnapshot,
-      allowFallback: allowMockReadFallback,
-    }),
+  const bootstrap = await fetchReadEndpoint<ClientBootstrapResponse>({
+    endpoint: 'bootstrap',
+    path: `${CLIENT_API_PREFIX}/bootstrap`,
+    fallback: mockBootstrapSnapshot,
+    allowFallback: allowMockReadFallback,
+  });
+  const [home, scenes] = await Promise.all([
     fetchReadEndpoint<HomeSummaryResponse>({
       endpoint: 'home',
       path: `${CLIENT_API_PREFIX}/home-summary`,
@@ -360,6 +364,32 @@ export async function claimSeasonSignIn(): Promise<ClientClaimSeasonSignInRespon
 
   return fetchJson<ClientClaimSeasonSignInResponse>(`${CLIENT_API_PREFIX}/actions/claim-season-sign-in`, {
     method: 'POST',
+  });
+}
+
+export async function confirmSeasonStartupIntro(): Promise<ClientSeasonStartupActionResponse> {
+  return fetchJson<ClientSeasonStartupActionResponse>(`${CLIENT_API_PREFIX}/actions/confirm-season-startup-intro`, {
+    method: 'POST',
+  });
+}
+
+export async function confirmSeasonFaction(input: ClientConfirmSeasonFactionRequest = { mode: 'keep-current' }): Promise<ClientSeasonStartupActionResponse> {
+  return fetchJson<ClientSeasonStartupActionResponse>(`${CLIENT_API_PREFIX}/actions/confirm-season-faction`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function changeSeasonFaction(input: ClientChangeSeasonFactionRequest): Promise<ClientSeasonStartupActionResponse> {
+  return fetchJson<ClientSeasonStartupActionResponse>(`${CLIENT_API_PREFIX}/actions/change-season-faction`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
   });
 }
 
@@ -1255,6 +1285,62 @@ export async function resetDemoExperimentState(): Promise<ClientResetDemoStateRe
   mockSceneSnapshot = cloneSceneContent(response.scenes);
   mockFieldTimingState = buildInitialMockFieldTimingStates();
   return response;
+}
+
+export async function setDevelopmentSeasonNearRollover(): Promise<ClientDevelopmentSeasonControlResponse> {
+  if (forceMockCommands) {
+    const now = Date.now();
+    const endsAt = new Date(now + 60 * 1000).toISOString();
+    const startsAt = new Date(now + 60 * 1000 - 28 * 24 * 60 * 60 * 1000).toISOString();
+    mockBootstrapSnapshot = cloneBootstrap({
+      ...mockBootstrapSnapshot,
+      serverTime: new Date(now).toISOString(),
+      season: {
+        ...mockBootstrapSnapshot.season,
+        startsAt,
+        endsAt,
+        transition: {
+          currentSeasonNumber: mockBootstrapSnapshot.season.seasonNumber,
+          previousSeasonNumber: null,
+          resetApplied: false,
+          refreshRequired: false,
+          seasonStartsAt: startsAt,
+          seasonEndsAt: endsAt,
+          factionChoiceStatus: 'not_needed',
+          factionChoiceDeadlineAt: null,
+        },
+      },
+    });
+
+    return {
+      app: mockBootstrapSnapshot.app,
+      summary: '已将当前赛季设置为 60 秒后结束。请保持在线验证自动跨赛季流程。',
+      serverTime: mockBootstrapSnapshot.serverTime,
+      season: cloneBootstrap(mockBootstrapSnapshot).season,
+      overrideActive: true,
+    };
+  }
+
+  return fetchJson<ClientDevelopmentSeasonControlResponse>(`${CLIENT_API_PREFIX}/actions/dev-season-near-rollover`, {
+    method: 'POST',
+  });
+}
+
+export async function resetDevelopmentSeasonTiming(): Promise<ClientDevelopmentSeasonControlResponse> {
+  if (forceMockCommands) {
+    mockBootstrapSnapshot = cloneBootstrap(mockBootstrap);
+    return {
+      app: mockBootstrapSnapshot.app,
+      summary: '已恢复正常赛季时间。',
+      serverTime: mockBootstrapSnapshot.serverTime,
+      season: cloneBootstrap(mockBootstrapSnapshot).season,
+      overrideActive: false,
+    };
+  }
+
+  return fetchJson<ClientDevelopmentSeasonControlResponse>(`${CLIENT_API_PREFIX}/actions/dev-season-reset-timing`, {
+    method: 'POST',
+  });
 }
 
 export async function loadRaidTargetDetail(targetId: string): Promise<ClientRaidTargetDetailResponse> {

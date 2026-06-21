@@ -4,6 +4,8 @@ import type {
   ClientClaimSeasonSignInResponse,
   ClientClaimStarterSeedRequest,
   ClientClaimStarterSeedResponse,
+  ClientChangeSeasonFactionRequest,
+  ClientDevelopmentSeasonControlResponse,
   ClientClaimDailyTaskRequest,
   ClientClaimDailyTaskResponse,
   ClientClaimPendingRequest,
@@ -14,6 +16,8 @@ import type {
   ClientFactionDonateRequest,
   ClientFactionTaskSubmitRequest,
   ClientFactionTaskSubmitResponse,
+  ClientSeasonStartupActionResponse,
+  ClientConfirmSeasonFactionRequest,
   ClientUnlockPlantRequest,
   ClientUnlockPlantResponse,
   ClientCollectFieldResponse,
@@ -28,7 +32,7 @@ import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
 import { createUnauthorizedError } from '../common/errors/index.js';
 import { ClientCommandService } from './client-command.service.js';
-import { ClaimDailyTaskRequestDto, ClaimPendingRequestDto, ClaimStarterSeedRequestDto, CollectFieldRequestDto, FactionDonateRequestDto, FactionTaskSubmitRequestDto, ClaimFactionStipendRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UnlockPlantRequestDto, UpgradeBuildingRequestDto } from './dto.js';
+import { ChangeSeasonFactionRequestDto, ClaimDailyTaskRequestDto, ClaimPendingRequestDto, ClaimStarterSeedRequestDto, CollectFieldRequestDto, ConfirmSeasonFactionRequestDto, FactionDonateRequestDto, FactionTaskSubmitRequestDto, ClaimFactionStipendRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UnlockPlantRequestDto, UpgradeBuildingRequestDto } from './dto.js';
 
 @ApiTags('client')
 @Controller('client/actions')
@@ -311,6 +315,91 @@ export class ClientCommandController {
       playerId: currentPlayer.playerId,
     });
   }
+
+  @Post('dev-season-near-rollover')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Set current season to end in 60 seconds for development verification.' })
+  async setDevelopmentSeasonNearRollover(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+  ): Promise<ClientDevelopmentSeasonControlResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.setDevelopmentSeasonNearRollover({
+      playerId: currentPlayer.playerId,
+    });
+  }
+
+  @Post('dev-season-reset-timing')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Restore normal season timing after development verification.' })
+  async resetDevelopmentSeasonTiming(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+  ): Promise<ClientDevelopmentSeasonControlResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.resetDevelopmentSeasonTiming({
+      playerId: currentPlayer.playerId,
+    });
+  }
+
+  @Post('confirm-season-startup-intro')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Confirm season startup intro step.' })
+  async confirmSeasonStartupIntro(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+  ): Promise<ClientSeasonStartupActionResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.confirmSeasonStartupIntro({
+      playerId: currentPlayer.playerId,
+    });
+  }
+
+  @Post('confirm-season-faction')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: ConfirmSeasonFactionRequestDto })
+  @ApiOkResponse({ description: 'Confirm keeping current faction for the current season startup.' })
+  async confirmSeasonFaction(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() _body: ClientConfirmSeasonFactionRequest,
+  ): Promise<ClientSeasonStartupActionResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.confirmSeasonFaction({
+      playerId: currentPlayer.playerId,
+    });
+  }
+
+  @Post('change-season-faction')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: ChangeSeasonFactionRequestDto })
+  @ApiOkResponse({ description: 'Change faction during the current season startup flow.' })
+  async changeSeasonFaction(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: ClientChangeSeasonFactionRequest,
+  ): Promise<ClientSeasonStartupActionResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.changeSeasonFaction({
+      playerId: currentPlayer.playerId,
+      request: body,
+    });
+  }
 }
 
 defineRouteParamTypes(ClientCommandController.prototype, 'claimPending', [Object, Object, Object]);
@@ -327,6 +416,11 @@ defineRouteParamTypes(ClientCommandController.prototype, 'submitFactionTask', [O
 defineRouteParamTypes(ClientCommandController.prototype, 'unlockPlant', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimFactionStipend', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'resetDemoState', [Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'setDevelopmentSeasonNearRollover', [Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'resetDevelopmentSeasonTiming', [Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'confirmSeasonStartupIntro', [Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'confirmSeasonFaction', [Object, Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'changeSeasonFaction', [Object, Object]);
 
 function defineRouteParamTypes(target: object, methodName: string, paramTypes: unknown[]): void {
   const defineMetadata = Reflect.defineMetadata as

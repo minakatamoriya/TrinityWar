@@ -7,6 +7,7 @@ import {
 } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SeasonGuardService } from '../season/season-guard.service.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
 
 export interface CurrentPlayerResponse {
@@ -33,7 +34,10 @@ export interface CurrentPlayerResponse {
 
 @Injectable()
 export class PlayerService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(SeasonGuardService) private readonly seasonGuardService: SeasonGuardService,
+  ) {}
 
   async getCurrentPlayer(context: CurrentPlayerContext): Promise<CurrentPlayerResponse> {
     const player = await this.prisma.db.player.findUniqueOrThrow({
@@ -87,6 +91,7 @@ export class PlayerService {
     playerId: string,
     request: ClientFarmBoardUpdateRequest,
   ): Promise<ClientFarmBoardUpdateResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     const message = normalizeFarmBoardMessage(request.message);
 
     const board = await this.prisma.transaction(async (client) => {

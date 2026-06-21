@@ -101,6 +101,7 @@ export interface GlobalFeatureModalState {
   title: string;
   eyebrow?: string;
   description?: string;
+  returnHomeOnClose?: boolean;
   contributionTiers?: FactionContributionTier[];
   seasonResetRules?: boolean;
   tianjiShop?: boolean;

@@ -512,6 +512,51 @@ export interface ClientSeasonStatus {
   seasonNumber: number;
   currentWeek: number;
   totalWeeks: number;
+  startsAt: string;
+  endsAt: string;
+  transition?: ClientSeasonTransition;
+  startup?: ClientSeasonStartupState;
+}
+
+export type ClientFactionChoiceStatus = 'not_needed' | 'available' | 'used' | 'expired';
+
+export interface ClientSeasonTransition {
+  currentSeasonNumber: number;
+  previousSeasonNumber: number | null;
+  resetApplied: boolean;
+  refreshRequired: boolean;
+  seasonStartsAt: string;
+  seasonEndsAt: string;
+  factionChoiceStatus: ClientFactionChoiceStatus;
+  factionChoiceDeadlineAt: string | null;
+}
+
+export type ClientSeasonStartupStepType = 'season-intro' | 'faction-confirm';
+
+export interface ClientSeasonStartupState {
+  seasonNumber: number;
+  blocking: boolean;
+  completed: boolean;
+  currentStep: ClientSeasonStartupStepType | null;
+  availableSteps: ClientSeasonStartupStepType[];
+  introConfirmed: boolean;
+  factionChoiceStatus: ClientFactionChoiceStatus;
+  factionChoiceDeadlineAt: string | null;
+}
+
+export interface ClientSeasonStartupActionResponse {
+  app: string;
+  summary: string;
+  season: ClientSeasonStatus;
+  startup: ClientSeasonStartupState;
+}
+
+export interface ClientConfirmSeasonFactionRequest {
+  mode: 'keep-current';
+}
+
+export interface ClientChangeSeasonFactionRequest {
+  factionCode: 'human' | 'immortal' | 'demon';
 }
 
 export interface ClientSeasonSignInDay {
@@ -1427,6 +1472,14 @@ export interface ClientResetDemoStateResponse {
   summary: string;
   home: HomeSummaryResponse;
   scenes: ClientSceneContentResponse;
+}
+
+export interface ClientDevelopmentSeasonControlResponse {
+  app: string;
+  summary: string;
+  serverTime: string;
+  season: ClientSeasonStatus;
+  overrideActive: boolean;
 }
 
 export type ClientSceneKey = 'home' | 'building' | 'farm' | 'raid' | 'report' | 'faction' | 'social';

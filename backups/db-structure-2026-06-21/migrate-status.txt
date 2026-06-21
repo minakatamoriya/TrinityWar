@@ -1,0 +1,20 @@
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "trinitywar", schema "public" at "localhost:5432"
+
+69 migrations found in prisma/migrations
+Your local migration history and the migrations table from your database are different:
+
+The last common migration is: 066_social_friend_deleted_feed
+
+The migrations have not yet been applied:
+067_social_followed_feed
+068_season_startup_flow
+
+The migrations from the database are not found locally in prisma/migrations:
+057_repair_robot_sim_required_indexes
+058_repair_robot_sim_one_to_one_indexes
+059_repair_faction_stipend_indexes
+060_repair_season_activity_indexes
+
+ExitCode: 1

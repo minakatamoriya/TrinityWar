@@ -4,12 +4,20 @@ import type {
   ClientMarkNotificationReadResponse,
   ClientNotificationItem,
   ClientNotificationListResponse,
+  NotificationAttachment,
 } from '@trinitywar/shared';
 import type { SeedRewardModalState } from '../../shell/appStateTypes';
 import type { SeedRewardModalItem } from '../../ui/common/SeedRewardModal';
 
-export function mapNotificationAttachmentToRewardItem(attachment: ClientNotificationItem['attachments'][number]): SeedRewardModalItem {
-  const label = attachment.name ?? attachment.label;
+interface NotificationRewardModalOptions {
+  resolveAttachmentLabel?: (attachment: NotificationAttachment) => string | null;
+}
+
+export function mapNotificationAttachmentToRewardItem(
+  attachment: ClientNotificationItem['attachments'][number],
+  options: NotificationRewardModalOptions = {},
+): SeedRewardModalItem {
+  const label = options.resolveAttachmentLabel?.(attachment) ?? attachment.name ?? attachment.label;
   return {
     itemId: attachment.kind,
     label,
@@ -17,13 +25,16 @@ export function mapNotificationAttachmentToRewardItem(attachment: ClientNotifica
   };
 }
 
-export function buildNotificationClaimRewardModal(notification: ClientNotificationItem): SeedRewardModalState {
+export function buildNotificationClaimRewardModal(
+  notification: ClientNotificationItem,
+  options: NotificationRewardModalOptions = {},
+): SeedRewardModalState {
   return {
     title: notification.title || '领取附件',
     summary: '确认后将以下附件收入背包。',
     confirmAction: 'claim-notification',
     notificationId: notification.id,
-    items: notification.attachments.map(mapNotificationAttachmentToRewardItem),
+    items: notification.attachments.map((attachment) => mapNotificationAttachmentToRewardItem(attachment, options)),
   };
 }
 

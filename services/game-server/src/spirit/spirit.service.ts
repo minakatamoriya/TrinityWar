@@ -19,6 +19,7 @@ import {
   type FactionAdvantageCode,
 } from '../lib/faction-advantage-formulas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SeasonGuardService } from '../season/season-guard.service.js';
 import { STARTER_SPIRIT_IDS } from '../seed/seed-data/spirits.js';
 import { TaskConfigService } from '../task-config/task-config.service.js';
 import { getTraitDefinition, isActiveTraitRollMode, rollTraitCandidates, SPIRIT_TRAIT_DEFINITIONS, SPIRIT_TRAIT_ROLL_RULES, toTraitRollCandidate } from './spirit-trait-roll-rules.js';
@@ -80,6 +81,7 @@ export class SpiritService {
     @Inject(IdempotencyService) private readonly idempotencyService: IdempotencyService,
     @Inject(AuditService) private readonly auditService: AuditService,
     @Inject(DailyTaskLifecycleService) private readonly dailyTaskLifecycleService: DailyTaskLifecycleService,
+    @Inject(SeasonGuardService) private readonly seasonGuardService: SeasonGuardService,
     @Inject(TaskConfigService) private readonly taskConfigService: TaskConfigService,
   ) {}
 
@@ -111,6 +113,7 @@ export class SpiritService {
     validateBuySpiritSoulRequest(request);
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.prisma.transaction(async (client) => {
       const goldAmount = Math.max(Math.floor(request.goldAmount / SPIRIT_SOUL_GOLD_PRICE) * SPIRIT_SOUL_GOLD_PRICE, 0);
       if (goldAmount <= 0) {
@@ -211,6 +214,7 @@ export class SpiritService {
     validateSlotRequest(request, 'slotIndex');
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.prisma.transaction(async (client) => {
       const requestHash = hashRequest({
         endpoint: 'upgrade',
@@ -323,6 +327,7 @@ export class SpiritService {
     validateFeedSpiritRequest(request);
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.prisma.transaction(async (client) => {
       const requestHash = hashRequest({
         endpoint: 'feed',
@@ -436,6 +441,7 @@ export class SpiritService {
     validateBreakthroughSpiritRequest(request);
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.prisma.transaction(async (client) => {
       const requestHash = hashRequest({
         endpoint: 'breakthrough',
@@ -558,6 +564,7 @@ export class SpiritService {
     const excludeCandidateIds = normalizeExcludeCandidateIds(request.excludeCandidateIds);
     const material = getTraitRollMaterial(request.mode);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.prisma.transaction(async (client) => {
       if (!isActiveTraitRollMode(request.mode)) {
         throwBadRequest('mode must be basic, normal, or advanced.');
@@ -858,6 +865,7 @@ export class SpiritService {
     validateResolveSpiritTraitRollRequest(request);
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.prisma.transaction(async (client) => {
       const requestHash = hashRequest({
         endpoint: 'resolve-trait-roll',
@@ -972,6 +980,7 @@ export class SpiritService {
       throwBadRequest('Unknown shop item.');
     }
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.prisma.transaction(async (client) => {
       const requestHash = hashRequest({
         endpoint: 'shop-buy',
@@ -1045,6 +1054,7 @@ export class SpiritService {
     validateClaimAdRewardRequest(request);
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.prisma.transaction(async (client) => {
       const requestHash = hashRequest({
         endpoint: 'shop-ad-reward',
@@ -1103,6 +1113,7 @@ export class SpiritService {
     validateSlotRequest(request, 'slotIndex');
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.prisma.transaction(async (client) => {
       const requestHash = hashRequest({
         endpoint: 'set-main',
@@ -1171,6 +1182,7 @@ export class SpiritService {
     validateSlotRequest(request, 'slotIndex');
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.prisma.transaction(async (client) => {
       const requestHash = hashRequest({
         endpoint: 'dissolve',
@@ -1272,6 +1284,7 @@ export class SpiritService {
     validateComposeSpiritRequest(request);
     const idempotencyKey = normalizeIdempotencyKey(headerIdempotencyKey ?? request.requestIdempotencyKey);
 
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(playerId);
     return this.prisma.transaction(async (client) => {
       const requestHash = hashRequest({
         endpoint: 'compose',
