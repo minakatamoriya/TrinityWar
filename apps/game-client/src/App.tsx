@@ -27,7 +27,7 @@ import type {
   HomeSummaryResponse,
   ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, changeSeasonFaction, claimFactionStipend, claimSeasonSignIn, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, confirmSeasonFaction, confirmSeasonStartupIntro, createShareAssistCampaign, devLogin, dissolveSpirit, feedSpirit, followSocialTarget, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, resetDevelopmentSeasonTiming, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setDevelopmentSeasonNearRollover, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unfollowSocialTarget, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, changeSeasonFaction, claimFactionStipend, claimSeasonSignIn, claimSeasonSignInMilestone, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, confirmSeasonFaction, confirmSeasonStartupIntro, createShareAssistCampaign, devLogin, dissolveSpirit, feedSpirit, followSocialTarget, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, resetDevelopmentSeasonTiming, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setDevelopmentSeasonNearRollover, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unfollowSocialTarget, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import type { SocialTabKey } from './ui/scenes/SocialScene';
 import type { ShareAssistAudience } from './ui/share/ShareAssistPage';
@@ -1792,6 +1792,46 @@ function App(): JSX.Element {
     }
   };
 
+  const handleClaimSeasonSignInMilestone = async (dayCount: number): Promise<void> => {
+    const actionKey = `season:sign-in-milestone:${dayCount}`;
+    if (!loginSession || pendingActionKey === actionKey) {
+      return;
+    }
+
+    setPendingActionKey(actionKey);
+    try {
+      const result = await claimSeasonSignInMilestone({ dayCount });
+      setSeasonSignInState(result.signIn);
+      const talismanReward = result.rewards
+        .filter((reward) => reward.kind === 'tianjiTalisman')
+        .reduce((sum, reward) => sum + reward.quantity, 0);
+      if (talismanReward > 0) {
+        applyTianjiTalismanState({
+          resourceVersion: (spiritState?.resourceVersion ?? 0) + 1,
+          tianjiTalisman: (spiritState?.tianjiTalisman ?? tianjiTalismanCount) + talismanReward,
+        });
+      }
+      try {
+        const [nextSpirit, nextSeasonRewards] = await Promise.all([
+          loadSpiritState(),
+          loadSeasonRewards(),
+        ]);
+        setSpiritState(nextSpirit);
+        setSeasonRewardsState(nextSeasonRewards);
+      } catch {
+        // Test-mode milestone claims can still rely on the optimistic sign-in/talisman refresh above.
+      }
+      showToast(result.summary, 'success');
+    } catch (error) {
+      if (await handleSeasonRolledOverError(error)) {
+        return;
+      }
+      showToast(error instanceof Error && error.message ? error.message : '当前无法领取签到阶段宝箱，请稍后重试。', 'error');
+    } finally {
+      setPendingActionKey(null);
+    }
+  };
+
   const handleClaimSpiritAdRewardAction = async (): Promise<void> => {
     const actionKey = 'spirit:ad-reward';
     const usedToday = spiritState?.shop?.adReward.usedToday ?? 0;
@@ -3141,6 +3181,9 @@ function App(): JSX.Element {
             }}
             onClaimSeasonSignIn={() => {
               void handleClaimSeasonSignIn();
+            }}
+            onClaimSeasonSignInMilestone={(dayCount) => {
+              void handleClaimSeasonSignInMilestone(dayCount);
             }}
             onClaimSpiritAdReward={() => {
               void handleClaimSpiritAdRewardAction();

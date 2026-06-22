@@ -3,7 +3,12 @@ import type { Prisma, PrismaClient, SpiritElement } from '@prisma/client';
 import { APP_NAME, type ClientBootstrapResponse, type ClientPlantResearchState, type ClientSceneContentResponse, type ClientSeasonRewardsResponse, type ClientSeasonSignInResponse, type HomeSummaryResponse } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { getLocalDateKey } from '../lib/date-key.js';
-import { GAME_BALANCE, getRaidBaseRewardByLevel, getRaidLevelBand } from '../lib/game-balance.js';
+import {
+  GAME_BALANCE,
+  getPlantUnlockRequirement,
+  getRaidBaseRewardByLevel,
+  getRaidLevelBand,
+} from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SeasonService } from '../season/season.service.js';
 import { SEED_DEFINITION_SEEDS } from '../seed/seed-data/seeds.js';
@@ -958,30 +963,6 @@ async function ensureSpiritDefinition(
       baseHp: true,
     },
   });
-}
-
-function getPlantUnlockRequirement(seedId: string, rarity: string, sortOrder: number): { harvestRequired: number; contributionRequired: number } {
-  if (seedId === 'qilingya' || seedId === 'qinglingmai' || seedId === 'xunyamai') {
-    return { harvestRequired: 0, contributionRequired: 0 };
-  }
-
-  if (rarity === 'legendary') {
-    return { harvestRequired: 0, contributionRequired: 800 };
-  }
-
-  if (rarity === 'rare') {
-    return { harvestRequired: 0, contributionRequired: 300 };
-  }
-
-  if (sortOrder >= 60) {
-    return { harvestRequired: 30, contributionRequired: 0 };
-  }
-
-  if (sortOrder >= 50) {
-    return { harvestRequired: 20, contributionRequired: 0 };
-  }
-
-  return { harvestRequired: 10, contributionRequired: 0 };
 }
 
 function sortRaidCandidatesByLevelBand<T extends { castleLevelCache: number }>(candidates: T[], ownerLevel: number): T[] {

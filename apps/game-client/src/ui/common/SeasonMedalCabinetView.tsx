@@ -137,10 +137,19 @@ function getMedalTierShortLabel(rewardTier: string | null): string {
   if (rewardTier.endsWith('-bronze') || rewardTier.endsWith('-800')) {
     return '铜';
   }
+  if (rewardTier.endsWith('-200')) {
+    return '银';
+  }
+  if (rewardTier.endsWith('-150')) {
+    return '铜';
+  }
   if (rewardTier.endsWith('-300')) {
-    return '入';
+    return '金';
   }
   if (rewardTier.endsWith('-100')) {
+    return '入';
+  }
+  if (rewardTier.endsWith('-50')) {
     return '始';
   }
   return '章';
@@ -199,9 +208,9 @@ const rewardTierLabels: Record<string, string> = {
   'season-combat-bronze': '探索战斗领域铜档',
   'season-combat-silver': '探索战斗领域银档',
   'season-combat-gold': '探索战斗领域金档',
-  'season-contribution-100': '贡献领域起步档',
-  'season-contribution-300': '贡献领域入门档',
-  'season-contribution-800': '贡献领域铜档',
-  'season-contribution-1500': '贡献领域银档',
-  'season-contribution-3000': '贡献领域金档',
+  'season-contribution-50': '贡献领域起步档',
+  'season-contribution-100': '贡献领域入门档',
+  'season-contribution-150': '贡献领域铜档',
+  'season-contribution-200': '贡献领域银档',
+  'season-contribution-300': '贡献领域金档',
 };

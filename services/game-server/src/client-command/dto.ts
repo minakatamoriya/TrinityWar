@@ -3,6 +3,7 @@ import type {
   ClientClaimDailyTaskRequest,
   ClientClaimPendingRequest,
   ClientClaimFactionStipendRequest,
+  ClientClaimSeasonSignInMilestoneRequest,
   ClientChangeSeasonFactionRequest,
   ClientConfirmSeasonFactionRequest,
   ClientCollectFieldRequest,
@@ -54,6 +55,11 @@ export class ClaimDailyTaskRequestDto implements ClientClaimDailyTaskRequest {
 }
 
 export class ClaimStarterSeedRequestDto implements ClientClaimStarterSeedRequest {
+  requestIdempotencyKey?: string;
+}
+
+export class ClaimSeasonSignInMilestoneRequestDto implements ClientClaimSeasonSignInMilestoneRequest {
+  dayCount!: number;
   requestIdempotencyKey?: string;
 }
 

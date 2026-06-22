@@ -1,3 +1,4 @@
+import type { ClientSeasonRewardItem } from '@trinitywar/shared';
 import type { ClientSeasonMedalCabinet, ClientSpiritState } from '@trinitywar/shared';
 import { SeasonMedalCabinetView } from './SeasonMedalCabinetView';
 
@@ -25,6 +26,10 @@ export interface SeasonSignInMilestoneView {
   title: string;
   reached: boolean;
   remainingDays: number;
+  claimed: boolean;
+  claimable: boolean;
+  debugUnlocked: boolean;
+  rewards: ClientSeasonRewardItem[];
 }
 
 interface SeasonSignInPanelProps {
@@ -34,6 +39,8 @@ interface SeasonSignInPanelProps {
   days: SeasonSignInDayView[];
   claimedToday: boolean;
   onClaim: () => void;
+  onClaimMilestone: (dayCount: number) => void;
+  pendingActionKey: string | null;
 }
 
 interface TianjiShopPanelProps {
@@ -113,6 +120,8 @@ function SeasonSignInPanel(props: SeasonSignInPanelProps): JSX.Element {
     days,
     claimedToday,
     onClaim,
+    onClaimMilestone,
+    pendingActionKey,
   } = props;
 
   return (
@@ -128,8 +137,17 @@ function SeasonSignInPanel(props: SeasonSignInPanelProps): JSX.Element {
             <div>
               <strong>{milestone.title}</strong>
               <span>累计 {milestone.dayCount} 天</span>
+              <span>{milestone.rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}</span>
             </div>
-            <em>{milestone.reached ? '已达成' : `还差 ${milestone.remainingDays} 天`}</em>
+            <em>{milestone.claimed ? '已领取' : milestone.reached ? '已达成' : milestone.debugUnlocked ? `测试可领（还差 ${milestone.remainingDays} 天）` : `还差 ${milestone.remainingDays} 天`}</em>
+            <button
+              className="secondary-button small"
+              disabled={!milestone.claimable || pendingActionKey === `season:sign-in-milestone:${milestone.dayCount}`}
+              onClick={() => onClaimMilestone(milestone.dayCount)}
+              type="button"
+            >
+              {milestone.claimed ? '已领取' : pendingActionKey === `season:sign-in-milestone:${milestone.dayCount}` ? '领取中...' : milestone.debugUnlocked ? '测试领取' : '领取宝箱'}
+            </button>
           </div>
         ))}
       </div>

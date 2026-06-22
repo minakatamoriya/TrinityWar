@@ -22,6 +22,7 @@ interface GlobalFeatureModalHostProps {
   tianjiTalismanCount: number;
   onBuySpiritShopItem: (itemId: string) => void;
   onClaimSeasonSignIn: () => void;
+  onClaimSeasonSignInMilestone: (dayCount: number) => void;
   onClaimSpiritAdReward: () => void;
   onClose: () => void;
   onOpenSeasonSignIn: () => void;
@@ -59,6 +60,7 @@ export function GlobalFeatureModalHost(props: GlobalFeatureModalHostProps): JSX.
     tianjiTalismanCount,
     onBuySpiritShopItem,
     onClaimSeasonSignIn,
+    onClaimSeasonSignInMilestone,
     onClaimSpiritAdReward,
     onClose,
     onOpenSeasonSignIn,
@@ -88,6 +90,8 @@ export function GlobalFeatureModalHost(props: GlobalFeatureModalHostProps): JSX.
           days: seasonSignInDays,
           claimedToday: seasonSignInClaimedToday,
           onClaim: onClaimSeasonSignIn,
+          onClaimMilestone: onClaimSeasonSignInMilestone,
+          pendingActionKey,
         } : undefined}
         seasonMedalCabinet={modal.seasonMedalCabinet ? seasonMedalCabinet : undefined}
         tianjiShop={modal.tianjiShop && spiritState?.shop ? {

@@ -8,6 +8,7 @@ import {
   getCastleExtensionTrack,
   getFactionStipendTier,
   getLandDeedConfig,
+  getPlantUnlockRequirement,
 } from '../lib/game-balance.js';
 import { getCurrentFactionAdvantageConfig, getFactionFarmCollectWindowSeconds, type FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 import {
@@ -613,6 +614,10 @@ function getContributionSourceLabel(sourceType: string): string {
     return '收取田地';
   }
 
+  if (sourceType === 'field-start-cultivation') {
+    return '开始种植';
+  }
+
   if (sourceType === 'spirit-recover') {
     return '灵宠恢复';
   }
@@ -627,6 +632,14 @@ function getContributionSourceLabel(sourceType: string): string {
 
   if (sourceType === 'social-harvest-field') {
     return '好友摘取';
+  }
+
+  if (sourceType === 'social-revive-field') {
+    return '好友复活';
+  }
+
+  if (sourceType === 'raid-battle') {
+    return '参与对战';
   }
 
   if (sourceType === 'raid-win') {
@@ -939,29 +952,6 @@ function mapSeedRarity(rarity: string): ClientPlantInventoryItem['rarity'] {
   return 'common';
 }
 
-function getPlantUnlockRequirement(seedId: string, rarity: string, sortOrder: number): { harvestRequired: number; contributionRequired: number } {
-  if (seedId === 'qilingya' || seedId === 'qinglingmai' || seedId === 'xunyamai') {
-    return { harvestRequired: 0, contributionRequired: 0 };
-  }
-
-  if (rarity === 'legendary') {
-    return { harvestRequired: 0, contributionRequired: 800 };
-  }
-
-  if (rarity === 'rare') {
-    return { harvestRequired: 0, contributionRequired: 300 };
-  }
-
-  if (sortOrder >= 60) {
-    return { harvestRequired: 30, contributionRequired: 0 };
-  }
-
-  if (sortOrder >= 50) {
-    return { harvestRequired: 20, contributionRequired: 0 };
-  }
-
-  return { harvestRequired: 10, contributionRequired: 0 };
-}
 function normalizeRaidRewardItems(value: unknown): ClientRaidRewardItem[] {
   if (!Array.isArray(value)) {
     return [];

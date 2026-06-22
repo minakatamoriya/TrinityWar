@@ -20,6 +20,7 @@ const SEASON_LENGTH_DAYS = 28;
 const SEASON_START_UTC = new Date('2026-05-03T16:00:00.000Z');
 const SEASON_MS = SEASON_LENGTH_DAYS * 24 * 60 * 60 * 1000;
 const DEV_SEASON_NEAR_ROLLOVER_MS = 60 * 1000;
+const SEASON_SIGN_IN_MILESTONE_DEBUG_UNLOCK_ALL = true;
 
 type PrismaClientLike = Prisma.TransactionClient | PrismaClient;
 type SeasonRewardDomain = 'participation' | 'farming' | 'spirit' | 'combat' | 'contribution';
@@ -89,6 +90,12 @@ export interface SeasonSignInClaimResult {
   rewardTianjiTalisman: number;
   tianjiTalisman: number;
   resourceVersion: number;
+}
+
+export interface SeasonSignInMilestoneClaimResult {
+  summary: string;
+  rewards: ClientSeasonRewardItem[];
+  signIn: ClientSeasonSignInState;
 }
 
 export interface EnsurePlayerSeasonResult {
@@ -729,6 +736,91 @@ export class SeasonService {
     };
   }
 
+  async claimSeasonSignInMilestone(
+    client: PrismaClientLike,
+    playerId: string,
+    dayCount: number,
+    now: Date = new Date(),
+  ): Promise<SeasonSignInMilestoneClaimResult> {
+    const season = await this.ensurePlayerSeason(client, playerId, now);
+    const milestone = buildSeasonSignInMilestoneDefinitions(playerId, season.seasonNumber).find((item) => item.dayCount === dayCount) ?? null;
+    if (!milestone) {
+      throw new BusinessError({
+        code: ErrorCode.BadRequest,
+        message: 'Season sign-in milestone not found.',
+        statusCode: 400,
+      });
+    }
+
+    const signIns = await buildPlayerClaimedSignIns(client, playerId, season.seasonNumber);
+    const claimedDayCount = signIns.length;
+    const reached = claimedDayCount >= milestone.dayCount;
+    if (!reached && !SEASON_SIGN_IN_MILESTONE_DEBUG_UNLOCK_ALL) {
+      throw new BusinessError({
+        code: ErrorCode.Conflict,
+        message: 'Season sign-in milestone is not reached yet.',
+        statusCode: 409,
+      });
+    }
+
+    const rewardType = buildSeasonSignInMilestoneRewardType(milestone.dayCount);
+    const existingGrant = await client.playerSeasonRewardGrant.findUnique({
+      where: {
+        playerId_seasonNumber_rewardType: {
+          playerId,
+          seasonNumber: season.seasonNumber,
+          rewardType,
+        },
+      },
+    });
+    if (existingGrant?.claimedAt) {
+      throw new BusinessError({
+        code: ErrorCode.TaskAlreadyClaimed,
+        message: 'Season sign-in milestone already claimed.',
+        statusCode: 409,
+      });
+    }
+
+    await applySeasonSignInMilestoneRewards(client, playerId, milestone.rewards, now);
+
+    await client.playerSeasonRewardGrant.upsert({
+      where: {
+        playerId_seasonNumber_rewardType: {
+          playerId,
+          seasonNumber: season.seasonNumber,
+          rewardType,
+        },
+      },
+      create: {
+        playerId,
+        seasonNumber: season.seasonNumber,
+        rewardType,
+        rewardTier: rewardType,
+        status: 'claimed',
+        contributionSnapshot: 0,
+        signInDays: claimedDayCount,
+        loginDays: 0,
+        harvestCount: 0,
+        raidCount: 0,
+        rewardJson: milestone.rewards as unknown as Prisma.InputJsonValue,
+        claimedAt: now,
+      },
+      update: {
+        rewardTier: rewardType,
+        status: 'claimed',
+        signInDays: claimedDayCount,
+        rewardJson: milestone.rewards as unknown as Prisma.InputJsonValue,
+        claimedAt: now,
+      },
+    });
+
+    return {
+      summary: `${milestone.title}已领取：${formatSeasonRewardItemsSummary(milestone.rewards)}。`,
+      rewards: milestone.rewards,
+      signIn: await this.buildSeasonSignInState(client, playerId, season, now),
+    };
+  }
+
   async getSeasonRewards(
     client: PrismaClientLike,
     playerId: string,
@@ -855,7 +947,7 @@ export class SeasonService {
           missed: day < currentDay && !claimed,
         };
       }),
-      milestones: buildSeasonSignInMilestones(claimedDays.length),
+      milestones: await buildSeasonSignInMilestones(client, playerId, season.seasonNumber, claimedDays.length),
     };
   }
 
@@ -1053,16 +1145,234 @@ function getSeasonSignInReward(day: number): number {
   return 1;
 }
 
-function buildSeasonSignInMilestones(claimedDayCount: number): ClientSeasonSignInState['milestones'] {
+async function buildSeasonSignInMilestones(
+  client: PrismaClientLike,
+  playerId: string,
+  seasonNumber: number,
+  claimedDayCount: number,
+): Promise<ClientSeasonSignInState['milestones']> {
+  const milestoneDefinitions = buildSeasonSignInMilestoneDefinitions(playerId, seasonNumber);
+  const rewardTypes = milestoneDefinitions.map((milestone) => buildSeasonSignInMilestoneRewardType(milestone.dayCount));
+  const claimedGrants = await client.playerSeasonRewardGrant.findMany({
+    where: {
+      playerId,
+      seasonNumber,
+      rewardType: { in: rewardTypes },
+      claimedAt: { not: null },
+    },
+    select: {
+      rewardType: true,
+    },
+  });
+  const claimedRewardTypeSet = new Set(claimedGrants.map((grant) => grant.rewardType));
+
+  return milestoneDefinitions.map((milestone) => {
+    const reached = claimedDayCount >= milestone.dayCount;
+    const claimed = claimedRewardTypeSet.has(buildSeasonSignInMilestoneRewardType(milestone.dayCount));
+    return {
+      ...milestone,
+      reached,
+      remainingDays: Math.max(milestone.dayCount - claimedDayCount, 0),
+      claimed,
+      claimable: !claimed && (reached || SEASON_SIGN_IN_MILESTONE_DEBUG_UNLOCK_ALL),
+      debugUnlocked: !reached && SEASON_SIGN_IN_MILESTONE_DEBUG_UNLOCK_ALL,
+    };
+  });
+}
+
+function buildSeasonSignInMilestoneDefinitions(playerId: string, seasonNumber: number): Array<{
+  dayCount: number;
+  title: string;
+  rewards: ClientSeasonRewardItem[];
+}> {
   return [
-    { dayCount: 7, title: '七日宝箱' },
-    { dayCount: 14, title: '十四日宝箱' },
-    { dayCount: 21, title: '二十一日宝箱' },
-  ].map((milestone) => ({
-    ...milestone,
-    reached: claimedDayCount >= milestone.dayCount,
-    remainingDays: Math.max(milestone.dayCount - claimedDayCount, 0),
-  }));
+    {
+      dayCount: 1,
+      title: '一日宝箱',
+      rewards: [tianjiTalisman(3), ordinarySoul(3)],
+    },
+    {
+      dayCount: 2,
+      title: '二日宝箱',
+      rewards: [tianjiTalisman(3), ordinarySoul(4)],
+    },
+    {
+      dayCount: 3,
+      title: '三日宝箱',
+      rewards: [tianjiTalisman(4), signInMilestoneSpiritShard(playerId, seasonNumber, 3, 'COMMON', 3)],
+    },
+    {
+      dayCount: 5,
+      title: '五日宝箱',
+      rewards: [tianjiTalisman(5), ordinarySoul(6), signInMilestoneSpiritShard(playerId, seasonNumber, 5, 'COMMON', 5)],
+    },
+    {
+      dayCount: 7,
+      title: '七日宝箱',
+      rewards: [tianjiTalisman(6), rareSoul(2), signInMilestoneSpiritShard(playerId, seasonNumber, 7, 'RARE', 6)],
+    },
+    {
+      dayCount: 14,
+      title: '十四日宝箱',
+      rewards: [tianjiTalisman(8), rareSoul(4), signInMilestoneSpiritShard(playerId, seasonNumber, 14, 'LEGENDARY', 8)],
+    },
+    {
+      dayCount: 21,
+      title: '二十一日宝箱',
+      rewards: [tianjiTalisman(12), legendarySoul(2), signInMilestoneSpiritShard(playerId, seasonNumber, 21, 'LEGENDARY', 12)],
+    },
+  ];
+}
+
+function buildSeasonSignInMilestoneRewardType(dayCount: number): string {
+  return `season-signin-milestone-${dayCount}`;
+}
+
+function signInMilestoneSpiritShard(
+  playerId: string,
+  seasonNumber: number,
+  dayCount: number,
+  rarity: 'COMMON' | 'RARE' | 'LEGENDARY',
+  quantity: number,
+): ClientSeasonRewardItem {
+  const pool = SPIRIT_DEFINITION_SEEDS.filter((spirit) => spirit.rarity === rarity);
+  const available = pool.length > 0 ? pool : SPIRIT_DEFINITION_SEEDS;
+  const selected = available[stableStringHash(`${playerId}:${seasonNumber}:sign-in-milestone:${dayCount}:${rarity}`) % available.length] ?? SPIRIT_DEFINITION_SEEDS[0];
+  return {
+    kind: 'spiritShard',
+    spiritId: selected?.spiritId ?? 'canglang',
+    quantity,
+    label: selected?.shardName ?? '灵宠精魄',
+    name: selected?.shardName ?? '灵宠精魄',
+    nameEn: 'Spirit Shard',
+  };
+}
+
+async function applySeasonSignInMilestoneRewards(
+  client: PrismaClientLike,
+  playerId: string,
+  rewards: ClientSeasonRewardItem[],
+  now: Date,
+): Promise<void> {
+  const spiritSoulGrant = rewards.filter((item) => item.kind === 'spiritSoul').reduce((sum, item) => sum + item.quantity, 0);
+  const ordinarySoulGrant = rewards.filter((item) => item.kind === 'ordinarySoul').reduce((sum, item) => sum + item.quantity, 0);
+  const rareSoulGrant = rewards.filter((item) => item.kind === 'rareSoul').reduce((sum, item) => sum + item.quantity, 0);
+  const legendarySoulGrant = rewards.filter((item) => item.kind === 'legendarySoul').reduce((sum, item) => sum + item.quantity, 0);
+  const talismanGrant = rewards.filter((item) => item.kind === 'tianjiTalisman').reduce((sum, item) => sum + item.quantity, 0);
+  const spiritShardGrants = rewards.filter((item) => item.kind === 'spiritShard' && item.spiritId);
+
+  if (spiritSoulGrant > 0 || ordinarySoulGrant > 0 || rareSoulGrant > 0 || legendarySoulGrant > 0 || talismanGrant > 0) {
+    await client.playerSpiritResource.upsert({
+      where: { playerId },
+      create: {
+        playerId,
+        spiritSoul: spiritSoulGrant,
+        ordinarySoul: ordinarySoulGrant,
+        rareSoul: rareSoulGrant,
+        legendarySoul: legendarySoulGrant,
+        tianjiTalisman: talismanGrant,
+      },
+      update: {
+        spiritSoul: spiritSoulGrant > 0 ? { increment: spiritSoulGrant } : undefined,
+        ordinarySoul: ordinarySoulGrant > 0 ? { increment: ordinarySoulGrant } : undefined,
+        rareSoul: rareSoulGrant > 0 ? { increment: rareSoulGrant } : undefined,
+        legendarySoul: legendarySoulGrant > 0 ? { increment: legendarySoulGrant } : undefined,
+        tianjiTalisman: talismanGrant > 0 ? { increment: talismanGrant } : undefined,
+        resourceVersion: { increment: 1 },
+      },
+    });
+  }
+
+  if (spiritShardGrants.length > 0) {
+    const spiritDefinitions = await Promise.all(
+      spiritShardGrants.map(async (item) => ensureSpiritDefinitionForSeasonReward(client, item.spiritId ?? '')),
+    );
+    const spiritDefinitionById = new Map(spiritDefinitions.map((item) => [item.spiritId, item]));
+
+    for (const shardGrant of spiritShardGrants) {
+      const spiritId = shardGrant.spiritId ?? '';
+      const spiritDefinition = spiritDefinitionById.get(spiritId);
+      if (!spiritDefinition) {
+        continue;
+      }
+      const existingCodex = await client.playerSpiritCodex.findUnique({
+        where: {
+          playerId_spiritDefinitionId: {
+            playerId,
+            spiritDefinitionId: spiritDefinition.id,
+          },
+        },
+        select: { shardCount: true },
+      });
+      const nextShardCount = Math.min((existingCodex?.shardCount ?? 0) + shardGrant.quantity, spiritDefinition.shardUnlockRequired);
+      await client.playerSpiritCodex.upsert({
+        where: {
+          playerId_spiritDefinitionId: {
+            playerId,
+            spiritDefinitionId: spiritDefinition.id,
+          },
+        },
+        create: {
+          playerId,
+          spiritDefinitionId: spiritDefinition.id,
+          hasSeen: true,
+          shardCount: nextShardCount,
+          readyToCompose: nextShardCount >= spiritDefinition.shardUnlockRequired,
+          firstSeenAt: now,
+          readyAt: nextShardCount >= spiritDefinition.shardUnlockRequired ? now : null,
+        },
+        update: {
+          hasSeen: true,
+          shardCount: nextShardCount,
+          readyToCompose: nextShardCount >= spiritDefinition.shardUnlockRequired,
+          readyAt: nextShardCount >= spiritDefinition.shardUnlockRequired ? now : undefined,
+          codexVersion: { increment: 1 },
+        },
+      });
+    }
+  }
+}
+
+async function ensureSpiritDefinitionForSeasonReward(
+  client: PrismaClientLike,
+  spiritId: string,
+): Promise<{ id: string; spiritId: string; shardUnlockRequired: number }> {
+  const seed = SPIRIT_DEFINITION_SEEDS.find((spirit) => spirit.spiritId === spiritId);
+  if (!seed) {
+    throw new BusinessError({
+      code: ErrorCode.NotFound,
+      message: `Spirit definition seed not found: ${spiritId}.`,
+      statusCode: 404,
+    });
+  }
+
+  return client.spiritDefinition.upsert({
+    where: { spiritId: seed.spiritId },
+    create: seed,
+    update: {
+      label: seed.label,
+      rarity: seed.rarity,
+      factionAffinity: seed.factionAffinity,
+      role: seed.role,
+      shardName: seed.shardName,
+      shardUnlockRequired: seed.shardUnlockRequired,
+      baseAttack: seed.baseAttack,
+      baseHp: seed.baseHp,
+      growthAttack: seed.growthAttack,
+      growthHp: seed.growthHp,
+      sortOrder: seed.sortOrder,
+      lore: seed.lore,
+    },
+    select: {
+      id: true,
+      spiritId: true,
+      shardUnlockRequired: true,
+    },
+  });
+}
+
+function formatSeasonRewardItemsSummary(rewards: ClientSeasonRewardItem[]): string {
+  return rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、') || '奖励';
 }
 
 function isPrismaUniqueConstraintError(error: unknown): boolean {
@@ -1073,20 +1383,20 @@ function isPrismaUniqueConstraintError(error: unknown): boolean {
 }
 
 function getContributionRewardTier(contributionScore: number): string | null {
-  if (contributionScore >= 3000) {
-    return 'season-contribution-3000';
-  }
-  if (contributionScore >= 1500) {
-    return 'season-contribution-1500';
-  }
-  if (contributionScore >= 800) {
-    return 'season-contribution-800';
-  }
   if (contributionScore >= 300) {
     return 'season-contribution-300';
   }
+  if (contributionScore >= 200) {
+    return 'season-contribution-200';
+  }
+  if (contributionScore >= 150) {
+    return 'season-contribution-150';
+  }
   if (contributionScore >= 100) {
     return 'season-contribution-100';
+  }
+  if (contributionScore >= 50) {
+    return 'season-contribution-50';
   }
   return null;
 }
@@ -1292,70 +1602,50 @@ function getCombatRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
 }
 
 function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule | null {
-  if (snapshot.contributionScore >= 3000) {
-    return buildDomainRewardRule({
-      rewardType: 'contribution_tier',
-      rewardTier: 'season-contribution-3000',
-      domain: 'contribution',
-      achievementTitle: '赛季贡献金章',
-      achievementDescription: '本赛季阵营贡献达到 3000。',
-      statSnapshot: { contributionScore: snapshot.contributionScore },
-      rewards: [
-        tianjiTalisman(10),
-        rareSoul(5),
-        rareSoul(3),
-        spiritShard(snapshot, 10),
-      ],
-    });
-  }
-
-  if (snapshot.contributionScore >= 1500) {
-    return buildDomainRewardRule({
-      rewardType: 'contribution_tier',
-      rewardTier: 'season-contribution-1500',
-      domain: 'contribution',
-      achievementTitle: '赛季贡献银章',
-      achievementDescription: '本赛季阵营贡献达到 1500。',
-      statSnapshot: { contributionScore: snapshot.contributionScore },
-      rewards: [
-        tianjiTalisman(7),
-        rareSoul(3),
-        rareSoul(2),
-        spiritShard(snapshot, 8),
-      ],
-    });
-  }
-
-  if (snapshot.contributionScore >= 800) {
-    return buildDomainRewardRule({
-      rewardType: 'contribution_tier',
-      rewardTier: 'season-contribution-800',
-      domain: 'contribution',
-      achievementTitle: '赛季贡献铜章',
-      achievementDescription: '本赛季阵营贡献达到 800。',
-      statSnapshot: { contributionScore: snapshot.contributionScore },
-      rewards: [
-        tianjiTalisman(5),
-        ordinarySoul(10),
-        ordinarySoul(10),
-        spiritShard(snapshot, 6),
-      ],
-    });
-  }
-
   if (snapshot.contributionScore >= 300) {
     return buildDomainRewardRule({
       rewardType: 'contribution_tier',
       rewardTier: 'season-contribution-300',
       domain: 'contribution',
-      achievementTitle: '赛季贡献入门章',
+      achievementTitle: '赛季贡献金章',
       achievementDescription: '本赛季阵营贡献达到 300。',
       statSnapshot: { contributionScore: snapshot.contributionScore },
       rewards: [
+        rareSoul(3),
+        tianjiTalisman(5),
+        spiritShard(snapshot, 8),
+      ],
+    });
+  }
+
+  if (snapshot.contributionScore >= 200) {
+    return buildDomainRewardRule({
+      rewardType: 'contribution_tier',
+      rewardTier: 'season-contribution-200',
+      domain: 'contribution',
+      achievementTitle: '赛季贡献银章',
+      achievementDescription: '本赛季阵营贡献达到 200。',
+      statSnapshot: { contributionScore: snapshot.contributionScore },
+      rewards: [
+        rareSoul(3),
+        tianjiTalisman(4),
+        spiritShard(snapshot, 6),
+      ],
+    });
+  }
+
+  if (snapshot.contributionScore >= 150) {
+    return buildDomainRewardRule({
+      rewardType: 'contribution_tier',
+      rewardTier: 'season-contribution-150',
+      domain: 'contribution',
+      achievementTitle: '赛季贡献铜章',
+      achievementDescription: '本赛季阵营贡献达到 150。',
+      statSnapshot: { contributionScore: snapshot.contributionScore },
+      rewards: [
         tianjiTalisman(3),
-        ordinarySoul(5),
-        ordinarySoul(5),
-        spiritShard(snapshot, 4),
+        ordinarySoul(10),
+        spiritShard(snapshot, 5),
       ],
     });
   }
@@ -1365,12 +1655,27 @@ function getContributionRewardRule(snapshot: SeasonRewardSnapshot): SeasonReward
       rewardType: 'contribution_tier',
       rewardTier: 'season-contribution-100',
       domain: 'contribution',
-      achievementTitle: '赛季贡献起步章',
+      achievementTitle: '赛季贡献入门章',
       achievementDescription: '本赛季阵营贡献达到 100。',
       statSnapshot: { contributionScore: snapshot.contributionScore },
       rewards: [
         tianjiTalisman(2),
-        ordinarySoul(3),
+        ordinarySoul(5),
+        spiritShard(snapshot, 4),
+      ],
+    });
+  }
+
+  if (snapshot.contributionScore >= 50) {
+    return buildDomainRewardRule({
+      rewardType: 'contribution_tier',
+      rewardTier: 'season-contribution-50',
+      domain: 'contribution',
+      achievementTitle: '赛季贡献起步章',
+      achievementDescription: '本赛季阵营贡献达到 50。',
+      statSnapshot: { contributionScore: snapshot.contributionScore },
+      rewards: [
+        tianjiTalisman(1),
         ordinarySoul(3),
         spiritShard(snapshot, 2),
       ],
@@ -1411,6 +1716,10 @@ function ordinarySoul(quantity: number): ClientSeasonRewardItem {
 
 function rareSoul(quantity: number): ClientSeasonRewardItem {
   return { kind: 'rareSoul', quantity, label: '稀有兽魂', name: '稀有兽魂', nameEn: 'Rare Soul' };
+}
+
+function legendarySoul(quantity: number): ClientSeasonRewardItem {
+  return { kind: 'legendarySoul', quantity, label: '传说兽魂', name: '传说兽魂', nameEn: 'Legendary Soul' };
 }
 
 function spiritShard(snapshot: SeasonRewardSnapshot, quantity: number): ClientSeasonRewardItem {
@@ -1696,6 +2005,9 @@ function getSeasonRewardNotificationExpiresAt(seasonNumber: number): Date {
 }
 
 function getSeasonRewardTypeLabel(rewardType: string): string {
+  if (rewardType.startsWith('season-signin-milestone-')) {
+    return '签到阶段宝箱';
+  }
   if (rewardType === 'participation') {
     return '基础参与';
   }
@@ -1921,25 +2233,25 @@ const seasonMedalCopyByKey: Record<string, {
     title: '赛季远征金章',
     description: '本赛季已结算探索战斗不少于 20 次。',
   },
-  'season-contribution-100': {
+  'season-contribution-50': {
     title: '赛季贡献起步章',
+    description: '本赛季阵营贡献达到 50。',
+  },
+  'season-contribution-100': {
+    title: '赛季贡献入门章',
     description: '本赛季阵营贡献达到 100。',
   },
-  'season-contribution-300': {
-    title: '赛季贡献入门章',
-    description: '本赛季阵营贡献达到 300。',
-  },
-  'season-contribution-800': {
+  'season-contribution-150': {
     title: '赛季贡献铜章',
-    description: '本赛季阵营贡献达到 800。',
+    description: '本赛季阵营贡献达到 150。',
   },
-  'season-contribution-1500': {
+  'season-contribution-200': {
     title: '赛季贡献银章',
-    description: '本赛季阵营贡献达到 1500。',
+    description: '本赛季阵营贡献达到 200。',
   },
-  'season-contribution-3000': {
+  'season-contribution-300': {
     title: '赛季贡献金章',
-    description: '本赛季阵营贡献达到 3000。',
+    description: '本赛季阵营贡献达到 300。',
   },
 };
 

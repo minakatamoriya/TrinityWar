@@ -2,6 +2,8 @@ import { Body, Controller, Headers, Inject, Post, UseGuards } from '@nestjs/comm
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type {
   ClientClaimSeasonSignInResponse,
+  ClientClaimSeasonSignInMilestoneRequest,
+  ClientClaimSeasonSignInMilestoneResponse,
   ClientClaimStarterSeedRequest,
   ClientClaimStarterSeedResponse,
   ClientChangeSeasonFactionRequest,
@@ -32,7 +34,7 @@ import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
 import { createUnauthorizedError } from '../common/errors/index.js';
 import { ClientCommandService } from './client-command.service.js';
-import { ChangeSeasonFactionRequestDto, ClaimDailyTaskRequestDto, ClaimPendingRequestDto, ClaimStarterSeedRequestDto, CollectFieldRequestDto, ConfirmSeasonFactionRequestDto, FactionDonateRequestDto, FactionTaskSubmitRequestDto, ClaimFactionStipendRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UnlockPlantRequestDto, UpgradeBuildingRequestDto } from './dto.js';
+import { ChangeSeasonFactionRequestDto, ClaimDailyTaskRequestDto, ClaimPendingRequestDto, ClaimSeasonSignInMilestoneRequestDto, ClaimStarterSeedRequestDto, CollectFieldRequestDto, ConfirmSeasonFactionRequestDto, FactionDonateRequestDto, FactionTaskSubmitRequestDto, ClaimFactionStipendRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UnlockPlantRequestDto, UpgradeBuildingRequestDto } from './dto.js';
 
 @ApiTags('client')
 @Controller('client/actions')
@@ -94,6 +96,25 @@ export class ClientCommandController {
 
     return this.clientCommandService.claimSeasonSignIn({
       playerId: currentPlayer.playerId,
+    });
+  }
+
+  @Post('claim-season-sign-in-milestone')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiBody({ type: ClaimSeasonSignInMilestoneRequestDto })
+  @ApiOkResponse({ description: 'Claim a season sign-in milestone reward.' })
+  async claimSeasonSignInMilestone(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Body() body: ClientClaimSeasonSignInMilestoneRequest,
+  ): Promise<ClientClaimSeasonSignInMilestoneResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.clientCommandService.claimSeasonSignInMilestone({
+      playerId: currentPlayer.playerId,
+      request: body as ClaimSeasonSignInMilestoneRequestDto,
     });
   }
 
@@ -405,6 +426,7 @@ export class ClientCommandController {
 defineRouteParamTypes(ClientCommandController.prototype, 'claimPending', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimDailyTask', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimSeasonSignIn', [Object]);
+defineRouteParamTypes(ClientCommandController.prototype, 'claimSeasonSignInMilestone', [Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'refreshRaidTargets', [Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'claimStarterSeeds', [Object, Object, Object]);
 defineRouteParamTypes(ClientCommandController.prototype, 'collectField', [Object, Object, Object]);

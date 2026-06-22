@@ -5,12 +5,11 @@ import { AuditService } from '../audit/audit.service.js';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { grantFactionContribution } from '../faction/contribution.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
+import { FACTION_CONTRIBUTION_BALANCE_CONFIG } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { buildRaidBattleReplay } from './raid-battle-replay.js';
 import { RaidRepository } from './raid.repository.js';
 import { RaidSettlementRuleService, type SpiritBattleSnapshot } from './raid-settlement-rule.service.js';
-
-const RAID_WIN_CONTRIBUTION = 5;
 
 @Injectable()
 export class RaidSettlementService {
@@ -247,16 +246,32 @@ export class RaidSettlementService {
         },
       });
 
-      if (settlementResult.result === 'WIN') {
+      const raidBattleSettledContribution = FACTION_CONTRIBUTION_BALANCE_CONFIG.sources.raidBattleSettled;
+      if (raidBattleSettledContribution > 0) {
         await grantFactionContribution(client, {
           playerId: raidOrder.attackerPlayerId,
-          contribution: RAID_WIN_CONTRIBUTION,
+          contribution: raidBattleSettledContribution,
+          sourceType: 'raid-battle',
+          sourceId: raidOrder.id,
+          metadata: {
+            defenderPlayerId: raidOrder.defenderPlayerId,
+            result: settlementResult.result,
+            lootGold: settlementResult.lootGold,
+          },
+        });
+      }
+
+      const raidBattleWinBonusContribution = FACTION_CONTRIBUTION_BALANCE_CONFIG.sources.raidBattleWinBonus;
+      if (settlementResult.result === 'WIN' && raidBattleWinBonusContribution > 0) {
+        await grantFactionContribution(client, {
+          playerId: raidOrder.attackerPlayerId,
+          contribution: raidBattleWinBonusContribution,
           sourceType: 'raid-win',
           sourceId: raidOrder.id,
-            metadata: {
-              defenderPlayerId: raidOrder.defenderPlayerId,
-              lootGold: settlementResult.lootGold,
-            },
+          metadata: {
+            defenderPlayerId: raidOrder.defenderPlayerId,
+            lootGold: settlementResult.lootGold,
+          },
         });
       }
 

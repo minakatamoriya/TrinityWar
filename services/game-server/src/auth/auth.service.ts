@@ -6,6 +6,7 @@ import { AppConfigService } from '../config/app-config.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PlayerInitializationService, type PlayerInitializationInput } from '../seed/player-initialization.service.js';
 import { DEV_ACCOUNT_SEEDS, type DevAccountSeedData } from '../seed/seed-data/dev-accounts.js';
+import { FACTION_SEEDS } from '../seed/seed-data/factions.js';
 import { SEED_DEFINITION_SEEDS } from '../seed/seed-data/seeds.js';
 import { AuthTokenService } from './auth-token.service.js';
 
@@ -190,9 +191,7 @@ export class AuthService {
         };
       }
 
-      const faction = await client.faction.findUniqueOrThrow({
-        where: { code: factionCode },
-      });
+      const faction = await this.ensureFactionByCode(client, factionCode);
       const existingIdentity = await client.playerAuthIdentity.findUnique({
         where: {
           provider_providerUserId: {
@@ -318,6 +317,7 @@ export class AuthService {
     client: Prisma.TransactionClient,
     requestedProviderUserId: string,
   ): Promise<string> {
+    await this.ensureCoreFactions(client);
     const playerIdByProviderUserId = new Map<string, string>();
 
     for (const account of DEV_VERIFICATION_ACCOUNTS) {
@@ -375,10 +375,7 @@ export class AuthService {
     client: Prisma.TransactionClient,
     account: DevVerificationAccount,
   ): Promise<string> {
-    const faction = await client.faction.findUniqueOrThrow({
-      where: { code: account.factionCode },
-      select: { id: true },
-    });
+    const faction = await this.ensureFactionByCode(client, account.factionCode, { select: { id: true } });
     const existingIdentity = await client.playerAuthIdentity.findUnique({
       where: {
         provider_providerUserId: {
@@ -488,6 +485,41 @@ export class AuthService {
         now: new Date(),
       });
     }
+  }
+
+  private async ensureCoreFactions(client: Prisma.TransactionClient): Promise<void> {
+    for (const faction of FACTION_SEEDS) {
+      await client.faction.upsert({
+        where: { code: faction.code },
+        create: faction,
+        update: {
+          name: faction.name,
+          treasuryGold: faction.treasuryGold,
+          hourlyBaseDividend: faction.hourlyBaseDividend,
+          hourlyContributionDividendPerTen: faction.hourlyContributionDividendPerTen,
+        },
+      });
+    }
+  }
+
+  private async ensureFactionByCode<TSelect extends Prisma.FactionSelect | undefined = undefined>(
+    client: Prisma.TransactionClient,
+    factionCode: string,
+    options?: { select?: TSelect },
+  ): Promise<TSelect extends Prisma.FactionSelect ? Prisma.FactionGetPayload<{ select: TSelect }> : Prisma.Faction> {
+    await this.ensureCoreFactions(client);
+    const faction = await client.faction.findUnique({
+      where: { code: factionCode },
+      ...(options?.select ? { select: options.select } : {}),
+    });
+    if (!faction) {
+      throw new BusinessError({
+        code: ErrorCode.NotFound,
+        message: `Faction not found: ${factionCode}.`,
+        statusCode: 404,
+      });
+    }
+    return faction as TSelect extends Prisma.FactionSelect ? Prisma.FactionGetPayload<{ select: TSelect }> : Prisma.Faction;
   }
 
   private async createVerificationRaidTargetPool(

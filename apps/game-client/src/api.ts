@@ -20,6 +20,8 @@
   type ClientClaimDailyTaskResponse,
   type ClientClaimFactionStipendRequest,
   type ClientClaimFactionStipendResponse,
+  type ClientClaimSeasonSignInMilestoneRequest,
+  type ClientClaimSeasonSignInMilestoneResponse,
   type ClientClaimSpiritAdRewardRequest,
   type ClientComposeSpiritRequest,
   type ClientFeedSpiritRequest,
@@ -48,6 +50,7 @@
   type ClientResetDemoStateResponse,
   type ClientSceneContentResponse,
   type ClientSeasonRewardsResponse,
+  type ClientSeasonRewardItem,
   type ClientSeasonSignInResponse,
   type ClientStartCultivationRequest,
   type ClientStateMutationResponse,
@@ -198,6 +201,7 @@ function buildInitialMockFieldTimingStates(): Record<string, MockFieldTimingStat
 }
 
 let mockFieldTimingState: Record<string, MockFieldTimingState> = buildInitialMockFieldTimingStates();
+let mockSeasonSignInMilestoneClaims = new Set<number>();
 
 function updateMockDailyTask(taskId: string, amount = 1): void {
   const task = mockHomeSnapshot.dailyTasks.find((item) => item.id === taskId);
@@ -364,6 +368,29 @@ export async function claimSeasonSignIn(): Promise<ClientClaimSeasonSignInRespon
 
   return fetchJson<ClientClaimSeasonSignInResponse>(`${CLIENT_API_PREFIX}/actions/claim-season-sign-in`, {
     method: 'POST',
+  });
+}
+
+export async function claimSeasonSignInMilestone(
+  input: ClientClaimSeasonSignInMilestoneRequest,
+): Promise<ClientClaimSeasonSignInMilestoneResponse> {
+  if (forceMockCommands) {
+    mockSeasonSignInMilestoneClaims.add(input.dayCount);
+    const signIn = buildMockSeasonSignIn(buildMockSeasonSignIn().claimedDays);
+    return {
+      app: mockBootstrapSnapshot.app,
+      summary: `已领取${input.dayCount}天签到阶段宝箱。`,
+      rewards: signIn.milestones.find((milestone) => milestone.dayCount === input.dayCount)?.rewards ?? [],
+      signIn,
+    };
+  }
+
+  return fetchJson<ClientClaimSeasonSignInMilestoneResponse>(`${CLIENT_API_PREFIX}/actions/claim-season-sign-in-milestone`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
   });
 }
 
@@ -707,8 +734,8 @@ function syncMockFactionScene(): void {
     eyebrow: '阵营面板',
     title: '人界阵营',
     description: '完成日常行为积累个人贡献，每日按贡献档位领取材料俸禄。',
-    advantage: '今日俸禄档位：入门俸禄',
-    breakdown: '预计每日俸禄：金币 x20、灵根 x20、普通兽魂 x5',
+    advantage: '今日俸禄档位：基础俸禄',
+    breakdown: '预计每日俸禄：金币 x20、灵根 x10、随机灵宠碎片 x1、普通兽魂 x5',
     action: { label: '领取俸禄', target: 'faction', tone: 'primary' },
   };
   mockSceneSnapshot.faction.contribution = {
@@ -734,10 +761,11 @@ function syncMockFactionScene(): void {
     dateKey: new Date().toISOString().slice(0, 10),
     contribution: mockFactionContribution,
     tierKey: 'contribution-0',
-    tierLabel: '入门俸禄',
+    tierLabel: '基础俸禄',
     rewards: [
       { kind: 'gold', label: '金币', quantity: 20 },
-      { kind: 'spirit-root', label: '灵根', quantity: 20 },
+      { kind: 'spirit-root', label: '灵根', quantity: 10 },
+      { kind: 'spirit-shard', label: '灵宠精魄', quantity: 1 },
       { kind: 'ordinary-soul', label: '普通兽魂', quantity: 5 },
     ],
     claimedAt: null,
@@ -1468,6 +1496,15 @@ function getMockSeasonDay(): number {
 function buildMockSeasonSignIn(claimedDays: number[] = []): ClientSeasonSignInResponse {
   const currentDay = getMockSeasonDay();
   const claimedDaySet = new Set(claimedDays.filter((day) => day >= 1 && day <= 28));
+  const milestoneRewards = [
+    { dayCount: 1, title: '一日宝箱', rewards: [{ kind: 'tianjiTalisman', quantity: 3, label: '天机符' }, { kind: 'ordinarySoul', quantity: 3, label: '普通兽魂' }] },
+    { dayCount: 2, title: '二日宝箱', rewards: [{ kind: 'tianjiTalisman', quantity: 3, label: '天机符' }, { kind: 'ordinarySoul', quantity: 4, label: '普通兽魂' }] },
+    { dayCount: 3, title: '三日宝箱', rewards: [{ kind: 'tianjiTalisman', quantity: 4, label: '天机符' }, { kind: 'spiritShard', quantity: 3, spiritId: 'xuanhu', label: '玄虎精魄' }] },
+    { dayCount: 5, title: '五日宝箱', rewards: [{ kind: 'tianjiTalisman', quantity: 5, label: '天机符' }, { kind: 'ordinarySoul', quantity: 6, label: '普通兽魂' }, { kind: 'spiritShard', quantity: 5, spiritId: 'hegui', label: '岩龟精魄' }] },
+    { dayCount: 7, title: '七日宝箱', rewards: [{ kind: 'tianjiTalisman', quantity: 6, label: '天机符' }, { kind: 'rareSoul', quantity: 2, label: '稀有兽魂' }, { kind: 'spiritShard', quantity: 6, spiritId: 'chenghuang', label: '乘黄精魄' }] },
+    { dayCount: 14, title: '十四日宝箱', rewards: [{ kind: 'tianjiTalisman', quantity: 8, label: '天机符' }, { kind: 'rareSoul', quantity: 4, label: '稀有兽魂' }, { kind: 'spiritShard', quantity: 8, spiritId: 'fenghuang', label: '凤皇精魄' }] },
+    { dayCount: 21, title: '二十一日宝箱', rewards: [{ kind: 'tianjiTalisman', quantity: 12, label: '天机符' }, { kind: 'legendarySoul', quantity: 2, label: '传说兽魂' }, { kind: 'spiritShard', quantity: 12, spiritId: 'yinglong', label: '应龙精魄' }] },
+  ] satisfies Array<{ dayCount: number; title: string; rewards: ClientSeasonRewardItem[] }>;
 
   return {
     seasonNumber: mockBootstrapSnapshot.season.seasonNumber,
@@ -1488,14 +1525,13 @@ function buildMockSeasonSignIn(claimedDays: number[] = []): ClientSeasonSignInRe
         missed: day < currentDay && !claimed,
       };
     }),
-    milestones: [
-      { dayCount: 7, title: '七日宝箱' },
-      { dayCount: 14, title: '十四日宝箱' },
-      { dayCount: 21, title: '二十一日宝箱' },
-    ].map((milestone) => ({
+    milestones: milestoneRewards.map((milestone) => ({
       ...milestone,
       reached: claimedDaySet.size >= milestone.dayCount,
       remainingDays: Math.max(milestone.dayCount - claimedDaySet.size, 0),
+      claimed: mockSeasonSignInMilestoneClaims.has(milestone.dayCount),
+      claimable: !mockSeasonSignInMilestoneClaims.has(milestone.dayCount),
+      debugUnlocked: !claimedDaySet.has(milestone.dayCount),
     })),
   };
 }

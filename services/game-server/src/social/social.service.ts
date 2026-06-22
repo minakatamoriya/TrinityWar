@@ -28,6 +28,7 @@ import {
   buildFieldReadyAtUpdate,
   getFieldReadyAt,
 } from '../lib/field-timing.js';
+import { FACTION_CONTRIBUTION_BALANCE_CONFIG } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { grantFactionContribution } from '../faction/contribution.service.js';
 import { FieldLifecycleService } from '../client-read/field-lifecycle.service.js';
@@ -53,8 +54,8 @@ export const SOCIAL_FRIEND_LIMIT_CONFIG = {
   hardLimit: 150,
 } as const;
 const SOCIAL_CONTRIBUTION_REWARDS = {
-  reviveField: 1,
-  harvestField: 2,
+  reviveField: FACTION_CONTRIBUTION_BALANCE_CONFIG.sources.socialReviveField,
+  harvestField: FACTION_CONTRIBUTION_BALANCE_CONFIG.sources.socialHarvestField,
 } as const;
 
 type DbClient = Prisma.TransactionClient | PrismaClient;

@@ -226,11 +226,11 @@ export const SPIRIT_ROOT_ECONOMY_CONFIG = {
   },
   stipendRootRewards: {
     'contribution-0': 10,
+    'contribution-50': 14,
     'contribution-100': 18,
-    'contribution-300': 25,
-    'contribution-600': 35,
-    'contribution-800': 45,
-    'contribution-1000': 60,
+    'contribution-150': 24,
+    'contribution-200': 32,
+    'contribution-300': 45,
   },
 };
 
@@ -238,11 +238,11 @@ export const SPIRIT_ROOT_ECONOMY_CONFIG = {
 export const FACTION_STIPEND_BALANCE_CONFIG = {
   tiers: [
     { tierKey: 'contribution-0', minContribution: 0 },
+    { tierKey: 'contribution-50', minContribution: 50 },
     { tierKey: 'contribution-100', minContribution: 100 },
+    { tierKey: 'contribution-150', minContribution: 150 },
+    { tierKey: 'contribution-200', minContribution: 200 },
     { tierKey: 'contribution-300', minContribution: 300 },
-    { tierKey: 'contribution-600', minContribution: 600 },
-    { tierKey: 'contribution-800', minContribution: 800 },
-    { tierKey: 'contribution-1000', minContribution: 1000 },
   ],
 };
 
@@ -262,23 +262,34 @@ export const FACTION_STIPEND_CONFIG = {
       ],
     },
     {
+      tierKey: 'contribution-50',
+      minContribution: 50,
+      label: '小有供奉',
+      rewards: [
+        { kind: 'gold', quantity: 25, label: '金币' },
+        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-50'], label: '灵根' },
+        { kind: 'spirit-shard', quantity: 2, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
+        { kind: 'ordinary-soul', quantity: 8, label: '普通兽魂' },
+      ],
+    },
+    {
       tierKey: 'contribution-100',
       minContribution: 100,
-      label: '小有供奉',
+      label: '稳定供奉',
       rewards: [
         { kind: 'gold', quantity: 30, label: '金币' },
         { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-100'], label: '灵根' },
-        { kind: 'spirit-shard', quantity: 2, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
+        { kind: 'spirit-shard', quantity: 3, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'ordinary-soul', quantity: 10, label: '普通兽魂' },
       ],
     },
     {
-      tierKey: 'contribution-300',
-      minContribution: 300,
-      label: '稳定供奉',
+      tierKey: 'contribution-150',
+      minContribution: 150,
+      label: '阵营骨干',
       rewards: [
         { kind: 'gold', quantity: 40, label: '金币' },
-        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-300'], label: '灵根' },
+        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-150'], label: '灵根' },
         { kind: 'spirit-shard', quantity: 3, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'spirit-marrow', quantity: 2, label: '灵髓' },
         { kind: 'rare-soul', quantity: 2, label: '稀有兽魂' },
@@ -286,41 +297,28 @@ export const FACTION_STIPEND_CONFIG = {
       ],
     },
     {
-      tierKey: 'contribution-600',
-      minContribution: 600,
-      label: '阵营骨干',
+      tierKey: 'contribution-200',
+      minContribution: 200,
+      label: '高阶供奉',
       rewards: [
         { kind: 'gold', quantity: 50, label: '金币' },
-        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-600'], label: '灵根' },
+        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-200'], label: '灵根' },
         { kind: 'spirit-shard', quantity: 4, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'spirit-marrow', quantity: 4, label: '灵髓' },
-        { kind: 'rare-soul', quantity: 6, label: '稀有兽魂' },
+        { kind: 'rare-soul', quantity: 4, label: '稀有兽魂' },
       ],
     },
     {
-      tierKey: FACTION_STIPEND_BALANCE_CONFIG.tiers[4].tierKey,
-      minContribution: 800,
-      label: '高阶供奉',
+      tierKey: 'contribution-300',
+      minContribution: 300,
+      label: '阵营重臣',
       rewards: [
         { kind: 'gold', quantity: 60, label: '金币' },
-        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-800'], label: '灵根' },
+        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-300'], label: '灵根' },
         { kind: 'spirit-shard', quantity: 5, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
         { kind: 'spirit-marrow', quantity: 6, label: '灵髓' },
         { kind: 'spirit-jade', quantity: 1, label: '灵玉' },
-        { kind: 'rare-soul', quantity: 10, label: '稀有兽魂' },
-      ],
-    },
-    {
-      tierKey: FACTION_STIPEND_BALANCE_CONFIG.tiers[5].tierKey,
-      minContribution: 1000,
-      label: '阵营重臣',
-      rewards: [
-        { kind: 'gold', quantity: 80, label: '金币' },
-        { kind: 'spirit-root', quantity: SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-1000'], label: '灵根' },
-        { kind: 'spirit-shard', quantity: 6, label: '随机灵宠碎片', spiritPoolIds: COMMON_NON_STARTER_SPIRIT_IDS },
-        { kind: 'spirit-marrow', quantity: 8, label: '灵髓' },
-        { kind: 'spirit-jade', quantity: 2, label: '灵玉' },
-        { kind: 'legendary-soul', quantity: 2, label: '传说兽魂' },
+        { kind: 'rare-soul', quantity: 8, label: '稀有兽魂' },
       ],
     },
   ],
@@ -358,6 +356,34 @@ export const RAID_BALANCE_CONFIG = {
   tianjiPurchase: {
     extraAttempts: [],
     extraRefreshes: [],
+  },
+};
+
+export const PLANT_UNLOCK_BALANCE_CONFIG = {
+  baseUnlockedSeedIds: ['qilingya', 'qinglingmai', 'xunyamai'],
+  rarityContributionRequired: {
+    rare: 100,
+    legendary: 200,
+  },
+  commonHarvestThresholds: [
+    { minSortOrder: 70, harvestRequired: 30 },
+    { minSortOrder: 60, harvestRequired: 24 },
+    { minSortOrder: 50, harvestRequired: 18 },
+    { minSortOrder: 40, harvestRequired: 12 },
+    { minSortOrder: 0, harvestRequired: 6 },
+  ],
+};
+
+export const FACTION_CONTRIBUTION_BALANCE_CONFIG = {
+  sources: {
+    startCultivation: 1,
+    fieldCollect: 2,
+    spiritRecover: 2,
+    spiritRollTraits: 3,
+    socialHarvestField: 2,
+    socialReviveField: 1,
+    raidBattleSettled: 2,
+    raidBattleWinBonus: 3,
   },
 };
 
@@ -763,6 +789,7 @@ export const GAME_BALANCE = {
     donateGoldStep: 100,
     contributionPerDonateStep: 1,
     stipendTiers: FACTION_STIPEND_CONFIG.tiers,
+    contributionSources: FACTION_CONTRIBUTION_BALANCE_CONFIG.sources,
     advantages: FACTION_ADVANTAGE_CONFIG,
   },
   raid: {
@@ -1009,6 +1036,36 @@ export function getSeedGrowthSeconds(seedId) {
   }
 
   return seedConfig.growthSeconds;
+}
+
+export function getPlantUnlockRequirement(seedId, rarity, sortOrder) {
+  if (PLANT_UNLOCK_BALANCE_CONFIG.baseUnlockedSeedIds.includes(seedId)) {
+    return { harvestRequired: 0, contributionRequired: 0 };
+  }
+
+  const normalizedRarity = typeof rarity === 'string' ? rarity.toLowerCase() : '';
+  if (normalizedRarity === 'legendary') {
+    return {
+      harvestRequired: 0,
+      contributionRequired: PLANT_UNLOCK_BALANCE_CONFIG.rarityContributionRequired.legendary,
+    };
+  }
+
+  if (normalizedRarity === 'rare') {
+    return {
+      harvestRequired: 0,
+      contributionRequired: PLANT_UNLOCK_BALANCE_CONFIG.rarityContributionRequired.rare,
+    };
+  }
+
+  const matchedThreshold = PLANT_UNLOCK_BALANCE_CONFIG.commonHarvestThresholds.find((threshold) => sortOrder >= threshold.minSortOrder)
+    ?? PLANT_UNLOCK_BALANCE_CONFIG.commonHarvestThresholds[PLANT_UNLOCK_BALANCE_CONFIG.commonHarvestThresholds.length - 1]
+    ?? { harvestRequired: 10 };
+
+  return {
+    harvestRequired: matchedThreshold.harvestRequired,
+    contributionRequired: 0,
+  };
 }
 
 /**

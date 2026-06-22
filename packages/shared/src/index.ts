@@ -573,6 +573,10 @@ export interface ClientSeasonSignInMilestone {
   title: string;
   reached: boolean;
   remainingDays: number;
+  claimed: boolean;
+  claimable: boolean;
+  debugUnlocked: boolean;
+  rewards: ClientSeasonRewardItem[];
 }
 
 export interface ClientSeasonSignInState {
@@ -594,6 +598,18 @@ export interface ClientClaimSeasonSignInResponse {
   rewardTianjiTalisman: number;
   tianjiTalisman: number;
   resourceVersion: number;
+  signIn: ClientSeasonSignInState;
+}
+
+export interface ClientClaimSeasonSignInMilestoneRequest {
+  dayCount: number;
+  requestIdempotencyKey?: string;
+}
+
+export interface ClientClaimSeasonSignInMilestoneResponse {
+  app: string;
+  summary: string;
+  rewards: ClientSeasonRewardItem[];
   signIn: ClientSeasonSignInState;
 }
 

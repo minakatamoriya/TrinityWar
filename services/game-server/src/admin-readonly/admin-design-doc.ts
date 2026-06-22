@@ -202,7 +202,7 @@ function buildCoreRulesSection(): AdminDesignDocSection {
         fact('commonRootRewardMax', 'commonRootRewardMax', SPIRIT_ROOT_ECONOMY_CONFIG.farmHarvest.commonRootRewardMax),
       ],
       notes: [
-        `高阶阵营俸禄可把单日灵根提升到 ${SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-1000']}。`,
+        `高阶阵营俸禄可把单日灵根提升到 ${SPIRIT_ROOT_ECONOMY_CONFIG.stipendRootRewards['contribution-300']}。`,
       ],
     }),
     card({

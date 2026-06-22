@@ -5,6 +5,7 @@ import {
   type ClientDevelopmentSeasonControlResponse,
   type ClientSeasonStartupActionResponse,
   type ClientClaimSeasonSignInResponse,
+  type ClientClaimSeasonSignInMilestoneResponse,
   type ClientClaimStarterSeedResponse,
   type ClientClaimDailyTaskResponse,
   type ClientClaimFactionStipendResponse,
@@ -27,7 +28,13 @@ import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { IdempotencyService } from '../idempotency/idempotency.service.js';
 import { getLocalDateKey } from '../lib/date-key.js';
 import { grantFactionContribution } from '../faction/contribution.service.js';
-import { DAILY_TASK_CONFIG, GAME_BALANCE, getFactionStipendTier, getSeedStageGold } from '../lib/game-balance.js';
+import {
+  DAILY_TASK_CONFIG,
+  GAME_BALANCE,
+  getFactionStipendTier,
+  getPlantUnlockRequirement,
+  getSeedStageGold,
+} from '../lib/game-balance.js';
 import {
   applyFactionFarmHarvestSpiritRootBonus,
   getFactionFarmMatureYieldMultiplier,
@@ -51,6 +58,7 @@ import {
 } from './building-upgrade-rule.service.js';
 import { FieldCommandRuleService } from './field-command-rule.service.js';
 import type { ClaimDailyTaskRequestDto, ClaimFactionStipendRequestDto, ClaimPendingRequestDto, ClaimStarterSeedRequestDto, CollectFieldRequestDto, FactionTaskSubmitRequestDto, RecruitArmyRequestDto, StartCultivationRequestDto, UnlockPlantRequestDto, UpgradeBuildingRequestDto } from './dto.js';
+import type { ClaimSeasonSignInMilestoneRequestDto } from './dto.js';
 
 interface ClaimPendingCommandInput {
   playerId: string;
@@ -68,6 +76,11 @@ interface ClaimStarterSeedCommandInput {
   playerId: string;
   request: ClaimStarterSeedRequestDto;
   idempotencyKey?: string;
+}
+
+interface ClaimSeasonSignInMilestoneCommandInput {
+  playerId: string;
+  request: ClaimSeasonSignInMilestoneRequestDto;
 }
 
 interface UpgradeBuildingCommandInput {
@@ -128,11 +141,6 @@ type ResolvableStipendReward = ClientFactionStipendReward & {
   spiritPoolIds?: string[];
 };
 
-interface PlantUnlockRequirement {
-  harvestRequired: number;
-  contributionRequired: number;
-}
-
 interface PlantUnlockMetrics {
   harvestCount: number;
   contribution: number;
@@ -168,6 +176,19 @@ export class ClientCommandService {
         app: APP_NAME,
         summary: `签到成功，获得天机符 x${result.rewardTianjiTalisman}。`,
         ...result,
+      };
+    });
+  }
+
+  async claimSeasonSignInMilestone(input: ClaimSeasonSignInMilestoneCommandInput): Promise<ClientClaimSeasonSignInMilestoneResponse> {
+    await this.seasonGuardService.ensureNoSeasonRolloverForAction(input.playerId);
+    return this.prisma.transaction<ClientClaimSeasonSignInMilestoneResponse>(async (client) => {
+      const result = await this.seasonService.claimSeasonSignInMilestone(client, input.playerId, input.request.dayCount);
+      return {
+        app: APP_NAME,
+        summary: result.summary,
+        rewards: result.rewards,
+        signIn: result.signIn,
       };
     });
   }
@@ -939,6 +960,19 @@ export class ClientCommandService {
       if (seedDefinition.seedId !== TUTORIAL_STARTER_SEED_ID) {
         await this.recordDailyTaskProgress(client, input.playerId, 'start-cultivation', 1, now);
         await this.recordDailyTaskProgress(client, input.playerId, 'farm-cycle', 1, now);
+        const contributionConfig = await this.taskConfigService.getDailyFactionTaskConfig('start-cultivation', client);
+        if (contributionConfig?.isEnabled && contributionConfig.rewardContribution > 0) {
+          await grantFactionContribution(client, {
+            playerId: input.playerId,
+            contribution: contributionConfig.rewardContribution,
+            sourceType: 'field-start-cultivation',
+            sourceId: field.id,
+            metadata: {
+              seedId: seedDefinition.seedId,
+              fieldSlotId: field.id,
+            },
+          });
+        }
       }
 
       const responseSnapshot: ClientStateMutationResponse = {
@@ -2997,29 +3031,6 @@ async function loadPlantUnlockMetrics(client: Prisma.TransactionClient, playerId
   };
 }
 
-function getPlantUnlockRequirement(seedId: string, rarity: string, sortOrder: number): PlantUnlockRequirement {
-  if (seedId === 'qilingya' || seedId === 'qinglingmai' || seedId === 'xunyamai') {
-    return { harvestRequired: 0, contributionRequired: 0 };
-  }
-
-  if (rarity === 'legendary') {
-    return { harvestRequired: 0, contributionRequired: 800 };
-  }
-
-  if (rarity === 'rare') {
-    return { harvestRequired: 0, contributionRequired: 300 };
-  }
-
-  if (sortOrder >= 60) {
-    return { harvestRequired: 30, contributionRequired: 0 };
-  }
-
-  if (sortOrder >= 50) {
-    return { harvestRequired: 20, contributionRequired: 0 };
-  }
-
-  return { harvestRequired: 10, contributionRequired: 0 };
-}
 function sumCollectRewardQuantity(rewards: ClientCollectRewardItem[], kind: NonNullable<ClientCollectRewardItem['kind']>): number {
   return rewards
     .filter((reward) => reward.kind === kind)

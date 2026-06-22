@@ -1,6 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { DAILY_TASK_CONFIG, getDailyTaskDefinition } from '../lib/game-balance.js';
+import {
+  DAILY_TASK_CONFIG,
+  FACTION_CONTRIBUTION_BALANCE_CONFIG,
+  getDailyTaskDefinition,
+} from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 type PrismaClientLike = Prisma.TransactionClient | PrismaClient;
@@ -98,12 +102,21 @@ const DAILY_FACTION_DEFAULTS: ResolvedDailyFactionTaskConfig[] = [
 
 const CONTRIBUTION_RULE_DEFAULTS: ResolvedDailyFactionTaskConfig[] = [
   {
+    taskId: 'start-cultivation',
+    title: '开始种植',
+    description: '每次开始一轮非教程灵植培育获得个人阵营贡献。',
+    taskType: 'FARM_CULTIVATION',
+    targetCount: 1,
+    rewardContribution: FACTION_CONTRIBUTION_BALANCE_CONFIG.sources.startCultivation,
+    isEnabled: true,
+  },
+  {
     taskId: 'collect-field',
     title: '收取灵植',
     description: '每次收取成熟灵植获得个人阵营贡献。',
     taskType: 'FARM_HARVEST',
     targetCount: 1,
-    rewardContribution: 2,
+    rewardContribution: FACTION_CONTRIBUTION_BALANCE_CONFIG.sources.fieldCollect,
     isEnabled: true,
   },
   {
@@ -112,7 +125,7 @@ const CONTRIBUTION_RULE_DEFAULTS: ResolvedDailyFactionTaskConfig[] = [
     description: '使用灵宠恢复获得个人阵营贡献。',
     taskType: 'SPIRIT_RECOVER',
     targetCount: 1,
-    rewardContribution: 2,
+    rewardContribution: FACTION_CONTRIBUTION_BALANCE_CONFIG.sources.spiritRecover,
     isEnabled: true,
   },
   {
@@ -121,7 +134,7 @@ const CONTRIBUTION_RULE_DEFAULTS: ResolvedDailyFactionTaskConfig[] = [
     description: '洗练灵宠词条获得个人阵营贡献。',
     taskType: 'SPIRIT_ROLL_TRAITS',
     targetCount: 1,
-    rewardContribution: 3,
+    rewardContribution: FACTION_CONTRIBUTION_BALANCE_CONFIG.sources.spiritRollTraits,
     isEnabled: true,
   },
   ...DAILY_FACTION_DEFAULTS.map((task) => ({
