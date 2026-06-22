@@ -30,8 +30,9 @@ export interface SeedRewardModalState {
   title: string;
   summary: string;
   footerHint?: string;
-  confirmAction?: 'claim-faction-stipend' | 'claim-starter-seeds' | 'claim-notification';
+  confirmAction?: 'claim-faction-stipend' | 'claim-starter-seeds' | 'claim-notification' | 'claim-season-sign-in-milestone';
   notificationId?: string;
+  seasonSignInMilestoneDayCount?: number;
   afterConfirmActions?: TutorialFlowAction[];
   items: SeedRewardModalItem[];
 }
@@ -62,7 +63,7 @@ export interface GlobalUnlockModalState {
   summary: string;
   items: GlobalUnlockItem[];
   afterConfirmActions?: TutorialFlowAction[];
-  completionKind?: 'friend-invite' | 'spirit-codex-visible';
+  completionKind?: 'friend-invite' | 'spirit-codex-visible' | 'plant-unlock-ready';
   subjectId?: string;
 }
 

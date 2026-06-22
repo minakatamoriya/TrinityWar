@@ -20,6 +20,7 @@ import type {
   ClientSpiritTraitCode,
   ClientSpiritTraitRollMaterial,
   ClientSpiritState,
+  ClientSeasonRewardItem,
   ClientSeasonRewardsResponse,
   ClientSeasonSignInState,
   ClientSeasonTransition,
@@ -98,7 +99,7 @@ import {
   emptyGlobalItemInventory,
   getPreferredSeedId,
 } from './modules/backpack/backpackState';
-import { mergePlantResearchStateFromScenePlants } from './modules/farm/seedPresentation';
+import { buildSeedCatalogMap, buildSeedGroups, mergePlantResearchStateFromScenePlants } from './modules/farm/seedPresentation';
 import { buildUpgradeRequest } from './modules/building/buildingRequests';
 import { buildFactionContributionTiers } from './modules/faction/factionPresentation';
 import { applyFactionStipendSoulRewards } from './modules/faction/factionRewardState';
@@ -238,6 +239,7 @@ function App(): JSX.Element {
   const [globalFeatureModal, setGlobalFeatureModal] = useState<GlobalFeatureModalState | null>(null);
   const [globalUnlockModal, setGlobalUnlockModal] = useState<GlobalUnlockModalState | null>(null);
   const [pendingSpiritCodexRevealIds, setPendingSpiritCodexRevealIds] = useState<string[]>([]);
+  const [pendingPlantUnlockPromptIds, setPendingPlantUnlockPromptIds] = useState<string[]>([]);
   const [seasonSignInState, setSeasonSignInState] = useState<ClientSeasonSignInState | null>(null);
   const [seasonRewardsState, setSeasonRewardsState] = useState<ClientSeasonRewardsResponse | null>(null);
   const [seasonCountdownNow, setSeasonCountdownNow] = useState(() => Date.now());
@@ -246,9 +248,15 @@ function App(): JSX.Element {
   const characterDialogPortalRef = useRef<HTMLDivElement | null>(null);
   const welcomeDialogSessionIdRef = useRef<string | null>(null);
   const farmEnterDialogRef = useRef<{ sceneId: string; at: number } | null>(null);
+  const plantUnlockReadyIdsRef = useRef<string[] | null>(null);
+  const plantCatalogMap = useRef(buildSeedCatalogMap()).current;
   const battleDemoScenarioIndexRef = useRef(0);
   const seasonRefreshInFlightRef = useRef(false);
   const seasonNoticeSeasonNumberRef = useRef<number | null>(null);
+  const plantPromptSeedGroups = buildSeedGroups({ unlockedSeedIds, seedInventory, plantResearchState });
+  const plantPromptSelectedSeedCodexItem = seedCodexState
+    ? plantPromptSeedGroups.flatMap((group) => group.seeds).find((seed) => seed.id === seedCodexState.selectedSeedId) ?? null
+    : null;
 
   const handleOpenBattleDemo = (): void => {
     const trait = (code: string, label: string, value: number) => ({ code, label, value });
@@ -658,6 +666,9 @@ function App(): JSX.Element {
 
     setSeedRewardModal(buildNotificationClaimRewardModal(notification, {
       resolveAttachmentLabel: (attachment) => resolveNotificationAttachmentLabel(attachment, spiritState, pendingSpiritCodexRevealIds),
+      footerHint: hasHiddenSpiritShardAttachments(notification.attachments, spiritState, pendingSpiritCodexRevealIds)
+        ? '首次获得未发现的精魄后，可前往灵宠图鉴查看真实名称与收集进度。'
+        : undefined,
     }));
   };
 
@@ -696,7 +707,10 @@ function App(): JSX.Element {
       if (newlyVisibleSpiritIds.length > 0) {
         enqueueSpiritCodexRevealIds(newlyVisibleSpiritIds);
       }
-      showToast(result.summary, 'success');
+      const toastMessage = buildSpiritShardClaimToastMessage(result.summary, newlyVisibleSpiritIds.length > 0);
+      if (toastMessage) {
+        showToast(toastMessage, 'success');
+      }
     } catch (error) {
       showToast(error instanceof Error && error.message ? error.message : '当前无法领取附件，请稍后重试。', 'error');
     }
@@ -1110,6 +1124,7 @@ function App(): JSX.Element {
     setFarmCollectPresentation(null);
     setGlobalFeatureModal(null);
     setGlobalUnlockModal(null);
+    setPendingPlantUnlockPromptIds([]);
     setPendingActionKey(null);
     setAuthScreen('account-select');
     notifications.reset();
@@ -1117,6 +1132,7 @@ function App(): JSX.Element {
     setLoginError(null);
     welcomeDialogSessionIdRef.current = null;
     farmEnterDialogRef.current = null;
+    plantUnlockReadyIdsRef.current = null;
   };
 
   useEffect(() => {
@@ -1290,6 +1306,10 @@ function App(): JSX.Element {
       return;
     }
 
+    if (viewModel.bootstrap.season.startup?.blocking) {
+      return;
+    }
+
     if (welcomeDialogSessionIdRef.current === loginSession.player.id) {
       return;
     }
@@ -1304,6 +1324,10 @@ function App(): JSX.Element {
 
   useEffect(() => {
     if (activeScene !== 'farm' || !viewModel) {
+      return;
+    }
+
+    if (viewModel.bootstrap.season.startup?.blocking) {
       return;
     }
 
@@ -1388,6 +1412,61 @@ function App(): JSX.Element {
       active = false;
     };
   }, [armyQueueRefreshReadyAt, farmTick, viewModel]);
+
+  useEffect(() => {
+    const readyPlantIds = getReadyPlantUnlockIds(plantResearchState);
+    const previousReadyPlantIds = plantUnlockReadyIdsRef.current;
+    plantUnlockReadyIdsRef.current = readyPlantIds;
+
+    if (previousReadyPlantIds === null) {
+      return;
+    }
+
+    const newlyReadyPlantIds = readyPlantIds.filter((plantId) => !previousReadyPlantIds.includes(plantId));
+    if (newlyReadyPlantIds.length <= 0) {
+      return;
+    }
+
+    setPendingPlantUnlockPromptIds((current) => {
+      const nextIds = [...current];
+      for (const plantId of newlyReadyPlantIds) {
+        if (!nextIds.includes(plantId)) {
+          nextIds.push(plantId);
+        }
+      }
+      return nextIds;
+    });
+
+    showToast(buildPlantUnlockReadyToastMessage(newlyReadyPlantIds, plantCatalogMap), 'success');
+  }, [plantCatalogMap, plantResearchState, showToast]);
+
+  useEffect(() => {
+    if (globalUnlockModal) {
+      return;
+    }
+
+    const pendingPlantId = resolvePendingPlantUnlockPromptTarget({
+      pendingPlantUnlockPromptIds,
+      seedGroups: plantPromptSeedGroups,
+      seedSelectionState,
+      selectedSeedCodexItem: plantPromptSelectedSeedCodexItem,
+      selectedSeedId,
+    });
+
+    if (!pendingPlantId) {
+      return;
+    }
+
+    setGlobalUnlockModal(buildPlantUnlockReadyModal(pendingPlantId, plantCatalogMap));
+  }, [
+    globalUnlockModal,
+    pendingPlantUnlockPromptIds,
+    plantCatalogMap,
+    plantPromptSeedGroups,
+    plantPromptSelectedSeedCodexItem,
+    seedSelectionState,
+    selectedSeedId,
+  ]);
 
   const appEntryState = selectAppEntryState({
     loginSession,
@@ -1603,6 +1682,7 @@ function App(): JSX.Element {
       const result = await unlockPlant({ plantType: plantId });
       applyMutationResult(result);
       syncSeedBackpackState(result.bootstrap.backpack);
+      setPendingPlantUnlockPromptIds((current) => current.filter((id) => id !== plantId));
     } catch (error) {
       if (await handleSeasonRolledOverError(error)) {
         return;
@@ -1792,14 +1872,42 @@ function App(): JSX.Element {
     }
   };
 
-  const handleClaimSeasonSignInMilestone = async (dayCount: number): Promise<void> => {
+  const handleClaimSeasonSignInMilestone = (dayCount: number): void => {
+    const milestone = seasonSignInMilestones.find((item) => item.dayCount === dayCount);
+    if (!milestone) {
+      return;
+    }
+
+    setSeedRewardModal({
+      title: milestone.title,
+      summary: `累计签到 ${milestone.dayCount} 天后可领取以下宝箱奖励。`,
+      footerHint: hasHiddenSpiritShardSeasonRewards(milestone.rewards, spiritState)
+        ? '首次获得未发现的精魄后，可前往灵宠图鉴查看真实名称与收集进度。'
+        : undefined,
+      confirmAction: 'claim-season-sign-in-milestone',
+      seasonSignInMilestoneDayCount: dayCount,
+      items: milestone.rewards.map((reward) => ({
+        itemId: reward.kind,
+        label: resolveSeasonRewardItemLabel(reward, spiritState),
+        quantity: reward.quantity,
+      })),
+    });
+  };
+
+  const handleConfirmSeasonSignInMilestoneClaim = async (): Promise<void> => {
+    const dayCount = seedRewardModal?.seasonSignInMilestoneDayCount;
+    if (!loginSession || seedRewardModal?.confirmAction !== 'claim-season-sign-in-milestone' || !dayCount) {
+      return;
+    }
+
     const actionKey = `season:sign-in-milestone:${dayCount}`;
-    if (!loginSession || pendingActionKey === actionKey) {
+    if (pendingActionKey === actionKey) {
       return;
     }
 
     setPendingActionKey(actionKey);
     try {
+      const beforeSpiritState = spiritState;
       const result = await claimSeasonSignInMilestone({ dayCount });
       setSeasonSignInState(result.signIn);
       const talismanReward = result.rewards
@@ -1811,17 +1919,34 @@ function App(): JSX.Element {
           tianjiTalisman: (spiritState?.tianjiTalisman ?? tianjiTalismanCount) + talismanReward,
         });
       }
+      let newlyVisibleSpiritIds: string[] = [];
       try {
         const [nextSpirit, nextSeasonRewards] = await Promise.all([
           loadSpiritState(),
           loadSeasonRewards(),
         ]);
+        newlyVisibleSpiritIds = findNewlyVisibleSpiritCodexIds({
+          before: beforeSpiritState,
+          after: nextSpirit,
+          spiritIds: Array.from(new Set(
+            result.rewards
+              .filter((reward) => reward.kind === 'spiritShard' && reward.spiritId)
+              .map((reward) => reward.spiritId as string),
+          )),
+        });
         setSpiritState(nextSpirit);
         setSeasonRewardsState(nextSeasonRewards);
+        if (newlyVisibleSpiritIds.length > 0) {
+          enqueueSpiritCodexRevealIds(newlyVisibleSpiritIds);
+        }
       } catch {
         // Test-mode milestone claims can still rely on the optimistic sign-in/talisman refresh above.
       }
-      showToast(result.summary, 'success');
+      setSeedRewardModal(null);
+      const toastMessage = buildSpiritShardClaimToastMessage(result.summary, newlyVisibleSpiritIds.length > 0);
+      if (toastMessage) {
+        showToast(toastMessage, 'success');
+      }
     } catch (error) {
       if (await handleSeasonRolledOverError(error)) {
         return;
@@ -2018,6 +2143,8 @@ function App(): JSX.Element {
         setRaidHubTab('targets');
         setFactionTab('overview');
         setSocialTab('friends');
+      } else if (result.startup.currentStep === 'faction-confirm') {
+        setSeasonStartupStepOverride('faction-select');
       }
       if (result.startup.currentStep === 'faction-confirm') {
         showToast(result.summary, 'info');
@@ -2370,6 +2497,11 @@ function App(): JSX.Element {
           setFactionTab('overview');
         }
         return;
+      }
+
+      const preferredPendingPlantId = getPreferredPendingPlantUnlockId(seedGroups, pendingPlantUnlockPromptIds);
+      if (preferredPendingPlantId) {
+        setSelectedSeedId(preferredPendingPlantId);
       }
 
       setSeedSelectionState({
@@ -2834,6 +2966,9 @@ function App(): JSX.Element {
     const spiritCodexRevealSubjectId = globalUnlockModal.completionKind === 'spirit-codex-visible'
       ? globalUnlockModal.subjectId ?? null
       : null;
+    const plantUnlockReadySubjectId = globalUnlockModal.completionKind === 'plant-unlock-ready'
+      ? globalUnlockModal.subjectId ?? null
+      : null;
     setGlobalUnlockModal(null);
     if (globalUnlockModal.completionKind === 'friend-invite') {
       setPendingFriendInvite(null);
@@ -2841,6 +2976,9 @@ function App(): JSX.Element {
     }
     if (spiritCodexRevealSubjectId) {
       setPendingSpiritCodexRevealIds((current) => current.filter((spiritId) => spiritId !== spiritCodexRevealSubjectId));
+    }
+    if (plantUnlockReadySubjectId) {
+      setPendingPlantUnlockPromptIds((current) => current.filter((plantId) => plantId !== plantUnlockReadySubjectId));
     }
     if (afterConfirmActions.length > 0) {
       runTutorialFlowActions(afterConfirmActions);
@@ -2997,7 +3135,9 @@ function App(): JSX.Element {
             tianjiTalisman={tianjiTalismanCount}
             onOpenResources={() => setTopResourcePanel('resources')}
             onOpenSeedCodex={() => {
-              setSeedCodexState({ selectedSeedId: firstVisibleUnlockedSeedId });
+              setSeedCodexState({
+                selectedSeedId: getPreferredPendingPlantUnlockId(seedGroups, pendingPlantUnlockPromptIds) ?? firstVisibleUnlockedSeedId,
+              });
             }}
             onOpenSpiritCodex={() => {
               setTopSpiritCodexSpiritId(topSpiritCodexSelectedId);
@@ -3235,6 +3375,9 @@ function App(): JSX.Element {
             onClaimFactionStipend={() => {
               void handleConfirmFactionStipendClaim();
             }}
+            onClaimSeasonSignInMilestone={() => {
+              void handleConfirmSeasonSignInMilestoneClaim();
+            }}
             onClaimNotification={() => {
               void handleConfirmNotificationClaim();
             }}
@@ -3342,6 +3485,154 @@ function findNewlyVisibleSpiritCodexIds(input: {
   });
 }
 
+function isSpiritShardHidden(input: {
+  spiritId?: string;
+  spirit: ClientSpiritState | null;
+  pendingRevealIds?: string[];
+}): boolean {
+  if (!input.spiritId) {
+    return false;
+  }
+
+  if (input.pendingRevealIds?.includes(input.spiritId)) {
+    return true;
+  }
+
+  const codexEntry = input.spirit?.codex.find((entry) => entry.spiritId === input.spiritId) ?? null;
+  return !codexEntry || codexEntry.sceneVisibility !== 'named';
+}
+
+function resolveSeasonRewardItemLabel(
+  reward: ClientSeasonRewardItem,
+  spirit: ClientSpiritState | null,
+): string {
+  if (reward.kind === 'spiritShard' && isSpiritShardHidden({ spiritId: reward.spiritId, spirit })) {
+    return '??? 精魄';
+  }
+
+  return reward.label;
+}
+
+function hasHiddenSpiritShardSeasonRewards(
+  rewards: ClientSeasonRewardItem[],
+  spirit: ClientSpiritState | null,
+): boolean {
+  return rewards.some((reward) => reward.kind === 'spiritShard' && isSpiritShardHidden({
+    spiritId: reward.spiritId,
+    spirit,
+  }));
+}
+
+function hasHiddenSpiritShardAttachments(
+  attachments: NotificationAttachment[],
+  spirit: ClientSpiritState | null,
+  pendingRevealIds: string[],
+): boolean {
+  return attachments.some((attachment) => attachment.kind === 'spiritShard' && isSpiritShardHidden({
+    spiritId: attachment.spiritId,
+    spirit,
+    pendingRevealIds,
+  }));
+}
+
+function buildSpiritShardClaimToastMessage(summary: string, hasNewlyVisibleSpiritShard: boolean): string | null {
+  if (hasNewlyVisibleSpiritShard) {
+    return '已获得新精魄，可前往灵宠图鉴查看。';
+  }
+
+  return summary;
+}
+
+function getReadyPlantUnlockIds(plantResearchState: Record<string, ClientPlantResearchState>): string[] {
+  return Object.values(plantResearchState)
+    .filter((research) => research.canUnlock && !research.unlocked)
+    .map((research) => research.plantType)
+    .sort();
+}
+
+function buildPlantUnlockReadyToastMessage(
+  plantIds: string[],
+  seedCatalogMap: Map<string, { name: string }>,
+): string {
+  if (plantIds.length === 1) {
+    const plantName = seedCatalogMap.get(plantIds[0] ?? '')?.name ?? '新灵植';
+    return `${plantName} 已满足解锁条件，可前往灵植图鉴查看。`;
+  }
+
+  return `有 ${plantIds.length} 株新灵植已满足解锁条件，可前往灵植图鉴查看。`;
+}
+
+function getPreferredPendingPlantUnlockId(
+  seedGroups: Array<{ seeds: Array<{ id: string; research?: ClientPlantResearchState; unlocked: boolean }> }>,
+  pendingPlantUnlockPromptIds: string[],
+): string | null {
+  const pendingSeedIds = new Set(pendingPlantUnlockPromptIds);
+  const pendingSeed = seedGroups
+    .flatMap((group) => group.seeds)
+    .find((seed) => pendingSeedIds.has(seed.id) && seed.research?.canUnlock && !seed.unlocked);
+
+  return pendingSeed?.id ?? null;
+}
+
+function resolvePendingPlantUnlockPromptTarget(input: {
+  pendingPlantUnlockPromptIds: string[];
+  seedGroups: Array<{ seeds: Array<{ id: string; research?: ClientPlantResearchState; unlocked: boolean }> }>;
+  seedSelectionState: SeedSelectionState | null;
+  selectedSeedCodexItem: { id: string; research?: ClientPlantResearchState; unlocked: boolean } | null;
+  selectedSeedId: string;
+}): string | null {
+  const pendingSeedIds = new Set(input.pendingPlantUnlockPromptIds);
+
+  const selectedCodexPlant = input.selectedSeedCodexItem;
+  if (
+    selectedCodexPlant
+    && pendingSeedIds.has(selectedCodexPlant.id)
+    && selectedCodexPlant.research?.canUnlock
+    && !selectedCodexPlant.unlocked
+  ) {
+    return selectedCodexPlant.id;
+  }
+
+  if (!input.seedSelectionState) {
+    return null;
+  }
+
+  const selectedSeed = input.seedGroups
+    .flatMap((group) => group.seeds)
+    .find((seed) => seed.id === input.selectedSeedId);
+
+  if (
+    selectedSeed
+    && pendingSeedIds.has(selectedSeed.id)
+    && selectedSeed.research?.canUnlock
+    && !selectedSeed.unlocked
+  ) {
+    return selectedSeed.id;
+  }
+
+  return null;
+}
+
+function buildPlantUnlockReadyModal(
+  plantId: string,
+  seedCatalogMap: Map<string, { name: string }>,
+): GlobalUnlockModalState {
+  const plantName = seedCatalogMap.get(plantId)?.name ?? '新灵植';
+
+  return {
+    title: '灵植已满足解锁条件',
+    summary: `${plantName} 已达到解锁条件。你可以先在灵植图鉴查看详细信息，并在图鉴中完成解锁；解锁后即可在种植界面直接播种。`,
+    completionKind: 'plant-unlock-ready',
+    subjectId: plantId,
+    items: [{
+      id: plantId,
+      label: plantName,
+      kind: 'plant',
+      description: '先查看，再解锁，随后即可播种。',
+    }],
+  };
+}
+
 function resolveNotificationAttachmentLabel(
   attachment: NotificationAttachment,
   spirit: ClientSpiritState | null,
@@ -3351,16 +3642,11 @@ function resolveNotificationAttachmentLabel(
     return null;
   }
 
-  if (pendingRevealIds.includes(attachment.spiritId)) {
-    return '??? 精魄';
-  }
-
-  const codexEntry = spirit?.codex.find((entry) => entry.spiritId === attachment.spiritId) ?? null;
-  if (codexEntry && codexEntry.sceneVisibility === 'named') {
-    return null;
-  }
-
-  return '??? 精魄';
+  return isSpiritShardHidden({
+    spiritId: attachment.spiritId,
+    spirit,
+    pendingRevealIds,
+  }) ? '??? 精魄' : null;
 }
 
 export default App;

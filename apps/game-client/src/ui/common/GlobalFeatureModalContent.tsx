@@ -1,5 +1,4 @@
-import type { ClientSeasonRewardItem } from '@trinitywar/shared';
-import type { ClientSeasonMedalCabinet, ClientSpiritState } from '@trinitywar/shared';
+import type { ClientSeasonMedalCabinet, ClientSeasonRewardItem, ClientSpiritState } from '@trinitywar/shared';
 import { SeasonMedalCabinetView } from './SeasonMedalCabinetView';
 
 export interface FactionContributionTierView {
@@ -80,7 +79,7 @@ function SeasonResetRulesPanel(props: { title: string; reset: string[]; retained
       <article className="contribution-tier-card">
         <div>
           <span>赛季重置</span>
-          <strong>以下内容会清零</strong>
+          <strong>以下内容会在新赛季开始后重置</strong>
         </div>
         <ul>
           {props.reset.map((item) => (
@@ -112,6 +111,22 @@ function ContributionTierList(props: { tiers: FactionContributionTierView[] }): 
   );
 }
 
+function buildSeasonMilestoneStatusLabel(milestone: SeasonSignInMilestoneView): string {
+  if (milestone.claimed) {
+    return '已领取';
+  }
+
+  if (milestone.reached) {
+    return '可领取';
+  }
+
+  if (milestone.debugUnlocked) {
+    return `测试可领 -${milestone.remainingDays}`;
+  }
+
+  return `还差 ${milestone.remainingDays} 天`;
+}
+
 function SeasonSignInPanel(props: SeasonSignInPanelProps): JSX.Element {
   const {
     record,
@@ -130,27 +145,6 @@ function SeasonSignInPanel(props: SeasonSignInPanelProps): JSX.Element {
         <span>累计 {record.claimedDays.length}/28 天</span>
         <strong>今日 x{todayReward}</strong>
       </div>
-      <div className="season-signin-milestones" aria-label="累计签到宝箱">
-        {milestones.map((milestone) => (
-          <div className={`season-signin-milestone ${milestone.reached ? 'reached' : ''}`} key={milestone.dayCount}>
-            <span className="season-signin-milestone-icon" aria-hidden="true">箱</span>
-            <div>
-              <strong>{milestone.title}</strong>
-              <span>累计 {milestone.dayCount} 天</span>
-              <span>{milestone.rewards.map((reward) => `${reward.label} x${reward.quantity}`).join('、')}</span>
-            </div>
-            <em>{milestone.claimed ? '已领取' : milestone.reached ? '已达成' : milestone.debugUnlocked ? `测试可领（还差 ${milestone.remainingDays} 天）` : `还差 ${milestone.remainingDays} 天`}</em>
-            <button
-              className="secondary-button small"
-              disabled={!milestone.claimable || pendingActionKey === `season:sign-in-milestone:${milestone.dayCount}`}
-              onClick={() => onClaimMilestone(milestone.dayCount)}
-              type="button"
-            >
-              {milestone.claimed ? '已领取' : pendingActionKey === `season:sign-in-milestone:${milestone.dayCount}` ? '领取中...' : milestone.debugUnlocked ? '测试领取' : '领取宝箱'}
-            </button>
-          </div>
-        ))}
-      </div>
       <p className="season-signin-rule">1-6 天 x1，7-13 天 x2，14-20 天 x3，21 天后 x4。</p>
       <div className="season-signin-grid" aria-label="赛季签到日历">
         {days.map((day) => (
@@ -165,13 +159,34 @@ function SeasonSignInPanel(props: SeasonSignInPanelProps): JSX.Element {
             key={day.day}
           >
             <span>{day.day}</span>
-            <strong>{day.missed ? '未签' : `符 x${day.reward}`}</strong>
+            <strong>{day.missed ? '未签' : `天机符 x${day.reward}`}</strong>
           </div>
         ))}
       </div>
       <button className="secondary-button" disabled={claimedToday} onClick={onClaim} type="button">
         {claimedToday ? '今日已签到' : '签到领取'}
       </button>
+      <div className="season-signin-milestones" aria-label="累计签到宝箱">
+        {milestones.map((milestone) => (
+          <div className={`season-signin-milestone ${milestone.reached ? 'reached' : ''}`} key={milestone.dayCount}>
+            <span className="season-signin-milestone-icon" aria-hidden="true">箱</span>
+            <strong>{milestone.dayCount} 天</strong>
+            <em>{buildSeasonMilestoneStatusLabel(milestone)}</em>
+            <button
+              className="secondary-button small season-signin-milestone-button"
+              disabled={!milestone.claimable || pendingActionKey === `season:sign-in-milestone:${milestone.dayCount}`}
+              onClick={() => onClaimMilestone(milestone.dayCount)}
+              type="button"
+            >
+              {milestone.claimed
+                ? '已领'
+                : pendingActionKey === `season:sign-in-milestone:${milestone.dayCount}`
+                  ? '领取中...'
+                  : '宝箱'}
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -192,9 +207,13 @@ function TianjiShopPanel(props: TianjiShopPanelProps): JSX.Element {
         onClick={onClaimAdReward}
         type="button"
       >
-        {pendingActionKey === 'spirit:ad-reward' ? '领取中...' : `看广告 +${spirit.shop.adReward.tianjiTalisman} 天机符`}
+        {pendingActionKey === 'spirit:ad-reward'
+          ? '领取中...'
+          : `看广告 +${spirit.shop.adReward.tianjiTalisman} 天机符`}
       </button>
-      <p className="panel-text">今日广告 {spirit.shop.adReward.usedToday}/{spirit.shop.adReward.dailyLimit}，观看完成后立即入账天机符。</p>
+      <p className="panel-text">
+        今日广告 {spirit.shop.adReward.usedToday}/{spirit.shop.adReward.dailyLimit}，观看完成后立即入账天机符。
+      </p>
       <div className="task-list tianji-shop-list">
         {spirit.shop.items.map((item) => (
           <div className="task-row tianji-shop-row" key={item.itemId}>
@@ -202,7 +221,10 @@ function TianjiShopPanel(props: TianjiShopPanelProps): JSX.Element {
             <div>
               <div className="task-row-head">
                 <strong>{item.label}</strong>
-                <span className="task-state-badge">{item.limitLabel}{item.remainingPurchases === null ? '' : ` · 剩 ${item.remainingPurchases}`}</span>
+                <span className="task-state-badge">
+                  {item.limitLabel}
+                  {item.remainingPurchases === null ? '' : ` · 剩 ${item.remainingPurchases}`}
+                </span>
               </div>
               <p>{item.description}</p>
             </div>

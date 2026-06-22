@@ -42,7 +42,7 @@ export function SeasonStartupFlow(props: SeasonStartupFlowProps): JSX.Element | 
     const selectedFactionName = factionChoiceCards.find((item) => item.code === selectedFactionCode)?.name ?? '所选阵营';
 
     return (
-      <section className="season-startup-screen" role="dialog" aria-modal="true" aria-labelledby="season-startup-title">
+      <section className="season-startup-screen" aria-labelledby="season-startup-title">
         <div className="season-startup-layout">
           <header className="season-startup-hero">
             <p className="eyebrow">新赛季启动</p>
@@ -112,7 +112,7 @@ export function SeasonStartupFlow(props: SeasonStartupFlowProps): JSX.Element | 
 
   if (effectiveStep === 'faction-confirm') {
     return (
-      <section className="season-startup-screen" role="dialog" aria-modal="true" aria-labelledby="season-startup-title">
+      <section className="season-startup-screen" aria-labelledby="season-startup-title">
         <div className="season-startup-layout">
           <header className="season-startup-hero">
             <p className="eyebrow">新赛季启动</p>
@@ -154,7 +154,7 @@ export function SeasonStartupFlow(props: SeasonStartupFlowProps): JSX.Element | 
   }
 
   return (
-    <section className="season-startup-screen" role="dialog" aria-modal="true" aria-labelledby="season-startup-title">
+    <section className="season-startup-screen" aria-labelledby="season-startup-title">
       <div className="season-startup-layout">
         <header className="season-startup-hero">
           <p className="eyebrow">新赛季启动</p>

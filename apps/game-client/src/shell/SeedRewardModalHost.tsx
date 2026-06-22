@@ -9,6 +9,7 @@ interface SeedRewardModalHostProps {
   seedCatalogMap: Map<string, SeedCatalogItem>;
   onClear: () => void;
   onClaimFactionStipend: () => void;
+  onClaimSeasonSignInMilestone: () => void;
   onClaimNotification: () => void;
   onClaimStarterSeeds: () => void;
   onRunAfterConfirmActions: () => void;
@@ -22,6 +23,7 @@ export function SeedRewardModalHost(props: SeedRewardModalHostProps): JSX.Elemen
     seedCatalogMap,
     onClear,
     onClaimFactionStipend,
+    onClaimSeasonSignInMilestone,
     onClaimNotification,
     onClaimStarterSeeds,
     onRunAfterConfirmActions,
@@ -35,6 +37,8 @@ export function SeedRewardModalHost(props: SeedRewardModalHostProps): JSX.Elemen
     <SeedRewardModal
       confirming={
         pendingActionKey === 'faction:stipend'
+        || (modal.confirmAction === 'claim-season-sign-in-milestone'
+          && pendingActionKey === `season:sign-in-milestone:${modal.seasonSignInMilestoneDayCount ?? ''}`)
         || pendingActionKey === 'spirit:ad-reward'
         || pendingActionKey === 'tutorial:starter-seeds'
         || (modal.confirmAction === 'claim-notification' && notificationActionId === `claim:${modal.notificationId}`)
@@ -55,6 +59,10 @@ export function SeedRewardModalHost(props: SeedRewardModalHostProps): JSX.Elemen
         }
         if (modal.confirmAction === 'claim-starter-seeds') {
           onClaimStarterSeeds();
+          return;
+        }
+        if (modal.confirmAction === 'claim-season-sign-in-milestone') {
+          onClaimSeasonSignInMilestone();
           return;
         }
         if (modal.confirmAction === 'claim-notification') {

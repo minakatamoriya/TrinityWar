@@ -3889,18 +3889,23 @@ button {
 
 .season-signin-milestones {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .season-signin-milestone {
   display: grid;
+  align-content: center;
+  justify-items: center;
   gap: 6px;
   min-width: 0;
-  padding: 8px 7px;
-  border-radius: 8px;
+  min-height: 96px;
+  aspect-ratio: 1 / 1;
+  padding: 10px 8px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 248, 234, 0.08);
   background: rgba(255, 248, 234, 0.04);
+  text-align: center;
 }
 
 .season-signin-milestone.reached {
@@ -3925,6 +3930,7 @@ button {
 .season-signin-milestone em {
   display: block;
   overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .season-signin-milestone strong {
@@ -3943,6 +3949,12 @@ button {
 .season-signin-milestone em {
   font-style: normal;
   color: #f8df9a;
+}
+
+.season-signin-milestone-button {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
 }
 
 .season-signin-rule {

@@ -11,6 +11,7 @@ import type { SeedRewardModalItem } from '../../ui/common/SeedRewardModal';
 
 interface NotificationRewardModalOptions {
   resolveAttachmentLabel?: (attachment: NotificationAttachment) => string | null;
+  footerHint?: string;
 }
 
 export function mapNotificationAttachmentToRewardItem(
@@ -32,6 +33,7 @@ export function buildNotificationClaimRewardModal(
   return {
     title: notification.title || '领取附件',
     summary: '确认后将以下附件收入背包。',
+    footerHint: options.footerHint,
     confirmAction: 'claim-notification',
     notificationId: notification.id,
     items: notification.attachments.map((attachment) => mapNotificationAttachmentToRewardItem(attachment, options)),
