@@ -1,7 +1,8 @@
 ﻿import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import { SocialRelationStatus, SocialRelationType } from '@prisma/client';
 import type { Prisma, PrismaClient, SpiritElement, SpiritRarity, SpiritRole } from '@prisma/client';
-import { APP_NAME, getBasicSpiritTraitRollGoldCost, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientCodexState, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientResolveSpiritTraitRollRequest, type ClientRollSpiritTraitsRequest, type ClientRollSpiritTraitsResponse, type ClientSceneVisibility, type ClientSetMainSpiritRequest, type ClientSpiritActiveRollMode, type ClientSpiritCodexEntry, type ClientSpiritDefinition, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritShopItem, type ClientSpiritSlot, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientSpiritTraitRollMaterial, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
+import { APP_NAME, getBasicSpiritTraitRollGoldCost, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientCodexState, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientResolveSpiritTraitRollRequest, type ClientRollSpiritTraitsRequest, type ClientRollSpiritTraitsResponse, type ClientSceneVisibility, type ClientSetMainSpiritRequest, type ClientSpiritActiveRollMode, type ClientSpiritCodexEntry, type ClientSpiritDefinition, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritPublicProfileResponse, type ClientSpiritPublicSlot, type ClientSpiritShopItem, type ClientSpiritSlot, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientSpiritTraitRollMaterial, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
 import { AuditService } from '../audit/audit.service.js';
 import { DailyTaskLifecycleService } from '../client-read/daily-task-lifecycle.service.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
@@ -73,6 +74,13 @@ type SpiritReadTrait = {
   sourceType: string;
 };
 
+type SpiritReadAppearance = {
+  appearanceSkinId: string | null;
+  appearanceFrameId: string | null;
+  appearanceCardBackId: string | null;
+  appearanceEffectId: string | null;
+};
+
 @Injectable()
 export class SpiritService {
   constructor(
@@ -103,6 +111,132 @@ export class SpiritService {
 
     const readModel = await this.findSpiritReadModel(playerId, client);
     return buildSpiritState(readModel.resource, readModel.slots, readModel.codex, readModel.shopPurchases, readModel.adRewardUsedToday, now);
+  }
+
+  async getPublicSpiritProfile(
+    viewerPlayerId: string,
+    targetPlayerId: string,
+    now: Date = new Date(),
+  ): Promise<ClientSpiritPublicProfileResponse> {
+    const [targetPlayer, relations] = await Promise.all([
+      this.prisma.db.player.findUnique({
+        where: { id: targetPlayerId },
+        select: {
+          id: true,
+          nickname: true,
+          castleLevelCache: true,
+          faction: {
+            select: {
+              code: true,
+              name: true,
+            },
+          },
+        },
+      }),
+      viewerPlayerId === targetPlayerId
+        ? Promise.resolve([])
+        : this.prisma.db.playerSocialRelation.findMany({
+          where: {
+            playerId: viewerPlayerId,
+            targetPlayerId,
+            status: SocialRelationStatus.ACTIVE,
+            relationType: { in: [SocialRelationType.FRIEND, SocialRelationType.FOLLOWING] },
+          },
+          select: { relationType: true },
+        }),
+    ]);
+
+    if (!targetPlayer) {
+      throw new BusinessError({ code: ErrorCode.NotFound, message: 'Target player not found.', statusCode: 404 });
+    }
+
+    const slots = await this.prisma.db.playerSpiritSlot.findMany({
+      where: { playerId: targetPlayerId },
+      orderBy: { slotIndex: 'asc' },
+      select: {
+        id: true,
+        slotIndex: true,
+        isMain: true,
+        appearanceSkinId: true,
+        appearanceFrameId: true,
+        appearanceCardBackId: true,
+        appearanceEffectId: true,
+        level: true,
+        exp: true,
+        breakthroughStage: true,
+        satiatedUntil: true,
+        lastExpSettledAt: true,
+        element: true,
+        maxHp: true,
+        slotVersion: true,
+        spiritDefinition: {
+          select: {
+            spiritId: true,
+            label: true,
+            rarity: true,
+          },
+        },
+        traits: {
+          select: {
+            slotIndex: true,
+            traitCode: true,
+            traitValue: true,
+            sourceType: true,
+          },
+        },
+      },
+    });
+
+    const viewerRelation = viewerPlayerId === targetPlayerId
+      ? 'self'
+      : relations.some((relation) => relation.relationType === SocialRelationType.FRIEND)
+      ? 'friend'
+      : relations.some((relation) => relation.relationType === SocialRelationType.FOLLOWING)
+      ? 'following'
+      : 'none';
+    const factionCode = toFactionAdvantageCode(targetPlayer.faction?.code);
+    const mappedSlots = slots.map((slot): ClientSpiritPublicSlot => {
+      const settled = slot.spiritDefinition
+        ? settleSpiritProgress(slot, now, factionCode)
+        : {
+          level: slot.level,
+          exp: slot.exp,
+          breakthroughStage: slot.breakthroughStage,
+          satiatedUntil: slot.satiatedUntil,
+          lastExpSettledAt: slot.lastExpSettledAt,
+      };
+      const unlockedTraitSlots = getUnlockedTraitSlots(settled.breakthroughStage);
+      const rarity = slot.spiritDefinition
+        ? slot.spiritDefinition.rarity.toLowerCase() as ClientSpiritDefinition['rarity']
+        : null;
+
+      return {
+        spiritInstanceId: slot.spiritDefinition ? slot.id : null,
+        slotIndex: slot.slotIndex,
+        spiritId: slot.spiritDefinition?.spiritId ?? null,
+        label: slot.spiritDefinition?.label ?? `空栏位 ${slot.slotIndex}`,
+        rarity,
+        level: settled.level,
+        isMain: slot.isMain,
+        element: slot.element ? toClientElement(slot.element) : null,
+        maxHp: slot.maxHp,
+        traits: mapTraits(slot.traits).filter((trait) => trait.slotIndex <= unlockedTraitSlots),
+        appearance: mapSpiritAppearance(slot),
+      };
+    });
+
+    return {
+      app: APP_NAME,
+      viewerRelation,
+      player: {
+        playerId: targetPlayer.id,
+        nickname: targetPlayer.nickname,
+        factionName: targetPlayer.faction?.name ?? null,
+        castleLevel: targetPlayer.castleLevelCache,
+      },
+      mainSlot: mappedSlots.find((slot) => slot.isMain && slot.spiritId) ?? null,
+      slots: mappedSlots,
+    };
   }
 
   async buySpiritSoul(
@@ -1132,10 +1266,32 @@ export class SpiritService {
           slotIndex: true,
           spiritDefinitionId: true,
           isMain: true,
+          appearanceSkinId: true,
+          appearanceFrameId: true,
+          appearanceCardBackId: true,
+          appearanceEffectId: true,
+          level: true,
+          exp: true,
+          breakthroughStage: true,
+          satiatedUntil: true,
+          lastExpSettledAt: true,
+          element: true,
+          maxHp: true,
+          acquiredAt: true,
+          dissolvedAt: true,
           slotVersion: true,
           spiritDefinition: {
             select: {
               label: true,
+            },
+          },
+          traits: {
+            select: {
+              slotIndex: true,
+              traitCode: true,
+              traitValue: true,
+              sourceType: true,
+              lockedAt: true,
             },
           },
         },
@@ -1153,19 +1309,57 @@ export class SpiritService {
 
       assertVersion('slotVersion', request.slotVersion, targetSlot.slotVersion);
 
-      for (const slot of slots) {
-        const nextIsMain = slot.id === targetSlot.id;
-        if (slot.isMain === nextIsMain) {
-          continue;
-        }
+      const currentMainSlot = slots.find((slot) => slot.isMain && slot.spiritDefinitionId);
+      if (currentMainSlot?.id !== targetSlot.id) {
+        if (currentMainSlot) {
+          await client.playerSpiritSlot.update({
+            where: { id: currentMainSlot.id },
+            data: {
+              ...buildSpiritSlotSwapData(targetSlot),
+              isMain: true,
+              slotVersion: { increment: 1 },
+            },
+          });
+          await client.playerSpiritSlot.update({
+            where: { id: targetSlot.id },
+            data: {
+              ...buildSpiritSlotSwapData(currentMainSlot),
+              isMain: false,
+              slotVersion: { increment: 1 },
+            },
+          });
+          await client.playerSpiritTrait.deleteMany({
+            where: {
+              spiritSlotId: {
+                in: [currentMainSlot.id, targetSlot.id],
+              },
+            },
+          });
+          const swappedTraits = [
+            ...targetSlot.traits.map((trait) => ({ ...trait, spiritSlotId: currentMainSlot.id })),
+            ...currentMainSlot.traits.map((trait) => ({ ...trait, spiritSlotId: targetSlot.id })),
+          ];
+          if (swappedTraits.length > 0) {
+            await client.playerSpiritTrait.createMany({
+              data: swappedTraits,
+            });
+          }
+        } else {
+          for (const slot of slots) {
+            const nextIsMain = slot.id === targetSlot.id;
+            if (slot.isMain === nextIsMain) {
+              continue;
+            }
 
-        await client.playerSpiritSlot.update({
-          where: { id: slot.id },
-          data: {
-            isMain: nextIsMain,
-            slotVersion: { increment: 1 },
-          },
-        });
+            await client.playerSpiritSlot.update({
+              where: { id: slot.id },
+              data: {
+                isMain: nextIsMain,
+                slotVersion: { increment: 1 },
+              },
+            });
+          }
+        }
       }
 
       const response = await this.buildSpiritMutationResponse(client, playerId, (targetSlot.spiritDefinition?.label ?? '灵宠') + ' 已设为主位。');
@@ -1515,8 +1709,13 @@ export class SpiritService {
         where: { playerId },
         orderBy: { slotIndex: 'asc' },
         select: {
+          id: true,
           slotIndex: true,
           isMain: true,
+          appearanceSkinId: true,
+          appearanceFrameId: true,
+          appearanceCardBackId: true,
+          appearanceEffectId: true,
           level: true,
           exp: true,
           breakthroughStage: true,
@@ -1785,8 +1984,13 @@ export class SpiritService {
 function buildSpiritState(
   resource: SpiritReadResource,
   slots: Array<{
+    id: string;
     slotIndex: number;
     isMain: boolean;
+    appearanceSkinId: string | null;
+    appearanceFrameId: string | null;
+    appearanceCardBackId: string | null;
+    appearanceEffectId: string | null;
     level: number;
     exp: number;
     breakthroughStage: number;
@@ -1835,7 +2039,8 @@ function buildSpiritState(
       lastExpSettledAt: slot.lastExpSettledAt,
     };
     const unlockedTraitSlots = getUnlockedTraitSlots(settled.breakthroughStage);
-    return {
+    const mappedSlot: ClientSpiritSlot = {
+      spiritInstanceId: slot.id,
       slotIndex: slot.slotIndex,
       spiritId: slot.spiritDefinition?.spiritId ?? null,
       isMain: slot.isMain,
@@ -1853,6 +2058,11 @@ function buildSpiritState(
       traits: mapTraits(slot.traits).filter((trait) => trait.slotIndex <= unlockedTraitSlots),
       unlockedTraitSlots,
       slotVersion: slot.slotVersion,
+      appearance: mapSpiritAppearance(slot),
+    };
+    return {
+      ...mappedSlot,
+      breakthroughRequirement: buildBreakthroughRequirement(mappedSlot, resource),
     };
   });
   const mappedCodex: ClientSpiritCodexEntry[] = codexEntries
@@ -2049,6 +2259,49 @@ function mapTraits(traits: SpiritReadTrait[]): ClientSpiritTrait[] {
         sourceType: trait.sourceType,
       };
     });
+}
+
+function mapSpiritAppearance(slot: SpiritReadAppearance): ClientSpiritSlot['appearance'] {
+  return {
+    skinId: slot.appearanceSkinId ?? null,
+    frameId: slot.appearanceFrameId ?? null,
+    cardBackId: slot.appearanceCardBackId ?? null,
+    effectId: slot.appearanceEffectId ?? null,
+  };
+}
+
+function buildSpiritSlotSwapData(slot: {
+  spiritDefinitionId: string | null;
+  appearanceSkinId: string | null;
+  appearanceFrameId: string | null;
+  appearanceCardBackId: string | null;
+  appearanceEffectId: string | null;
+  level: number;
+  exp: number;
+  breakthroughStage: number;
+  satiatedUntil: Date | null;
+  lastExpSettledAt: Date | null;
+  element: SpiritElement | null;
+  maxHp: number;
+  acquiredAt: Date | null;
+  dissolvedAt: Date | null;
+}) {
+  return {
+    spiritDefinitionId: slot.spiritDefinitionId,
+    appearanceSkinId: slot.appearanceSkinId,
+    appearanceFrameId: slot.appearanceFrameId,
+    appearanceCardBackId: slot.appearanceCardBackId,
+    appearanceEffectId: slot.appearanceEffectId,
+    level: slot.level,
+    exp: slot.exp,
+    breakthroughStage: slot.breakthroughStage,
+    satiatedUntil: slot.satiatedUntil,
+    lastExpSettledAt: slot.lastExpSettledAt,
+    element: slot.element,
+    maxHp: slot.maxHp,
+    acquiredAt: slot.acquiredAt,
+    dissolvedAt: slot.dissolvedAt,
+  };
 }
 
 function getUnlockedTraitSlots(breakthroughStage: number): number {

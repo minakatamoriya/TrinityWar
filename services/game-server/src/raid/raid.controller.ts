@@ -69,6 +69,7 @@ export class RaidController {
       playerId: currentPlayer.playerId,
       targetId: body.targetId,
       requestIdempotencyKey: idempotencyKey ?? body.requestIdempotencyKey,
+      attackerSpiritInstanceId: body.attackerSpiritInstanceId,
       armyVersion: body.armyVersion,
     });
   }

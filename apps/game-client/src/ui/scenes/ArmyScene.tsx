@@ -495,6 +495,8 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
     { tianjiTalisman: selectedTraitRollTianjiCost },
   );
   const selectedBreakthroughStage = selectedSlot?.breakthroughStage ?? 0;
+  const selectedBreakthroughRequirement = selectedSlot?.breakthroughRequirement
+    ?? (selectedSlot?.isMain ? spirit.breakthroughRequirement : null);
   const selectedTraitRollHasSlots = unlockedTraitSlotCount > 0;
   const selectedTraitRollUnlocked = selectedBreakthroughStage >= selectedTraitRollPlan.unlockBreakthroughStage;
   const selectedTraitRollHasMaterials = (spirit.spiritMarrow ?? 0) >= selectedTraitRollPlan.cost.marrow
@@ -920,10 +922,10 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
                           <h4>突破</h4>
                           <span className="soft-tag">只消耗兽魂</span>
                         </div>
-                        {selectedSlot.isAtBreakthroughNode && spirit.breakthroughRequirement ? (
+                        {selectedSlot.isAtBreakthroughNode && selectedBreakthroughRequirement ? (
                           <>
-                            <p className="panel-text">Lv.{spirit.breakthroughRequirement.level} 满经验突破后升至 Lv.{spirit.breakthroughRequirement.level + 1}，需要 {spirit.breakthroughRequirement.label} x{spirit.breakthroughRequirement.required}，当前 {spirit.breakthroughRequirement.owned}。</p>
-                            <button className="primary-button spirit-full-button" disabled={busy || !spirit.breakthroughRequirement.canBreakthrough} onClick={() => onBreakthrough(selectedSlot.slotIndex, selectedSlot.slotVersion, spirit.breakthroughRequirement?.stage)} type="button">手动突破</button>
+                            <p className="panel-text">Lv.{selectedBreakthroughRequirement.level} 满经验突破后升至 Lv.{selectedBreakthroughRequirement.level + 1}，需要 {selectedBreakthroughRequirement.label} x{selectedBreakthroughRequirement.required}，当前 {selectedBreakthroughRequirement.owned}。</p>
+                            <button className="primary-button spirit-full-button" disabled={busy || !selectedBreakthroughRequirement.canBreakthrough} onClick={() => onBreakthrough(selectedSlot.slotIndex, selectedSlot.slotVersion, selectedBreakthroughRequirement.stage)} type="button">手动突破</button>
                           </>
                         ) : (
                           <p className="panel-text">未到突破节点。Lv.9/19/29/39/49 满经验时需要手动突破，经验不会缓存溢出。</p>

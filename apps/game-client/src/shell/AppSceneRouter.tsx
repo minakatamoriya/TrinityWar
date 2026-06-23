@@ -74,6 +74,7 @@ interface AppSceneRouterProps {
   onOpenFarmBoard: () => void;
   onOpenRaidTarget: (target: ClientRaidTarget) => void;
   onOpenSocialFieldVisit: (targetPlayerId: string) => void;
+  onOpenSpiritPublicProfile: (targetPlayerId: string) => void;
   onRaidAction: (action: ClientSceneAction, context?: string) => void;
   onRefreshRaidTargets: () => void;
   onRefreshSocial: () => void;
@@ -151,6 +152,7 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
     onOpenFarmBoard,
     onOpenRaidTarget,
     onOpenSocialFieldVisit,
+    onOpenSpiritPublicProfile,
     onRaidAction,
     onRefreshRaidTargets,
     onRefreshSocial,
@@ -274,6 +276,7 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
           onRequestFriend={onRequestFriend}
           onUnfollowTarget={onUnfollowSocialTarget}
           onOpenFieldVisit={onOpenSocialFieldVisit}
+          onOpenSpiritProfile={onOpenSpiritPublicProfile}
           summary={socialSummary}
         />
       ) : null}

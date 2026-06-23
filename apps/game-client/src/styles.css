@@ -5926,6 +5926,369 @@ button.spirit-element-chip {
   white-space: nowrap;
 }
 
+.raid-attacker-picker {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.raid-attacker-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.raid-attacker-picker-head h4 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.raid-attacker-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.raid-attacker-option {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+  min-height: 92px;
+  padding: 8px 10px 8px 8px;
+  border: 1px solid rgba(255, 248, 234, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 248, 234, 0.05);
+  color: #f7efe1;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease;
+}
+
+.raid-attacker-option:hover:not(:disabled),
+.raid-attacker-option.selected {
+  transform: translateY(-1px);
+  border-color: rgba(216, 255, 183, 0.42);
+  background: linear-gradient(180deg, rgba(115, 148, 92, 0.24), rgba(255, 248, 234, 0.06));
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+.raid-attacker-option:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.raid-attacker-card-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 76px;
+  border: 1px solid rgba(255, 248, 234, 0.14);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(255, 248, 234, 0.22), transparent 26%),
+    linear-gradient(160deg, rgba(65, 84, 58, 0.76), rgba(45, 28, 26, 0.9));
+  overflow: hidden;
+}
+
+.raid-attacker-card-art::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border: 1px solid rgba(255, 248, 234, 0.08);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.raid-attacker-card-glyph {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(10, 12, 9, 0.42);
+  color: #f7efe1;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.raid-attacker-element-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(14, 10, 8, 0.72);
+  border: 1px solid rgba(255, 248, 234, 0.18);
+  color: #ffe2b7;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.raid-attacker-option-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.raid-attacker-option-title strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.raid-attacker-option-title em {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(216, 255, 183, 0.12);
+  color: #d8ffb7;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.raid-attacker-option span,
+.raid-attacker-option small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.raid-attacker-row-info {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.raid-attacker-meta,
+.raid-attacker-hint-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.raid-attacker-meta span {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 248, 234, 0.06);
+}
+
+.raid-attacker-meta span:first-child {
+  color: #f0d7aa;
+}
+
+.raid-attacker-control {
+  color: #d8ffb7;
+  font-weight: 700;
+}
+
+.raid-attacker-trait-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(255, 248, 234, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 248, 234, 0.05);
+}
+
+.raid-attacker-trait-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.raid-attacker-trait-head strong {
+  color: #f7efe1;
+  font-size: 13px;
+}
+
+.raid-attacker-trait-head span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.raid-attacker-trait-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.raid-attacker-trait-list span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(216, 255, 183, 0.1);
+  color: #d8ffb7;
+  font-size: 11px;
+}
+
+.spirit-public-profile-screen {
+  color: #f7efe1;
+}
+
+.spirit-public-profile-body {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+}
+
+.spirit-public-player-card {
+  display: grid;
+  gap: 10px;
+}
+
+.spirit-public-player-card h4 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.spirit-public-player-tags,
+.spirit-public-meta,
+.spirit-public-trait-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.spirit-public-slot-list {
+  display: grid;
+  gap: 10px;
+}
+
+.spirit-public-list {
+  display: grid;
+  gap: 8px;
+}
+
+.spirit-public-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+  min-height: 88px;
+  padding: 8px 10px 8px 8px;
+  border: 1px solid rgba(255, 248, 234, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 248, 234, 0.05);
+  color: #f7efe1;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease;
+}
+
+.spirit-public-row:hover:not(:disabled),
+.spirit-public-row.selected {
+  transform: translateY(-1px);
+  border-color: rgba(216, 255, 183, 0.42);
+  background: linear-gradient(180deg, rgba(115, 148, 92, 0.24), rgba(255, 248, 234, 0.06));
+}
+
+.spirit-public-row:disabled {
+  opacity: 0.46;
+  cursor: not-allowed;
+}
+
+.spirit-public-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  border: 1px solid rgba(255, 248, 234, 0.14);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 248, 234, 0.2), transparent 28%),
+    linear-gradient(160deg, rgba(65, 84, 58, 0.76), rgba(45, 28, 26, 0.9));
+  overflow: hidden;
+}
+
+.spirit-public-art span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(10, 12, 9, 0.42);
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.spirit-public-art em {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 24px;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 248, 234, 0.18);
+  border-radius: 999px;
+  background: rgba(14, 10, 8, 0.72);
+  color: #ffe2b7;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  text-align: center;
+}
+
+.spirit-public-row-main {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.spirit-public-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.spirit-public-title strong {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spirit-public-title em {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(216, 255, 183, 0.12);
+  color: #d8ffb7;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.spirit-public-meta span,
+.spirit-public-trait-list span {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(255, 248, 234, 0.07);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.spirit-public-traits {
+  display: grid;
+  gap: 10px;
+}
+
+.spirit-public-trait-list span {
+  background: rgba(216, 255, 183, 0.1);
+  color: #d8ffb7;
+}
+
 .raid-intel-actionbar {
   padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(255, 248, 234, 0.08);

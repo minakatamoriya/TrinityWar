@@ -26,6 +26,7 @@ interface SocialSceneProps {
   onAssistFriend: (targetPlayerId: string) => void;
   onAssistAllFields: () => void;
   onOpenFieldVisit: (targetPlayerId: string) => void;
+  onOpenSpiritProfile: (targetPlayerId: string) => void;
   onCloseFieldVisit: () => void;
   onRequestFriend: (targetPlayerId: string) => void;
   onDeleteFriend: (targetPlayerId: string) => void;
@@ -58,6 +59,7 @@ export function SocialScene({
   onAssistFriend,
   onAssistAllFields,
   onOpenFieldVisit,
+  onOpenSpiritProfile,
   onCloseFieldVisit,
   onRequestFriend,
   onDeleteFriend,
@@ -156,6 +158,7 @@ export function SocialScene({
             onDeleteFriend,
             onFollowTarget,
             onOpenFieldVisit,
+            onOpenSpiritProfile,
             onRequestFriend,
             onUnfollowTarget,
             relation,
@@ -171,6 +174,7 @@ export function SocialScene({
             onDeleteFriend,
             onFollowTarget,
             onOpenFieldVisit,
+            onOpenSpiritProfile,
             onRequestFriend,
             onUnfollowTarget,
             relation,
@@ -266,6 +270,7 @@ function renderRelationCard(input: {
   onDeleteFriend: (targetPlayerId: string) => void;
   onFollowTarget: (targetPlayerId: string) => void;
   onOpenFieldVisit: (targetPlayerId: string) => void;
+  onOpenSpiritProfile: (targetPlayerId: string) => void;
   onRequestFriend: (targetPlayerId: string) => void;
   onUnfollowTarget: (targetPlayerId: string) => void;
 }): JSX.Element {
@@ -276,6 +281,7 @@ function renderRelationCard(input: {
     onDeleteFriend,
     onFollowTarget,
     onOpenFieldVisit,
+    onOpenSpiritProfile,
     onRequestFriend,
     onUnfollowTarget,
   } = input;
@@ -297,6 +303,9 @@ function renderRelationCard(input: {
             </button>
             <button className="ghost-button" disabled={busy} onClick={() => onOpenFieldVisit(relation.target.playerId)} type="button">
               拜访灵田
+            </button>
+            <button className="ghost-button" disabled={busy} onClick={() => onOpenSpiritProfile(relation.target.playerId)} type="button">
+              查看灵宠
             </button>
             <button className="ghost-button danger" disabled={busy} onClick={() => onDeleteFriend(relation.target.playerId)} type="button">
               删除
@@ -321,6 +330,9 @@ function renderRelationCard(input: {
                 关注
               </button>
             )}
+            <button className="ghost-button" disabled={busy} onClick={() => onOpenSpiritProfile(relation.target.playerId)} type="button">
+              查看灵宠
+            </button>
           </>
         )}
       </div>

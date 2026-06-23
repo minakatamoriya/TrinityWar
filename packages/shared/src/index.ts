@@ -109,6 +109,13 @@ export interface ClientSpiritDefinition {
   lore: string | null;
 }
 
+export interface ClientSpiritAppearance {
+  skinId: string | null;
+  frameId: string | null;
+  cardBackId: string | null;
+  effectId: string | null;
+}
+
 export interface ClientSpiritInnateTrait {
   spiritId: string;
   label: string;
@@ -179,6 +186,7 @@ export interface ClientFactionAdvantagePanel {
 }
 
 export interface ClientSpiritSlot {
+  spiritInstanceId?: string | null;
   slotIndex: number;
   spiritId: string | null;
   isMain: boolean;
@@ -195,7 +203,9 @@ export interface ClientSpiritSlot {
   maxHp: number;
   traits?: ClientSpiritTrait[];
   unlockedTraitSlots?: number;
+  breakthroughRequirement?: ClientSpiritBreakthroughRequirement | null;
   slotVersion: number;
+  appearance?: ClientSpiritAppearance | null;
 }
 
 export interface ClientSpiritTrait {
@@ -291,6 +301,35 @@ export interface ClientSpiritState {
 export interface ClientSpiritStateResponse {
   app: string;
   spirit: ClientSpiritState;
+}
+
+export type ClientSpiritPublicViewerRelation = 'self' | 'friend' | 'following' | 'none';
+
+export interface ClientSpiritPublicSlot {
+  spiritInstanceId: string | null;
+  slotIndex: number;
+  spiritId: string | null;
+  label: string;
+  rarity: ClientSpiritDefinition['rarity'] | null;
+  level: number;
+  isMain: boolean;
+  element: ClientSpiritElement | null;
+  maxHp: number;
+  traits: ClientSpiritTrait[];
+  appearance?: ClientSpiritAppearance | null;
+}
+
+export interface ClientSpiritPublicProfileResponse {
+  app: string;
+  viewerRelation: ClientSpiritPublicViewerRelation;
+  player: {
+    playerId: string;
+    nickname: string;
+    factionName: string | null;
+    castleLevel: number;
+  };
+  mainSlot: ClientSpiritPublicSlot | null;
+  slots: ClientSpiritPublicSlot[];
 }
 
 export interface ClientBuySpiritSoulRequest {
@@ -400,6 +439,7 @@ export interface ClientRaidSpiritIntel {
   element: ClientSpiritElement | null;
   attackRating: string;
   healthStatus: string;
+  traits?: ClientSpiritTrait[];
   remainingFreeIntel: number;
   remainingTalismanIntel: number;
 }
@@ -1351,6 +1391,7 @@ export interface ClientRecruitArmyRequest {
 export interface ClientRaidActionRequest {
   targetId: string;
   mode?: 'raid' | 'revenge';
+  attackerSpiritInstanceId?: string | null;
   armyVersion?: number;
   requestIdempotencyKey?: string;
 }

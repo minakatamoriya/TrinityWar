@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Headers, Inject, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Inject, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import type { ClientRollSpiritTraitsResponse, ClientSpiritMutationResponse, ClientSpiritStateResponse } from '@trinitywar/shared';
+import type { ClientRollSpiritTraitsResponse, ClientSpiritMutationResponse, ClientSpiritPublicProfileResponse, ClientSpiritStateResponse } from '@trinitywar/shared';
 import { AuthPlaceholderGuard } from '../auth/auth-placeholder.guard.js';
 import { CurrentPlayer } from '../auth/current-player.decorator.js';
 import type { CurrentPlayerContext } from '../auth/current-player-context.js';
@@ -35,6 +35,21 @@ export class SpiritController {
     }
 
     return this.spiritService.getSpiritStateResponse(currentPlayer.playerId);
+  }
+
+  @Get('players/:targetPlayerId')
+  @UseGuards(AuthPlaceholderGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Public spirit profile for a player.' })
+  async getPublicSpiritProfile(
+    @CurrentPlayer() currentPlayer: CurrentPlayerContext | null,
+    @Param('targetPlayerId') targetPlayerId: string,
+  ): Promise<ClientSpiritPublicProfileResponse> {
+    if (!currentPlayer) {
+      throw createUnauthorizedError('Current player context is required.');
+    }
+
+    return this.spiritService.getPublicSpiritProfile(currentPlayer.playerId, targetPlayerId);
   }
 
   @Post('buy-soul')
@@ -226,6 +241,7 @@ export class SpiritController {
 }
 
 defineRouteParamTypes(SpiritController.prototype, 'getSpiritState', [Object]);
+defineRouteParamTypes(SpiritController.prototype, 'getPublicSpiritProfile', [Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'buySpiritSoul', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'upgradeSpirit', [Object, Object, String]);
 defineRouteParamTypes(SpiritController.prototype, 'feedSpirit', [Object, Object, String]);

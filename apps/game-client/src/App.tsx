@@ -16,6 +16,7 @@ import type {
   ClientRollSpiritTraitsResponse,
   ClientSpiritTraitCode,
   ClientSpiritTraitRollMaterial,
+  ClientSpiritPublicProfileResponse,
   ClientSpiritState,
   ClientSeasonRewardItem,
   ClientSeasonRewardsResponse,
@@ -24,7 +25,7 @@ import type {
   NotificationAttachment,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, changeSeasonFaction, claimFactionStipend, claimSeasonSignIn, claimSeasonSignInMilestone, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, confirmSeasonFaction, confirmSeasonStartupIntro, createShareAssistCampaign, devLogin, dissolveSpirit, feedSpirit, followSocialTarget, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, resetDevelopmentSeasonTiming, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setDevelopmentSeasonNearRollover, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unfollowSocialTarget, unlockPlant, updateFarmBoard } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, changeSeasonFaction, claimFactionStipend, claimSeasonSignIn, claimSeasonSignInMilestone, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, confirmSeasonFaction, confirmSeasonStartupIntro, createShareAssistCampaign, devLogin, dissolveSpirit, feedSpirit, followSocialTarget, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritPublicProfile, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, resetDevelopmentSeasonTiming, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setDevelopmentSeasonNearRollover, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unfollowSocialTarget, unlockPlant, updateFarmBoard } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import type { SocialTabKey } from './ui/scenes/SocialScene';
 import type { ShareAssistAudience } from './ui/share/ShareAssistPage';
@@ -147,6 +148,7 @@ import { TopDock } from './shell/TopDock';
 import { ProfileModal } from './shell/ProfileModal';
 import { SceneCodexShortcut } from './shell/SceneCodexShortcut';
 import { useFeedbackLayer } from './shell/useFeedbackLayer';
+import { SpiritPublicProfileModal } from './ui/common/SpiritPublicProfileModal';
 
 const SEASON_END_WARNING_THRESHOLD_MS = 60 * 60 * 1000;
 
@@ -171,6 +173,9 @@ function App(): JSX.Element {
   const [friendInviteDemoLinks, setFriendInviteDemoLinks] = useState<{ newUser: string; returningUser: string } | null>(null);
   const [friendInviteNewUserUrlInput, setFriendInviteNewUserUrlInput] = useState('');
   const [friendInviteReturningUserUrlInput, setFriendInviteReturningUserUrlInput] = useState('');
+  const [spiritPublicProfile, setSpiritPublicProfile] = useState<ClientSpiritPublicProfileResponse | null>(null);
+  const [spiritPublicProfileError, setSpiritPublicProfileError] = useState<string | null>(null);
+  const [spiritPublicProfileLoading, setSpiritPublicProfileLoading] = useState(false);
   const {
     rewardBubbles,
     showRewardBubbles,
@@ -2509,7 +2514,32 @@ function App(): JSX.Element {
     handleSceneAction(action, context);
   };
 
-  const handleSceneAction = (action: ClientSceneAction, context?: string): void => {
+  const openSpiritPublicProfile = async (targetPlayerId: string): Promise<void> => {
+    if (!targetPlayerId || pendingActionKey === 'spirit:public-profile') {
+      return;
+    }
+
+    setPendingActionKey('spirit:public-profile');
+    setSpiritPublicProfile(null);
+    setSpiritPublicProfileError(null);
+    setSpiritPublicProfileLoading(true);
+
+    try {
+      const profile = await loadSpiritPublicProfile(targetPlayerId);
+      setSpiritPublicProfile(profile);
+    } catch {
+      setSpiritPublicProfileError('当前无法读取对方灵宠，请稍后重试。');
+    } finally {
+      setSpiritPublicProfileLoading(false);
+      setPendingActionKey(null);
+    }
+  };
+
+  const handleSceneAction = (
+    action: ClientSceneAction,
+    context?: string,
+    selectedAttackerSpiritId?: string | null,
+  ): void => {
     const actionContext = context ?? raidIntel.detail?.name ?? selectedRaidTarget?.name;
 
     if ((action.label === '确认出兵' || action.label === '发起掠夺' || action.label === '发起战斗') && actionContext) {
@@ -2528,6 +2558,7 @@ function App(): JSX.Element {
         const input: ClientRaidActionRequest = {
           targetId,
           mode: raidIntel.modal?.mode ?? 'raid',
+          attackerSpiritInstanceId: selectedAttackerSpiritId ?? undefined,
           armyVersion: home.stateVersions.armyVersion,
         };
 
@@ -2609,6 +2640,11 @@ function App(): JSX.Element {
       };
 
       void runReplay();
+      return;
+    }
+
+    if (action.label === '查看对手' && action.context) {
+      void openSpiritPublicProfile(action.context);
       return;
     }
 
@@ -3092,6 +3128,9 @@ function App(): JSX.Element {
             onOpenSocialFieldVisit={(targetPlayerId) => {
               void social.openFieldVisit(targetPlayerId);
             }}
+            onOpenSpiritPublicProfile={(targetPlayerId) => {
+              void openSpiritPublicProfile(targetPlayerId);
+            }}
             onRaidAction={handleSceneAction}
             onRefreshRaidTargets={() => {
               void handleRefreshRaidTargets();
@@ -3117,6 +3156,19 @@ function App(): JSX.Element {
               void social.unfollowTarget(targetPlayerId);
             }}
           />
+
+          {(spiritPublicProfile || spiritPublicProfileLoading || spiritPublicProfileError) ? (
+            <SpiritPublicProfileModal
+              error={spiritPublicProfileError}
+              loading={spiritPublicProfileLoading}
+              profile={spiritPublicProfile}
+              onClose={() => {
+                setSpiritPublicProfile(null);
+                setSpiritPublicProfileError(null);
+                setSpiritPublicProfileLoading(false);
+              }}
+            />
+          ) : null}
 
           <BottomDock
             activeScene={activeScene}
@@ -3151,7 +3203,9 @@ function App(): JSX.Element {
               .map((relation) => relation.target.playerId)}
             loading={raidIntel.loading}
             modal={raidIntel.modal}
+            pendingAction={pendingActionKey === 'raid:execute'}
             raidTargetsById={raidTargetsById}
+            spiritState={spiritState}
             onAction={handleSceneAction}
             onClose={raidIntel.closeModal}
             onRevealDeepIntel={async (targetId): Promise<ClientRaidDeepIntelResponse> => {

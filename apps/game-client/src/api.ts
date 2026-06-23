@@ -61,6 +61,7 @@
   type ClientCreateShareAssistCampaignRequest,
   type ClientCreateShareAssistCampaignResponse,
   type ClientSpiritMutationResponse,
+  type ClientSpiritPublicProfileResponse,
   type ClientSpiritState,
   type ClientSpiritStateResponse,
   type PublicShareAssistCampaignResponse,
@@ -1606,6 +1607,10 @@ export async function upgradeSpirit(input: ClientUpgradeSpiritRequest): Promise<
 
 export async function loadRaidBattleReplay(orderId: string): Promise<ClientRaidBattleReplayResponse> {
   return fetchJson<ClientRaidBattleReplayResponse>(`${CLIENT_API_PREFIX}/raid-orders/${encodeURIComponent(orderId)}/battle-replay`);
+}
+
+export async function loadSpiritPublicProfile(targetPlayerId: string): Promise<ClientSpiritPublicProfileResponse> {
+  return fetchJson<ClientSpiritPublicProfileResponse>(`${CLIENT_API_PREFIX}/spirit/players/${encodeURIComponent(targetPlayerId)}`);
 }
 
 export async function loadSocialSummary(): Promise<ClientSocialSummaryResponse> {

@@ -32,7 +32,6 @@ export class RaidRepository {
             protectedUntil: true,
             castleLevelCache: true,
             faction: { select: { name: true } },
-            farmBoard: { select: { message: true, hiddenAt: true } },
             spiritSlots: {
               where: { isMain: true },
               take: 1,
@@ -58,44 +57,10 @@ export class RaidRepository {
                 },
                 traits: {
                   select: {
+                    slotIndex: true,
                     traitCode: true,
                     traitValue: true,
-                  },
-                },
-              },
-            },
-            wallet: { select: { vaultGold: true, walletGold: true } },
-            army: {
-              select: {
-                totalCount: true,
-                availableCount: true,
-                frozenCount: true,
-                woundedCount: true,
-                capacity: true,
-              },
-            },
-            fieldSlots: {
-              orderBy: { slotIndex: 'asc' },
-              select: {
-                id: true,
-                slotIndex: true,
-                isUnlocked: true,
-                unlockCastleLevel: true,
-                status: true,
-                investedGold: true,
-                currentClaimableGold: true,
-                seedAt: true,
-                matureAt: true,
-                readyAt: true,
-                overripeAt: true,
-                seedDefinition: {
-                  select: {
-                    seedId: true,
-                    label: true,
-                    growSeconds: true,
-                    matureSeconds: true,
-                    collectWindowSeconds: true,
-                    baseYieldGold: true,
+                    sourceType: true,
                   },
                 },
               },

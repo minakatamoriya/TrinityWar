@@ -105,6 +105,7 @@ export class RecruitArmyRequestDto implements ClientRecruitArmyRequest {
 export class RaidTargetRequestDto implements ClientRaidActionRequest {
   targetId!: string;
   mode?: 'raid' | 'revenge';
+  attackerSpiritInstanceId?: string | null;
   armyVersion?: number;
   requestIdempotencyKey?: string;
 }

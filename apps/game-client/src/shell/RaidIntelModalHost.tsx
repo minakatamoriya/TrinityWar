@@ -3,6 +3,7 @@ import type {
   ClientRaidTarget,
   ClientRaidTargetDetailResponse,
   ClientSceneAction,
+  ClientSpiritState,
 } from '@trinitywar/shared';
 import { RaidIntelScreen } from '../ui/raid/RaidIntelScreen';
 import type { RaidTargetModalState } from './appStateTypes';
@@ -16,8 +17,10 @@ interface RaidIntelModalHostProps {
   friendTargetIds: string[];
   loading: boolean;
   modal: RaidTargetModalState | null;
+  pendingAction: boolean;
   raidTargetsById: Map<string, ClientRaidTarget>;
-  onAction: (action: ClientSceneAction, context?: string) => void;
+  spiritState: ClientSpiritState | null;
+  onAction: (action: ClientSceneAction, context?: string, selectedAttackerSpiritId?: string | null) => void;
   onClose: () => void;
   onRevealDeepIntel: (targetId: string) => Promise<ClientRaidDeepIntelResponse>;
   onToggleFollowTarget: (target: ClientRaidTarget) => void;
@@ -33,7 +36,9 @@ export function RaidIntelModalHost(props: RaidIntelModalHostProps): JSX.Element 
     friendTargetIds,
     loading,
     modal,
+    pendingAction,
     raidTargetsById,
+    spiritState,
     onAction,
     onClose,
     onRevealDeepIntel,
@@ -57,7 +62,9 @@ export function RaidIntelModalHost(props: RaidIntelModalHostProps): JSX.Element 
       friend={isFriend}
       loading={loading}
       mode={modal.mode}
-      onAction={(action) => onAction(action, detail?.name)}
+      pendingAction={pendingAction}
+      spiritState={spiritState}
+      onAction={(action, selectedAttackerSpiritId) => onAction(action, detail?.name, selectedAttackerSpiritId)}
       onClose={onClose}
       onRevealDeepIntel={onRevealDeepIntel}
       onToggleFollow={() => {

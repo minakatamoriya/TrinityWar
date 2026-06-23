@@ -12,6 +12,8 @@ import {
   type ClientRaidSpiritPreview,
   type ClientRaidTargetDetailResponse,
   type ClientSceneVisibility,
+  type ClientSpiritTrait,
+  getSpiritBattleTraitLabel,
 } from '@trinitywar/shared';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
@@ -203,6 +205,7 @@ export class RaidTargetService {
     playerId: string;
     targetId: string;
     requestIdempotencyKey?: string;
+    attackerSpiritInstanceId?: string | null;
     armyVersion?: number;
     skipReadModel?: boolean;
     skipQueue?: boolean;
@@ -380,13 +383,19 @@ export class RaidTargetService {
 
       target = targetInTransaction;
 
-      const primaryField = pickPrimaryRaidField(target);
-      const attackerMainSpirit = await client.playerSpiritSlot.findFirst({
-        where: {
-          playerId: input.playerId,
-          isMain: true,
-          spiritDefinitionId: { not: null },
-        },
+      const attackerSpiritInstanceId = input.attackerSpiritInstanceId?.trim();
+      const attackerSelectedSpirit = await client.playerSpiritSlot.findFirst({
+        where: attackerSpiritInstanceId
+          ? {
+            id: attackerSpiritInstanceId,
+            playerId: input.playerId,
+            spiritDefinitionId: { not: null },
+          }
+          : {
+            playerId: input.playerId,
+            isMain: true,
+            spiritDefinitionId: { not: null },
+          },
         select: {
           id: true,
           slotIndex: true,
@@ -416,10 +425,12 @@ export class RaidTargetService {
         },
       });
 
-      if (!attackerMainSpirit?.spiritDefinition) {
+      if (!attackerSelectedSpirit?.spiritDefinition) {
         throw new BusinessError({
           code: ErrorCode.RaidNotAllowed,
-          message: '当前没有可出战的主位灵宠。请先设置主位灵宠后再发起掠夺。',
+          message: attackerSpiritInstanceId
+            ? '所选灵宠不可出战。请重新选择一只已养成的灵宠。'
+            : '当前没有可出战的灵宠。请先养成一只灵宠后再发起掠夺。',
           statusCode: 409,
         });
       }
@@ -434,12 +445,12 @@ export class RaidTargetService {
 
       const defenderMainSpirit = target.targetPlayer.spiritSlots[0] ?? null;
       const [attackerVisibilityForDefender, defenderVisibilityForAttacker] = await Promise.all([
-        attackerMainSpirit.spiritDefinition.spiritId
+        attackerSelectedSpirit.spiritDefinition.spiritId
           ? client.playerSpiritCodex.findFirst({
             where: {
               playerId: target.targetPlayerId,
               spiritDefinition: {
-                spiritId: attackerMainSpirit.spiritDefinition.spiritId,
+                spiritId: attackerSelectedSpirit.spiritDefinition.spiritId,
               },
             },
             select: {
@@ -476,9 +487,6 @@ export class RaidTargetService {
       const raidOrder = await this.raidRepository.createRaidOrder({
         attacker: { connect: { id: input.playerId } },
         defender: { connect: { id: target.targetPlayerId } },
-        defenderFieldSlot: primaryField
-          ? { connect: { id: primaryField.id } }
-          : undefined,
         mode: 'SINGLE',
         status: 'LOCKED',
         dispatchedUnitCount: nextDispatchedCount,
@@ -488,15 +496,14 @@ export class RaidTargetService {
           playerId: input.playerId,
           availableCount: currentArmy?.availableCount ?? 0,
           frozenCount: currentArmy?.frozenCount ?? 0,
-          mainSpirit: buildSpiritBattleSnapshot(attackerMainSpirit),
+          selectedSpiritInstanceId: attackerSelectedSpirit.id,
+          mainSpirit: buildSpiritBattleSnapshot(attackerSelectedSpirit),
           mainSpiritSceneVisibilityForDefender: resolveSpiritSceneVisibility(attackerVisibilityForDefender),
         },
         defenderSnapshotJson: {
           targetId: target.id,
           targetPlayerId: target.targetPlayerId,
           targetSnapshotJson: target.targetSnapshotJson,
-          fieldSnapshotJson: target.fieldSnapshotJson,
-          riskSnapshotJson: target.riskSnapshotJson,
           mainSpirit: buildSpiritBattleSnapshot(defenderMainSpirit),
           mainSpiritSceneVisibilityForAttacker: resolveSpiritSceneVisibility(defenderVisibilityForAttacker),
         },
@@ -518,13 +525,9 @@ export class RaidTargetService {
       await this.raidRepository.createRaidAssetLock({
         raidOrder: { connect: { id: raidOrder.id } },
         defenderPlayer: { connect: { id: target.targetPlayerId } },
-        sourceFieldSlot: primaryField
-          ? { connect: { id: primaryField.id } }
-          : undefined,
         assetType: 'gold',
-        sourceEntityId: primaryField?.id ?? target.id,
+        sourceEntityId: target.id,
         lockedGold,
-        lockedItemJson: target.fieldSnapshotJson ?? undefined,
         lockMode: 'HARD',
         status: 'ACTIVE',
         expiresAt: target.expiresAt,
@@ -868,6 +871,7 @@ function buildRaidDeepIntelResponse(
       element: mapSpiritElement(mainSlot?.element ?? null),
       attackRating: buildAttackRating(mainSlot),
       healthStatus: mainSlot ? '状态良好' : '未知',
+      traits: buildRaidSpiritTraits(mainSlot),
       remainingFreeIntel: remaining.remainingFreeIntel,
       remainingTalismanIntel: remaining.remainingTalismanIntel,
     },
@@ -1241,6 +1245,24 @@ function mapSpiritElement(element: string | null): ClientRaidDeepIntelResponse['
   return null;
 }
 
+function buildRaidSpiritTraits(slot: {
+  traits?: Array<{
+    slotIndex?: number;
+    traitCode: string;
+    traitValue: number;
+    sourceType?: string;
+  }>;
+} | null): ClientSpiritTrait[] {
+  return (slot?.traits ?? []).map((trait, index) => ({
+    slotIndex: trait.slotIndex ?? index,
+    traitCode: trait.traitCode as ClientSpiritTrait['traitCode'],
+    label: getSpiritBattleTraitLabel(trait.traitCode),
+    description: '',
+    value: trait.traitValue,
+    sourceType: trait.sourceType ?? 'battle',
+  }));
+}
+
 function getSpiritGlyph(label: string): string {
   const firstCharacter = Array.from(label.trim())[0];
   return firstCharacter ?? '灵';
@@ -1280,26 +1302,6 @@ function mapScoreRating(score: number): string {
   }
 
   return '未知';
-}
-
-function pickPrimaryRaidField(target: NonNullable<Awaited<ReturnType<RaidRepository['findVisibleTargetPoolEntry']>>>) {
-  const candidateFields = target.targetPlayer.fieldSlots.filter(
-    (field) => field.isUnlocked && field.currentClaimableGold > 0,
-  );
-
-  if (candidateFields.length <= 0) {
-    return null;
-  }
-
-  candidateFields.sort((left, right) => {
-    if (right.currentClaimableGold !== left.currentClaimableGold) {
-      return right.currentClaimableGold - left.currentClaimableGold;
-    }
-
-    return left.slotIndex - right.slotIndex;
-  });
-
-  return candidateFields[0] ?? null;
 }
 
 function readTargetLevel(
