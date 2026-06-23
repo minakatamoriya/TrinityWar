@@ -1,5 +1,5 @@
 import type { ClientFactionAdvantagePanel, ClientFarmField, ClientSceneAction } from '@trinitywar/shared';
-import type { TutorialFarmUiRules } from '../../tutorial/tutorialFlow';
+import type { TutorialFarmUiRules, TutorialTask } from '../../tutorial/tutorialFlow';
 import { buildFarmFieldStatusView, FarmStatusCard } from '../farm/FarmStatusCard';
 
 interface FarmCollectPresentationState {
@@ -14,9 +14,11 @@ interface FarmSceneProps {
   fields: ClientFarmField[];
   farmBoardMessage: string;
   farmBoardUpdatedAt: string | null;
+  tutorialTask: TutorialTask | null;
   uiRules: TutorialFarmUiRules;
   onAction: (action: ClientSceneAction, fieldId: string, fieldCode: string) => void;
   onOpenFarmBoard: () => void;
+  onTutorialAction: () => void;
 }
 
 export function FarmScene(props: FarmSceneProps): JSX.Element {
@@ -25,9 +27,11 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
     advantage,
     fields,
     farmBoardMessage,
+    tutorialTask,
     uiRules,
     onAction,
     onOpenFarmBoard,
+    onTutorialAction,
   } = props;
   const boardPreview = farmBoardMessage.trim() || '还没有留言，点击写下农场留言。';
   const visibleFields = uiRules.visibleFieldLimit === null ? fields : fields.slice(0, uiRules.visibleFieldLimit);
@@ -35,6 +39,19 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
   return (
     <div className="scene-shell">
       <div className="scene-scroll farm-scene-scroll">
+        {tutorialTask ? (
+          <article className="panel-card tutorial-starter-card">
+            <p className="eyebrow">新手引导</p>
+            <div className="panel-head">
+              <h4>{tutorialTask.title}</h4>
+            </div>
+            <p className="panel-text">{tutorialTask.description}</p>
+            <button className="secondary-button" onClick={onTutorialAction} type="button">
+              {tutorialTask.actionLabel}
+            </button>
+          </article>
+        ) : null}
+
         {advantage && uiRules.showFactionAdvantage ? (
           <article className="panel-card faction-advantage-panel">
             <div className="panel-head">

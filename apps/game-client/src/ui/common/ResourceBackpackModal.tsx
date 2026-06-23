@@ -4,7 +4,7 @@ export interface BackpackResourceItem {
   id: string;
   label: string;
   quantity: number;
-  group: 'spirit' | 'soul' | 'raid-shard' | 'farm' | 'other';
+  group: 'currency' | 'spirit' | 'soul' | 'raid-shard' | 'farm' | 'other';
   rarity?: 'common' | 'rare' | 'legendary';
   description?: string;
 }
@@ -16,6 +16,7 @@ interface ResourceBackpackModalProps {
 }
 
 const groupLabels: Record<BackpackResourceItem['group'], string> = {
+  currency: '通用货币',
   spirit: '灵宠养成材料',
   soul: '兽魂突破材料',
   'raid-shard': '灵宠精魄',
@@ -23,7 +24,7 @@ const groupLabels: Record<BackpackResourceItem['group'], string> = {
   other: '其他资源',
 };
 
-const groupOrder: BackpackResourceItem['group'][] = ['spirit', 'soul', 'raid-shard', 'farm', 'other'];
+const groupOrder: BackpackResourceItem['group'][] = ['currency', 'spirit', 'soul', 'raid-shard', 'farm', 'other'];
 
 export function ResourceBackpackModal(props: ResourceBackpackModalProps): JSX.Element {
   const {
@@ -34,12 +35,12 @@ export function ResourceBackpackModal(props: ResourceBackpackModalProps): JSX.El
 
   return (
     <FullScreenToolShell
-      ariaLabel="我的资源"
+      ariaLabel="背包"
       bodyClassName="resource-backpack-body"
       className="resource-backpack-screen"
       description="查看当前拥有的灵宠材料、灵宠精魄和其他资源"
       onBack={onClose}
-      title="我的资源"
+      title="背包"
     >
         {groupOrder.map((group) => {
           const groupItems = items.filter((item) => item.group === group);

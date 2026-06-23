@@ -102,7 +102,7 @@ export function SeasonStartupFlow(props: SeasonStartupFlowProps): JSX.Element | 
               onClick={onConfirmSeasonFactionChange}
               type="button"
             >
-              {pendingActionKey === 'season-startup:change-faction' ? '确认中...' : `确认加入${selectedFactionName}并进入首页`}
+              {pendingActionKey === 'season-startup:change-faction' ? '确认中...' : `确认加入${selectedFactionName}并进入灵田`}
             </button>
           </footer>
         </div>
@@ -117,7 +117,7 @@ export function SeasonStartupFlow(props: SeasonStartupFlowProps): JSX.Element | 
           <header className="season-startup-hero">
             <p className="eyebrow">新赛季启动</p>
             <h2 id="season-startup-title">{seasonTitle} 阵营确认</h2>
-            <p>新赛季开始时需要确认一次阵营。保持当前阵营也会消耗本赛季的确认机会，确认后进入首页。</p>
+            <p>新赛季开始时需要确认一次阵营。保持当前阵营也会消耗本赛季的确认机会，确认后进入灵田。</p>
           </header>
 
           <main className="season-startup-main">
@@ -126,7 +126,7 @@ export function SeasonStartupFlow(props: SeasonStartupFlowProps): JSX.Element | 
               <strong>{currentFactionName}</strong>
             </div>
             <div className="season-startup-note">
-              确认后本赛季不能再次更改阵营；如果要调整，请在进入首页前完成选择。
+              确认后本赛季不能再次更改阵营；如果要调整，请在进入灵田前完成选择。
             </div>
           </main>
 
@@ -137,7 +137,7 @@ export function SeasonStartupFlow(props: SeasonStartupFlowProps): JSX.Element | 
               onClick={onConfirmKeepCurrentFaction}
               type="button"
             >
-              {pendingActionKey === 'season-startup:keep-faction' ? '确认中...' : '保持当前阵营并进入首页'}
+              {pendingActionKey === 'season-startup:keep-faction' ? '确认中...' : '保持当前阵营并进入灵田'}
             </button>
             <button
               className="ghost-button"
@@ -159,7 +159,7 @@ export function SeasonStartupFlow(props: SeasonStartupFlowProps): JSX.Element | 
         <header className="season-startup-hero">
           <p className="eyebrow">新赛季启动</p>
           <h2 id="season-startup-title">{seasonTitle} 开启</h2>
-          <p>旧赛季已经结算。确认规则摘要后，需要完成阵营确认，才会进入首页。</p>
+          <p>旧赛季已经结算。确认规则摘要后，需要完成阵营确认，才会进入灵田。</p>
         </header>
 
         <main className="season-startup-main">

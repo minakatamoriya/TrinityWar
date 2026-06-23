@@ -1,6 +1,6 @@
 ﻿import { Inject, Injectable } from '@nestjs/common';
 import { APP_NAME } from '@trinitywar/shared';
-import { Prisma, SocialRelationStatus, SocialRelationType, type FieldStatus } from '@prisma/client';
+import { Prisma, SocialRelationStatus, SocialRelationType, type Faction, type FieldStatus } from '@prisma/client';
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { AppConfigService } from '../config/app-config.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -143,7 +143,10 @@ const DEV_VERIFICATION_ACCOUNTS: DevVerificationAccount[] = [
 
 const DEV_MAIN_LOOP_PROVIDER_USER_ID = 'dev-main-loop';
 const DEV_STABLE_FLOW_2_PROVIDER_USER_ID = 'dev-stable-flow-2';
-const DEV_STABLE_ACCOUNT_PROVIDER_USER_IDS = new Set([DEV_STABLE_FLOW_2_PROVIDER_USER_ID]);
+const DEV_STABLE_ACCOUNT_PROVIDER_USER_IDS = new Set([
+  DEV_MAIN_LOOP_PROVIDER_USER_ID,
+  DEV_STABLE_FLOW_2_PROVIDER_USER_ID,
+]);
 const DEV_FIXED_FRIEND_PROVIDER_PAIRS = [
   [DEV_MAIN_LOOP_PROVIDER_USER_ID, DEV_STABLE_FLOW_2_PROVIDER_USER_ID],
 ] as const;
@@ -199,13 +202,37 @@ export class AuthService {
             providerUserId,
           },
         },
-        include: { player: { include: { factionMembers: true } } },
+        include: {
+          player: {
+            include: {
+              factionMembers: true,
+              spiritSlots: {
+                select: {
+                  spiritDefinitionId: true,
+                  isMain: true,
+                  lastExpSettledAt: true,
+                },
+              },
+            },
+          },
+        },
       });
 
       const shouldRepairNickname = existingIdentity
         ? isMojibakeText(existingIdentity.player.nickname) && !isMojibakeText(nickname)
         : false;
       const shouldSyncStableFaction = Boolean(stableAccount && existingIdentity && existingIdentity.player.factionId !== faction.id);
+      const shouldRepairStableInitialization = Boolean(
+        stableAccount
+        && existingIdentity
+        && existingIdentity.player.castleLevelCache <= 1
+        && !existingIdentity.player.spiritSlots.some((slot) => slot.isMain && slot.spiritDefinitionId)
+        && !existingIdentity.player.spiritSlots.some((slot) => slot.spiritDefinitionId),
+      );
+      const shouldRepairSpiritProgressAnchor = Boolean(
+        existingIdentity
+        && existingIdentity.player.spiritSlots.some((slot) => slot.spiritDefinitionId && !slot.lastExpSettledAt),
+      );
       const player = existingIdentity
         ? await client.player.update({
           where: { id: existingIdentity.playerId },
@@ -265,7 +292,7 @@ export class AuthService {
         });
       }
 
-      const initialization = stableAccount && !existingIdentity
+      const initialization = stableAccount && (!existingIdentity || shouldRepairStableInitialization)
         ? buildStableDevAccountInitialization(stableAccount)
         : {
           castleLevel: player.castleLevelCache,
@@ -277,7 +304,20 @@ export class AuthService {
       await this.playerInitializationService.initialize(client, {
         playerId: player.id,
         ...initialization,
+        ...(shouldRepairStableInitialization ? { resetExisting: true } : {}),
       });
+      if (shouldRepairSpiritProgressAnchor) {
+        await client.playerSpiritSlot.updateMany({
+          where: {
+            playerId: player.id,
+            spiritDefinitionId: { not: null },
+            lastExpSettledAt: null,
+          },
+          data: {
+            lastExpSettledAt: new Date(),
+          },
+        });
+      }
       await this.ensureDevFixedFriendRelations(client, providerUserId);
 
       const authIdentity = existingIdentity
@@ -506,7 +546,7 @@ export class AuthService {
     client: Prisma.TransactionClient,
     factionCode: string,
     options?: { select?: TSelect },
-  ): Promise<TSelect extends Prisma.FactionSelect ? Prisma.FactionGetPayload<{ select: TSelect }> : Prisma.Faction> {
+  ): Promise<TSelect extends Prisma.FactionSelect ? Prisma.FactionGetPayload<{ select: TSelect }> : Faction> {
     await this.ensureCoreFactions(client);
     const faction = await client.faction.findUnique({
       where: { code: factionCode },
@@ -519,7 +559,7 @@ export class AuthService {
         statusCode: 404,
       });
     }
-    return faction as TSelect extends Prisma.FactionSelect ? Prisma.FactionGetPayload<{ select: TSelect }> : Prisma.Faction;
+    return faction as TSelect extends Prisma.FactionSelect ? Prisma.FactionGetPayload<{ select: TSelect }> : Faction;
   }
 
   private async createVerificationRaidTargetPool(

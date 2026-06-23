@@ -1,13 +1,13 @@
-import type { ClientSceneKey } from '@trinitywar/shared';
 import type { ClientViewModel } from '../api';
 import { formatReadSource, formatServerTime } from '../utils/format';
 import type { RaidHubTabKey } from './appStateTypes';
+import type { SceneNavigationTarget } from './navigation';
 
 interface DesktopStatusRailProps {
   currentAccountName: string;
   pendingActionKey: string | null;
   viewModel: ClientViewModel;
-  onNavigate: (scene: ClientSceneKey, nextRaidHubTab?: RaidHubTabKey) => void;
+  onNavigate: (scene: SceneNavigationTarget, nextRaidHubTab?: RaidHubTabKey) => void;
   onResetDemoState: () => void;
   onShowToast: (message: string) => void;
   onSwitchDevUser: () => void;
@@ -61,12 +61,12 @@ export function DesktopStatusRail(props: DesktopStatusRailProps): JSX.Element {
         <button
           className="rail-alert"
           onClick={() => {
-            onNavigate('report', 'reports');
-            onShowToast('最近 1 次被挑战已解锁免费复仇，已切到探索模块的战报页签。');
+            onNavigate('battle', 'reports');
+            onShowToast('最近 1 次被挑战已解锁免费复仇，已切到战斗模块的战报页签。');
           }}
           type="button"
         >
-          探索动态 2
+          战斗动态 2
         </button>
       </div>
 

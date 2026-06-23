@@ -45,10 +45,9 @@ export class HomeSummaryAssembler {
       factionTasks: [],
       todayContribution: readModel.contributionLogs.reduce((sum, log) => sum + Math.max(log.contributionDelta, 0), 0),
       primaryActions: [
-        { key: 'building', title: '法术阁', description: '修习法术强化经营' },
-        { key: 'farm', title: '农场', description: '收成熟田地' },
-        { key: 'raid', title: '部队', description: '征召兵力并查看训练队列' },
-        { key: 'report', title: '探索', description: '查看目标、战报与通缉令' },
+        { key: 'farm', title: '灵田', description: '收成熟田地' },
+        { key: 'spirit', title: '灵宠', description: '培育灵宠并查看当前守备' },
+        { key: 'battle', title: '战斗', description: '查看目标、战报与通缉令' },
         { key: 'faction', title: '阵营', description: '领取每日俸禄并查看贡献' },
       ],
     };

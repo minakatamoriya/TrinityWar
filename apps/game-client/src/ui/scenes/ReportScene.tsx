@@ -77,9 +77,9 @@ export function ReportScene(props: ReportSceneProps): JSX.Element {
           ) : null}
           {uiRules.showToolbar ? (
             <div className="raid-toolbar compact-raid-toolbar">
-              <div className="raid-rule-strip" aria-label="探索规则">
+              <div className="raid-rule-strip" aria-label="战斗规则">
                 {isTutorial ? (
-                  <span>推荐目标 · 完成一次战斗后解锁完整探索</span>
+                  <span>推荐目标 · 完成一次战斗后解锁完整战斗模块</span>
                 ) : (
                   <>
                     <span>今日战斗 {battleUsed}/{battleLimit}</span>

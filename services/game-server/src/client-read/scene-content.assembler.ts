@@ -56,11 +56,10 @@ export class SceneContentAssembler {
         plants: this.buildPlants(readModel),
         landDeeds: this.buildLandDeeds(readModel),
         guide: {
-          title: '\u519c\u573a\u7ecf\u8425',
-          description: '\u7530\u5730\u72b6\u6001\u5df2\u4ece\u6570\u636e\u5e93\u8bfb\u53d6\uff0c\u53ef\u901a\u8fc7\u57f9\u80b2\u548c\u6536\u53d6\u9010\u6b65\u6269\u5927\u7ecf\u8425\u3002',
+          title: '灵田经营',
+          description: '灵田状态已从数据库读取，可通过培育和收取逐步扩大经营。',
           actions: [
-            { label: '\u6253\u5f00\u5efa\u7b51', target: 'building', tone: 'secondary' },
-            { label: '\u8fd4\u56de\u9996\u9875', target: 'home', tone: 'ghost' },
+            { label: '查看灵田', target: 'farm', tone: 'ghost' },
           ],
         },
       },

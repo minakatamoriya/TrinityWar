@@ -251,8 +251,8 @@ export function GlobalFeatureModalContent(props: GlobalFeatureModalContentProps)
   return (
     <>
       {props.contributionTiers ? <ContributionTierList tiers={props.contributionTiers} /> : null}
-      {props.seasonResetRules ? <SeasonResetRulesPanel {...props.seasonResetRules} /> : null}
       {props.seasonSignIn ? <SeasonSignInPanel {...props.seasonSignIn} /> : null}
+      {props.seasonResetRules ? <SeasonResetRulesPanel {...props.seasonResetRules} /> : null}
       {props.seasonMedalCabinet !== undefined ? <SeasonMedalCabinetPanel cabinet={props.seasonMedalCabinet} /> : null}
       {props.tianjiShop ? <TianjiShopPanel {...props.tianjiShop} /> : null}
     </>

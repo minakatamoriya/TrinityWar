@@ -1,24 +1,22 @@
 import type {
-  ClientSceneKey,
   ClientPlantResearchState,
   ClientSeasonSignInState,
   ClientSpiritState,
 } from '@trinitywar/shared';
 import { getDevLoginModeLabel, type ClientViewModel, type DevLoginSession } from '../api';
-import { getSceneBackground } from '../config/sceneConfig';
+import { getSceneBackground, type AppSceneKey } from '../config/sceneConfig';
 import { buildBackpackResourceItems } from '../modules/backpack/backpackSelectors';
 import { buildFarmFields } from '../modules/farm/farmFields';
 import type { FarmOptimisticMutation } from '../modules/farm/farmOptimisticState';
-import { buildSeedCatalogMap, buildSeedGroups, getFirstVisibleUnlockedSeedId } from '../modules/farm/seedPresentation';
+import { buildSeedCatalogMap, buildSeedGroups } from '../modules/farm/seedPresentation';
 import { findResourceByTone } from '../modules/home/homeSelectors';
-import { buildSeasonProgress } from '../modules/season/seasonPresentation';
 import { getFirstVisibleSpiritCodexId } from '../modules/spirit/spiritCodexPresentation';
 import { buildTutorialTask, getTutorialUiRules, isNewUserInTutorial, type TutorialStage } from '../tutorial/tutorialFlow';
 import { parseCapacityResourceValue } from '../utils/format';
 import type { SeedCodexState } from './appStateTypes';
 
 interface BuildAppDerivedStateInput {
-  activeScene: ClientSceneKey;
+  activeScene: AppSceneKey;
   farmTick: number;
   fieldSeedAssignments: Record<string, string>;
   farmOptimisticMutations: FarmOptimisticMutation[];
@@ -55,7 +53,7 @@ export function buildAppDerivedState(input: BuildAppDerivedStateInput) {
     unlockedSeedIds,
     viewModel,
   } = input;
-  const { bootstrap, home, scenes } = viewModel;
+  const { home, scenes } = viewModel;
   const selectedRaidTarget = scenes.raid.targets.find((target) => target.id === selectedRaidTargetId) ?? scenes.raid.targets[0];
   const isTutorialUser = isNewUserInTutorial(loginSession, tutorialStage);
   const mergedReportEntries = [...scenes.report.attack, ...scenes.report.defense]
@@ -71,7 +69,6 @@ export function buildAppDerivedState(input: BuildAppDerivedStateInput) {
   const currentAccountName = loginSession?.player.nickname ?? home.playerName;
   const tutorialTask = buildTutorialTask(tutorialStage);
   const vaultProgress = vaultResource ? parseCapacityResourceValue(vaultResource.value) : { current: 0, capacity: 0, ratio: 0 };
-  const seasonProgress = buildSeasonProgress(bootstrap.season);
   const seasonSignInDays = seasonSignInState?.days ?? [];
   const seasonSignInClaimedToday = seasonSignInState?.claimedToday ?? true;
   const seasonSignInTodayReward = seasonSignInState?.todayReward ?? 0;
@@ -85,12 +82,16 @@ export function buildAppDerivedState(input: BuildAppDerivedStateInput) {
   const selectedSeedCodexItem = seedCodexState
     ? seedGroups.flatMap((group) => group.seeds).find((seed) => seed.id === seedCodexState.selectedSeedId) ?? null
     : null;
-  const firstVisibleUnlockedSeedId = getFirstVisibleUnlockedSeedId(seedGroups);
   const topSpiritCodexSelectedId = topSpiritCodexSpiritId
     ?? (spiritState ? getFirstVisibleSpiritCodexId(spiritState.codex) : null)
     ?? null;
   const spiritStableFull = spiritState ? spiritState.slots.filter((slot) => slot.spiritId).length >= spiritState.slots.length : false;
-  const backpackResourceItems = buildBackpackResourceItems({ spiritState, unlockedSeedIds, seedInventory });
+  const backpackResourceItems = buildBackpackResourceItems({
+    seedInventory,
+    spiritState,
+    unlockedSeedIds,
+    vaultGold: vaultProgress.current,
+  });
   const farmFields = buildFarmFields({
     fields: scenes.farm.fields,
     fieldSeedAssignments,
@@ -106,13 +107,11 @@ export function buildAppDerivedState(input: BuildAppDerivedStateInput) {
     currentAccountName,
     devLoginModeLabel,
     farmFields,
-    firstVisibleUnlockedSeedId,
     isTutorialUser,
     mergedReportEntries,
     raidBattleLimit,
     raidBattleUsed,
     raidTargetsById,
-    seasonProgress,
     seasonSignInClaimedToday,
     seasonSignInDays,
     seasonSignInMilestones,

@@ -116,7 +116,7 @@ function getMedalDomainLabel(domain: string): string {
     return '养宠领域';
   }
   if (domain === 'combat') {
-    return '探索战斗领域';
+    return '战斗领域';
   }
   if (domain === 'contribution') {
     return '贡献领域';
@@ -189,7 +189,7 @@ function getRewardTypeLabel(rewardType: string): string {
     return '养宠领域奖励';
   }
   if (rewardType === 'domain_combat') {
-    return '探索战斗领域奖励';
+    return '战斗领域奖励';
   }
   if (rewardType === 'contribution_tier') {
     return '贡献领域奖励';
@@ -205,9 +205,9 @@ const rewardTierLabels: Record<string, string> = {
   'season-spirit-bronze': '养宠领域铜档',
   'season-spirit-silver': '养宠领域银档',
   'season-spirit-gold': '养宠领域金档',
-  'season-combat-bronze': '探索战斗领域铜档',
-  'season-combat-silver': '探索战斗领域银档',
-  'season-combat-gold': '探索战斗领域金档',
+  'season-combat-bronze': '战斗领域铜档',
+  'season-combat-silver': '战斗领域银档',
+  'season-combat-gold': '战斗领域金档',
   'season-contribution-50': '贡献领域起步档',
   'season-contribution-100': '贡献领域入门档',
   'season-contribution-150': '贡献领域铜档',

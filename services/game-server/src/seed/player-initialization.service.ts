@@ -497,6 +497,7 @@ export class PlayerInitializationService {
           element: shouldCreateStarter ? starterElement : null,
           maxHp,
           acquiredAt: shouldCreateStarter ? now : null,
+          lastExpSettledAt: shouldCreateStarter ? now : null,
           slotVersion: 1,
         },
         update: resetExisting
@@ -508,6 +509,7 @@ export class PlayerInitializationService {
             element: shouldCreateStarter ? starterElement : null,
             maxHp,
             acquiredAt: shouldCreateStarter ? now : null,
+            lastExpSettledAt: shouldCreateStarter ? now : null,
             dissolvedAt: null,
             slotVersion: { increment: 1 },
           }

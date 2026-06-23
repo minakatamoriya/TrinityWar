@@ -484,7 +484,7 @@ export class ClientReadService {
             faction: target.faction?.name ?? '未知阵营',
             level: target.castleLevelCache,
             combatPower: target.army?.totalCount ?? 0,
-            raidRule: `探索与战斗只针对对手灵宠。当前目标段位 ${targetBandLabel}。`,
+            raidRule: `战斗只针对对手灵宠。当前目标段位 ${targetBandLabel}。`,
             defenseStatus: `可用战力 ${target.army?.availableCount ?? 0}`,
             protectionStatus: '可发起战斗',
             risk: targetKind.label,

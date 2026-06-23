@@ -1482,7 +1482,7 @@ export class SpiritService {
   ) {
     const dateKey = getLocalDateKey();
     const weekKey = getWeekPeriodKey();
-    const [resource, slots, codex, shopPurchases, adRewardUsedToday] = await Promise.all([
+    const [resource, slots, codex, allSpiritDefinitions, shopPurchases, adRewardUsedToday] = await Promise.all([
       client.playerSpiritResource.findUnique({
         where: { playerId },
         select: {
@@ -1568,6 +1568,23 @@ export class SpiritService {
           },
         },
       }),
+      client.spiritDefinition.findMany({
+        select: {
+          spiritId: true,
+          label: true,
+          rarity: true,
+          factionAffinity: true,
+          role: true,
+          shardName: true,
+          shardUnlockRequired: true,
+          baseAttack: true,
+          baseHp: true,
+          growthAttack: true,
+          growthHp: true,
+          lore: true,
+          sortOrder: true,
+        },
+      }),
       client.spiritShopPurchaseLog.findMany({
         where: {
           playerId,
@@ -1597,13 +1614,25 @@ export class SpiritService {
       });
     }
 
+    const codexBySpiritId = new Map(codex.map((entry) => [entry.spiritDefinition.spiritId, entry]));
+    const completeCodex = allSpiritDefinitions.map((definition) => (
+      codexBySpiritId.get(definition.spiritId) ?? {
+        hasSeen: false,
+        shardCount: 0,
+        readyToCompose: false,
+        ownedCurrent: false,
+        ownedEver: false,
+        spiritDefinition: definition,
+      }
+    ));
+
     return {
       resource: {
         ...resource,
         factionCode: resource.player?.faction?.code ?? null,
       },
       slots,
-      codex,
+      codex: completeCodex,
       shopPurchases,
       adRewardUsedToday,
     };

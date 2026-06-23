@@ -1,6 +1,8 @@
 import type { ClientSceneKey } from '@trinitywar/shared';
 import type { DevFactionChoice } from '../api';
 
+export type AppSceneKey = 'farm' | 'spirit' | 'battle' | 'social' | 'faction';
+
 export interface FactionChoiceCard {
   code: DevFactionChoice;
   name: string;
@@ -9,17 +11,15 @@ export interface FactionChoiceCard {
   leaderSummary: string;
 }
 
-export const sceneNavLabels: Record<ClientSceneKey, string> = {
-  home: '首页',
-  building: '法术',
-  farm: '农场',
-  raid: '灵宠',
-  report: '探索',
-  faction: '阵营',
+export const sceneNavLabels: Record<AppSceneKey, string> = {
+  farm: '灵田',
+  spirit: '灵宠',
+  battle: '战斗',
   social: '社交',
+  faction: '阵营',
 };
 
-export const sceneKeys: ClientSceneKey[] = ['home', 'farm', 'raid', 'report', 'faction', 'social'];
+export const sceneKeys: AppSceneKey[] = ['farm', 'spirit', 'battle', 'social', 'faction'];
 
 const factionBackgroundMap: Record<string, string> = {
   人界: '/assets/backgrounds/renjie.png',
@@ -27,11 +27,11 @@ const factionBackgroundMap: Record<string, string> = {
   魔界: '/assets/backgrounds/mojie.png',
 };
 
-const sceneBackgroundMap: Record<Exclude<ClientSceneKey, 'home'>, string> = {
+const sceneBackgroundMap: Record<AppSceneKey | 'building', string> = {
   building: '/assets/backgrounds/jianzhu.png',
   farm: '/assets/backgrounds/nongchang.png',
-  raid: '/assets/backgrounds/lueduo.png',
-  report: '/assets/backgrounds/zhanbao.png',
+  spirit: '/assets/backgrounds/lueduo.png',
+  battle: '/assets/backgrounds/zhanbao.png',
   faction: '/assets/backgrounds/zhenying.png',
   social: '/assets/backgrounds/zhenying.png',
 };
@@ -56,7 +56,7 @@ export const factionChoiceCards: FactionChoiceCard[] = [
     name: '魔界',
     title: '战斗更强',
     traits: ['更适合主动战斗', '出手更狠', '连续作战更有优势'],
-    leaderSummary: '仙界更擅长培育灵宠，主宠成长更快，养成推进也更顺手。更容易把第一只灵宠尽快养成主力，适合喜欢围绕灵宠持续投入的玩家。',
+    leaderSummary: '魔界更擅长主动战斗，出手更狠，战斗节奏也更直接。更容易在对战和目标争夺中打出优势，适合喜欢主动进攻的玩家。',
   },
 ];
 
@@ -76,10 +76,16 @@ function getFactionBackground(factionName: string): string {
   return factionBackgroundMap[factionName] ?? factionBackgroundMap['人界'];
 }
 
-export function getSceneBackground(scene: ClientSceneKey, factionName: string): string {
+export function getSceneBackground(scene: AppSceneKey | ClientSceneKey, factionName: string): string {
   if (scene === 'home') {
-    return getFactionBackground(factionName);
+    return sceneBackgroundMap.farm;
+  }
+  if (scene === 'raid') {
+    return sceneBackgroundMap.battle;
+  }
+  if (scene === 'report') {
+    return sceneBackgroundMap.battle;
   }
 
-  return sceneBackgroundMap[scene];
+  return sceneBackgroundMap[scene as AppSceneKey | 'building'] ?? getFactionBackground(factionName);
 }

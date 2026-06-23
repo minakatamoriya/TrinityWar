@@ -838,7 +838,7 @@ function buildRaidTargetDetailResponse(
     level: targetSnapshot?.level ?? target?.targetPlayer.castleLevelCache ?? 1,
     tutorialTarget: targetSnapshot?.tutorialTarget === true,
     combatPower: String(targetSnapshot?.combatPower ?? 0),
-    raidRule: targetSnapshot?.raidRule ?? '探索与战斗只针对对手灵宠，奖励由系统按战果发放。',
+    raidRule: targetSnapshot?.raidRule ?? '战斗只针对对手灵宠，奖励由系统按战果发放。',
     defenseStatus: targetSnapshot?.defenseStatus ?? '等待结算',
     protectionStatus: targetSnapshot?.protectionStatus ?? '当前可挑战，是否成功结算以后端最终校验为准。',
     mainPetPreview,

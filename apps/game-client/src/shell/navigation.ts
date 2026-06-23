@@ -1,13 +1,24 @@
 import type { ClientSceneKey } from '@trinitywar/shared';
+import type { AppSceneKey } from '../config/sceneConfig';
 
-export function normalizeScene(scene: string): ClientSceneKey {
-  if (scene === 'field') {
+export type SceneNavigationTarget = AppSceneKey | ClientSceneKey;
+
+export function normalizeScene(scene: string): AppSceneKey {
+  if (scene === 'home' || scene === 'field' || scene === 'farm') {
     return 'farm';
   }
 
-  if (scene === 'home' || scene === 'building' || scene === 'farm' || scene === 'raid' || scene === 'report' || scene === 'faction' || scene === 'social') {
+  if (scene === 'spirit') {
+    return 'spirit';
+  }
+
+  if (scene === 'raid' || scene === 'report' || scene === 'battle') {
+    return 'battle';
+  }
+
+  if (scene === 'faction' || scene === 'social') {
     return scene;
   }
 
-  return 'home';
+  return 'farm';
 }

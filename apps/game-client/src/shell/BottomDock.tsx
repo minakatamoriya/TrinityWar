@@ -1,11 +1,10 @@
-import type { ClientSceneKey } from '@trinitywar/shared';
-import { sceneKeys, sceneNavLabels } from '../config/sceneConfig';
+import { sceneKeys, sceneNavLabels, type AppSceneKey } from '../config/sceneConfig';
 import { canOpenSceneInTutorial, type TutorialStage } from '../tutorial/tutorialFlow';
 
 interface BottomDockProps {
-  activeScene: ClientSceneKey;
+  activeScene: AppSceneKey;
   tutorialStage: TutorialStage;
-  onNavigate: (scene: ClientSceneKey) => void;
+  onNavigate: (scene: AppSceneKey) => void;
 }
 
 export function BottomDock(props: BottomDockProps): JSX.Element {

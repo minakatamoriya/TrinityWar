@@ -111,7 +111,7 @@ function FactionSelectPanel(props: {
           <p>这是一条单人好友邀请。选择任意阵营都可以成为好友；选择同阵营只是更方便后续阵营协作。</p>
         </div>
       ) : (
-        <p className="panel-text">这是用户第一次进入时看到的页面。先确定阵营，再创建新档案进入首页。</p>
+        <p className="panel-text">这是用户第一次进入时看到的页面。先确定阵营，再创建新档案进入灵田。</p>
       )}
       <div className="auth-faction-page-grid">
         {factionChoiceCards.map((faction) => {

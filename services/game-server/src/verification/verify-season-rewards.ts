@@ -167,7 +167,7 @@ async function main(): Promise<void> {
     if (!notification.titleSnapshot.includes('物品奖励')) {
       throw new Error(`Expected season reward notification title to be Chinese, got ${notification.titleSnapshot}.`);
     }
-    if (!notification.bodySnapshot.includes('探索战斗领域') && !notification.bodySnapshot.includes('贡献领域')) {
+    if (!notification.bodySnapshot.includes('战斗领域') && !notification.bodySnapshot.includes('贡献领域')) {
       throw new Error(`Expected season reward notification body to be Chinese, got ${notification.bodySnapshot}.`);
     }
     if (notification.titleSnapshot.includes('Season') || notification.bodySnapshot.includes('Your Season')) {

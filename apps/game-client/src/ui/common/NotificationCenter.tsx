@@ -1,4 +1,5 @@
 import type { ClientNotificationItem, ClientNotificationListResponse, NotificationAttachment } from '@trinitywar/shared';
+import { FullScreenToolShell } from './ModalShell';
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -52,85 +53,80 @@ export function NotificationCenter(props: {
   const totalPages = Math.max(1, Math.ceil(total / Math.max(pageSize, 1)));
 
   return (
-    <div className="modal-backdrop modal-backdrop-blocking" role="presentation">
-      <section className="modal-card app-dialog notification-panel" role="dialog" aria-modal="true" aria-labelledby="notification-center-title">
-        <header className="app-dialog-head">
-          <div className="app-dialog-title">
-            <p className="eyebrow">消息中心</p>
-            <h3 id="notification-center-title">系统通知</h3>
-          </div>
-          <button className="app-dialog-close" aria-label="关闭" onClick={props.onClose} type="button">×</button>
-        </header>
+    <FullScreenToolShell
+      ariaLabel="系统通知"
+      bodyClassName="notification-dialog-body"
+      className="notification-screen"
+      eyebrow="消息中心"
+      onBack={props.onClose}
+      title="系统通知"
+    >
+      {props.error ? <p className="notification-error">{props.error}</p> : null}
 
-        <div className="app-dialog-body notification-dialog-body">
-          {props.error ? <p className="notification-error">{props.error}</p> : null}
+      <div className="notification-list">
+        {props.busy ? <p className="notification-empty">正在读取消息...</p> : null}
+        {!props.busy && !props.error && (props.data?.items.length ?? 0) <= 0 ? <p className="notification-empty">当前没有系统通知。</p> : null}
+        {!props.busy ? props.data?.items.map((item) => (
+          <article className={`notification-card${item.read ? '' : ' unread'}`} key={item.id}>
+            <div className="notification-card-head">
+              <div className="notification-meta-row">
+                <span className="notification-category-tag">{getCategoryLabel(item.category)}</span>
+                <span className={`notification-status-tag ${item.read ? 'read' : 'unread'}`}>{item.read ? '已读' : '未读'}</span>
+              </div>
+              <span className="notification-time">{formatDateTime(item.createdAt)}</span>
+            </div>
+            <h4>{item.title}</h4>
+            <p>{item.body}</p>
+            {item.attachments.length > 0 ? (
+              <div className="notification-attachment-list">
+                {item.attachments.map((attachment, index) => (
+                  <span className="notification-attachment-pill" key={`${item.id}:${attachment.kind}:${index}`}>
+                    {props.resolveAttachmentLabel?.(attachment) ?? attachment.name ?? attachment.label} x{attachment.quantity}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            <div className="notification-card-actions">
+              {!item.read ? (
+                <button
+                  className="secondary-button"
+                  disabled={props.actionId === `read:${item.id}`}
+                  onClick={() => props.onMarkRead(item.id)}
+                  type="button"
+                >
+                  {props.actionId === `read:${item.id}` ? '处理中...' : '标记已读'}
+                </button>
+              ) : null}
+              {item.claimStatus === 'unclaimed' ? (
+                <button
+                  className="secondary-button"
+                  disabled={props.actionId === `claim:${item.id}`}
+                  onClick={() => props.onClaim(item.id)}
+                  type="button"
+                >
+                  {props.actionId === `claim:${item.id}` ? '领取中...' : '领取附件'}
+                </button>
+              ) : null}
+              <button
+                className="ghost-button"
+                disabled={!item.canDelete || props.actionId === `delete:${item.id}`}
+                onClick={() => props.onDelete(item.id)}
+                type="button"
+              >
+                {props.actionId === `delete:${item.id}` ? '删除中...' : '删除'}
+              </button>
+            </div>
+          </article>
+        )) : null}
+      </div>
 
-          <div className="notification-list">
-            {props.busy ? <p className="notification-empty">正在读取消息...</p> : null}
-            {!props.busy && !props.error && (props.data?.items.length ?? 0) <= 0 ? <p className="notification-empty">当前没有系统通知。</p> : null}
-            {!props.busy ? props.data?.items.map((item) => (
-              <article className={`notification-card${item.read ? '' : ' unread'}`} key={item.id}>
-                <div className="notification-card-head">
-                  <div className="notification-meta-row">
-                    <span className="notification-category-tag">{getCategoryLabel(item.category)}</span>
-                    <span className={`notification-status-tag ${item.read ? 'read' : 'unread'}`}>{item.read ? '已读' : '未读'}</span>
-                  </div>
-                  <span className="notification-time">{formatDateTime(item.createdAt)}</span>
-                </div>
-                <h4>{item.title}</h4>
-                <p>{item.body}</p>
-                {item.attachments.length > 0 ? (
-                  <div className="notification-attachment-list">
-                    {item.attachments.map((attachment, index) => (
-                      <span className="notification-attachment-pill" key={`${item.id}:${attachment.kind}:${index}`}>
-                        {props.resolveAttachmentLabel?.(attachment) ?? attachment.name ?? attachment.label} x{attachment.quantity}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="notification-card-actions">
-                  {!item.read ? (
-                    <button
-                      className="secondary-button"
-                      disabled={props.actionId === `read:${item.id}`}
-                      onClick={() => props.onMarkRead(item.id)}
-                      type="button"
-                    >
-                      {props.actionId === `read:${item.id}` ? '处理中...' : '标记已读'}
-                    </button>
-                  ) : null}
-                  {item.claimStatus === 'unclaimed' ? (
-                    <button
-                      className="secondary-button"
-                      disabled={props.actionId === `claim:${item.id}`}
-                      onClick={() => props.onClaim(item.id)}
-                      type="button"
-                    >
-                      {props.actionId === `claim:${item.id}` ? '领取中...' : '领取附件'}
-                    </button>
-                  ) : null}
-                  <button
-                    className="ghost-button"
-                    disabled={!item.canDelete || props.actionId === `delete:${item.id}`}
-                    onClick={() => props.onDelete(item.id)}
-                    type="button"
-                  >
-                    {props.actionId === `delete:${item.id}` ? '删除中...' : '删除'}
-                  </button>
-                </div>
-              </article>
-            )) : null}
-          </div>
+      <footer className="notification-pagination">
+        <span>第 {page} / {totalPages} 页</span>
+        <div className="notification-pagination-actions">
+          <button className="ghost-button" disabled={props.busy || page <= 1} onClick={() => props.onPageChange(page - 1)} type="button">上一页</button>
+          <button className="ghost-button" disabled={props.busy || page >= totalPages} onClick={() => props.onPageChange(page + 1)} type="button">下一页</button>
         </div>
-
-        <footer className="app-dialog-footer notification-pagination">
-          <span>第 {page} / {totalPages} 页</span>
-          <div className="notification-pagination-actions">
-            <button className="ghost-button" disabled={props.busy || page <= 1} onClick={() => props.onPageChange(page - 1)} type="button">上一页</button>
-            <button className="ghost-button" disabled={props.busy || page >= totalPages} onClick={() => props.onPageChange(page + 1)} type="button">下一页</button>
-          </div>
-        </footer>
-      </section>
-    </div>
+      </footer>
+    </FullScreenToolShell>
   );
 }

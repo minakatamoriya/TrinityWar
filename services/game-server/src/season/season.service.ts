@@ -1559,7 +1559,7 @@ function getCombatRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       rewardTier: 'season-combat-gold',
       domain: 'combat',
       achievementTitle: '赛季远征金章',
-      achievementDescription: '本赛季已结算探索战斗不少于 20 次。',
+      achievementDescription: '本赛季已结算战斗不少于 20 次。',
       statSnapshot: { raidCount: snapshot.raidCount },
       rewards: [
         rareSoul(2),
@@ -1574,7 +1574,7 @@ function getCombatRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       rewardTier: 'season-combat-silver',
       domain: 'combat',
       achievementTitle: '赛季远征银章',
-      achievementDescription: '本赛季已结算探索战斗不少于 5 次。',
+      achievementDescription: '本赛季已结算战斗不少于 5 次。',
       statSnapshot: { raidCount: snapshot.raidCount },
       rewards: [
         ordinarySoul(8),
@@ -1589,7 +1589,7 @@ function getCombatRewardRule(snapshot: SeasonRewardSnapshot): SeasonRewardRule |
       rewardTier: 'season-combat-bronze',
       domain: 'combat',
       achievementTitle: '赛季远征铜章',
-      achievementDescription: '本赛季已结算探索战斗不少于 1 次。',
+      achievementDescription: '本赛季已结算战斗不少于 1 次。',
       statSnapshot: { raidCount: snapshot.raidCount },
       rewards: [
         ordinarySoul(3),
@@ -2018,7 +2018,7 @@ function getSeasonRewardTypeLabel(rewardType: string): string {
     return '养宠领域';
   }
   if (rewardType === 'domain_combat') {
-    return '探索战斗领域';
+    return '战斗领域';
   }
   if (rewardType === 'contribution_tier') {
     return '贡献领域';
@@ -2223,15 +2223,15 @@ const seasonMedalCopyByKey: Record<string, {
   },
   'season-combat-bronze': {
     title: '赛季远征铜章',
-    description: '本赛季已结算探索战斗不少于 1 次。',
+    description: '本赛季已结算战斗不少于 1 次。',
   },
   'season-combat-silver': {
     title: '赛季远征银章',
-    description: '本赛季已结算探索战斗不少于 5 次。',
+    description: '本赛季已结算战斗不少于 5 次。',
   },
   'season-combat-gold': {
     title: '赛季远征金章',
-    description: '本赛季已结算探索战斗不少于 20 次。',
+    description: '本赛季已结算战斗不少于 20 次。',
   },
   'season-contribution-50': {
     title: '赛季贡献起步章',

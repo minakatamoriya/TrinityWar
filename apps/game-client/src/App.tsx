@@ -1,17 +1,14 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import { buildSpiritCollisionBattleReplay } from '@trinitywar/shared';
 import type {
-  ClientCastleExtensionUpgradeId,
   ClientCollectFieldRequest,
   ClientCollectFieldResponse,
   ClientCodexPrompt,
   ClientRaidActionRequest,
   ClientRaidDeepIntelResponse,
   ClientRaidBattleReplay,
-  ClientBuildingUpgradeId,
   ClientRaidTarget,
   ClientSceneAction,
-  ClientSceneKey,
   ClientPlantResearchState,
   ClientFarmBoardState,
   ClientSpiritElement,
@@ -26,9 +23,8 @@ import type {
   ClientSeasonTransition,
   NotificationAttachment,
   HomeSummaryResponse,
-  ClientUpgradeTargetType,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, changeSeasonFaction, claimFactionStipend, claimSeasonSignIn, claimSeasonSignInMilestone, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, confirmSeasonFaction, confirmSeasonStartupIntro, createShareAssistCampaign, devLogin, dissolveSpirit, feedSpirit, followSocialTarget, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, resetDevelopmentSeasonTiming, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setDevelopmentSeasonNearRollover, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unfollowSocialTarget, unlockPlant, updateFarmBoard, upgradeClientBuilding } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, changeSeasonFaction, claimFactionStipend, claimSeasonSignIn, claimSeasonSignInMilestone, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, confirmSeasonFaction, confirmSeasonStartupIntro, createShareAssistCampaign, devLogin, dissolveSpirit, feedSpirit, followSocialTarget, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, resetDevelopmentSeasonTiming, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setDevelopmentSeasonNearRollover, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unfollowSocialTarget, unlockPlant, updateFarmBoard } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import type { SocialTabKey } from './ui/scenes/SocialScene';
 import type { ShareAssistAudience } from './ui/share/ShareAssistPage';
@@ -37,7 +33,6 @@ import { useCharacterDialog } from './dialog/useCharacterDialog';
 import { RaidBattleScreen } from './battle/RaidBattleScreen';
 import {
   TUTORIAL_STARTER_SEED_ID,
-  buildTutorialTask,
   canOpenSceneInTutorial,
   getInitialTutorialStage,
   getLockedSceneMessage,
@@ -52,11 +47,11 @@ import {
 } from './config/seedCatalog';
 import {
   FRIEND_INVITE_DEMO_INVITER,
+  type AppSceneKey,
   factionCodeByName,
 } from './config/sceneConfig';
 import {
   formatNumber,
-  parseTianjiCostText,
 } from './utils/format';
 import { getMillisecondsUntilNextChinaMidnight } from './utils/time';
 import {
@@ -92,15 +87,14 @@ import {
   type ShareAssistDemoState,
   type TopResourcePanel,
 } from './shell/appStateTypes';
-import { normalizeScene } from './shell/navigation';
+import { normalizeScene, type SceneNavigationTarget } from './shell/navigation';
 import { buildActionMessage } from './shell/actionMessages';
 import {
   buildSeedBackpackState,
   emptyGlobalItemInventory,
   getPreferredSeedId,
 } from './modules/backpack/backpackState';
-import { buildSeedCatalogMap, buildSeedGroups, mergePlantResearchStateFromScenePlants } from './modules/farm/seedPresentation';
-import { buildUpgradeRequest } from './modules/building/buildingRequests';
+import { buildSeedCatalogMap, buildSeedGroups, getFirstVisibleUnlockedSeedId, mergePlantResearchStateFromScenePlants } from './modules/farm/seedPresentation';
 import { buildFactionContributionTiers } from './modules/faction/factionPresentation';
 import { applyFactionStipendSoulRewards } from './modules/faction/factionRewardState';
 import { getRewardBubbleTone, isDisplayableFarmReward } from './modules/rewards/rewardPresentation';
@@ -127,7 +121,6 @@ import { useRaidIntelState } from './modules/raid/useRaidIntelState';
 import { useSocialSceneState } from './modules/social/useSocialSceneState';
 import {
   applyTianjiTalismanToSpiritState,
-  spendLocalTianjiTalisman,
   syncTianjiTalismanInInventory,
 } from './modules/spirit/spiritState';
 import { buildSpiritCodexVisibleUnlockModal, buildSpiritComposeUnlockModal } from './modules/spirit/spiritPresentation';
@@ -142,18 +135,17 @@ import { CombatAndFeedbackLayer } from './shell/CombatAndFeedbackLayer';
 import { DesktopStatusRail } from './shell/DesktopStatusRail';
 import { FarmModalLayer } from './shell/FarmModalLayer';
 import { GlobalFeatureModalHost } from './shell/GlobalFeatureModalHost';
-import { GlobalResourceBar } from './shell/GlobalResourceBar';
 import { GlobalUnlockModalHost } from './shell/GlobalUnlockModalHost';
 import { LoadingScreen } from './shell/LoadingScreen';
 import { RaidIntelModalHost } from './shell/RaidIntelModalHost';
 import { ReturningFriendInvitePrompt } from './shell/ReturningFriendInvitePrompt';
 import { SeedRewardModalHost } from './shell/SeedRewardModalHost';
-import { SettingsModal } from './shell/SettingsModal';
 import { ShareAssistDemoScreen } from './shell/ShareAssistDemoScreen';
 import { SeasonCountdownBanner } from './shell/SeasonCountdownBanner';
 import { SeasonStartupFlow } from './shell/SeasonStartupFlow';
 import { TopDock } from './shell/TopDock';
 import { ProfileModal } from './shell/ProfileModal';
+import { SceneCodexShortcut } from './shell/SceneCodexShortcut';
 import { useFeedbackLayer } from './shell/useFeedbackLayer';
 
 const SEASON_END_WARNING_THRESHOLD_MS = 60 * 60 * 1000;
@@ -167,7 +159,7 @@ function App(): JSX.Element {
   const [authScreen, setAuthScreen] = useState<'faction-select' | 'account-select'>('account-select');
   const [loginLoadingMode, setLoginLoadingMode] = useState<DevLoginMode | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [activeScene, setActiveScene] = useState<ClientSceneKey>('home');
+  const [activeScene, setActiveScene] = useState<AppSceneKey>('farm');
   const [tutorialStage, setTutorialStage] = useState<TutorialStage>(() => getInitialTutorialStage(storedLoginSession));
   const [raidHubTab, setRaidHubTab] = useState<RaidHubTabKey>('targets');
   const [factionTab, setFactionTab] = useState<FactionTabKey>('overview');
@@ -188,7 +180,6 @@ function App(): JSX.Element {
   const social = useSocialSceneState({
     onToast: showToast,
   });
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [seasonTimingOverrideActive, setSeasonTimingOverrideActive] = useState(false);
   const [seasonStartupSelectedFaction, setSeasonStartupSelectedFaction] = useState<DevFactionChoice>('human');
   const [seasonStartupStepOverride, setSeasonStartupStepOverride] = useState<'faction-select' | null>(null);
@@ -247,7 +238,6 @@ function App(): JSX.Element {
   const { playDialogScene } = characterDialog;
   const characterDialogPortalRef = useRef<HTMLDivElement | null>(null);
   const welcomeDialogSessionIdRef = useRef<string | null>(null);
-  const farmEnterDialogRef = useRef<{ sceneId: string; at: number } | null>(null);
   const plantUnlockReadyIdsRef = useRef<string[] | null>(null);
   const plantCatalogMap = useRef(buildSeedCatalogMap()).current;
   const battleDemoScenarioIndexRef = useRef(0);
@@ -572,7 +562,7 @@ function App(): JSX.Element {
       }
 
       if (action.type === 'navigate') {
-        setActiveScene(action.scene);
+        setActiveScene(normalizeScene(action.scene));
         if (action.raidHubTab) {
           setRaidHubTab(action.raidHubTab);
         }
@@ -785,7 +775,7 @@ function App(): JSX.Element {
 
   const handleCloseGlobalFeatureModal = (): void => {
     if (globalFeatureModal?.returnHomeOnClose) {
-      setActiveScene('home');
+      setActiveScene('farm');
       setRaidHubTab('targets');
       setFactionTab('overview');
       setSocialTab('friends');
@@ -1096,7 +1086,7 @@ function App(): JSX.Element {
   };
 
   const handleSwitchDevUser = (): void => {
-    setSettingsOpen(false);
+    setProfileOpen(false);
     clearDevLoginSession();
     setLoginSession(null);
     setSeasonTimingOverrideActive(false);
@@ -1106,7 +1096,7 @@ function App(): JSX.Element {
     setSpiritState(null);
     setFarmBoard(null);
     setFarmBoardEditor(null);
-    setActiveScene('home');
+    setActiveScene('farm');
     setRaidHubTab('targets');
     setFactionTab('overview');
     setSocialTab('friends');
@@ -1131,7 +1121,6 @@ function App(): JSX.Element {
     social.reset();
     setLoginError(null);
     welcomeDialogSessionIdRef.current = null;
-    farmEnterDialogRef.current = null;
     plantUnlockReadyIdsRef.current = null;
   };
 
@@ -1234,7 +1223,7 @@ function App(): JSX.Element {
 
   useEffect(() => {
     if (!canOpenSceneInTutorial(activeScene, tutorialStage)) {
-      setActiveScene('home');
+      setActiveScene('farm');
     }
   }, [activeScene, tutorialStage]);
 
@@ -1321,32 +1310,6 @@ function App(): JSX.Element {
     welcomeDialogSessionIdRef.current = loginSession.player.id;
     playDialogScene('home.welcome.fox');
   }, [loginSession, playDialogScene, tutorialStage, viewModel]);
-
-  useEffect(() => {
-    if (activeScene !== 'farm' || !viewModel) {
-      return;
-    }
-
-    if (viewModel.bootstrap.season.startup?.blocking) {
-      return;
-    }
-
-    const ripeField = viewModel.scenes.farm.fields.find((field) => field.tone === 'mature' || field.tone === 'withered');
-    if (!ripeField) {
-      return;
-    }
-
-    const now = Date.now();
-    const lastShown = farmEnterDialogRef.current;
-    if (lastShown && lastShown.sceneId === 'farm.enter.ripe-crop' && now - lastShown.at < 120000) {
-      return;
-    }
-
-    const shown = playDialogScene('farm.enter.ripe-crop');
-    if (shown) {
-      farmEnterDialogRef.current = { sceneId: 'farm.enter.ripe-crop', at: now };
-    }
-  }, [activeScene, playDialogScene, viewModel]);
 
   useEffect(() => {
     if (!viewModel) {
@@ -1548,13 +1511,11 @@ function App(): JSX.Element {
     currentAccountName,
     devLoginModeLabel,
     farmFields,
-    firstVisibleUnlockedSeedId,
     isTutorialUser,
     mergedReportEntries,
     raidBattleLimit,
     raidBattleUsed,
     raidTargetsById,
-    seasonProgress,
     seasonSignInClaimedToday,
     seasonSignInDays,
     seasonSignInMilestones,
@@ -1595,6 +1556,7 @@ function App(): JSX.Element {
     nowMs: seasonCountdownNow,
     suppress: Boolean(seasonStartup?.blocking),
   });
+  const firstVisibleSeedCodexId = getFirstVisibleUnlockedSeedId(seedGroups);
 
   const runPendingAction = async (actionKey: string, action: () => Promise<void>): Promise<void> => {
     if (pendingActionKey === actionKey) {
@@ -2062,14 +2024,13 @@ function App(): JSX.Element {
       setSpiritState(nextSpiritState);
 
       showToast(result.summary, 'success');
-      setActiveScene('home');
+      setActiveScene('farm');
       setRaidHubTab('targets');
       setFactionTab('overview');
       setSeedInventory(emptySeedInventory);
       setGlobalItemInventory(emptyGlobalItemInventory);
       setUnlockedSeedIds(defaultUnlockedSeedIds);
       setSeedRewardModal(null);
-      farmEnterDialogRef.current = null;
       setArmyQueueRefreshReadyAt(null);
       setSeedSelectionState(null);
       setSelectedSeedId(getPreferredSeedId({
@@ -2139,7 +2100,7 @@ function App(): JSX.Element {
       applyClientBundle(data);
       await notifications.refreshUnreadCount();
       if (result.startup.completed) {
-        setActiveScene('home');
+        setActiveScene('farm');
         setRaidHubTab('targets');
         setFactionTab('overview');
         setSocialTab('friends');
@@ -2167,7 +2128,7 @@ function App(): JSX.Element {
       const data = await loadClientBundle();
       applyClientBundle(data);
       await notifications.refreshUnreadCount();
-      setActiveScene('home');
+      setActiveScene('farm');
       setRaidHubTab('targets');
       setFactionTab('overview');
       setSocialTab('friends');
@@ -2192,7 +2153,7 @@ function App(): JSX.Element {
       const data = await loadClientBundle();
       applyClientBundle(data);
       await notifications.refreshUnreadCount();
-      setActiveScene('home');
+      setActiveScene('farm');
       setRaidHubTab('targets');
       setFactionTab('overview');
       setSocialTab('friends');
@@ -2326,39 +2287,44 @@ function App(): JSX.Element {
     applySpiritState(result.spirit);
   };
 
-  const applyLocalTianjiSpend = (costText: string): void => {
-    const tianjiCost = parseTianjiCostText(costText);
-    if (tianjiCost <= 0) {
+  const handleTutorialTaskAction = (): void => {
+    if (tutorialStage === 'starter') {
+      setSeedRewardModal({
+        title: '领取启灵芽',
+        summary: '引导者交付启灵芽 x1。确认后会开放第一块田的可种植资格。',
+        confirmAction: 'claim-starter-seeds',
+        items: [
+          {
+            seedId: TUTORIAL_STARTER_SEED_ID,
+            label: '启灵芽',
+            quantity: 1,
+          },
+        ],
+      });
       return;
     }
 
-    setSpiritState((currentSpiritState) => spendLocalTianjiTalisman({
-      cost: tianjiCost,
-      globalItemInventory,
-      spiritState: currentSpiritState,
-    }).spiritState);
-    setGlobalItemInventory((currentGlobalItemInventory) => (
-      spendLocalTianjiTalisman({
-        cost: tianjiCost,
-        globalItemInventory: currentGlobalItemInventory,
-        spiritState: null,
-      }).globalItemInventory
-    ));
+    if (!tutorialTask) {
+      return;
+    }
+
+    navigateToScene(tutorialTask.targetScene);
   };
 
-  const navigateToScene = (scene: ClientSceneKey, nextRaidHubTab?: RaidHubTabKey): void => {
-    if (!canOpenSceneInTutorial(scene, tutorialStage)) {
-      showToast(getLockedSceneMessage(scene), 'info');
+  const navigateToScene = (scene: SceneNavigationTarget, nextRaidHubTab?: RaidHubTabKey): void => {
+    const nextScene = normalizeScene(scene);
+    if (!canOpenSceneInTutorial(nextScene, tutorialStage)) {
+      showToast(getLockedSceneMessage(nextScene), 'info');
       return;
     }
 
-    setActiveScene(scene);
+    setActiveScene(nextScene);
 
-    if (scene === 'report' && nextRaidHubTab) {
+    if (nextScene === 'battle' && nextRaidHubTab) {
       setRaidHubTab(nextRaidHubTab);
     }
 
-    if (scene !== 'report' && nextRaidHubTab) {
+    if (nextScene !== 'battle' && nextRaidHubTab) {
       setRaidHubTab(nextRaidHubTab);
     }
   };
@@ -2394,79 +2360,6 @@ function App(): JSX.Element {
     } finally {
       setPendingActionKey(null);
     }
-  };
-
-  const handleTutorialTaskAction = (): void => {
-    const task = buildTutorialTask(tutorialStage);
-    if (!task) {
-      return;
-    }
-
-    if (tutorialStage === 'home') {
-      setSeedRewardModal({
-        title: '领取启灵芽',
-        summary: '引导者交付启灵芽 x1。确认后会开放第一块田的可种植资格。',
-        confirmAction: 'claim-starter-seeds',
-        items: [
-          {
-            seedId: 'qilingya',
-            label: '启灵芽',
-            quantity: 1,
-          },
-        ],
-      });
-      return;
-    }
-
-    if (tutorialStage === 'farm') {
-      setActiveScene('farm');
-      return;
-    }
-
-    if (tutorialStage === 'spirit') {
-      setActiveScene('raid');
-      return;
-    }
-
-    if (tutorialStage === 'raid') {
-      setActiveScene('report');
-      setRaidHubTab('targets');
-      return;
-    }
-
-    if (tutorialStage === 'faction') {
-      setActiveScene('faction');
-      setFactionTab('overview');
-      return;
-    }
-
-  };
-
-  const handleBuildingAction = async (action: ClientSceneAction, upgradeId: ClientBuildingUpgradeId | ClientCastleExtensionUpgradeId, context: string, targetType: ClientUpgradeTargetType, costText: string): Promise<void> => {
-    if (action.label.includes('升级') || action.label.includes('修习')) {
-      const actionKey = `${targetType}:${upgradeId}`;
-      if (pendingActionKey === actionKey) {
-        return;
-      }
-
-      setPendingActionKey(actionKey);
-
-      try {
-        const result = await upgradeClientBuilding(buildUpgradeRequest(targetType, upgradeId, home.stateVersions.buildingVersion, home.stateVersions.walletVersion));
-        applyMutationResult(result);
-        applyLocalTianjiSpend(costText);
-      } catch (error) {
-        if (await handleSeasonRolledOverError(error)) {
-          return;
-        }
-        showToast(`${context} 当前修习失败，请稍后重试。`, 'error');
-      } finally {
-        setPendingActionKey(null);
-      }
-      return;
-    }
-
-    handleSceneAction(action, context);
   };
 
   const handleFarmAction = async (action: ClientSceneAction, fieldId: string, context: string): Promise<void> => {
@@ -2733,8 +2626,9 @@ function App(): JSX.Element {
       }
     }
 
-    if (action.target !== activeScene || action.label.includes('返回') || action.label.includes('打开')) {
-      navigateToScene(normalizeScene(action.target));
+    const nextScene = normalizeScene(action.target);
+    if (nextScene !== activeScene || action.label.includes('返回') || action.label.includes('打开')) {
+      navigateToScene(nextScene);
     }
 
     showToast(buildActionMessage(action.label, actionContext), 'info');
@@ -3020,17 +2914,9 @@ function App(): JSX.Element {
             avatarInitial={avatarInitial}
             isTutorialUser={isTutorialUser}
             notificationUnreadCount={notifications.unreadCount}
-            seasonProgress={seasonProgress}
             onOpenNotifications={notifications.openCenter}
+            onOpenBackpack={() => setTopResourcePanel('resources')}
             onOpenProfile={() => setProfileOpen(true)}
-            onOpenSeasonResetRules={() => {
-              setGlobalFeatureModal({
-                title: '赛季规则',
-                eyebrow: '赛季',
-                description: '查看赛季结算与重置规则，再决定本赛季的经营重点。',
-                seasonResetRules: true,
-              });
-            }}
             onOpenSeasonSignIn={() => {
               setGlobalFeatureModal({
                 title: '赛季签到',
@@ -3039,10 +2925,9 @@ function App(): JSX.Element {
                 seasonSignIn: true,
               });
             }}
-            onOpenSettings={() => setSettingsOpen(true)}
             onOpenTianjiShop={() => {
               setGlobalFeatureModal({
-                title: '天机符商店',
+                title: '福利',
                 tianjiShop: true,
               });
             }}
@@ -3104,14 +2989,16 @@ function App(): JSX.Element {
             stepOverride={seasonStartupStepOverride}
           />
 
-          <SettingsModal
-            currentAccountName={currentAccountName}
+          <ProfileModal
+            avatarInitial={avatarInitial}
             currentSeasonEndsAt={viewModel?.bootstrap.season.endsAt ?? null}
             devLoginModeLabel={devLoginModeLabel}
-            open={settingsOpen}
+            medalCabinet={seasonRewardsState?.medalCabinet ?? null}
+            nickname={currentAccountName}
+            open={profileOpen}
             pendingActionKey={pendingActionKey}
             seasonTimingOverrideActive={seasonTimingOverrideActive}
-            onClose={() => setSettingsOpen(false)}
+            onClose={() => setProfileOpen(false)}
             onResetSeasonTiming={() => {
               void handleResetDevelopmentSeasonTiming();
             }}
@@ -3119,31 +3006,6 @@ function App(): JSX.Element {
               void handleSetDevelopmentSeasonNearRollover();
             }}
             onSwitchDevUser={handleSwitchDevUser}
-          />
-
-          <ProfileModal
-            avatarInitial={avatarInitial}
-            medalCabinet={seasonRewardsState?.medalCabinet ?? null}
-            nickname={currentAccountName}
-            open={profileOpen}
-            onClose={() => setProfileOpen(false)}
-          />
-
-          <GlobalResourceBar
-            gold={vaultProgress.current}
-            showTopResourceButtons={tutorialUiRules.showTopResourceButtons}
-            tianjiTalisman={tianjiTalismanCount}
-            onOpenResources={() => setTopResourcePanel('resources')}
-            onOpenSeedCodex={() => {
-              setSeedCodexState({
-                selectedSeedId: getPreferredPendingPlantUnlockId(seedGroups, pendingPlantUnlockPromptIds) ?? firstVisibleUnlockedSeedId,
-              });
-            }}
-            onOpenSpiritCodex={() => {
-              setTopSpiritCodexSpiritId(topSpiritCodexSelectedId);
-              setTopResourcePanel('spirit-codex');
-              openPendingSpiritCodexReveal();
-            }}
           />
 
           <AppSceneRouter
@@ -3188,9 +3050,6 @@ function App(): JSX.Element {
             onBreakthroughSpirit={(slotIndex, slotVersion, targetStage) => {
               void handleBreakthroughSpiritAction(slotIndex, slotVersion, targetStage);
             }}
-            onBuildingUpgradeAction={(action, upgradeId, context, targetType, costText) => {
-              void handleBuildingAction(action, upgradeId, context, targetType, costText);
-            }}
             onChangeFactionTab={setFactionTab}
             onChangeRaidHubTab={setRaidHubTab}
             onChangeSocialTab={setSocialTab}
@@ -3220,7 +3079,6 @@ function App(): JSX.Element {
             onFollowSocialTarget={(targetPlayerId) => {
               void social.followTarget(targetPlayerId);
             }}
-            onNavigate={navigateToScene}
             onOpenContributionGuide={() => {
               setGlobalFeatureModal({
                 title: '贡献俸禄档位',
@@ -3264,6 +3122,22 @@ function App(): JSX.Element {
             activeScene={activeScene}
             tutorialStage={tutorialStage}
             onNavigate={navigateToScene}
+          />
+          <SceneCodexShortcut
+            activeScene={activeScene}
+            disabled={isTutorialUser}
+            onOpenPlantCodex={() => {
+              setTopResourcePanel(null);
+              setSeedCodexState({
+                selectedSeedId: getPreferredPendingPlantUnlockId(seedGroups, pendingPlantUnlockPromptIds) ?? firstVisibleSeedCodexId,
+              });
+            }}
+            onOpenSpiritCodex={() => {
+              setSeedCodexState(null);
+              setTopSpiritCodexSpiritId(topSpiritCodexSelectedId);
+              setTopResourcePanel('spirit-codex');
+              openPendingSpiritCodexReveal();
+            }}
           />
 
           <RaidIntelModalHost
@@ -3315,7 +3189,6 @@ function App(): JSX.Element {
             seasonSignInTodayReward={seasonSignInTodayReward}
             seasonMedalCabinet={seasonRewardsState?.medalCabinet ?? null}
             spiritState={spiritState}
-            tianjiTalismanCount={tianjiTalismanCount}
             onBuySpiritShopItem={(itemId) => {
               void handleBuySpiritShopItemAction(itemId);
             }}

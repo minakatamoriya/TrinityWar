@@ -1,4 +1,4 @@
-import { CenteredModalShell } from './ModalShell';
+import { FullScreenToolShell } from './ModalShell';
 
 interface GlobalFeatureModalProps {
   title: string;
@@ -12,14 +12,16 @@ export function GlobalFeatureModal(props: GlobalFeatureModalProps): JSX.Element 
   const { title, eyebrow, description, onClose, children } = props;
 
   return (
-    <CenteredModalShell
-      className="global-feature-card"
+    <FullScreenToolShell
+      ariaLabel={title}
+      bodyClassName="global-feature-tool-body"
+      className="global-feature-screen"
       description={description}
       eyebrow={eyebrow}
-      onClose={onClose}
+      onBack={onClose}
       title={title}
     >
       {children ? <div className="global-feature-content">{children}</div> : null}
-    </CenteredModalShell>
+    </FullScreenToolShell>
   );
 }

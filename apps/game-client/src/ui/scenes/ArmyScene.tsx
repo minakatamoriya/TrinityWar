@@ -18,7 +18,6 @@ import type {
 } from '@trinitywar/shared';
 import { CLIENT_SPIRIT_TRAIT_ROLL_PLAN_ORDER, CLIENT_SPIRIT_TRAIT_ROLL_RULES, getBasicSpiritTraitRollGoldCost, getClientSpiritInnateTrait } from '@trinitywar/shared';
 import {
-  getFirstVisibleSpiritCodexId,
   getSpiritCodexName,
   getSpiritCodexProgressLabel,
   getSpiritCodexShardProgress,
@@ -26,7 +25,6 @@ import {
   isSpiritCodexVisible,
 } from '../../modules/spirit/spiritCodexPresentation';
 import type { TutorialArmyUiRules } from '../../tutorial/tutorialFlow';
-import { SpiritCodexModal } from '../common/SpiritCodexModal';
 import { FullScreenToolShell } from '../common/ModalShell';
 
 interface ArmySceneProps {
@@ -380,9 +378,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   const { advantage, playerFaction, spirit, vaultGold, busy, uiRules, onSetMain, onDissolve, onCompose, onFeed, onBreakthrough, onRollTraits, onResolveTraitRoll, onOpenSpiritUnlockSurface } = props;
   void getRecoveryButtonText;
   void getHealthRatio;
-  const [codexOpen, setCodexOpen] = useState(false);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
-  const [selectedCodexSpiritId, setSelectedCodexSpiritId] = useState<string | null>(() => getFirstVisibleSpiritCodexId(spirit.codex));
   const [selectedComposeSpiritId, setSelectedComposeSpiritId] = useState<string>(() => spirit.readyToCompose[0]?.spiritId ?? spirit.codex[0]?.spiritId ?? '');
   const [composeElement, setComposeElement] = useState<ClientSpiritElement>('wood');
   const [composeStep, setComposeStep] = useState<SpiritComposeStep>('choose-spirit');
@@ -436,7 +432,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
   }));
   const firstVisibleComposeEntry = composeEntries.find((entry) => isSpiritCodexVisible(entry)) ?? null;
   const occupiedCount = slots.filter((slot) => slot.spiritId).length;
-  const isStableFull = occupiedCount >= slots.length;
   const isTutorialStarterSelection = Boolean(
     selectedSlot
     && !selectedSlotEntry
@@ -703,18 +698,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
             ) : null}
           </article>
         ) : null}
-        {uiRules.showCodexButton ? (
-        <section className="spirit-top-actions">
-          <button className="spirit-codex-button-card" onClick={() => {
-            setCodexOpen(true);
-            onOpenSpiritUnlockSurface();
-          }} type="button">
-            <span>灵宠图鉴</span>
-            <strong>打开图鉴</strong>
-          </button>
-        </section>
-        ) : null}
-
         {uiRules.showResourcePanel ? (
         <section className="panel-card spirit-growth-card">
           <div className="panel-head">
@@ -770,7 +753,7 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
             }} type="button">
               <span className="spirit-empty-main-plus">+</span>
               <strong>当前暂无主位灵宠</strong>
-              <span>请先在空栏位中完成合成，再设为主位</span>
+              <span>可直接在当前栏位合成灵宠，首次入栏会自动成为主位</span>
             </button>
           )}
         </section>
@@ -1331,15 +1314,6 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
         </FullScreenToolShell>
       ), portalTarget) : null}
 
-      {codexOpen && portalTarget ? createPortal((
-        <SpiritCodexModal
-          entries={spirit.codex}
-          onClose={() => setCodexOpen(false)}
-          onSelectSpirit={setSelectedCodexSpiritId}
-          selectedSpiritId={selectedCodexSpiritId}
-          stableFull={isStableFull}
-        />
-      ), portalTarget) : null}
     </div>
   );
 }

@@ -2284,7 +2284,7 @@ function formatSeasonRewardTypeLabel(rewardType: string): string {
     return '养宠领域';
   }
   if (rewardType === 'domain_combat') {
-    return '探索战斗领域';
+    return '战斗领域';
   }
   if (rewardType === 'contribution_tier') {
     return '贡献领域';

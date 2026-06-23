@@ -6,7 +6,6 @@ import {
   type SeasonSignInMilestoneView,
   type SeasonSignInRecordView,
 } from '../ui/common/GlobalFeatureModalContent';
-import { formatNumber } from '../utils/format';
 import type { GlobalFeatureModalState } from './appStateTypes';
 
 interface GlobalFeatureModalHostProps {
@@ -19,7 +18,6 @@ interface GlobalFeatureModalHostProps {
   seasonSignInTodayReward: number;
   seasonMedalCabinet: ClientSeasonMedalCabinet | null;
   spiritState: ClientSpiritState | null;
-  tianjiTalismanCount: number;
   onBuySpiritShopItem: (itemId: string) => void;
   onClaimSeasonSignIn: () => void;
   onClaimSeasonSignInMilestone: (dayCount: number) => void;
@@ -57,7 +55,6 @@ export function GlobalFeatureModalHost(props: GlobalFeatureModalHostProps): JSX.
     seasonSignInTodayReward,
     seasonMedalCabinet,
     spiritState,
-    tianjiTalismanCount,
     onBuySpiritShopItem,
     onClaimSeasonSignIn,
     onClaimSeasonSignInMilestone,
@@ -75,11 +72,11 @@ export function GlobalFeatureModalHost(props: GlobalFeatureModalHostProps): JSX.
       description={modal.tianjiShop ? undefined : modal.description}
       eyebrow={modal.tianjiShop ? undefined : modal.eyebrow}
       onClose={onClose}
-      title={modal.tianjiShop ? `天机符库存 x${formatNumber(tianjiTalismanCount)}` : modal.title}
+      title={modal.title}
     >
       <GlobalFeatureModalContent
         contributionTiers={modal.contributionTiers}
-        seasonResetRules={modal.seasonResetRules ? {
+        seasonResetRules={modal.seasonResetRules || modal.seasonSignIn ? {
           ...seasonResetRules,
           onOpenSignIn: onOpenSeasonSignIn,
         } : undefined}

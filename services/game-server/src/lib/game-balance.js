@@ -33,7 +33,7 @@ const CASTLE_LEVEL_CONFIG = [
   { level: 1, upgradeCost: 100, cumulativeCost: 100, taxPerHour: 8, unlocks: ['初始主城，默认开放 4 块田'] },
   { level: 2, upgradeCost: 150, cumulativeCost: 250, taxPerHour: 10, unlocks: ['开放基础建筑升级引导', '开放灵宠上限第 1 档'] },
   { level: 3, upgradeCost: 200, cumulativeCost: 450, taxPerHour: 13, unlocks: ['开放基础灵宠培育引导'] },
-  { level: 4, upgradeCost: 250, cumulativeCost: 700, taxPerHour: 18, unlocks: ['开放基础探索指引', '开放灵宠上限第 2 档'] },
+  { level: 4, upgradeCost: 250, cumulativeCost: 700, taxPerHour: 18, unlocks: ['开放基础战斗指引', '开放灵宠上限第 2 档'] },
   { level: 5, upgradeCost: 300, cumulativeCost: 1000, taxPerHour: 24, unlocks: ['解锁护灵阵', '解锁祈雨术'] },
   { level: 6, upgradeCost: 400, cumulativeCost: 1400, taxPerHour: 30, unlocks: ['开放灵宠上限第 3 档'] },
   { level: 7, upgradeCost: 500, cumulativeCost: 1900, taxPerHour: 36, unlocks: ['开放防守强化 2'] },

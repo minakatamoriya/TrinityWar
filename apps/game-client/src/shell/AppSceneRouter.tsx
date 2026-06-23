@@ -1,11 +1,8 @@
 import type {
-  ClientCastleExtensionUpgradeId,
-  ClientBuildingUpgradeId,
   ClientFarmBoardState,
   ClientFarmField,
   ClientRaidTarget,
   ClientSceneAction,
-  ClientSceneKey,
   ClientSocialFeedItem,
   ClientSocialFriendFieldVisitResponse,
   ClientSocialRelationItem,
@@ -16,21 +13,19 @@ import type {
   ClientSpiritState,
   ClientSpiritTraitCode,
   ClientSpiritTraitRollMaterial,
-  ClientUpgradeTargetType,
 } from '@trinitywar/shared';
 import type { ClientViewModel } from '../api';
 import { ArmyScene } from '../ui/scenes/ArmyScene';
-import { BuildingScene } from '../ui/scenes/BuildingScene';
 import { FactionScene } from '../ui/scenes/FactionScene';
 import { FarmScene } from '../ui/scenes/FarmScene';
-import { HomeScene } from '../ui/scenes/HomeScene';
 import { ReportScene } from '../ui/scenes/ReportScene';
 import { SocialScene, type SocialTabKey } from '../ui/scenes/SocialScene';
 import type { TutorialTask, TutorialUiRules } from '../tutorial/tutorialFlow';
+import type { AppSceneKey } from '../config/sceneConfig';
 import type { FactionTabKey, FarmCollectPresentationState, RaidHubTabKey } from './appStateTypes';
 
 interface AppSceneRouterProps {
-  activeScene: ClientSceneKey;
+  activeScene: AppSceneKey;
   factionTab: FactionTabKey;
   farmBoard: ClientFarmBoardState | null;
   farmCollectPresentation: FarmCollectPresentationState | null;
@@ -63,13 +58,6 @@ interface AppSceneRouterProps {
   onAssistAllSocialFields: () => void;
   onAssistSocialFriend: (targetPlayerId: string) => void;
   onBreakthroughSpirit: (slotIndex: number, slotVersion: number, targetStage?: number) => void;
-  onBuildingUpgradeAction: (
-    action: ClientSceneAction,
-    upgradeId: ClientBuildingUpgradeId | ClientCastleExtensionUpgradeId,
-    context: string,
-    targetType: ClientUpgradeTargetType,
-    costText: string,
-  ) => void;
   onChangeFactionTab: (tab: FactionTabKey) => void;
   onChangeRaidHubTab: (tab: RaidHubTabKey) => void;
   onChangeSocialTab: (tab: SocialTabKey) => void;
@@ -108,7 +96,6 @@ interface AppSceneRouterProps {
   onOpenSpiritUnlockSurface: () => void;
   onToggleFollowTarget: (target: ClientRaidTarget) => void;
   onTutorialAction: () => void;
-  onNavigate: (scene: ClientSceneKey, nextRaidHubTab?: RaidHubTabKey) => void;
   onCloseSocialFieldVisit: () => void;
   onUnfollowSocialTarget: (targetPlayerId: string) => void;
 }
@@ -148,7 +135,6 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
     onAssistAllSocialFields,
     onAssistSocialFriend,
     onBreakthroughSpirit,
-    onBuildingUpgradeAction,
     onChangeFactionTab,
     onChangeRaidHubTab,
     onChangeSocialTab,
@@ -176,33 +162,12 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
     onOpenSpiritUnlockSurface,
     onToggleFollowTarget,
     onTutorialAction,
-    onNavigate,
     onCloseSocialFieldVisit,
     onUnfollowSocialTarget,
   } = props;
 
   return (
     <section className={`screen-body scene-${activeScene}`}>
-      {activeScene === 'home' ? (
-        <HomeScene
-          home={home}
-          scenes={scenes}
-          socialSummary={socialSummary}
-          spirit={spiritState}
-          tutorialTask={tutorialTask}
-          onNavigate={onNavigate}
-          onTutorialAction={onTutorialAction}
-        />
-      ) : null}
-
-      {activeScene === 'building' ? (
-        <BuildingScene
-          onUpgradeAction={onBuildingUpgradeAction}
-          extensions={scenes.building.extensions}
-          upgrades={scenes.building.upgrades}
-        />
-      ) : null}
-
       {activeScene === 'farm' ? (
         <FarmScene
           advantage={scenes.farm.advantage}
@@ -210,13 +175,15 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
           farmBoardMessage={farmBoard?.farmBoardMessage ?? ''}
           farmBoardUpdatedAt={farmBoard?.farmBoardUpdatedAt ?? null}
           fields={farmFields}
+          tutorialTask={tutorialTask}
           uiRules={tutorialUiRules.farm}
           onAction={onFarmAction}
           onOpenFarmBoard={onOpenFarmBoard}
+          onTutorialAction={onTutorialAction}
         />
       ) : null}
 
-      {activeScene === 'raid' && spiritState ? (
+      {activeScene === 'spirit' && spiritState ? (
         <ArmyScene
           advantage={scenes.army.advantage}
           busy={pendingActionKey?.startsWith('spirit:') ?? false}
@@ -235,7 +202,7 @@ export function AppSceneRouter(props: AppSceneRouterProps): JSX.Element {
         />
       ) : null}
 
-      {activeScene === 'report' ? (
+      {activeScene === 'battle' ? (
         <ReportScene
           activeTab={raidHubTab}
           advantage={scenes.raid.advantage}

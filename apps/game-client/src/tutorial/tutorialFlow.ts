@@ -1,8 +1,10 @@
 import type { ClientSceneKey } from '@trinitywar/shared';
 import type { DevLoginSession } from '../api';
+import type { AppSceneKey } from '../config/sceneConfig';
 import type { CharacterDialogSceneId } from '../dialog/dialogLibrary';
 
-export type TutorialStage = 'home' | 'farm' | 'spirit' | 'raid' | 'faction' | 'completed';
+export type TutorialStage = 'starter' | 'farm' | 'spirit' | 'raid' | 'faction' | 'completed';
+export type TutorialSceneKey = ClientSceneKey | AppSceneKey;
 export type TutorialRaidHubTab = 'targets' | 'reports';
 export type TutorialFactionTab = 'overview' | 'donate' | 'rank';
 
@@ -10,7 +12,7 @@ export interface TutorialTask {
   title: string;
   description: string;
   actionLabel: string;
-  targetScene: ClientSceneKey;
+  targetScene: TutorialSceneKey;
 }
 
 export interface TutorialFarmUiRules {
@@ -49,8 +51,6 @@ export interface TutorialRaidUiRules {
 
 export interface TutorialUiRules {
   showTopResourceButtons: boolean;
-  showHomeDailyTasks: boolean;
-  showHomeFactionTasks: boolean;
   farm: TutorialFarmUiRules;
   army: TutorialArmyUiRules;
   raid: TutorialRaidUiRules;
@@ -72,7 +72,7 @@ export interface TutorialUnlockModalConfig {
 
 export type TutorialFlowAction =
   | { type: 'setStage'; stage: TutorialStage }
-  | { type: 'navigate'; scene: ClientSceneKey; raidHubTab?: TutorialRaidHubTab; factionTab?: TutorialFactionTab }
+  | { type: 'navigate'; scene: TutorialSceneKey; raidHubTab?: TutorialRaidHubTab; factionTab?: TutorialFactionTab }
   | { type: 'dialog'; sceneId: CharacterDialogSceneId; force?: boolean; delayMs?: number; onCompleteActions?: TutorialFlowAction[] }
   | { type: 'unlockModal'; modal: TutorialUnlockModalConfig; afterConfirmActions?: TutorialFlowAction[] };
 
@@ -88,7 +88,7 @@ export const tutorialStageStorageKeyPrefix = 'trinitywar.tutorialStage';
 export const TUTORIAL_STARTER_SEED_ID = 'qilingya';
 
 const tutorialStageRank: Record<TutorialStage, number> = {
-  home: 0,
+  starter: 0,
   farm: 1,
   spirit: 2,
   raid: 3,
@@ -96,10 +96,12 @@ const tutorialStageRank: Record<TutorialStage, number> = {
   completed: 5,
 };
 
-const sceneTutorialUnlockStage: Record<ClientSceneKey, TutorialStage> = {
-  home: 'home',
-  farm: 'farm',
+const sceneTutorialUnlockStage: Record<TutorialSceneKey, TutorialStage> = {
+  home: 'starter',
+  farm: 'starter',
+  spirit: 'spirit',
   raid: 'spirit',
+  battle: 'raid',
   report: 'raid',
   building: 'completed',
   faction: 'faction',
@@ -107,11 +109,11 @@ const sceneTutorialUnlockStage: Record<ClientSceneKey, TutorialStage> = {
 };
 
 const tutorialTasks: Partial<Record<TutorialStage, TutorialTask>> = {
-  home: {
+  starter: {
     title: '领取启灵芽 x1',
     description: '先收下引导者给你的启灵芽。获得可种植资格后，再去第一块田培育它。',
     actionLabel: '领取启灵芽',
-    targetScene: 'home',
+    targetScene: 'farm',
   },
   farm: {
     title: '收获启灵芽',
@@ -123,13 +125,13 @@ const tutorialTasks: Partial<Record<TutorialStage, TutorialTask>> = {
     title: '创建第一只灵宠',
     description: '在空主位中选择初始灵宠，并设定五行属性。创建后会自动设为主位。',
     actionLabel: '创建灵宠',
-    targetScene: 'raid',
+    targetScene: 'spirit',
   },
   raid: {
     title: '完成教程战斗',
     description: '挑战教程对象，理解战斗结果和收益。',
-    actionLabel: '进入探索',
-    targetScene: 'report',
+    actionLabel: '进入战斗',
+    targetScene: 'battle',
   },
   faction: {
     title: '领取阵营俸禄',
@@ -157,7 +159,7 @@ export function getTutorialStageStorageKey(playerId: string): string {
 }
 
 export function isTutorialStage(value: string | null | undefined): value is TutorialStage {
-  return value === 'home' || value === 'farm' || value === 'spirit' || value === 'raid' || value === 'faction' || value === 'completed';
+  return value === 'starter' || value === 'farm' || value === 'spirit' || value === 'raid' || value === 'faction' || value === 'completed';
 }
 
 export function isNewUserInTutorial(session: DevLoginSession | null | undefined, stage: TutorialStage): boolean {
@@ -170,32 +172,36 @@ export function getInitialTutorialStage(session: DevLoginSession | null): Tutori
   }
 
   if (typeof window === 'undefined') {
-    return 'home';
+    return 'starter';
   }
 
   const storedStage = window.localStorage.getItem(getTutorialStageStorageKey(session.player.id));
+  if (storedStage === 'home') {
+    return 'starter';
+  }
+
   if (storedStage === 'building') {
     return 'completed';
   }
 
-  return isTutorialStage(storedStage) ? storedStage : 'home';
+  return isTutorialStage(storedStage) ? storedStage : 'starter';
 }
 
-export function canOpenSceneInTutorial(scene: ClientSceneKey, stage: TutorialStage): boolean {
+export function canOpenSceneInTutorial(scene: TutorialSceneKey, stage: TutorialStage): boolean {
   return tutorialStageRank[stage] >= tutorialStageRank[sceneTutorialUnlockStage[scene]];
 }
 
-export function getLockedSceneMessage(scene: ClientSceneKey): string {
+export function getLockedSceneMessage(scene: TutorialSceneKey): string {
   if (scene === 'farm') {
-    return '先从首页任务进入农场。';
+    return '先领取启灵芽，再开始第一块灵田。';
   }
 
-  if (scene === 'raid') {
+  if (scene === 'raid' || scene === 'spirit') {
     return '先完成第一轮种田，再创建灵宠。';
   }
 
-  if (scene === 'report') {
-    return '先完成首宠创建，再进入探索教程。';
+  if (scene === 'report' || scene === 'battle') {
+    return '先完成首宠创建，再进入战斗教程。';
   }
 
   if (scene === 'faction') {
@@ -235,7 +241,7 @@ export function getTutorialFlowActions(event: TutorialFlowEvent): TutorialFlowAc
   if (event === 'farmRewardConfirmed') {
     return [
       { type: 'setStage', stage: 'spirit' },
-      { type: 'navigate', scene: 'raid' },
+      { type: 'navigate', scene: 'spirit' },
       { type: 'dialog', sceneId: 'tutorial.spirit.start', force: true },
     ];
   }
@@ -243,7 +249,7 @@ export function getTutorialFlowActions(event: TutorialFlowEvent): TutorialFlowAc
   if (event === 'spiritAwardConfirmed') {
     return [
       { type: 'setStage', stage: 'raid' },
-      { type: 'navigate', scene: 'report', raidHubTab: 'targets' },
+      { type: 'navigate', scene: 'battle', raidHubTab: 'targets' },
       { type: 'dialog', sceneId: 'tutorial.raid.start', force: true },
     ];
   }
@@ -267,7 +273,7 @@ export function getTutorialFlowActions(event: TutorialFlowEvent): TutorialFlowAc
           sceneId: 'tutorial.completed',
           force: true,
           onCompleteActions: [
-            { type: 'navigate', scene: 'home' },
+            { type: 'navigate', scene: 'farm' },
           ],
         },
       ],
@@ -279,8 +285,6 @@ export function getTutorialUiRules(stage: TutorialStage, isTutorialActive: boole
   if (!isTutorialActive || stage === 'completed') {
     return {
       showTopResourceButtons: true,
-      showHomeDailyTasks: true,
-      showHomeFactionTasks: true,
       farm: {
         showFactionAdvantage: true,
         showFarmBoard: true,
@@ -316,8 +320,6 @@ export function getTutorialUiRules(stage: TutorialStage, isTutorialActive: boole
 
   return {
     showTopResourceButtons: false,
-    showHomeDailyTasks: false,
-    showHomeFactionTasks: false,
     farm: {
       showFactionAdvantage: false,
       showFarmBoard: false,

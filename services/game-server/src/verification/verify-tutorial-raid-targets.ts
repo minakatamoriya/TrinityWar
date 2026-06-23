@@ -60,15 +60,26 @@ async function main(): Promise<void> {
       nickname: '主循环测试号',
       factionCode: 'immortal',
     });
+    assert(existingPlayer.player.castleLevel > 1, 'existing player should stay on the stable progressed profile');
     const existingPlayerScenes = await clientReadService.refreshRaidTargetPool(existingPlayer.player.id);
     const existingPlayerState = await prisma.player.findUniqueOrThrow({
       where: { id: existingPlayer.player.id },
       select: { factionId: true },
     });
+    const existingPlayerMainSpirit = await prisma.playerSpiritSlot.findFirst({
+      where: {
+        playerId: existingPlayer.player.id,
+        isMain: true,
+        spiritDefinitionId: { not: null },
+      },
+      select: { slotIndex: true, lastExpSettledAt: true },
+    });
     assert(
       existingPlayerScenes.raid.targets.every((target) => target.name !== TUTORIAL_TARGET_NAME && target.tutorialTarget !== true),
       'existing player refresh should not show tutorial target',
     );
+    assert(existingPlayerMainSpirit, 'existing player should have a main spirit');
+    assert(existingPlayerMainSpirit.lastExpSettledAt, 'existing player main spirit should have a progress anchor');
 
     const existingPlayerTutorialRows = await prisma.raidTargetPool.count({
       where: {

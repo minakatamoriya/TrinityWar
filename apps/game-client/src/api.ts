@@ -1105,7 +1105,7 @@ void applyMockRecruitArmy;
   targetDetail.protectionStatus = '普通目标改为次数限制与系统奖励结算，不再使用时间保护期。';
   targetDetail.actions = [{ label: '今日已结算', target: 'raid', tone: 'ghost' }];
   const remainingRaidCount = Math.max(mockSceneSnapshot.raid.targets.length, 0);
-  mockSceneSnapshot.raid.hero.title = `剩余可探索目标 ${formatNumber(remainingRaidCount)} 个`;
+  mockSceneSnapshot.raid.hero.title = `剩余可战斗目标 ${formatNumber(remainingRaidCount)} 个`;
   const protectedUntil = new Date().toISOString();
   mockHomeSnapshot.protectedUntil = null;
 

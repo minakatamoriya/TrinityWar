@@ -5,6 +5,7 @@ import type { SeedRarity } from '../../config/seedCatalog';
 const rarityOrder: Record<SeedRarity, number> = { common: 0, rare: 1, legendary: 2 };
 
 export function buildBackpackResourceItems(input: {
+  vaultGold: number;
   spiritState: ClientSpiritState | null;
   unlockedSeedIds: string[];
   seedInventory: Record<string, number>;
@@ -24,6 +25,7 @@ export function buildBackpackResourceItems(input: {
     }));
 
   return [
+    { id: 'gold', label: '金币', quantity: input.vaultGold, group: 'currency', rarity: 'common' },
     { id: 'spirit-root', label: '灵根', quantity: input.spiritState?.spiritRoot ?? 0, group: 'spirit', rarity: 'common' },
     { id: 'spirit-marrow', label: '灵髓', quantity: input.spiritState?.spiritMarrow ?? 0, group: 'spirit', rarity: 'rare' },
     { id: 'spirit-jade', label: '灵玉', quantity: input.spiritState?.spiritJade ?? 0, group: 'spirit', rarity: 'legendary' },
