@@ -690,6 +690,15 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
               <h4>{advantage.factionName}优势</h4>
               <span className="soft-tag">{advantage.title}</span>
             </div>
+            <div className="faction-advantage-tipbar">
+              <div className="faction-advantage-tipcopy">
+                <span className="soft-tag">{advantage.factionName}优势</span>
+                <strong>{advantage.title}</strong>
+              </div>
+              <button className="faction-advantage-dismiss-button" disabled type="button">
+                本赛季不再提示
+              </button>
+            </div>
             <p className="panel-text">{advantage.summary}</p>
             {advantage.details.length > 0 ? (
               <ul className="mini-list">
@@ -771,16 +780,16 @@ export function ArmyScene(props: ArmySceneProps): JSX.Element {
               const entry = slot.spiritId ? codexById.get(slot.spiritId) ?? null : null;
 
               return (
-                <article className={`spirit-stable-slot${slot.spiritId && entry ? '' : ' spirit-stable-slot-empty'}`} key={slot.slotIndex} onClick={() => {
+                <button className={`spirit-stable-slot${slot.spiritId && entry ? '' : ' spirit-stable-slot-empty'}`} key={slot.slotIndex} onClick={() => {
                   setSelectedSlotIndex(slot.slotIndex);
                   if (!slot.spiritId) {
                     onOpenSpiritUnlockSurface();
                   }
-                }} role="button" tabIndex={0}>
+                }} type="button">
                   <strong>{slot.spiritId && entry ? `${entry.definition.label} Lv.${slot.level}` : '空栏位'}</strong>
                   <span>{slot.spiritId && entry ? `副位 ${slot.slotIndex - 1} · ${getElementLabel(slot.element)} · ${getHealthText(slot)}` : `副位 ${slot.slotIndex - 1}`}</span>
                   <small>{slot.spiritId && entry ? `${getPhaseForLevel(slot.level)} · ${getHealthStatus(slot)}` : '可合成新宠'}</small>
-                </article>
+                </button>
               );
             })}
           </div>

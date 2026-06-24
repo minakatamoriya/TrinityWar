@@ -18,7 +18,7 @@ import {
 import { BusinessError, ErrorCode } from '../common/errors/index.js';
 import { ClientReadService } from '../client-read/client-read.service.js';
 import { getLocalDateKey, getStartOfDateKey } from '../lib/date-key.js';
-import { GAME_BALANCE, getRaidBaseRewardByLevel } from '../lib/game-balance.js';
+import { FACTION_CONTRIBUTION_BALANCE_CONFIG, GAME_BALANCE, getRaidBaseRewardByLevel } from '../lib/game-balance.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SeasonGuardService } from '../season/season-guard.service.js';
 import { RaidSettlementQueueService } from './raid-settlement-queue.service.js';
@@ -586,7 +586,16 @@ export class RaidTargetService {
           const order = await orderPromise;
           const home = {} as Awaited<ReturnType<ClientReadService['getHomeSummary']>>;
           const scenes = {} as Awaited<ReturnType<ClientReadService['getSceneContent']>>;
-          return buildSettledRaidActionResponse(response.result.orderId, settlement, order, order?.defender.nickname ?? response.result.targetName, null, home, scenes);
+          return buildSettledRaidActionResponse(
+            response.result.orderId,
+            settlement,
+            order,
+            order?.defender.nickname ?? response.result.targetName,
+            null,
+            home,
+            scenes,
+            getRaidContributionGain(settlement.result),
+          );
         }
 
         const [home, scenes, order] = await Promise.all([
@@ -595,15 +604,27 @@ export class RaidTargetService {
           orderPromise,
         ]);
 
-        return buildSettledRaidActionResponse(response.result.orderId, settlement, order, order?.defender.nickname ?? response.result.targetName, null, home, scenes);
+        return buildSettledRaidActionResponse(
+          response.result.orderId,
+          settlement,
+          order,
+          order?.defender.nickname ?? response.result.targetName,
+          null,
+          home,
+          scenes,
+          getRaidContributionGain(settlement.result),
+        );
       } catch (error) {
+        console.error('raid settlement failed during createRaidOrder', error);
         if (error instanceof BusinessError) {
           throw error;
         }
 
         throw new BusinessError({
           code: ErrorCode.Conflict,
-          message: 'Raid settlement failed. Please try again after refreshing raid targets.',
+          message: process.env.NODE_ENV === 'development' && error instanceof Error
+            ? `Raid settlement failed: ${error.message}`
+            : 'Raid settlement failed. Please try again after refreshing raid targets.',
           statusCode: 409,
         });
       }
@@ -979,6 +1000,7 @@ function buildSettledRaidActionResponse(
   protectedUntil: Date | null,
   home: Awaited<ReturnType<ClientReadService['getHomeSummary']>>,
   scenes: Awaited<ReturnType<ClientReadService['getSceneContent']>>,
+  contributionGain: number,
 ): ClientRaidActionResponse {
   const rewards = normalizeRaidRewards(settlement.rewardItemsJson);
   const battleEvents = normalizeRaidBattleEvents(settlement.rewardItemsJson);
@@ -1002,6 +1024,7 @@ function buildSettledRaidActionResponse(
       temporaryClaimExpiresAt: settlement.temporaryClaimExpiresAt?.toISOString() ?? null,
       casualties: 0,
       rewards,
+      contributionGain,
       codexPrompts,
       battleEvents,
       battleReplay,
@@ -1243,6 +1266,14 @@ function mapSpiritElement(element: string | null): ClientRaidDeepIntelResponse['
   }
 
   return null;
+}
+
+function getRaidContributionGain(result: string): number {
+  const base = Math.max(Math.floor(FACTION_CONTRIBUTION_BALANCE_CONFIG.sources.raidBattleSettled ?? 0), 0);
+  const winBonus = result === 'WIN'
+    ? Math.max(Math.floor(FACTION_CONTRIBUTION_BALANCE_CONFIG.sources.raidBattleWinBonus ?? 0), 0)
+    : 0;
+  return base + winBonus;
 }
 
 function buildRaidSpiritTraits(slot: {

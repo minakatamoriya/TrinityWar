@@ -209,6 +209,15 @@ export interface SceneContentReadModel {
       } | null;
     };
   }>;
+  factionSpiritRankings: Array<{
+    spiritId: string;
+    label: string;
+    rarity: 'common' | 'rare' | 'legendary';
+    battleCount: number;
+    winCount: number;
+    lossCount: number;
+    drawCount: number;
+  }>;
   raidDailyState: {
     dateKey: string;
     normalRaidAttemptsUsed: number;
@@ -621,7 +630,16 @@ export class ClientReadRepository {
       return null;
     }
 
-    const [factions, factionContributionTotals, factionStipendClaimCount, factionRankings] = await Promise.all([
+    const activeSeason = await client.gameSeason.findFirst({
+      where: {
+        startsAt: { lte: now },
+        endsAt: { gt: now },
+      },
+      select: { seasonNumber: true },
+      orderBy: { seasonNumber: 'desc' },
+    });
+
+    const [factions, factionContributionTotals, factionStipendClaimCount, factionRankings, factionSpiritRankings] = await Promise.all([
       client.faction.findMany({
         orderBy: [{ contributionScore: 'desc' }, { name: 'asc' }],
         select: {
@@ -658,6 +676,34 @@ export class ClientReadRepository {
                 nickname: true,
                 castleLevelCache: true,
                 faction: { select: { name: true } },
+              },
+            },
+          },
+        })
+        : Promise.resolve([]),
+      player.faction && activeSeason
+        ? client.factionSpiritBattleStat.findMany({
+          where: {
+            factionId: player.faction.id,
+            seasonNumber: activeSeason.seasonNumber,
+            battleCount: { gte: 1 },
+          },
+          orderBy: [
+            { winCount: 'desc' },
+            { battleCount: 'desc' },
+            { drawCount: 'desc' },
+          ],
+          take: 20,
+          select: {
+            battleCount: true,
+            winCount: true,
+            lossCount: true,
+            drawCount: true,
+            spiritDefinition: {
+              select: {
+                spiritId: true,
+                label: true,
+                rarity: true,
               },
             },
           },
@@ -838,6 +884,19 @@ export class ClientReadRepository {
       factionStipendClaimCount,
       factions: factionsWithMemberContributionTotals,
       factionRankings,
+      factionSpiritRankings: factionSpiritRankings.map((item) => ({
+        spiritId: item.spiritDefinition.spiritId,
+        label: item.spiritDefinition.label,
+        rarity: item.spiritDefinition.rarity === 'LEGENDARY'
+          ? 'legendary'
+          : item.spiritDefinition.rarity === 'RARE'
+            ? 'rare'
+            : 'common',
+        battleCount: item.battleCount,
+        winCount: item.winCount,
+        lossCount: item.lossCount,
+        drawCount: item.drawCount,
+      })),
       raidDailyState,
       raidTargetPools,
       raidMessageTemplates,

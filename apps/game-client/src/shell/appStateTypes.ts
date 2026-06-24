@@ -6,7 +6,7 @@ import type { SeedRewardModalItem } from '../ui/common/SeedRewardModal';
 import type { ShareAssistAudience, ShareAssistKind, ShareAssistStatus } from '../ui/share/ShareAssistPage';
 
 export type RaidHubTabKey = 'targets' | 'reports';
-export type FactionTabKey = 'overview' | 'donate' | 'rank';
+export type FactionTabKey = 'rank' | 'spirit';
 
 export interface ToastState {
   id: number;
@@ -30,6 +30,7 @@ export interface SeedRewardModalState {
   title: string;
   summary: string;
   footerHint?: string;
+  contributionGain?: number;
   confirmAction?: 'claim-faction-stipend' | 'claim-starter-seeds' | 'claim-notification' | 'claim-season-sign-in-milestone';
   notificationId?: string;
   seasonSignInMilestoneDayCount?: number;

@@ -275,6 +275,30 @@ export class RaidSettlementService {
         });
       }
 
+      const currentSeason = await client.gameSeason.findFirst({
+        where: {
+          startsAt: { lte: now },
+          endsAt: { gt: now },
+        },
+        select: { seasonNumber: true },
+        orderBy: { seasonNumber: 'desc' },
+      });
+
+      if (currentSeason) {
+        await recordFactionSpiritBattleStat(client, {
+          seasonNumber: currentSeason.seasonNumber,
+          factionId: raidOrder.attacker.faction?.id ?? null,
+          spiritDefinitionId: attackerSpirit?.spiritDefinition.id ?? null,
+          result: settlementResult.result,
+        });
+        await recordFactionSpiritBattleStat(client, {
+          seasonNumber: currentSeason.seasonNumber,
+          factionId: raidOrder.defender.faction?.id ?? null,
+          spiritDefinitionId: defenderSpirit?.spiritDefinition.id ?? null,
+          result: invertSettlementResult(settlementResult.result),
+        });
+      }
+
       return settlement;
     });
   }
@@ -447,6 +471,55 @@ export class RaidSettlementService {
       }
     });
   }
+}
+
+async function recordFactionSpiritBattleStat(
+  client: Prisma.TransactionClient,
+  input: {
+    seasonNumber: number;
+    factionId: string | null;
+    spiritDefinitionId: string | null;
+    result: 'WIN' | 'LOSS' | 'DRAW' | 'CANCELLED';
+  },
+): Promise<void> {
+  if (!input.factionId || !input.spiritDefinitionId) {
+    return;
+  }
+
+  await client.factionSpiritBattleStat.upsert({
+    where: {
+      seasonNumber_factionId_spiritDefinitionId: {
+        seasonNumber: input.seasonNumber,
+        factionId: input.factionId,
+        spiritDefinitionId: input.spiritDefinitionId,
+      },
+    },
+    create: {
+      seasonNumber: input.seasonNumber,
+      factionId: input.factionId,
+      spiritDefinitionId: input.spiritDefinitionId,
+      battleCount: 1,
+      winCount: input.result === 'WIN' ? 1 : 0,
+      lossCount: input.result === 'LOSS' ? 1 : 0,
+      drawCount: input.result === 'DRAW' ? 1 : 0,
+    },
+    update: {
+      battleCount: { increment: 1 },
+      winCount: input.result === 'WIN' ? { increment: 1 } : undefined,
+      lossCount: input.result === 'LOSS' ? { increment: 1 } : undefined,
+      drawCount: input.result === 'DRAW' ? { increment: 1 } : undefined,
+    },
+  });
+}
+
+function invertSettlementResult(result: 'WIN' | 'LOSS' | 'DRAW' | 'CANCELLED'): 'WIN' | 'LOSS' | 'DRAW' | 'CANCELLED' {
+  if (result === 'WIN') {
+    return 'LOSS';
+  }
+  if (result === 'LOSS') {
+    return 'WIN';
+  }
+  return result;
 }
 
 function readFactionName(value: Prisma.JsonValue): string | null {

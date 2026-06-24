@@ -12,7 +12,7 @@ interface SeedRewardModalHostProps {
   onClaimSeasonSignInMilestone: () => void;
   onClaimNotification: () => void;
   onClaimStarterSeeds: () => void;
-  onRunAfterConfirmActions: () => void;
+  onRunAfterConfirmActions: (modal: SeedRewardModalState) => void;
 }
 
 export function SeedRewardModalHost(props: SeedRewardModalHostProps): JSX.Element | null {
@@ -70,8 +70,8 @@ export function SeedRewardModalHost(props: SeedRewardModalHostProps): JSX.Elemen
           return;
         }
 
+        onRunAfterConfirmActions(modal);
         onClear();
-        onRunAfterConfirmActions();
       }}
       summary={modal.summary}
       title={modal.title}

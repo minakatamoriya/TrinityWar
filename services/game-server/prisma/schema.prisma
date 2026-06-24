@@ -294,6 +294,7 @@ model GameSeason {
   playerActivities PlayerSeasonActivity[]
   playerRewardGrants PlayerSeasonRewardGrant[]
   playerAchievements PlayerSeasonAchievement[]
+  factionSpiritBattleStats FactionSpiritBattleStat[]
 
   @@index([startsAt, endsAt])
   @@map("game_season")
@@ -489,6 +490,7 @@ model Faction {
   dailyFactionTasks       DailyFactionTask[]
   playerSeasonSnapshots   PlayerSeasonSnapshot[]
   factionSeasonSnapshots  FactionSeasonSnapshot[]
+  spiritBattleStats       FactionSpiritBattleStat[]
 
   @@unique([code])
   @@unique([name])
@@ -669,6 +671,7 @@ model SpiritDefinition {
 
   codexEntries PlayerSpiritCodex[]
   spiritSlots  PlayerSpiritSlot[]
+  factionSpiritBattleStats FactionSpiritBattleStat[]
 
   @@unique([spiritId])
   @@index([rarity, sortOrder])
@@ -1476,6 +1479,28 @@ model FactionContributionLog {
   @@index([factionId, createdAt])
   @@index([playerId, createdAt])
   @@map("faction_contribution_log")
+}
+
+model FactionSpiritBattleStat {
+  id                 String   @id @default(cuid())
+  seasonNumber       Int      @map("season_number")
+  factionId          String   @map("faction_id")
+  spiritDefinitionId String   @map("spirit_definition_id")
+  battleCount        Int      @default(0) @map("battle_count")
+  winCount           Int      @default(0) @map("win_count")
+  lossCount          Int      @default(0) @map("loss_count")
+  drawCount          Int      @default(0) @map("draw_count")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  season           GameSeason       @relation(fields: [seasonNumber], references: [seasonNumber], onDelete: Cascade)
+  faction          Faction          @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  spiritDefinition SpiritDefinition @relation(fields: [spiritDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([seasonNumber, factionId, spiritDefinitionId])
+  @@index([seasonNumber, factionId, winCount, battleCount])
+  @@index([factionId, spiritDefinitionId])
+  @@map("faction_spirit_battle_stat")
 }
 
 model DailyFactionTask {

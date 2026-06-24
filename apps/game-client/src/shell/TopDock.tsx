@@ -38,13 +38,13 @@ export function TopDock(props: TopDockProps): JSX.Element {
               签到
             </button>
             <button className="operation-rail-button" onClick={onOpenTianjiShop} type="button">
-              福利
+              商店
             </button>
             <button className="operation-rail-button" onClick={onOpenBackpack} type="button">
               背包
             </button>
             <button className="operation-rail-button top-notification-button" onClick={onOpenNotifications} type="button">
-              消息
+              通知
               {notificationUnreadCount > 0 ? (
                 <span className="top-notification-badge">{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</span>
               ) : null}

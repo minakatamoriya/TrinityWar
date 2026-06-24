@@ -25,7 +25,7 @@ import type {
   NotificationAttachment,
   HomeSummaryResponse,
 } from '@trinitywar/shared';
-import { ApiError, breakthroughSpirit, buySpiritShopItem, changeSeasonFaction, claimFactionStipend, claimSeasonSignIn, claimSeasonSignInMilestone, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, confirmSeasonFaction, confirmSeasonStartupIntro, createShareAssistCampaign, devLogin, dissolveSpirit, feedSpirit, followSocialTarget, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritPublicProfile, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, resetDevelopmentSeasonTiming, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setDevelopmentSeasonNearRollover, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unfollowSocialTarget, unlockPlant, updateFarmBoard } from './api';
+import { ApiError, breakthroughSpirit, buySpiritShopItem, changeSeasonFaction, claimFactionStipend, claimSeasonSignIn, claimSeasonSignInMilestone, claimSpiritAdReward, claimStarterSeeds, clearDevLoginSession, collectFieldEarnings, composeSpirit, completeShareInviteTutorial, confirmPublicShareAssist, confirmSeasonFaction, confirmSeasonStartupIntro, createShareAssistCampaign, devLogin, dissolveSpirit, feedSpirit, followSocialTarget, getStoredDevLoginSession, loadClientViewModel, loadFarmBoard, loadPublicShareAssistCampaign, loadRaidBattleReplay, loadRaidTargetDetail, loadSeasonRewards, loadSeasonSignIn, loadSpiritPublicProfile, loadSpiritState, raidClientTarget, refreshRaidTargets, resetDemoExperimentState, resetDevelopmentSeasonTiming, revealRaidTargetDeepIntel, resolveSpiritTraitRoll, rollSpiritTraits, setDevelopmentSeasonNearRollover, setMainSpirit, startFieldCultivation, type ClientViewModel, type DevFactionChoice, type DevLoginMode, type DevLoginSession, unfollowSocialTarget, unlockPlant } from './api';
 import { NotificationCenter } from './ui/common/NotificationCenter';
 import type { SocialTabKey } from './ui/scenes/SocialScene';
 import type { ShareAssistAudience } from './ui/share/ShareAssistPage';
@@ -64,17 +64,12 @@ import {
   type FarmOptimisticMutation,
 } from './modules/farm/farmOptimisticState';
 import {
-  shouldCloseFarmBoardEditorWithoutSaving,
-  validateFarmBoardMessage,
-} from './modules/farm/farmBoardState';
-import {
   applyFarmSeedRewardsToInventory,
   applySpiritMaterialRewardDelta,
   buildSpiritMaterialRewardDelta,
 } from './modules/farm/farmRewardState';
 import {
   type FactionTabKey,
-  type FarmBoardEditorState,
   type FarmCollectPresentationState,
   type GlobalFeatureModalState,
   type GlobalUnlockModalState,
@@ -95,7 +90,7 @@ import {
   emptyGlobalItemInventory,
   getPreferredSeedId,
 } from './modules/backpack/backpackState';
-import { buildSeedCatalogMap, buildSeedGroups, getFirstVisibleUnlockedSeedId, mergePlantResearchStateFromScenePlants } from './modules/farm/seedPresentation';
+import { buildSeedCatalogMap, getFirstVisibleUnlockedSeedId, mergePlantResearchStateFromScenePlants } from './modules/farm/seedPresentation';
 import { buildFactionContributionTiers } from './modules/faction/factionPresentation';
 import { applyFactionStipendSoulRewards } from './modules/faction/factionRewardState';
 import { getRewardBubbleTone, isDisplayableFarmReward } from './modules/rewards/rewardPresentation';
@@ -148,6 +143,9 @@ import { TopDock } from './shell/TopDock';
 import { ProfileModal } from './shell/ProfileModal';
 import { SceneCodexShortcut } from './shell/SceneCodexShortcut';
 import { useFeedbackLayer } from './shell/useFeedbackLayer';
+import { BattleReportModal } from './ui/common/BattleReportModal';
+import { FactionContributionLogModal } from './ui/common/FactionContributionLogModal';
+import { SocialFeedModal } from './ui/common/SocialFeedModal';
 import { SpiritPublicProfileModal } from './ui/common/SpiritPublicProfileModal';
 
 const SEASON_END_WARNING_THRESHOLD_MS = 60 * 60 * 1000;
@@ -164,8 +162,10 @@ function App(): JSX.Element {
   const [activeScene, setActiveScene] = useState<AppSceneKey>('farm');
   const [tutorialStage, setTutorialStage] = useState<TutorialStage>(() => getInitialTutorialStage(storedLoginSession));
   const [raidHubTab, setRaidHubTab] = useState<RaidHubTabKey>('targets');
-  const [factionTab, setFactionTab] = useState<FactionTabKey>('overview');
+  const [factionTab, setFactionTab] = useState<FactionTabKey>('rank');
+  const [factionContributionLogOpen, setFactionContributionLogOpen] = useState(false);
   const [socialTab, setSocialTab] = useState<SocialTabKey>('friends');
+  const [socialFeedOpen, setSocialFeedOpen] = useState(false);
   const [shareAssistDemo, setShareAssistDemo] = useState<ShareAssistDemoState | null>(null);
   const [pendingShareInvite, setPendingShareInvite] = useState<PendingShareInviteState | null>(null);
   const [pendingFriendInvite, setPendingFriendInvite] = useState<PendingFriendInviteState | null>(null);
@@ -230,8 +230,7 @@ function App(): JSX.Element {
   const [fieldSeedAssignments, setFieldSeedAssignments] = useState<Record<string, string>>({});
   const [farmOptimisticMutations, setFarmOptimisticMutations] = useState<FarmOptimisticMutation[]>([]);
   const [farmCollectPresentation, setFarmCollectPresentation] = useState<FarmCollectPresentationState | null>(null);
-  const [farmBoard, setFarmBoard] = useState<ClientFarmBoardState | null>(null);
-  const [farmBoardEditor, setFarmBoardEditor] = useState<FarmBoardEditorState | null>(null);
+  const [, setFarmBoard] = useState<ClientFarmBoardState | null>(null);
   const [globalFeatureModal, setGlobalFeatureModal] = useState<GlobalFeatureModalState | null>(null);
   const [globalUnlockModal, setGlobalUnlockModal] = useState<GlobalUnlockModalState | null>(null);
   const [pendingSpiritCodexRevealIds, setPendingSpiritCodexRevealIds] = useState<string[]>([]);
@@ -246,12 +245,9 @@ function App(): JSX.Element {
   const plantUnlockReadyIdsRef = useRef<string[] | null>(null);
   const plantCatalogMap = useRef(buildSeedCatalogMap()).current;
   const battleDemoScenarioIndexRef = useRef(0);
+  const plantAutoUnlockInFlightRef = useRef(false);
   const seasonRefreshInFlightRef = useRef(false);
   const seasonNoticeSeasonNumberRef = useRef<number | null>(null);
-  const plantPromptSeedGroups = buildSeedGroups({ unlockedSeedIds, seedInventory, plantResearchState });
-  const plantPromptSelectedSeedCodexItem = seedCodexState
-    ? plantPromptSeedGroups.flatMap((group) => group.seeds).find((seed) => seed.id === seedCodexState.selectedSeedId) ?? null
-    : null;
 
   const handleOpenBattleDemo = (): void => {
     const trait = (code: string, label: string, value: number) => ({ code, label, value });
@@ -572,7 +568,7 @@ function App(): JSX.Element {
           setRaidHubTab(action.raidHubTab);
         }
         if (action.factionTab) {
-          setFactionTab(action.factionTab);
+          setFactionTab('rank');
         }
         return;
       }
@@ -758,7 +754,6 @@ function App(): JSX.Element {
     setFarmOptimisticMutations([]);
     setFarmCollectPresentation(null);
     setSeedSelectionState(null);
-    setFarmBoardEditor(null);
     setSeedRewardModal(null);
     setPendingRaidRewardModal(null);
     setRaidBattleReplay(null);
@@ -782,7 +777,7 @@ function App(): JSX.Element {
     if (globalFeatureModal?.returnHomeOnClose) {
       setActiveScene('farm');
       setRaidHubTab('targets');
-      setFactionTab('overview');
+      setFactionTab('rank');
       setSocialTab('friends');
       raidIntel.dismissModal();
       setTopResourcePanel(null);
@@ -1100,10 +1095,9 @@ function App(): JSX.Element {
     setViewModel(null);
     setSpiritState(null);
     setFarmBoard(null);
-    setFarmBoardEditor(null);
     setActiveScene('farm');
     setRaidHubTab('targets');
-    setFactionTab('overview');
+    setFactionTab('rank');
     setSocialTab('friends');
     raidIntel.reset();
     setSeedRewardModal(null);
@@ -1409,31 +1403,49 @@ function App(): JSX.Element {
   }, [plantCatalogMap, plantResearchState, showToast]);
 
   useEffect(() => {
-    if (globalUnlockModal) {
+    const unlockSurfaceOpen = Boolean(seedCodexState || seedSelectionState);
+    const readyPlantIds = getReadyPlantUnlockIds(plantResearchState);
+
+    if (!unlockSurfaceOpen || readyPlantIds.length <= 0 || plantAutoUnlockInFlightRef.current) {
       return;
     }
 
-    const pendingPlantId = resolvePendingPlantUnlockPromptTarget({
-      pendingPlantUnlockPromptIds,
-      seedGroups: plantPromptSeedGroups,
-      seedSelectionState,
-      selectedSeedCodexItem: plantPromptSelectedSeedCodexItem,
-      selectedSeedId,
-    });
+    plantAutoUnlockInFlightRef.current = true;
 
-    if (!pendingPlantId) {
-      return;
-    }
+    const runAutoUnlock = async (): Promise<void> => {
+      setPendingActionKey('plant-unlock:auto-batch');
+      const unlockedPlantIds: string[] = [];
 
-    setGlobalUnlockModal(buildPlantUnlockReadyModal(pendingPlantId, plantCatalogMap));
+      try {
+        for (const plantId of readyPlantIds) {
+          const result = await unlockPlant({ plantType: plantId });
+          applyMutationResultSilently(result);
+          syncSeedBackpackState(result.bootstrap.backpack);
+          unlockedPlantIds.push(plantId);
+        }
+
+        if (unlockedPlantIds.length > 0) {
+          setPendingPlantUnlockPromptIds((current) => current.filter((id) => !unlockedPlantIds.includes(id)));
+          showToast(buildPlantAutoUnlockToastMessage(unlockedPlantIds, plantCatalogMap), 'success');
+        }
+      } catch (error) {
+        if (!(await handleSeasonRolledOverError(error))) {
+          const message = error instanceof Error && error.message ? error.message : '当前无法自动解锁灵植，请稍后重试。';
+          showToast(message, 'error');
+        }
+      } finally {
+        setPendingActionKey(null);
+        plantAutoUnlockInFlightRef.current = false;
+      }
+    };
+
+    void runAutoUnlock();
   }, [
-    globalUnlockModal,
-    pendingPlantUnlockPromptIds,
     plantCatalogMap,
-    plantPromptSeedGroups,
-    plantPromptSelectedSeedCodexItem,
+    plantResearchState,
+    seedCodexState,
     seedSelectionState,
-    selectedSeedId,
+    showToast,
   ]);
 
   const appEntryState = selectAppEntryState({
@@ -1562,6 +1574,7 @@ function App(): JSX.Element {
     suppress: Boolean(seasonStartup?.blocking),
   });
   const firstVisibleSeedCodexId = getFirstVisibleUnlockedSeedId(seedGroups);
+  const todayContributionLogs = filterTodayContributionLogs(scenes.faction.contributionLogs ?? []);
 
   const runPendingAction = async (actionKey: string, action: () => Promise<void>): Promise<void> => {
     if (pendingActionKey === actionKey) {
@@ -1660,6 +1673,7 @@ function App(): JSX.Element {
       setPendingActionKey(null);
     }
   };
+
 
   const handleFeedSpiritAction = async (slotIndex: number, slotVersion: number, actionType: 'feed_once' | 'fill_full'): Promise<void> => {
     const actionKey = `spirit:feed:${slotIndex}:${actionType}`;
@@ -2031,7 +2045,7 @@ function App(): JSX.Element {
       showToast(result.summary, 'success');
       setActiveScene('farm');
       setRaidHubTab('targets');
-      setFactionTab('overview');
+      setFactionTab('rank');
       setSeedInventory(emptySeedInventory);
       setGlobalItemInventory(emptyGlobalItemInventory);
       setUnlockedSeedIds(defaultUnlockedSeedIds);
@@ -2107,7 +2121,7 @@ function App(): JSX.Element {
       if (result.startup.completed) {
         setActiveScene('farm');
         setRaidHubTab('targets');
-        setFactionTab('overview');
+        setFactionTab('rank');
         setSocialTab('friends');
       } else if (result.startup.currentStep === 'faction-confirm') {
         setSeasonStartupStepOverride('faction-select');
@@ -2135,7 +2149,7 @@ function App(): JSX.Element {
       await notifications.refreshUnreadCount();
       setActiveScene('farm');
       setRaidHubTab('targets');
-      setFactionTab('overview');
+      setFactionTab('rank');
       setSocialTab('friends');
       showToast(result.summary, 'success');
     } catch (error) {
@@ -2160,7 +2174,7 @@ function App(): JSX.Element {
       await notifications.refreshUnreadCount();
       setActiveScene('farm');
       setRaidHubTab('targets');
-      setFactionTab('overview');
+      setFactionTab('rank');
       setSocialTab('friends');
       showToast(result.summary, 'success');
     } catch (error) {
@@ -2198,10 +2212,27 @@ function App(): JSX.Element {
   };
 
   const applyMutationResult = (result: { home: HomeSummaryResponse; scenes: ClientViewModel['scenes']; summary: string }): void => {
-    setViewModel((current) => applyClientViewModelScenePatch(current, result));
+    const nextViewModel = applyClientViewModelScenePatch(viewModel, result);
+    const contributionGain = Math.max(
+      extractCurrentPlayerContribution(nextViewModel) - extractCurrentPlayerContribution(viewModel),
+      0,
+    );
+    setViewModel(nextViewModel);
     syncPlantResearchFromScenePlants(result.scenes.farm.plants);
+    if (contributionGain > 0) {
+      showRewardBubbles([{
+        label: '贡献',
+        quantity: contributionGain,
+        tone: 'contribution',
+      }]);
+    }
 
     showToast(result.summary, 'success');
+  };
+
+  const applyMutationResultSilently = (result: { home: HomeSummaryResponse; scenes: ClientViewModel['scenes'] }): void => {
+    setViewModel((current) => applyClientViewModelScenePatch(current, result));
+    syncPlantResearchFromScenePlants(result.scenes.farm.plants);
   };
 
   const enqueueSpiritCodexRevealPrompts = (prompts?: ClientCodexPrompt[]): void => {
@@ -2324,9 +2355,15 @@ function App(): JSX.Element {
     }
 
     setActiveScene(nextScene);
+    if (nextScene !== 'social') {
+      setSocialFeedOpen(false);
+    }
+    if (nextScene !== 'faction') {
+      setFactionContributionLogOpen(false);
+    }
 
-    if (nextScene === 'battle' && nextRaidHubTab) {
-      setRaidHubTab(nextRaidHubTab);
+    if (nextScene === 'battle') {
+      setRaidHubTab(nextRaidHubTab ?? 'targets');
     }
 
     if (nextScene !== 'battle' && nextRaidHubTab) {
@@ -2392,7 +2429,7 @@ function App(): JSX.Element {
         showToast('先完成阵营俸禄领取，之后就可以自由安排基础种植。', 'info');
         if (tutorialStage === 'faction') {
           setActiveScene('faction');
-          setFactionTab('overview');
+          setFactionTab('rank');
         }
         return;
       }
@@ -2519,6 +2556,7 @@ function App(): JSX.Element {
       return;
     }
 
+    setRaidHubTab('targets');
     setPendingActionKey('spirit:public-profile');
     setSpiritPublicProfile(null);
     setSpiritPublicProfileError(null);
@@ -2626,6 +2664,7 @@ function App(): JSX.Element {
           return;
         }
 
+        setRaidHubTab('targets');
         setPendingActionKey('raid:battle-replay');
         try {
           const response = await loadRaidBattleReplay(action.context ?? '');
@@ -2644,6 +2683,7 @@ function App(): JSX.Element {
     }
 
     if (action.label === '查看对手' && action.context) {
+      setRaidHubTab('targets');
       void openSpiritPublicProfile(action.context);
       return;
     }
@@ -2657,6 +2697,7 @@ function App(): JSX.Element {
       const revengeTarget = findRaidTargetByContext(context);
 
       if (revengeTarget) {
+        setRaidHubTab('targets');
         raidIntel.openTarget(revengeTarget, 'revenge');
         return;
       }
@@ -2668,67 +2709,6 @@ function App(): JSX.Element {
     }
 
     showToast(buildActionMessage(action.label, actionContext), 'info');
-  };
-
-  const handleOpenFarmBoardEditor = (): void => {
-    const currentMessage = farmBoard?.farmBoardMessage ?? '';
-    setFarmBoardEditor({
-      initialMessage: currentMessage,
-      message: currentMessage,
-      saving: false,
-    });
-  };
-
-  const handleCloseFarmBoardEditor = (): void => {
-    if (!farmBoardEditor || farmBoardEditor.saving) {
-      return;
-    }
-
-    if (shouldCloseFarmBoardEditorWithoutSaving({
-      initialMessage: farmBoardEditor.initialMessage,
-      message: farmBoardEditor.message,
-    })) {
-      setFarmBoardEditor(null);
-      return;
-    }
-
-    void handleSaveFarmBoard();
-  };
-
-  const handleSaveFarmBoard = async (): Promise<void> => {
-    if (!farmBoardEditor || farmBoardEditor.saving) {
-      return;
-    }
-
-    const validation = validateFarmBoardMessage(farmBoardEditor.message);
-    if (!validation.valid && validation.reason === 'empty') {
-      showToast('留言不能为空。', 'error');
-      return;
-    }
-
-    if (!validation.valid && validation.reason === 'too-long') {
-      showToast('留言最多 40 个字。', 'error');
-      return;
-    }
-
-    setFarmBoardEditor((current) => current ? { ...current, saving: true } : current);
-
-    try {
-      const result = await updateFarmBoard({
-        message: validation.message,
-        farmBoardVersion: farmBoard?.farmBoardVersion,
-      });
-      setFarmBoard(result.board);
-      setFarmBoardEditor(null);
-      showToast(result.summary, 'success');
-    } catch (error) {
-      if (await handleSeasonRolledOverError(error)) {
-        setFarmBoardEditor((current) => current ? { ...current, saving: false } : current);
-        return;
-      }
-      showToast(error instanceof Error && error.message ? error.message : '当前无法修改留言，请稍后重试。', 'error');
-      setFarmBoardEditor((current) => current ? { ...current, saving: false } : current);
-    }
   };
 
   const handleStartCultivation = async (fieldId: string, fieldCode: string, seedId: string): Promise<void> => {
@@ -2896,9 +2876,6 @@ function App(): JSX.Element {
     const spiritCodexRevealSubjectId = globalUnlockModal.completionKind === 'spirit-codex-visible'
       ? globalUnlockModal.subjectId ?? null
       : null;
-    const plantUnlockReadySubjectId = globalUnlockModal.completionKind === 'plant-unlock-ready'
-      ? globalUnlockModal.subjectId ?? null
-      : null;
     setGlobalUnlockModal(null);
     if (globalUnlockModal.completionKind === 'friend-invite') {
       setPendingFriendInvite(null);
@@ -2906,9 +2883,6 @@ function App(): JSX.Element {
     }
     if (spiritCodexRevealSubjectId) {
       setPendingSpiritCodexRevealIds((current) => current.filter((spiritId) => spiritId !== spiritCodexRevealSubjectId));
-    }
-    if (plantUnlockReadySubjectId) {
-      setPendingPlantUnlockPromptIds((current) => current.filter((plantId) => plantId !== plantUnlockReadySubjectId));
     }
     if (afterConfirmActions.length > 0) {
       runTutorialFlowActions(afterConfirmActions);
@@ -2963,7 +2937,7 @@ function App(): JSX.Element {
             }}
             onOpenTianjiShop={() => {
               setGlobalFeatureModal({
-                title: '福利',
+                title: '商店',
                 tianjiShop: true,
               });
             }}
@@ -3047,7 +3021,6 @@ function App(): JSX.Element {
           <AppSceneRouter
             activeScene={activeScene}
             factionTab={factionTab}
-            farmBoard={farmBoard}
             farmCollectPresentation={farmCollectPresentation}
             farmFields={farmFields}
             followedTargetIds={raidIntel.followedTargetIds}
@@ -3058,11 +3031,8 @@ function App(): JSX.Element {
             portalTarget={characterDialogPortalRef.current}
             raidBattleLimit={raidBattleLimit}
             raidBattleUsed={raidBattleUsed}
-            raidHubTab={raidHubTab}
-            reportEntries={mergedReportEntries}
             scenes={scenes}
             socialError={social.error}
-            socialFeed={social.feed}
             socialFieldVisit={social.fieldVisit}
             socialFollowing={social.following}
             socialFriends={social.friends}
@@ -3074,9 +3044,6 @@ function App(): JSX.Element {
             tutorialTask={tutorialTask}
             tutorialUiRules={tutorialUiRules}
             vaultGold={vaultProgress.current}
-            onAcceptFriendRequest={(relationId) => {
-              void social.acceptFriendRequest(relationId);
-            }}
             onAssistAllSocialFields={() => {
               void social.assistAllFields();
             }}
@@ -3087,7 +3054,6 @@ function App(): JSX.Element {
               void handleBreakthroughSpiritAction(slotIndex, slotVersion, targetStage);
             }}
             onChangeFactionTab={setFactionTab}
-            onChangeRaidHubTab={setRaidHubTab}
             onChangeSocialTab={setSocialTab}
             onClaimFactionStipend={() => {
               void handleClaimFactionStipend();
@@ -3123,23 +3089,21 @@ function App(): JSX.Element {
                 contributionTiers: buildFactionContributionTiers(),
               });
             }}
-            onOpenFarmBoard={handleOpenFarmBoardEditor}
-            onOpenRaidTarget={raidIntel.openTarget}
+            onOpenRaidTarget={(target) => {
+              setRaidHubTab('targets');
+              raidIntel.openTarget(target);
+            }}
             onOpenSocialFieldVisit={(targetPlayerId) => {
               void social.openFieldVisit(targetPlayerId);
             }}
             onOpenSpiritPublicProfile={(targetPlayerId) => {
               void openSpiritPublicProfile(targetPlayerId);
             }}
-            onRaidAction={handleSceneAction}
             onRefreshRaidTargets={() => {
               void handleRefreshRaidTargets();
             }}
             onRefreshSocial={() => {
               void social.loadBundle();
-            }}
-            onRejectFriendRequest={(relationId) => {
-              void social.rejectFriendRequest(relationId);
             }}
             onRequestFriend={(targetPlayerId) => {
               void social.requestFriend(targetPlayerId);
@@ -3178,12 +3142,15 @@ function App(): JSX.Element {
           <SceneCodexShortcut
             activeScene={activeScene}
             disabled={isTutorialUser}
+            onOpenBattleReports={() => setRaidHubTab('reports')}
+            onOpenFactionLogs={() => setFactionContributionLogOpen(true)}
             onOpenPlantCodex={() => {
               setTopResourcePanel(null);
               setSeedCodexState({
                 selectedSeedId: getPreferredPendingPlantUnlockId(seedGroups, pendingPlantUnlockPromptIds) ?? firstVisibleSeedCodexId,
               });
             }}
+            onOpenSocialFeed={() => setSocialFeedOpen(true)}
             onOpenSpiritCodex={() => {
               setSeedCodexState(null);
               setTopSpiritCodexSpiritId(topSpiritCodexSelectedId);
@@ -3191,6 +3158,36 @@ function App(): JSX.Element {
               openPendingSpiritCodexReveal();
             }}
           />
+
+          {activeScene === 'battle' && raidHubTab === 'reports' ? (
+            <BattleReportModal
+              entries={mergedReportEntries}
+              onAction={handleSceneAction}
+              onClose={() => setRaidHubTab('targets')}
+            />
+          ) : null}
+
+          {activeScene === 'faction' && factionContributionLogOpen ? (
+            <FactionContributionLogModal
+              entries={todayContributionLogs}
+              onClose={() => setFactionContributionLogOpen(false)}
+            />
+          ) : null}
+
+          {activeScene === 'social' && socialFeedOpen ? (
+            <SocialFeedModal
+              busy={social.loading}
+              error={social.error}
+              feed={social.feed}
+              onAcceptFriendRequest={(relationId) => {
+                void social.acceptFriendRequest(relationId);
+              }}
+              onClose={() => setSocialFeedOpen(false)}
+              onRejectFriendRequest={(relationId) => {
+                void social.rejectFriendRequest(relationId);
+              }}
+            />
+          ) : null}
 
           <RaidIntelModalHost
             allowDeepIntel={tutorialUiRules.raid.allowDeepIntel}
@@ -3217,13 +3214,10 @@ function App(): JSX.Element {
           />
 
           <FarmModalLayer
-            farmBoardEditor={farmBoardEditor}
             pendingActionKey={pendingActionKey}
             seedGroups={seedGroups}
             seedSelectionState={seedSelectionState}
             selectedSeedId={selectedSeedId}
-            onChangeFarmBoardMessage={(message) => setFarmBoardEditor((current) => current ? { ...current, message } : current)}
-            onCloseFarmBoardEditor={handleCloseFarmBoardEditor}
             onCloseSeedSelection={() => setSeedSelectionState(null)}
             onConfirmSeedCultivation={() => {
               void handleConfirmSeedCultivation();
@@ -3312,8 +3306,16 @@ function App(): JSX.Element {
               void handleConfirmStarterSeedClaim();
             }}
             onClear={() => setSeedRewardModal(null)}
-            onRunAfterConfirmActions={() => {
-              const afterConfirmActions = seedRewardModal?.afterConfirmActions ?? [];
+            onRunAfterConfirmActions={(modal) => {
+              if ((modal.contributionGain ?? 0) > 0) {
+                showRewardBubbles([{
+                  label: '贡献',
+                  quantity: modal.contributionGain ?? 0,
+                  tone: 'contribution',
+                }]);
+              }
+
+              const afterConfirmActions = modal.afterConfirmActions ?? [];
               if (afterConfirmActions.length > 0) {
                 runTutorialFlowActions(afterConfirmActions);
               }
@@ -3349,6 +3351,41 @@ function App(): JSX.Element {
 function getAvatarInitial(name: string): string {
   const [firstChar] = Array.from(name.trim());
   return firstChar ? firstChar.toLocaleUpperCase('zh-CN') : '人';
+}
+
+function extractCurrentPlayerContribution(viewModel: ClientViewModel | null): number {
+  if (!viewModel) {
+    return 0;
+  }
+
+  const currentPlayerRanking = viewModel.scenes.faction.rankings.find((item) => item.isCurrentPlayer);
+  if (typeof currentPlayerRanking?.contributionScore === 'number') {
+    return Math.max(currentPlayerRanking.contributionScore, 0);
+  }
+
+  return extractFirstNumber(viewModel.scenes.faction.contribution.value);
+}
+
+function extractFirstNumber(value: string): number {
+  const match = value.match(/[\d,]+/);
+  if (!match) {
+    return 0;
+  }
+
+  return Math.max(Number(match[0].replace(/,/g, '')) || 0, 0);
+}
+
+function filterTodayContributionLogs(
+  logs: Array<{ id: string; sourceLabel: string; contributionDelta: number; createdAt: string }>,
+) {
+  const now = new Date();
+  return logs.filter((log) => {
+    const date = new Date(log.createdAt);
+    return !Number.isNaN(date.getTime())
+      && date.getFullYear() === now.getFullYear()
+      && date.getMonth() === now.getMonth()
+      && date.getDate() === now.getDate();
+  });
 }
 
 function buildSeasonEndReminder(input: {
@@ -3483,10 +3520,28 @@ function buildPlantUnlockReadyToastMessage(
 ): string {
   if (plantIds.length === 1) {
     const plantName = seedCatalogMap.get(plantIds[0] ?? '')?.name ?? '新灵植';
-    return `${plantName} 已满足解锁条件，可前往灵植图鉴查看。`;
+    return `${plantName} 已满足解锁条件，进入图鉴或种植时会自动解锁。`;
   }
 
-  return `有 ${plantIds.length} 株新灵植已满足解锁条件，可前往灵植图鉴查看。`;
+  return `有 ${plantIds.length} 株新灵植已满足解锁条件，进入图鉴或种植时会自动解锁。`;
+}
+
+function buildPlantAutoUnlockToastMessage(
+  plantIds: string[],
+  seedCatalogMap: Map<string, { name: string }>,
+): string {
+  if (plantIds.length === 1) {
+    const plantName = seedCatalogMap.get(plantIds[0] ?? '')?.name ?? '新灵植';
+    return `${plantName} 已自动解锁，可直接播种。`;
+  }
+
+  const labels = plantIds
+    .map((plantId) => seedCatalogMap.get(plantId)?.name ?? '新灵植')
+    .filter((label) => label.length > 0);
+
+  return labels.length > 0
+    ? `已自动解锁 ${plantIds.length} 株灵植：${labels.join('、')}。`
+    : `已自动解锁 ${plantIds.length} 株灵植。`;
 }
 
 function getPreferredPendingPlantUnlockId(
@@ -3499,65 +3554,6 @@ function getPreferredPendingPlantUnlockId(
     .find((seed) => pendingSeedIds.has(seed.id) && seed.research?.canUnlock && !seed.unlocked);
 
   return pendingSeed?.id ?? null;
-}
-
-function resolvePendingPlantUnlockPromptTarget(input: {
-  pendingPlantUnlockPromptIds: string[];
-  seedGroups: Array<{ seeds: Array<{ id: string; research?: ClientPlantResearchState; unlocked: boolean }> }>;
-  seedSelectionState: SeedSelectionState | null;
-  selectedSeedCodexItem: { id: string; research?: ClientPlantResearchState; unlocked: boolean } | null;
-  selectedSeedId: string;
-}): string | null {
-  const pendingSeedIds = new Set(input.pendingPlantUnlockPromptIds);
-
-  const selectedCodexPlant = input.selectedSeedCodexItem;
-  if (
-    selectedCodexPlant
-    && pendingSeedIds.has(selectedCodexPlant.id)
-    && selectedCodexPlant.research?.canUnlock
-    && !selectedCodexPlant.unlocked
-  ) {
-    return selectedCodexPlant.id;
-  }
-
-  if (!input.seedSelectionState) {
-    return null;
-  }
-
-  const selectedSeed = input.seedGroups
-    .flatMap((group) => group.seeds)
-    .find((seed) => seed.id === input.selectedSeedId);
-
-  if (
-    selectedSeed
-    && pendingSeedIds.has(selectedSeed.id)
-    && selectedSeed.research?.canUnlock
-    && !selectedSeed.unlocked
-  ) {
-    return selectedSeed.id;
-  }
-
-  return null;
-}
-
-function buildPlantUnlockReadyModal(
-  plantId: string,
-  seedCatalogMap: Map<string, { name: string }>,
-): GlobalUnlockModalState {
-  const plantName = seedCatalogMap.get(plantId)?.name ?? '新灵植';
-
-  return {
-    title: '灵植已满足解锁条件',
-    summary: `${plantName} 已达到解锁条件。你可以先在灵植图鉴查看详细信息，并在图鉴中完成解锁；解锁后即可在种植界面直接播种。`,
-    completionKind: 'plant-unlock-ready',
-    subjectId: plantId,
-    items: [{
-      id: plantId,
-      label: plantName,
-      kind: 'plant',
-      description: '先查看，再解锁，随后即可播种。',
-    }],
-  };
 }
 
 function resolveNotificationAttachmentLabel(

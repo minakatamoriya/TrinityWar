@@ -1,14 +1,14 @@
 ﻿import type {
-  ClientSocialFeedItem,
   ClientSocialFriendFieldVisitResponse,
   ClientSocialRelationItem,
   ClientSocialSummaryResponse,
 } from '@trinitywar/shared';
 import { createPortal } from 'react-dom';
-import { FullScreenToolShell } from '../common/ModalShell';
+import { useState } from 'react';
+import { CenteredModalShell, FullScreenToolShell } from '../common/ModalShell';
 import { FarmStatusCard, type FarmStatusViewModel } from '../farm/FarmStatusCard';
 
-export type SocialTabKey = 'friends' | 'relations' | 'feed';
+export type SocialTabKey = 'friends' | 'relations';
 
 interface SocialSceneProps {
   activeTab: SocialTabKey;
@@ -16,7 +16,6 @@ interface SocialSceneProps {
   error: string | null;
   summary: ClientSocialSummaryResponse | null;
   friendInviteUrl: string | null;
-  feed: ClientSocialFeedItem[];
   friends: ClientSocialRelationItem[];
   following: ClientSocialRelationItem[];
   fieldVisit: ClientSocialFriendFieldVisitResponse | null;
@@ -34,14 +33,11 @@ interface SocialSceneProps {
   onUnfollowTarget: (targetPlayerId: string) => void;
   onInviteFriend: () => void;
   onCopyFriendInviteUrl: (url: string) => void;
-  onAcceptFriendRequest: (relationId: string) => void;
-  onRejectFriendRequest: (relationId: string) => void;
 }
 
 const socialTabs: Array<{ key: SocialTabKey; label: string }> = [
   { key: 'friends', label: '好友' },
-  { key: 'relations', label: '关系' },
-  { key: 'feed', label: '动态' },
+  { key: 'relations', label: '关注' },
 ];
 
 export function SocialScene({
@@ -50,7 +46,6 @@ export function SocialScene({
   error,
   summary,
   friendInviteUrl,
-  feed,
   friends,
   following,
   fieldVisit,
@@ -67,73 +62,33 @@ export function SocialScene({
   onUnfollowTarget,
   onInviteFriend,
   onCopyFriendInviteUrl,
-  onAcceptFriendRequest,
-  onRejectFriendRequest,
 }: SocialSceneProps): JSX.Element {
+  const [pendingDeleteFriend, setPendingDeleteFriend] = useState<{ nickname: string; targetPlayerId: string } | null>(null);
   const relationRows = buildRelationRows({ friends, following });
   const friendRows = relationRows.filter((relation) => relation.friendStatus === 'active');
   const followingRows = relationRows.filter((relation) => relation.friendStatus !== 'active' && relation.followingStatus === 'active');
+  const tabCountByKey: Record<SocialTabKey, number> = {
+    friends: summary?.counts.friends ?? friendRows.length,
+    relations: summary?.counts.following ?? followingRows.length,
+  };
 
   return (
     <div className="scene-scroll social-scene">
-      {summary ? (
-        <section className="social-metric-strip">
-          <span>好友 {summary.counts.friends}/{summary.counts.friendLimit}</span>
-          <span>关注 {summary.counts.following}/{summary.counts.followingLimit}</span>
-          <span>动态 {summary.counts.feedUnread}</span>
-        </section>
-      ) : null}
-
       {error ? <p className="social-error">{error}</p> : null}
 
-      <section className="tab-row">
+      <section className="social-tab-row">
         {socialTabs.map((tab) => (
           <button
-            className={`tab-button ${activeTab === tab.key ? 'active' : ''}`}
+            className={`social-tab-button ${activeTab === tab.key ? 'active' : ''}`}
             key={tab.key}
             onClick={() => onChangeTab(tab.key)}
             type="button"
           >
-            {tab.label}
+            <span>{tab.label}</span>
+            <strong className="social-tab-count">{tabCountByKey[tab.key]}</strong>
           </button>
         ))}
       </section>
-
-      {activeTab === 'feed' ? (
-        <section className="social-list">
-          {feed.length > 0 ? feed.map((item) => (
-            <article className="panel-card social-feed-card" key={item.id}>
-              <div className="panel-head">
-                <span className="soft-tag">{item.actor?.nickname ?? '系统'}</span>
-                <span className="card-label">{formatDateTime(item.createdAt)}</span>
-              </div>
-              <p>{item.summary}</p>
-              {item.actions.length > 0 ? (
-                <div className="button-row">
-                  {item.actions.map((action) => (
-                    <button
-                      className="ghost-button"
-                      disabled={isFeedActionDisabled(action, busy)}
-                      key={`${item.id}-${action.action}`}
-                      onClick={() => {
-                        if (action.action === 'accept_friend' && action.relatedEntityId) {
-                          onAcceptFriendRequest(action.relatedEntityId);
-                        }
-                        if (action.action === 'reject_friend' && action.relatedEntityId) {
-                          onRejectFriendRequest(action.relatedEntityId);
-                        }
-                      }}
-                      type="button"
-                    >
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </article>
-          )) : <EmptySocialState text="还没有新的社交动态。" />}
-        </section>
-      ) : null}
 
       {activeTab === 'friends' ? (
         <section className="social-list">
@@ -155,7 +110,9 @@ export function SocialScene({
           {friendRows.length > 0 ? friendRows.map((relation) => renderRelationCard({
             busy,
             onAssistFriend,
-            onDeleteFriend,
+            onDeleteFriend: (targetPlayerId, nickname) => {
+              setPendingDeleteFriend({ nickname, targetPlayerId });
+            },
             onFollowTarget,
             onOpenFieldVisit,
             onOpenSpiritProfile,
@@ -180,6 +137,41 @@ export function SocialScene({
             relation,
           })) : <EmptySocialState text="暂无关注对象。可在战报或目标详情中关注玩家。" />}
         </section>
+      ) : null}
+      {pendingDeleteFriend ? (
+        <CenteredModalShell
+          closeLabel="取消"
+          description={`删除后，你和 ${pendingDeleteFriend.nickname} 会从好友列表中移除。`}
+          footer={(
+            <>
+              <button
+                className="secondary-button"
+                disabled={busy}
+                onClick={() => setPendingDeleteFriend(null)}
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                className="ghost-button danger"
+                disabled={busy}
+                onClick={() => {
+                  onDeleteFriend(pendingDeleteFriend.targetPlayerId);
+                  setPendingDeleteFriend(null);
+                }}
+                type="button"
+              >
+                {busy ? '删除中...' : '确认删除'}
+              </button>
+            </>
+          )}
+          onClose={() => {
+            if (!busy) {
+              setPendingDeleteFriend(null);
+            }
+          }}
+          title="确认删除好友"
+        />
       ) : null}
       {fieldVisit && portalTarget ? createPortal((
         <FriendFieldVisitModal
@@ -267,7 +259,7 @@ function renderRelationCard(input: {
   busy: boolean;
   relation: RelationRow;
   onAssistFriend: (targetPlayerId: string) => void;
-  onDeleteFriend: (targetPlayerId: string) => void;
+  onDeleteFriend: (targetPlayerId: string, nickname: string) => void;
   onFollowTarget: (targetPlayerId: string) => void;
   onOpenFieldVisit: (targetPlayerId: string) => void;
   onOpenSpiritProfile: (targetPlayerId: string) => void;
@@ -288,33 +280,35 @@ function renderRelationCard(input: {
 
   return (
     <article className="panel-card social-relation-card" key={relation.key}>
-      <div>
-        <h4>{relation.target.nickname}</h4>
-        <p>{relation.target.factionName ?? '未加入阵营'} · {relation.target.castleLevel} 级 · 亲密度 {relation.intimacy}</p>
-        <div className="social-relation-tags">
-          {getRelationTags(relation).map((tag) => <span className="soft-tag" key={`${relation.key}-${tag}`}>{tag}</span>)}
-        </div>
+      <div className="social-relation-avatar" aria-hidden="true">
+        <span>{getRelationAvatarGlyph(relation.target.nickname)}</span>
       </div>
-      <div className="social-relation-actions">
+      <div className="social-relation-main">
+        <div className="social-relation-headline">
+          <h4>{relation.target.nickname}</h4>
+          <span className="social-relation-intimacy">亲密度 {relation.intimacy}</span>
+          <p>{relation.target.factionName ?? '未加入阵营'}</p>
+        </div>
+        <div className="social-relation-actions">
         {relation.friendStatus === 'active' ? (
           <>
-            <button className="primary-button" disabled={busy || !relation.assistSummary || relation.assistSummary.availableCount <= 0} onClick={() => onAssistFriend(relation.target.playerId)} type="button">
-              {relation.assistSummary && relation.assistSummary.availableCount > 0 ? `助力 ${relation.assistSummary.availableCount}` : '暂无助力'}
+            <button className="ghost-button social-relation-action-button is-accent" disabled={busy || !relation.assistSummary || relation.assistSummary.availableCount <= 0} onClick={() => onAssistFriend(relation.target.playerId)} type="button">
+              {relation.assistSummary && relation.assistSummary.availableCount > 0 ? `助力${relation.assistSummary.availableCount}` : '助力'}
             </button>
-            <button className="ghost-button" disabled={busy} onClick={() => onOpenFieldVisit(relation.target.playerId)} type="button">
-              拜访灵田
+            <button className="ghost-button social-relation-action-button" disabled={busy} onClick={() => onOpenFieldVisit(relation.target.playerId)} type="button">
+              灵田
             </button>
-            <button className="ghost-button" disabled={busy} onClick={() => onOpenSpiritProfile(relation.target.playerId)} type="button">
-              查看灵宠
+            <button className="ghost-button social-relation-action-button" disabled={busy} onClick={() => onOpenSpiritProfile(relation.target.playerId)} type="button">
+              灵宠
             </button>
-            <button className="ghost-button danger" disabled={busy} onClick={() => onDeleteFriend(relation.target.playerId)} type="button">
+            <button className="ghost-button social-relation-action-button danger" disabled={busy} onClick={() => onDeleteFriend(relation.target.playerId, relation.target.nickname)} type="button">
               删除
             </button>
           </>
         ) : (
           <>
             <button
-              className="ghost-button"
+              className="ghost-button social-relation-action-button"
               disabled={busy || relation.friendStatus === 'pending'}
               onClick={() => onRequestFriend(relation.target.playerId)}
               type="button"
@@ -322,19 +316,20 @@ function renderRelationCard(input: {
               {getRelationActionLabel(relation)}
             </button>
             {relation.followingStatus === 'active' ? (
-              <button className="ghost-button" disabled={busy} onClick={() => onUnfollowTarget(relation.target.playerId)} type="button">
-                取消关注
+              <button className="ghost-button social-relation-action-button" disabled={busy} onClick={() => onUnfollowTarget(relation.target.playerId)} type="button">
+                取关
               </button>
             ) : (
-              <button className="ghost-button" disabled={busy} onClick={() => onFollowTarget(relation.target.playerId)} type="button">
+              <button className="ghost-button social-relation-action-button" disabled={busy} onClick={() => onFollowTarget(relation.target.playerId)} type="button">
                 关注
               </button>
             )}
-            <button className="ghost-button" disabled={busy} onClick={() => onOpenSpiritProfile(relation.target.playerId)} type="button">
-              查看灵宠
+            <button className="ghost-button social-relation-action-button" disabled={busy} onClick={() => onOpenSpiritProfile(relation.target.playerId)} type="button">
+              灵宠
             </button>
           </>
         )}
+        </div>
       </div>
     </article>
   );
@@ -357,26 +352,9 @@ function getRelationActionLabel(relation: RelationRow): string {
     return '助力';
   }
   if (relation.friendStatus === 'pending') {
-    return '待确认';
+    return '待确';
   }
-  return '加好友';
-}
-
-function getRelationTags(relation: RelationRow): string[] {
-  return relation.tags;
-}
-
-function isFeedActionDisabled(action: ClientSocialFeedItem['actions'][number], busy: boolean): boolean {
-  if (busy) {
-    return true;
-  }
-  if (action.action === 'accept_friend' || action.action === 'reject_friend') {
-    return !action.relatedEntityId;
-  }
-  if (action.action === 'revenge' || action.action === 'follow') {
-    return !action.targetPlayerId;
-  }
-  return false;
+  return '加友';
 }
 
 function EmptySocialState({ actionLabel, onAction, text }: { actionLabel?: string; onAction?: () => void; text: string }): JSX.Element {
@@ -390,6 +368,10 @@ function EmptySocialState({ actionLabel, onAction, text }: { actionLabel?: strin
       ) : null}
     </div>
   );
+}
+
+function getRelationAvatarGlyph(nickname: string): string {
+  return Array.from(nickname.trim())[0] ?? '友';
 }
 
 function FriendFieldVisitModal(props: {
@@ -502,17 +484,4 @@ function getFriendFieldDescription(field: ClientSocialFriendFieldVisitResponse['
   return formatFriendFieldStatus(field.status);
 }
 
-function formatDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 

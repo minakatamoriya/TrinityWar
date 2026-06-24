@@ -12,8 +12,9 @@ export function buildSettledRaidRewardModal(result: RaidResult): SeedRewardModal
 
   return {
     title: '战斗所得',
+    contributionGain: result.contributionGain ?? 0,
     summary: result.overflowGold > 0
-      ? `本次战斗获得 ${formatNumber(result.goldLoot)} 金币，其中 ${formatNumber(result.depositedGold)} 已入库，另有 ${formatNumber(result.overflowGold)} 转入待领取。${result.reportSummary}${battleEventSummary}`
+      ? `本次战斗获得 ${formatNumber(result.goldLoot)} 金币，其中 ${formatNumber(result.depositedGold)} 已入账，另有 ${formatNumber(result.overflowGold)} 转入待领取。${result.reportSummary}${battleEventSummary}`
       : `获得 ${formatNumber(result.goldLoot)} 金币。${result.reportSummary}${battleEventSummary}`,
     footerHint: hasNewSpiritCodexReveal ? '获得新的灵宠精魄，请到图鉴或合成栏位查看。' : undefined,
     items: [

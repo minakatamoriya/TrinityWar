@@ -1,0 +1,9 @@
+﻿{
+    "createdAt":  "2026-06-25T00:54:35.2247203+08:00",
+    "type":  "schema-only",
+    "database":  "trinitywar",
+    "host":  "localhost",
+    "port":  5432,
+    "tool":  "pg_dump",
+    "schemaFile":  "postgres-schema.sql"
+}

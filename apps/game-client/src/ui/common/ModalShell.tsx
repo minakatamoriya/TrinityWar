@@ -15,6 +15,8 @@ interface FullScreenToolShellProps {
   description?: string;
   className?: string;
   bodyClassName?: string;
+  bottomBarClassName?: string;
+  bottomBarContent?: React.ReactNode;
   children: React.ReactNode;
   onBack: () => void;
   backLabel?: string;
@@ -61,6 +63,8 @@ export function FullScreenToolShell(props: FullScreenToolShellProps): JSX.Elemen
     description,
     className,
     bodyClassName,
+    bottomBarClassName,
+    bottomBarContent,
     children,
     onBack,
     backLabel = '返回',
@@ -69,20 +73,27 @@ export function FullScreenToolShell(props: FullScreenToolShellProps): JSX.Elemen
 
   return (
     <section className={`full-screen-tool${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true" aria-label={ariaLabel ?? title}>
-      <header className="full-screen-tool-topbar">
-        <button className="full-screen-tool-back" onClick={onBack} type="button">
-          {backLabel}
-        </button>
-        <div className="full-screen-tool-title">
+      <header className="full-screen-tool-header">
+        <div className="full-screen-tool-capsule-safe" aria-hidden="true" />
+        <div className="full-screen-tool-titlebar">
           {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
           <h3>{title}</h3>
           {description ? <p>{description}</p> : null}
         </div>
-        <span className="full-screen-tool-spacer" aria-hidden="true" />
       </header>
       <div className={`full-screen-tool-body${bodyClassName ? ` ${bodyClassName}` : ''}`}>
         {children}
       </div>
+      <footer className={`full-screen-tool-bottombar${bottomBarClassName ? ` ${bottomBarClassName}` : ''}`}>
+        <button className="full-screen-tool-back" onClick={onBack} type="button">
+          {backLabel}
+        </button>
+        {bottomBarContent ? (
+          <div className="full-screen-tool-bottom-extra">
+            {bottomBarContent}
+          </div>
+        ) : null}
+      </footer>
     </section>
   );
 }

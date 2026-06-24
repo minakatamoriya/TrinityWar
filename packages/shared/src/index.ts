@@ -1780,6 +1780,17 @@ export interface ClientFactionLeaderboardEntry {
   isCurrentPlayer?: boolean;
 }
 
+export interface ClientFactionSpiritLeaderboardEntry {
+  spiritId: string;
+  label: string;
+  rarity: ClientSpiritRarity;
+  battleCount: number;
+  winCount: number;
+  lossCount: number;
+  drawCount: number;
+  winRatePercent: number;
+}
+
 export interface ClientFactionDonateRequest {
   /**
    * @deprecated 旧版兼容入口已停用，当前贡献来自日常行为。
@@ -2188,5 +2199,6 @@ export interface ClientSceneContentResponse {
     }>;
     stipend?: ClientFactionStipendSummary;
     rankings: ClientFactionLeaderboardEntry[];
+    spiritRankings?: ClientFactionSpiritLeaderboardEntry[];
   };
 }

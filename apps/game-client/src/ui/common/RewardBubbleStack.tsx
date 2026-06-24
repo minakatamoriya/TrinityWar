@@ -1,4 +1,4 @@
-export type RewardBubbleTone = 'gold' | 'essence' | 'spirit' | 'item';
+export type RewardBubbleTone = 'gold' | 'essence' | 'spirit' | 'item' | 'contribution';
 
 export interface RewardBubbleItem {
   id: number;

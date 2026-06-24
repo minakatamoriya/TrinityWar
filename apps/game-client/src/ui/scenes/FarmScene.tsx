@@ -1,5 +1,6 @@
 import type { ClientFactionAdvantagePanel, ClientFarmField, ClientSceneAction } from '@trinitywar/shared';
 import type { TutorialFarmUiRules, TutorialTask } from '../../tutorial/tutorialFlow';
+import { FactionAdvantageTip } from '../common/FactionAdvantageTip';
 import { buildFarmFieldStatusView, FarmStatusCard } from '../farm/FarmStatusCard';
 
 interface FarmCollectPresentationState {
@@ -12,12 +13,9 @@ interface FarmSceneProps {
   advantage?: ClientFactionAdvantagePanel;
   collectPresentation: FarmCollectPresentationState | null;
   fields: ClientFarmField[];
-  farmBoardMessage: string;
-  farmBoardUpdatedAt: string | null;
   tutorialTask: TutorialTask | null;
   uiRules: TutorialFarmUiRules;
   onAction: (action: ClientSceneAction, fieldId: string, fieldCode: string) => void;
-  onOpenFarmBoard: () => void;
   onTutorialAction: () => void;
 }
 
@@ -26,18 +24,15 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
     collectPresentation,
     advantage,
     fields,
-    farmBoardMessage,
     tutorialTask,
     uiRules,
     onAction,
-    onOpenFarmBoard,
     onTutorialAction,
   } = props;
-  const boardPreview = farmBoardMessage.trim() || '还没有留言，点击写下农场留言。';
   const visibleFields = uiRules.visibleFieldLimit === null ? fields : fields.slice(0, uiRules.visibleFieldLimit);
 
   return (
-    <div className="scene-shell">
+    <div className="scene-shell farm-scene-shell">
       <div className="scene-scroll farm-scene-scroll">
         {tutorialTask ? (
           <article className="panel-card tutorial-starter-card">
@@ -52,33 +47,7 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
           </article>
         ) : null}
 
-        {advantage && uiRules.showFactionAdvantage ? (
-          <article className="panel-card faction-advantage-panel">
-            <div className="panel-head">
-              <h4>{advantage.factionName}优势</h4>
-              <span className="soft-tag">{advantage.title}</span>
-            </div>
-            <p className="panel-text">{advantage.summary}</p>
-            {advantage.details.length > 0 ? (
-              <ul className="mini-list">
-                {advantage.details.map((detail) => (
-                  <li key={detail}>{detail}</li>
-                ))}
-              </ul>
-            ) : null}
-          </article>
-        ) : null}
-
-        {uiRules.showFarmBoard ? (
-          <div className="farm-top-card-grid">
-            <button className="panel-card farm-top-action-card farm-board-panel-card" onClick={onOpenFarmBoard} type="button">
-              <span className="farm-board-icon" aria-hidden="true">田</span>
-              <span className="farm-board-copy">
-                <strong>{boardPreview}</strong>
-              </span>
-            </button>
-          </div>
-        ) : null}
+        {advantage && uiRules.showFactionAdvantage ? <FactionAdvantageTip advantage={advantage} /> : null}
 
         <div className="card-grid farm-field-grid">
           {visibleFields.map((field) => {
@@ -116,7 +85,6 @@ export function FarmScene(props: FarmSceneProps): JSX.Element {
             );
           })}
         </div>
-
       </div>
     </div>
   );

@@ -206,7 +206,7 @@ export class RaidRepository {
           select: {
             id: true,
             nickname: true,
-            faction: { select: { name: true, code: true } },
+            faction: { select: { id: true, name: true, code: true } },
             seedInventory: {
               select: {
                 id: true,

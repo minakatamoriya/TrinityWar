@@ -3,7 +3,27 @@ import { join, relative } from 'node:path';
 
 const roots = ['apps', 'services', 'packages'];
 const extensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css']);
-const mojibakePattern = /[�锛鍚浣濂鐨涓骞绛閫鎴缁鏂鏍鏌鏀璧鍙鐢闃璐褰杞尞惀噾]/;
+const suspectFragments = [
+  '锟�',
+  '閸掗',
+  '鍒锋',
+  '娴兼',
+  '浼樺',
+  '鏈',
+  '鐏靛',
+  '绌烘',
+  '涓讳',
+  '鏂版',
+  '闃佃',
+  '鏀跺',
+  '绋€',
+  '浼犺',
+  '鍏芥',
+  '鐢板',
+  '澶嶄',
+  '鐩',
+  '娆℃',
+];
 
 const findings = [];
 
@@ -13,11 +33,11 @@ for (const root of roots) {
 
 if (findings.length > 0) {
   console.error('Possible mojibake text found:');
-  for (const finding of findings.slice(0, 80)) {
+  for (const finding of findings.slice(0, 120)) {
     console.error(`${finding.file}:${finding.line}: ${finding.text.trim()}`);
   }
-  if (findings.length > 80) {
-    console.error(`...and ${findings.length - 80} more`);
+  if (findings.length > 120) {
+    console.error(`...and ${findings.length - 120} more`);
   }
   process.exitCode = 1;
 }
@@ -41,7 +61,7 @@ function walk(path) {
   const content = readFileSync(path, 'utf8');
   const lines = content.split(/\r?\n/);
   lines.forEach((line, index) => {
-    if (mojibakePattern.test(line)) {
+    if (suspectFragments.some((fragment) => line.includes(fragment))) {
       findings.push({
         file: relative(process.cwd(), path),
         line: index + 1,

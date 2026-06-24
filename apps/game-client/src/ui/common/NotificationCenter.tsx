@@ -56,6 +56,16 @@ export function NotificationCenter(props: {
     <FullScreenToolShell
       ariaLabel="系统通知"
       bodyClassName="notification-dialog-body"
+      bottomBarClassName="notification-bottom-bar"
+      bottomBarContent={(
+        <div className="notification-pagination">
+          <span>{`第 ${page} / ${totalPages} 页`}</span>
+          <div className="notification-pagination-actions">
+            <button className="ghost-button" disabled={props.busy || page <= 1} onClick={() => props.onPageChange(page - 1)} type="button">上一页</button>
+            <button className="ghost-button" disabled={props.busy || page >= totalPages} onClick={() => props.onPageChange(page + 1)} type="button">下一页</button>
+          </div>
+        </div>
+      )}
       className="notification-screen"
       eyebrow="消息中心"
       onBack={props.onClose}
@@ -119,14 +129,6 @@ export function NotificationCenter(props: {
           </article>
         )) : null}
       </div>
-
-      <footer className="notification-pagination">
-        <span>第 {page} / {totalPages} 页</span>
-        <div className="notification-pagination-actions">
-          <button className="ghost-button" disabled={props.busy || page <= 1} onClick={() => props.onPageChange(page - 1)} type="button">上一页</button>
-          <button className="ghost-button" disabled={props.busy || page >= totalPages} onClick={() => props.onPageChange(page + 1)} type="button">下一页</button>
-        </div>
-      </footer>
     </FullScreenToolShell>
   );
 }

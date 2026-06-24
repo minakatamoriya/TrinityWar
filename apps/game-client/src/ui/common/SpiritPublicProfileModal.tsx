@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ClientSpiritElement, ClientSpiritPublicProfileResponse, ClientSpiritPublicSlot } from '@trinitywar/shared';
 import { FullScreenToolShell } from './ModalShell';
+import { SpiritCardShowcaseModal } from './SpiritCardShowcaseModal';
 
 interface SpiritPublicProfileModalProps {
   error: string | null;
@@ -11,11 +12,15 @@ interface SpiritPublicProfileModalProps {
 
 export function SpiritPublicProfileModal(props: SpiritPublicProfileModalProps): JSX.Element {
   const { error, loading, profile, onClose } = props;
-  const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
-  const selectedSlot = profile?.slots.find((slot) => slot.slotIndex === selectedSlotIndex)
-    ?? profile?.mainSlot
-    ?? profile?.slots.find((slot) => slot.spiritId)
-    ?? null;
+  const [showcaseSlotIndex, setShowcaseSlotIndex] = useState<number | null>(null);
+  const showcaseSlot = useMemo(
+    () => profile?.slots.find((slot) => slot.slotIndex === showcaseSlotIndex && slot.spiritId) ?? null,
+    [profile, showcaseSlotIndex],
+  );
+
+  useEffect(() => {
+    setShowcaseSlotIndex(null);
+  }, [profile?.player.playerId]);
 
   return (
     <FullScreenToolShell
@@ -45,15 +50,15 @@ export function SpiritPublicProfileModal(props: SpiritPublicProfileModalProps): 
           <section className="panel-card spirit-public-slot-list">
             <div className="panel-head">
               <h4>灵宠栏位</h4>
-              <span className="soft-tag">点击查看词条</span>
+              <span className="soft-tag">点哪个就看哪个</span>
             </div>
             <div className="spirit-public-list">
               {profile.slots.map((slot) => (
                 <button
-                  className={`spirit-public-row${slot.slotIndex === selectedSlot?.slotIndex ? ' selected' : ''}${slot.spiritId ? '' : ' is-empty'}`}
+                  className={`spirit-public-row${slot.spiritId ? '' : ' is-empty'}`}
                   disabled={!slot.spiritId}
                   key={slot.slotIndex}
-                  onClick={() => setSelectedSlotIndex(slot.slotIndex)}
+                  onClick={() => setShowcaseSlotIndex(slot.slotIndex)}
                   type="button"
                 >
                   <span className="spirit-public-art" aria-hidden="true">
@@ -68,32 +73,35 @@ export function SpiritPublicProfileModal(props: SpiritPublicProfileModalProps): 
                     <span className="spirit-public-meta">
                       <span>{slot.spiritId ? `Lv.${slot.level}` : '未结契'}</span>
                       <span>{formatRarity(slot.rarity)}</span>
-                      <span>五行：{formatElement(slot.element)}</span>
+                      <span>{`五行：${formatElement(slot.element)}`}</span>
                     </span>
                   </span>
                 </button>
               ))}
             </div>
           </section>
-
-          {selectedSlot?.spiritId ? (
-            <section className="panel-card spirit-public-traits">
-              <div className="panel-head">
-                <h4>{selectedSlot.label}词条</h4>
-                <span className="soft-tag">当前已开放 {selectedSlot.traits.length} 条</span>
-              </div>
-              <div className="spirit-public-trait-list">
-                {selectedSlot.traits.length > 0
-                  ? selectedSlot.traits.map((trait) => (
-                    <span key={`${selectedSlot.spiritInstanceId}-${trait.slotIndex}-${trait.traitCode}`}>
-                      {trait.label} +{trait.value}
-                    </span>
-                  ))
-                  : <span>暂无词条</span>}
-              </div>
-            </section>
-          ) : null}
         </>
+      ) : null}
+
+      {showcaseSlot && profile ? (
+        <SpiritCardShowcaseModal
+          data={{
+            label: showcaseSlot.label,
+            element: showcaseSlot.element,
+            rarity: showcaseSlot.rarity,
+            detailTitle: `${showcaseSlot.label}词条`,
+            detailEyebrow: getRelationLabel(profile.viewerRelation),
+            detailBadges: [
+              profile.player.nickname,
+              showcaseSlot.isMain ? '主位' : `副位 ${showcaseSlot.slotIndex - 1}`,
+            ],
+            traits: showcaseSlot.traits.map((trait) => ({
+              description: trait.description,
+              label: trait.label,
+            })),
+          }}
+          onClose={() => setShowcaseSlotIndex(null)}
+        />
       ) : null}
     </FullScreenToolShell>
   );

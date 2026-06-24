@@ -484,6 +484,31 @@ export class SceneContentAssembler {
         castleLevel: ranking.player.castleLevelCache,
         isCurrentPlayer: ranking.player.id === readModel.player.id,
       })),
+      spiritRankings: readModel.factionSpiritRankings
+        .sort((left, right) => {
+          const winRateDelta = computeSpiritWinRate(right) - computeSpiritWinRate(left);
+          if (winRateDelta !== 0) {
+            return winRateDelta;
+          }
+
+          const battleDelta = right.battleCount - left.battleCount;
+          if (battleDelta !== 0) {
+            return battleDelta;
+          }
+
+          return right.winCount - left.winCount;
+        })
+        .slice(0, 10)
+        .map((item) => ({
+          spiritId: item.spiritId,
+          label: item.label,
+          rarity: item.rarity,
+          battleCount: item.battleCount,
+          winCount: item.winCount,
+          lossCount: item.lossCount,
+          drawCount: item.drawCount,
+          winRatePercent: computeSpiritWinRate(item),
+        })),
     };
   }
 
@@ -521,6 +546,17 @@ export class SceneContentAssembler {
 
     return undefined;
   }
+}
+
+function computeSpiritWinRate(input: {
+  battleCount: number;
+  winCount: number;
+}): number {
+  if (input.battleCount <= 0) {
+    return 0;
+  }
+
+  return Math.round((input.winCount / input.battleCount) * 100);
 }
 
 function normalizeFactionStipendRewards(value: unknown): ClientFactionStipendReward[] | null {

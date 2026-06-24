@@ -2229,7 +2229,7 @@ function buildShopItemsForState(shopPurchases: Array<{ itemId: string; periodKey
 
 function getSoulQualityLabel(quality: 'ordinary' | 'rare' | 'legendary'): string {
   if (quality === 'legendary') {
-    return '浼犺鍏介瓊';
+    return '传说兽魂';
   }
   if (quality === 'rare') {
     return '稀有兽魂';
