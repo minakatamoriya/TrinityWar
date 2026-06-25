@@ -8,6 +8,7 @@ import { PlayerInitializationService, type PlayerInitializationInput } from '../
 import { DEV_ACCOUNT_SEEDS, type DevAccountSeedData } from '../seed/seed-data/dev-accounts.js';
 import { FACTION_SEEDS } from '../seed/seed-data/factions.js';
 import { SEED_DEFINITION_SEEDS } from '../seed/seed-data/seeds.js';
+import { SPIRIT_DEFINITION_SEEDS } from '../seed/seed-data/spirits.js';
 import { AuthTokenService } from './auth-token.service.js';
 
 export interface DevLoginRequestBody {
@@ -225,7 +226,6 @@ export class AuthService {
       const shouldRepairStableInitialization = Boolean(
         stableAccount
         && existingIdentity
-        && existingIdentity.player.castleLevelCache <= 1
         && !existingIdentity.player.spiritSlots.some((slot) => slot.isMain && slot.spiritDefinitionId)
         && !existingIdentity.player.spiritSlots.some((slot) => slot.spiritDefinitionId),
       );
@@ -301,6 +301,7 @@ export class AuthService {
           spirit: NEW_PLAYER_SPIRIT_STATE,
         };
       await ensureSeedDefinitionsExist(client, getInitializationSeedIds(initialization));
+      await ensureSpiritDefinitionsExist(client);
       await this.playerInitializationService.initialize(client, {
         playerId: player.id,
         ...initialization,
@@ -475,6 +476,7 @@ export class AuthService {
       },
     });
 
+    await ensureSpiritDefinitionsExist(client);
     await this.playerInitializationService.initialize(client, {
       ...account.initialization,
       playerId: player.id,
@@ -875,6 +877,29 @@ async function ensureSeedDefinitionsExist(
         baseYieldGold: seed.baseYieldGold,
         strategyNote: seed.strategyNote,
         lore: seed.lore,
+      },
+    });
+  }
+}
+
+async function ensureSpiritDefinitionsExist(client: Prisma.TransactionClient): Promise<void> {
+  for (const spirit of SPIRIT_DEFINITION_SEEDS) {
+    await client.spiritDefinition.upsert({
+      where: { spiritId: spirit.spiritId },
+      create: spirit,
+      update: {
+        label: spirit.label,
+        rarity: spirit.rarity,
+        factionAffinity: spirit.factionAffinity,
+        role: spirit.role,
+        shardName: spirit.shardName,
+        shardUnlockRequired: spirit.shardUnlockRequired,
+        baseAttack: spirit.baseAttack,
+        baseHp: spirit.baseHp,
+        growthAttack: spirit.growthAttack,
+        growthHp: spirit.growthHp,
+        sortOrder: spirit.sortOrder,
+        lore: spirit.lore,
       },
     });
   }

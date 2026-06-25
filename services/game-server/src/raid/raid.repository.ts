@@ -37,7 +37,9 @@ export class RaidRepository {
               take: 1,
               select: {
                 id: true,
+                spiritInstanceId: true,
                 slotIndex: true,
+                isMain: true,
                 level: true,
                 element: true,
                 maxHp: true,
@@ -173,7 +175,9 @@ export class RaidRepository {
               take: 1,
               select: {
                 id: true,
+                spiritInstanceId: true,
                 slotIndex: true,
+                isMain: true,
                 level: true,
                 element: true,
                 maxHp: true,
@@ -226,7 +230,9 @@ export class RaidRepository {
               take: 1,
               select: {
                 id: true,
+                spiritInstanceId: true,
                 slotIndex: true,
+                isMain: true,
                 level: true,
                 element: true,
                 maxHp: true,

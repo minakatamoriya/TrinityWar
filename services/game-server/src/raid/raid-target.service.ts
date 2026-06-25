@@ -387,7 +387,7 @@ export class RaidTargetService {
       const attackerSelectedSpirit = await client.playerSpiritSlot.findFirst({
         where: attackerSpiritInstanceId
           ? {
-            id: attackerSpiritInstanceId,
+            spiritInstanceId: attackerSpiritInstanceId,
             playerId: input.playerId,
             spiritDefinitionId: { not: null },
           }
@@ -398,7 +398,9 @@ export class RaidTargetService {
           },
         select: {
           id: true,
+          spiritInstanceId: true,
           slotIndex: true,
+          isMain: true,
           level: true,
           element: true,
           maxHp: true,
@@ -496,7 +498,7 @@ export class RaidTargetService {
           playerId: input.playerId,
           availableCount: currentArmy?.availableCount ?? 0,
           frozenCount: currentArmy?.frozenCount ?? 0,
-          selectedSpiritInstanceId: attackerSelectedSpirit.id,
+          selectedSpiritInstanceId: attackerSelectedSpirit.spiritInstanceId ?? attackerSelectedSpirit.id,
           mainSpirit: buildSpiritBattleSnapshot(attackerSelectedSpirit),
           mainSpiritSceneVisibilityForDefender: resolveSpiritSceneVisibility(attackerVisibilityForDefender),
         },
@@ -1157,7 +1159,9 @@ function buildRaidSpiritPreview(
 function buildSpiritBattleSnapshot(
   slot: {
     id: string;
+    spiritInstanceId?: string | null;
     slotIndex: number;
+    isMain?: boolean;
     level: number;
     element: string | null;
     maxHp: number;
@@ -1187,7 +1191,9 @@ function buildSpiritBattleSnapshot(
 
   return {
     slotId: slot.id,
+    spiritInstanceId: slot.spiritInstanceId ?? slot.id,
     slotIndex: slot.slotIndex,
+    isMain: slot.isMain ?? false,
     level: slot.level,
     element: slot.element,
     currentHp: slot.currentHp ?? slot.maxHp,

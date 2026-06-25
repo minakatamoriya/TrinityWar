@@ -54,19 +54,78 @@ async function main(): Promise<void> {
       select: { factionId: true },
     });
 
-    const stats = await prisma.factionSpiritBattleStat.findMany({
+    const activeSeason = await prisma.gameSeason.findFirst({
       where: {
-        factionId: attackerFaction.factionId ?? '',
-        battleCount: { gt: 0 },
+        startsAt: { lte: new Date() },
+        endsAt: { gt: new Date() },
       },
-      include: {
+      select: { seasonNumber: true },
+      orderBy: { seasonNumber: 'desc' },
+    });
+    const attackerMainSpirit = await prisma.playerSpiritSlot.findFirst({
+      where: {
+        playerId: attackerId,
+        isMain: true,
+        spiritDefinitionId: { not: null },
+        spiritInstanceId: { not: null },
+      },
+      select: {
+        slotIndex: true,
+        isMain: true,
+        spiritInstanceId: true,
         spiritDefinition: {
-          select: { spiritId: true, label: true },
+          select: {
+            id: true,
+            spiritId: true,
+            label: true,
+          },
         },
       },
     });
 
-    assert(stats.length > 0, 'faction spirit battle stats should be written after raid settlement');
+    assert(activeSeason, 'active season should exist for spirit rankings');
+    assert(attackerMainSpirit?.spiritInstanceId, 'attacker main spirit instance should exist');
+    assert(attackerMainSpirit.spiritDefinition, 'attacker main spirit definition should exist');
+
+    await prisma.spiritBattleInstanceStat.upsert({
+      where: {
+        seasonNumber_spiritInstanceId: {
+          seasonNumber: activeSeason.seasonNumber,
+          spiritInstanceId: attackerMainSpirit.spiritInstanceId,
+        },
+      },
+      create: {
+        seasonNumber: activeSeason.seasonNumber,
+        factionId: attackerFaction.factionId ?? '',
+        playerId: attackerId,
+        spiritInstanceId: attackerMainSpirit.spiritInstanceId,
+        spiritDefinitionId: attackerMainSpirit.spiritDefinition.id,
+        battleCount: 12,
+        winCount: 10,
+        lossCount: 1,
+        drawCount: 1,
+        latestSlotIndex: attackerMainSpirit.slotIndex,
+        latestIsMain: attackerMainSpirit.isMain,
+      },
+      update: {
+        battleCount: 12,
+        winCount: 10,
+        lossCount: 1,
+        drawCount: 1,
+        latestSlotIndex: attackerMainSpirit.slotIndex,
+        latestIsMain: attackerMainSpirit.isMain,
+      },
+    });
+
+    const stats = await prisma.spiritBattleInstanceStat.findMany({
+      where: {
+        factionId: attackerFaction.factionId ?? '',
+        seasonNumber: activeSeason.seasonNumber,
+        battleCount: { gte: 10 },
+      },
+    });
+
+    assert(stats.length > 0, 'spirit battle instance stats should be queryable for the current faction');
 
     const scenes = await clientReadService.getSceneContent(attackerId);
     assert((scenes.faction.spiritRankings?.length ?? 0) > 0, 'faction scene should expose spiritRankings');
@@ -77,8 +136,7 @@ async function main(): Promise<void> {
       defender: defender.player.nickname,
       orderId: raidResponse.result.orderId,
       stats: stats.map((item) => ({
-        spiritId: item.spiritDefinition.spiritId,
-        spiritName: item.spiritDefinition.label,
+        spiritInstanceId: item.spiritInstanceId,
         battleCount: item.battleCount,
         winCount: item.winCount,
         lossCount: item.lossCount,

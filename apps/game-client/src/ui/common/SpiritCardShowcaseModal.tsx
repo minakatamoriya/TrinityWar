@@ -14,6 +14,7 @@ export interface SpiritCardShowcaseData {
   label: string;
   rarity: 'common' | 'rare' | 'legendary' | null;
   element: ClientSpiritElement | null;
+  artSrc?: string;
   traits?: SpiritCardShowcaseTrait[];
   detailTitle?: string;
   detailEyebrow?: string;
@@ -62,6 +63,7 @@ export function SpiritCardShowcaseModal(props: SpiritCardShowcaseModalProps): JS
           <article className={`spirit-card-showcase-card ${rarityClass}`}>
             <div className="spirit-card-showcase-cardback" aria-hidden="true" />
             <div className="spirit-card-showcase-frame" aria-hidden="true" />
+            {data.rarity ? <div className="spirit-card-showcase-rarity-gem" aria-hidden="true" /> : null}
 
             {data.element ? (
               <div className={`spirit-card-showcase-element-badge ${elementClass}`} aria-hidden="true">
@@ -70,9 +72,18 @@ export function SpiritCardShowcaseModal(props: SpiritCardShowcaseModalProps): JS
             ) : null}
 
             <div className="spirit-card-showcase-art">
-              <div className="spirit-card-showcase-glyph" aria-hidden="true">
-                <span>{getSpiritGlyph(data.label)}</span>
-              </div>
+              {data.artSrc ? (
+                <img
+                  alt=""
+                  aria-hidden="true"
+                  className="spirit-card-showcase-image"
+                  src={data.artSrc}
+                />
+              ) : (
+                <div className="spirit-card-showcase-glyph" aria-hidden="true">
+                  <span>{getSpiritGlyph(data.label)}</span>
+                </div>
+              )}
             </div>
 
             <div className="spirit-card-showcase-nameplate">

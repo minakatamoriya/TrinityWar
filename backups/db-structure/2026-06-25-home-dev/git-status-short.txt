@@ -1,0 +1,27 @@
+ M apps/game-client/src/shell/BottomDock.tsx
+ M apps/game-client/src/shell/SceneCodexShortcut.tsx
+ M apps/game-client/src/shell/TopDock.tsx
+ M apps/game-client/src/styles.css
+ M apps/game-client/src/ui/common/GlobalFeatureModalContent.tsx
+ M apps/game-client/src/ui/common/SpiritCardShowcaseModal.tsx
+ M apps/game-client/src/ui/common/SpiritCodexModal.tsx
+ M apps/game-client/src/ui/scenes/FactionScene.tsx
+ M packages/shared/src/index.ts
+ M services/game-server/package.json
+ M services/game-server/prisma/schema.prisma
+ M services/game-server/src/auth/auth.service.ts
+ M services/game-server/src/client-read/client-read.repository.ts
+ M services/game-server/src/client-read/scene-content.assembler.ts
+ M services/game-server/src/raid/raid-settlement-rule.service.ts
+ M services/game-server/src/raid/raid-settlement.service.ts
+ M services/game-server/src/raid/raid-target.service.ts
+ M services/game-server/src/raid/raid.repository.ts
+ M services/game-server/src/seed/player-initialization.service.ts
+ M services/game-server/src/spirit/spirit.service.ts
+ M services/game-server/src/verification/verify-faction-spirit-rankings.ts
+?? apps/game-client/public/assets/icon/
+?? apps/game-client/public/assets/pet/
+?? backups/db-structure/2026-06-25-home-dev/
+?? services/game-server/prisma/migrations/070_spirit_instance_leaderboard/
+?? services/game-server/src/verification/seed-demo-spirit-rankings.ts
+?? tools/

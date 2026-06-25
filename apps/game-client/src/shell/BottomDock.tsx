@@ -7,6 +7,22 @@ interface BottomDockProps {
   onNavigate: (scene: AppSceneKey) => void;
 }
 
+const dockIconMap: Record<AppSceneKey, string> = {
+  farm: '/assets/icon/dock_field_64.png',
+  spirit: '/assets/icon/dock_pet_64.png',
+  battle: '/assets/icon/dock_battle_64.png',
+  social: '/assets/icon/dock_social_64.png',
+  faction: '/assets/icon/dock_faction_64.png',
+};
+
+const dockLabelMap: Record<AppSceneKey, string> = {
+  farm: '灵田',
+  spirit: '灵宠',
+  battle: '战斗',
+  social: '社交',
+  faction: '阵营',
+};
+
 export function BottomDock(props: BottomDockProps): JSX.Element {
   const {
     activeScene,
@@ -27,7 +43,13 @@ export function BottomDock(props: BottomDockProps): JSX.Element {
             onClick={() => onNavigate(scene)}
             type="button"
           >
-            {sceneNavLabels[scene]}
+            <img
+              alt=""
+              aria-hidden="true"
+              className="dock-nav-icon"
+              src={dockIconMap[scene]}
+            />
+            <span className="dock-nav-label">{dockLabelMap[scene] ?? sceneNavLabels[scene]}</span>
           </button>
         );
       })}

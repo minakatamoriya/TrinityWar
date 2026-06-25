@@ -1,9 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ArmyTrainingStatus, DailyFactionTaskType, FieldStatus, Prisma, PrismaClient, TaskStatus } from '@prisma/client';
+import type { ClientSpiritElement } from '@trinitywar/shared';
+import { getSpiritBattleInnateRules } from '@trinitywar/shared';
+import type { ArmyTrainingStatus, DailyFactionTaskType, FieldStatus, Prisma, PrismaClient, SpiritElement, TaskStatus } from '@prisma/client';
 import { getLocalDateKey, getStartOfDateKey } from '../lib/date-key.js';
 import type { FactionAdvantageCode } from '../lib/faction-advantage-formulas.js';
 import { getFieldReadyAt } from '../lib/field-timing.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { getTraitDefinition } from '../spirit/spirit-trait-roll-rules.js';
 import type { AdminTaskConfigRecord } from '../task-config/task-config.service.js';
 
 export interface HomeSummaryReadModel {
@@ -210,13 +213,26 @@ export interface SceneContentReadModel {
     };
   }>;
   factionSpiritRankings: Array<{
+    playerId: string;
+    spiritInstanceId: string;
     spiritId: string;
     label: string;
     rarity: 'common' | 'rare' | 'legendary';
+    element: ClientSpiritElement | null;
     battleCount: number;
     winCount: number;
     lossCount: number;
     drawCount: number;
+    isMain: boolean;
+    updatedAt: Date;
+    traitItems: Array<{
+      label: string;
+      description: string;
+    }>;
+    innateTraitItems: Array<{
+      label: string;
+      description: string;
+    }>;
   }>;
   raidDailyState: {
     dateKey: string;
@@ -639,7 +655,7 @@ export class ClientReadRepository {
       orderBy: { seasonNumber: 'desc' },
     });
 
-    const [factions, factionContributionTotals, factionStipendClaimCount, factionRankings, factionSpiritRankings] = await Promise.all([
+    const [factions, factionContributionTotals, factionStipendClaimCount, factionRankings, activeFactionSpiritSlots, factionSpiritStats] = await Promise.all([
       client.faction.findMany({
         orderBy: [{ contributionScore: 'desc' }, { name: 'asc' }],
         select: {
@@ -681,24 +697,22 @@ export class ClientReadRepository {
           },
         })
         : Promise.resolve([]),
-      player.faction && activeSeason
-        ? client.factionSpiritBattleStat.findMany({
+      player.faction
+        ? client.playerSpiritSlot.findMany({
           where: {
-            factionId: player.faction.id,
-            seasonNumber: activeSeason.seasonNumber,
-            battleCount: { gte: 1 },
+            player: {
+              factionId: player.faction.id,
+            },
+            spiritDefinitionId: { not: null },
+            spiritInstanceId: { not: null },
+            dissolvedAt: null,
           },
-          orderBy: [
-            { winCount: 'desc' },
-            { battleCount: 'desc' },
-            { drawCount: 'desc' },
-          ],
-          take: 20,
           select: {
-            battleCount: true,
-            winCount: true,
-            lossCount: true,
-            drawCount: true,
+            playerId: true,
+            spiritInstanceId: true,
+            slotIndex: true,
+            isMain: true,
+            element: true,
             spiritDefinition: {
               select: {
                 spiritId: true,
@@ -706,6 +720,32 @@ export class ClientReadRepository {
                 rarity: true,
               },
             },
+            traits: {
+              select: {
+                slotIndex: true,
+                traitCode: true,
+                traitValue: true,
+                sourceType: true,
+              },
+            },
+          },
+        })
+        : Promise.resolve([]),
+      player.faction && activeSeason
+        ? client.spiritBattleInstanceStat.findMany({
+          where: {
+            factionId: player.faction.id,
+            seasonNumber: activeSeason.seasonNumber,
+            battleCount: { gte: 10 },
+          },
+          select: {
+            playerId: true,
+            spiritInstanceId: true,
+            battleCount: true,
+            winCount: true,
+            lossCount: true,
+            drawCount: true,
+            updatedAt: true,
           },
         })
         : Promise.resolve([]),
@@ -722,6 +762,41 @@ export class ClientReadRepository {
         const contributionDelta = right.contributionScore - left.contributionScore;
         return contributionDelta !== 0 ? contributionDelta : left.name.localeCompare(right.name, 'zh-Hans-CN');
       });
+    const activeSpiritSlotByInstanceId = new Map(
+      activeFactionSpiritSlots
+        .filter((slot): slot is typeof slot & { spiritInstanceId: string; spiritDefinition: NonNullable<typeof slot.spiritDefinition> } => (
+          typeof slot.spiritInstanceId === 'string' && slot.spiritDefinition !== null
+        ))
+        .map((slot) => [slot.spiritInstanceId, slot] as const),
+    );
+    const factionSpiritRankings = factionSpiritStats
+      .map((stat) => {
+        const slot = activeSpiritSlotByInstanceId.get(stat.spiritInstanceId);
+        if (!slot?.spiritDefinition) {
+          return null;
+        }
+
+        return {
+          playerId: stat.playerId || slot.playerId,
+          spiritInstanceId: stat.spiritInstanceId,
+          spiritId: slot.spiritDefinition.spiritId,
+          label: slot.spiritDefinition.label,
+          rarity: toClientSpiritRarity(slot.spiritDefinition.rarity),
+          element: toClientSpiritElement(slot.element),
+          battleCount: stat.battleCount,
+          winCount: stat.winCount,
+          lossCount: stat.lossCount,
+          drawCount: stat.drawCount,
+          isMain: slot.isMain,
+          updatedAt: stat.updatedAt,
+          traitItems: mapSpiritTraitItems(slot.traits),
+          innateTraitItems: getSpiritBattleInnateRules(slot.spiritDefinition.spiritId).map((rule) => ({
+            label: rule.label,
+            description: rule.description,
+          })),
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
     const [plantHarvestCount, raidDailyState, raidTargetPools] = await Promise.all([
       client.fieldHarvestLog.count({
@@ -884,19 +959,7 @@ export class ClientReadRepository {
       factionStipendClaimCount,
       factions: factionsWithMemberContributionTotals,
       factionRankings,
-      factionSpiritRankings: factionSpiritRankings.map((item) => ({
-        spiritId: item.spiritDefinition.spiritId,
-        label: item.spiritDefinition.label,
-        rarity: item.spiritDefinition.rarity === 'LEGENDARY'
-          ? 'legendary'
-          : item.spiritDefinition.rarity === 'RARE'
-            ? 'rare'
-            : 'common',
-        battleCount: item.battleCount,
-        winCount: item.winCount,
-        lossCount: item.lossCount,
-        drawCount: item.drawCount,
-      })),
+      factionSpiritRankings,
       raidDailyState,
       raidTargetPools,
       raidMessageTemplates,
@@ -911,4 +974,40 @@ function getLocalDateKeyForRepository(now = new Date()): string {
 
 function startOfDateKey(dateKey: string): Date {
   return getStartOfDateKey(dateKey);
+}
+
+function toClientSpiritElement(element: SpiritElement | null): ClientSpiritElement | null {
+  if (element === 'METAL') return 'metal';
+  if (element === 'WOOD') return 'wood';
+  if (element === 'WATER') return 'water';
+  if (element === 'FIRE') return 'fire';
+  if (element === 'EARTH') return 'earth';
+  return null;
+}
+
+function toClientSpiritRarity(rarity: string): 'common' | 'rare' | 'legendary' {
+  if (rarity === 'LEGENDARY') {
+    return 'legendary';
+  }
+  if (rarity === 'RARE') {
+    return 'rare';
+  }
+  return 'common';
+}
+
+function mapSpiritTraitItems(traits: Array<{
+  slotIndex: number;
+  traitCode: string;
+  traitValue: number;
+  sourceType: string;
+}>): Array<{ label: string; description: string }> {
+  return [...traits]
+    .sort((left, right) => left.slotIndex - right.slotIndex)
+    .map((trait) => {
+      const definition = getTraitDefinition(trait.traitCode);
+      return {
+        label: definition.label,
+        description: definition.description,
+      };
+    });
 }

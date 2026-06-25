@@ -291,10 +291,30 @@ export class RaidSettlementService {
           spiritDefinitionId: attackerSpirit?.spiritDefinition.id ?? null,
           result: settlementResult.result,
         });
+        await recordSpiritBattleInstanceStat(client, {
+          seasonNumber: currentSeason.seasonNumber,
+          factionId: raidOrder.attacker.faction?.id ?? null,
+          playerId: raidOrder.attacker.id,
+          spiritInstanceId: attackerSpirit?.spiritInstanceId ?? raidOrder.attacker.spiritSlots[0]?.spiritInstanceId ?? null,
+          spiritDefinitionId: attackerSpirit?.spiritDefinition.id ?? null,
+          latestSlotIndex: attackerSpirit?.slotIndex ?? raidOrder.attacker.spiritSlots[0]?.slotIndex ?? null,
+          latestIsMain: attackerSpirit?.isMain ?? raidOrder.attacker.spiritSlots[0]?.isMain ?? null,
+          result: settlementResult.result,
+        });
         await recordFactionSpiritBattleStat(client, {
           seasonNumber: currentSeason.seasonNumber,
           factionId: raidOrder.defender.faction?.id ?? null,
           spiritDefinitionId: defenderSpirit?.spiritDefinition.id ?? null,
+          result: invertSettlementResult(settlementResult.result),
+        });
+        await recordSpiritBattleInstanceStat(client, {
+          seasonNumber: currentSeason.seasonNumber,
+          factionId: raidOrder.defender.faction?.id ?? null,
+          playerId: raidOrder.defender.id,
+          spiritInstanceId: defenderSpirit?.spiritInstanceId ?? raidOrder.defender.spiritSlots[0]?.spiritInstanceId ?? null,
+          spiritDefinitionId: defenderSpirit?.spiritDefinition.id ?? null,
+          latestSlotIndex: defenderSpirit?.slotIndex ?? raidOrder.defender.spiritSlots[0]?.slotIndex ?? null,
+          latestIsMain: defenderSpirit?.isMain ?? raidOrder.defender.spiritSlots[0]?.isMain ?? null,
           result: invertSettlementResult(settlementResult.result),
         });
       }
@@ -482,7 +502,7 @@ async function recordFactionSpiritBattleStat(
     result: 'WIN' | 'LOSS' | 'DRAW' | 'CANCELLED';
   },
 ): Promise<void> {
-  if (!input.factionId || !input.spiritDefinitionId) {
+  if (!input.factionId || !input.spiritDefinitionId || input.result === 'CANCELLED') {
     return;
   }
 
@@ -504,6 +524,57 @@ async function recordFactionSpiritBattleStat(
       drawCount: input.result === 'DRAW' ? 1 : 0,
     },
     update: {
+      battleCount: { increment: 1 },
+      winCount: input.result === 'WIN' ? { increment: 1 } : undefined,
+      lossCount: input.result === 'LOSS' ? { increment: 1 } : undefined,
+      drawCount: input.result === 'DRAW' ? { increment: 1 } : undefined,
+    },
+  });
+}
+
+async function recordSpiritBattleInstanceStat(
+  client: Prisma.TransactionClient,
+  input: {
+    seasonNumber: number;
+    factionId: string | null;
+    playerId: string | null;
+    spiritInstanceId: string | null;
+    spiritDefinitionId: string | null;
+    latestSlotIndex: number | null;
+    latestIsMain: boolean | null;
+    result: 'WIN' | 'LOSS' | 'DRAW' | 'CANCELLED';
+  },
+): Promise<void> {
+  if (!input.factionId || !input.playerId || !input.spiritInstanceId || !input.spiritDefinitionId || input.result === 'CANCELLED') {
+    return;
+  }
+
+  await client.spiritBattleInstanceStat.upsert({
+    where: {
+      seasonNumber_spiritInstanceId: {
+        seasonNumber: input.seasonNumber,
+        spiritInstanceId: input.spiritInstanceId,
+      },
+    },
+    create: {
+      seasonNumber: input.seasonNumber,
+      factionId: input.factionId,
+      playerId: input.playerId,
+      spiritInstanceId: input.spiritInstanceId,
+      spiritDefinitionId: input.spiritDefinitionId,
+      battleCount: 1,
+      winCount: input.result === 'WIN' ? 1 : 0,
+      lossCount: input.result === 'LOSS' ? 1 : 0,
+      drawCount: input.result === 'DRAW' ? 1 : 0,
+      latestSlotIndex: input.latestSlotIndex,
+      latestIsMain: input.latestIsMain,
+    },
+    update: {
+      factionId: input.factionId,
+      playerId: input.playerId,
+      spiritDefinitionId: input.spiritDefinitionId,
+      latestSlotIndex: input.latestSlotIndex,
+      latestIsMain: input.latestIsMain,
       battleCount: { increment: 1 },
       winCount: input.result === 'WIN' ? { increment: 1 } : undefined,
       lossCount: input.result === 'LOSS' ? { increment: 1 } : undefined,
@@ -545,7 +616,9 @@ function readTutorialTarget(value: Prisma.JsonValue): boolean {
 
 function buildSpiritSnapshotFromSlot(slot: {
   id: string;
+  spiritInstanceId?: string | null;
   slotIndex: number;
+  isMain?: boolean;
   level: number;
   element: string | null;
   maxHp: number;
@@ -574,7 +647,9 @@ function buildSpiritSnapshotFromSlot(slot: {
 
   return {
     slotId: slot.id,
+    spiritInstanceId: slot.spiritInstanceId ?? slot.id,
     slotIndex: slot.slotIndex,
+    isMain: slot.isMain ?? false,
     level: slot.level,
     element: isSpiritElement(slot.element) ? slot.element : null,
     currentHp: slot.currentHp ?? slot.maxHp,

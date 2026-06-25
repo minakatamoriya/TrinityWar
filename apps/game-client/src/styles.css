@@ -722,27 +722,32 @@ button {
 }
 
 .profile-avatar-button {
-  flex: 0 0 32px;
-  width: 32px;
-  height: 32px;
-  margin-left: 10px;
+  flex: 0 0 60px;
+  width: 60px;
+  height: 60px;
+  margin-left: 6px;
   display: grid;
   place-items: center;
   border-radius: 999px;
-  border: 1px solid rgba(255, 248, 234, 0.24);
-  background:
-    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.28), transparent 34%),
-    linear-gradient(180deg, rgba(99, 128, 104, 0.92), rgba(44, 55, 46, 0.96));
+  border: 0;
+  background: transparent;
   color: #fff5df;
   font-size: 14px;
   font-weight: 800;
   line-height: 1;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24), inset 0 -1px 0 rgba(0, 0, 0, 0.24);
+  box-shadow: none;
 }
 
 .profile-avatar-button:hover {
   border-color: rgba(243, 181, 111, 0.5);
   transform: translateY(-1px);
+}
+
+.profile-avatar-image {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  display: block;
 }
 
 .operation-rail {
@@ -753,31 +758,42 @@ button {
   z-index: 5;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  width: 58px;
+  gap: 10px;
+  width: 72px;
   pointer-events: auto;
 }
 
 .operation-rail-button {
   position: relative;
-  display: grid;
-  place-items: center;
-  min-height: 42px;
-  padding: 7px 5px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 248, 234, 0.1);
-  background: linear-gradient(180deg, rgba(54, 42, 31, 0.88), rgba(27, 21, 18, 0.88));
-  color: #fff1d2;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.05;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 76px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .operation-rail-button:hover {
   transform: translateY(-1px);
-  border-color: rgba(243, 181, 111, 0.42);
-  background: linear-gradient(180deg, rgba(82, 57, 34, 0.92), rgba(39, 28, 21, 0.92));
+}
+
+.operation-rail-icon {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.28));
+}
+
+.operation-rail-label {
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72);
 }
 
 .scene-codex-shortcut {
@@ -785,24 +801,30 @@ button {
   left: max(12px, env(safe-area-inset-left));
   bottom: calc(88px + env(safe-area-inset-bottom));
   z-index: 5;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 2px;
-  width: 58px;
-  min-height: 58px;
-  padding: 8px 6px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 248, 234, 0.12);
-  background: linear-gradient(180deg, rgba(55, 45, 35, 0.9), rgba(24, 19, 17, 0.9));
+  width: 72px;
+  min-height: 78px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: #fff1d2;
   text-align: center;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: none;
 }
 
 .scene-codex-shortcut:hover {
   transform: translateY(-1px);
-  border-color: rgba(243, 181, 111, 0.42);
-  background: linear-gradient(180deg, rgba(80, 60, 38, 0.94), rgba(35, 25, 20, 0.94));
+}
+
+.scene-codex-icon {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.28));
 }
 
 .scene-codex-shortcut span,
@@ -812,13 +834,17 @@ button {
 }
 
 .scene-codex-shortcut span {
-  color: rgba(255, 241, 210, 0.78);
+  color: #ffffff;
   font-size: 11px;
   font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72);
 }
 
 .scene-codex-shortcut strong {
-  font-size: 13px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72);
 }
 
 .season-countdown-banner {
@@ -3849,9 +3875,9 @@ button {
   display: grid;
   align-content: center;
   justify-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  min-height: 96px;
+  min-height: 142px;
   aspect-ratio: 1 / 1;
   padding: 10px 8px;
   border-radius: 12px;
@@ -3877,6 +3903,22 @@ button {
   font-weight: 800;
 }
 
+.season-signin-milestone-art {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.24));
+}
+
+.season-signin-milestone-caption {
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.68);
+}
+
 .season-signin-milestone strong,
 .season-signin-milestone span,
 .season-signin-milestone em {
@@ -3887,7 +3929,7 @@ button {
 
 .season-signin-milestone strong {
   color: #fff1d2;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.2;
 }
 
@@ -6436,12 +6478,12 @@ button.spirit-element-chip {
   position: relative;
   width: min(78vw, 304px);
   aspect-ratio: 0.71;
-  display: grid;
-  grid-template-rows: 1fr auto;
+  display: block;
   padding: 18px;
   border-radius: 28px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid rgba(255, 241, 210, 0.3);
+  isolation: isolate;
   box-shadow:
     0 28px 60px rgba(0, 0, 0, 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
@@ -6449,21 +6491,33 @@ button.spirit-element-chip {
 }
 
 .spirit-card-showcase-card.rarity-common {
-  --spirit-card-accent: var(--rarity-common);
+  --spirit-card-accent: #4da3ff;
+  --spirit-card-gem-core: #4da3ff;
+  --spirit-card-gem-glow: rgba(77, 163, 255, 0.82);
+  --spirit-card-flow: rgba(120, 195, 255, 0.72);
+  --spirit-card-flow-duration: 8.2s;
   background:
     linear-gradient(180deg, rgba(78, 96, 88, 0.96), rgba(29, 24, 21, 0.98)),
     linear-gradient(150deg, rgba(255, 248, 234, 0.05), transparent);
 }
 
 .spirit-card-showcase-card.rarity-rare {
-  --spirit-card-accent: var(--rarity-rare);
+  --spirit-card-accent: #9a63ff;
+  --spirit-card-gem-core: #9a63ff;
+  --spirit-card-gem-glow: rgba(154, 99, 255, 0.84);
+  --spirit-card-flow: rgba(191, 146, 255, 0.78);
+  --spirit-card-flow-duration: 6.6s;
   background:
     linear-gradient(180deg, rgba(72, 92, 125, 0.97), rgba(26, 22, 28, 0.98)),
     linear-gradient(150deg, rgba(255, 248, 234, 0.06), transparent);
 }
 
 .spirit-card-showcase-card.rarity-legendary {
-  --spirit-card-accent: var(--rarity-legendary);
+  --spirit-card-accent: #ff9a2f;
+  --spirit-card-gem-core: #ff9a2f;
+  --spirit-card-gem-glow: rgba(255, 154, 47, 0.9);
+  --spirit-card-flow: rgba(255, 196, 108, 0.82);
+  --spirit-card-flow-duration: 5.1s;
   background:
     linear-gradient(180deg, rgba(126, 86, 42, 0.98), rgba(35, 20, 17, 1)),
     linear-gradient(150deg, rgba(255, 248, 234, 0.08), transparent);
@@ -6477,19 +6531,71 @@ button.spirit-element-chip {
 }
 
 .spirit-card-showcase-cardback {
-  background:
-    radial-gradient(circle at 50% 26%, rgba(255, 255, 255, 0.12), transparent 18%),
-    repeating-linear-gradient(135deg, rgba(255, 248, 234, 0.08) 0 2px, transparent 2px 12px);
-  opacity: 0.65;
+  display: none;
 }
 
 .spirit-card-showcase-frame {
   inset: 10px;
   border-radius: 20px;
-  border: 1px solid color-mix(in srgb, var(--spirit-card-accent, #ffe8bd) 52%, rgba(255, 232, 189, 0.28));
+  border: 2px solid color-mix(in srgb, var(--spirit-card-accent, #ffe8bd) 72%, rgba(255, 232, 189, 0.35));
   box-shadow:
-    inset 0 0 0 1px rgba(255, 248, 234, 0.08),
-    inset 0 0 26px color-mix(in srgb, var(--spirit-card-accent, #ffd995) 24%, transparent);
+    0 0 14px color-mix(in srgb, var(--spirit-card-accent, #ffd995) 42%, transparent),
+    0 0 28px color-mix(in srgb, var(--spirit-card-accent, #ffd995) 26%, transparent),
+    inset 0 0 0 1px rgba(255, 248, 234, 0.14),
+    inset 0 0 18px color-mix(in srgb, var(--spirit-card-accent, #ffd995) 22%, transparent);
+}
+
+.spirit-card-showcase-frame::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow:
+    0 0 8px #ffffff,
+    0 0 18px var(--spirit-card-gem-glow, rgba(255, 224, 164, 0.9)),
+    0 0 30px var(--spirit-card-gem-glow, rgba(255, 224, 164, 0.72));
+  offset-path: inset(0 round 20px);
+  offset-distance: 0%;
+  offset-rotate: 0deg;
+  animation: spiritCardBorderOrbit var(--spirit-card-flow-duration, 7s) linear infinite;
+}
+
+.spirit-card-showcase-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid color-mix(in srgb, var(--spirit-card-accent, #ffe8bd) 88%, rgba(255, 255, 255, 0.36));
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--spirit-card-accent, #ffe8bd) 52%, transparent),
+    0 0 32px color-mix(in srgb, var(--spirit-card-accent, #ffe8bd) 34%, transparent),
+    inset 0 0 14px color-mix(in srgb, var(--spirit-card-accent, #ffe8bd) 18%, transparent);
+  opacity: 0.92;
+  animation: spiritCardBorderPulse calc(var(--spirit-card-flow-duration, 7s) * 1.15) ease-in-out infinite;
+}
+
+.spirit-card-showcase-rarity-gem {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  transform: translateX(-50%) rotate(45deg);
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.92), transparent 34%),
+    linear-gradient(135deg, color-mix(in srgb, var(--spirit-card-gem-core, #ffe8bd) 82%, #ffffff) 0%, var(--spirit-card-gem-core, #ffe8bd) 56%, color-mix(in srgb, var(--spirit-card-gem-core, #ffe8bd) 56%, #000000) 100%);
+  border: 1px solid color-mix(in srgb, var(--spirit-card-gem-core, #ffe8bd) 58%, rgba(255, 248, 234, 0.9));
+  box-shadow:
+    0 0 0 2px rgba(17, 13, 11, 0.74),
+    0 0 16px var(--spirit-card-gem-glow, rgba(255, 224, 164, 0.6));
+  animation: spiritCardGemPulse calc(var(--spirit-card-flow-duration, 7s) * 0.95) ease-in-out infinite;
 }
 
 .spirit-card-showcase-element-badge,
@@ -6519,10 +6625,22 @@ button.spirit-element-chip {
 }
 
 .spirit-card-showcase-art {
-  position: relative;
+  position: absolute;
+  inset: 14px 10px 16px;
   z-index: 1;
   display: grid;
   place-items: center;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.spirit-card-showcase-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center center;
+  display: block;
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.28));
 }
 
 .spirit-card-showcase-glyph {
@@ -6531,6 +6649,8 @@ button.spirit-element-chip {
   place-items: center;
   width: 132px;
   height: 132px;
+  align-self: center;
+  justify-self: center;
   border-radius: 999px;
   border: 1px solid rgba(255, 248, 234, 0.18);
   background:
@@ -6554,10 +6674,16 @@ button.spirit-element-chip {
 }
 
 .spirit-card-showcase-nameplate {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 16px;
+  z-index: 2;
   display: grid;
-  align-self: end;
-  padding: 10px 12px 2px;
+  padding: 10px 12px 12px;
   text-align: center;
+  border-radius: 0 0 18px 18px;
+  background: rgba(0, 0, 0, 0.8);
 }
 
 .spirit-card-showcase-nameplate h3,
@@ -6568,10 +6694,48 @@ button.spirit-element-chip {
 }
 
 .spirit-card-showcase-nameplate h3 {
-  font-size: 30px;
+  font-size: 24px;
   line-height: 1.05;
   color: #fff4de;
   text-shadow: 0 10px 24px rgba(0, 0, 0, 0.42);
+}
+
+@keyframes spiritCardGemPulse {
+  0%,
+  100% {
+    filter: brightness(0.98);
+    box-shadow:
+      0 0 0 2px rgba(17, 13, 11, 0.74),
+      0 0 14px var(--spirit-card-gem-glow, rgba(255, 224, 164, 0.6));
+  }
+
+  50% {
+    filter: brightness(1.12);
+    box-shadow:
+      0 0 0 2px rgba(17, 13, 11, 0.74),
+      0 0 22px var(--spirit-card-gem-glow, rgba(255, 224, 164, 0.8));
+  }
+}
+
+@keyframes spiritCardBorderPulse {
+  0%,
+  100% {
+    opacity: 0.58;
+  }
+
+  50% {
+    opacity: 0.94;
+  }
+}
+
+@keyframes spiritCardBorderOrbit {
+  0% {
+    offset-distance: 0%;
+  }
+
+  100% {
+    offset-distance: 100%;
+  }
 }
 
 .spirit-card-showcase-intro {
@@ -7642,26 +7806,65 @@ button.spirit-element-chip {
   margin-top: auto;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
   border-radius: 0;
-  /* background: rgba(18, 14, 13, 0.84); */
+  background: linear-gradient(180deg, rgba(30, 20, 15, 0), rgba(30, 20, 15, 0.76) 38%, rgba(20, 13, 10, 0.92));
   border-top: 1px solid rgba(255, 248, 234, 0.08);
 }
 
 .nav-item {
   min-width: 0;
-  padding: 8px 4px;
-  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 2px 2px 0;
+  min-height: 84px;
   font-size: 12px;
   line-height: 1.15;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.dock-nav-icon {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.28));
+  transition: transform 140ms ease;
+}
+
+.dock-nav-label {
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72);
 }
 
 .nav-item.locked {
   cursor: not-allowed;
   opacity: 0.46;
   color: rgba(255, 248, 234, 0.5);
-  background: rgba(255, 248, 234, 0.025);
-  border-color: rgba(255, 248, 234, 0.04);
+  background: transparent;
+  border-color: transparent;
+}
+
+.nav-item.active .dock-nav-icon {
+  transform: translateY(-2px) scale(1.04);
+}
+
+.nav-item.active .dock-nav-label {
+  color: #fff6df;
+}
+
+.nav-item.active,
+.nav-item:hover {
+  background: transparent;
+  border-color: transparent;
 }
 
 .result-banner {

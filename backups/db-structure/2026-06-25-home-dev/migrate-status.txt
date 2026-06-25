@@ -1,0 +1,2 @@
+npm WARN config global `--global`, `--local` are deprecated. Use `--location=global` instead.
+Error: Could not load `--schema` from provided path `prisma\schema.prisma`: file or directory not found

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FieldStatus, Prisma, SpiritElement } from '@prisma/client';
 import { getDailyTaskActionScene } from '../client-read/daily-task-lifecycle.service.js';
 import { DAILY_TASK_CONFIG, DEFAULT_FIELD_SLOT_COUNT } from '../lib/game-balance.js';
@@ -490,6 +491,7 @@ export class PlayerInitializationService {
         create: {
           playerId,
           slotIndex,
+          spiritInstanceId: shouldCreateStarter ? randomUUID() : null,
           spiritDefinitionId: shouldCreateStarter ? starterDefinition.id : null,
           isMain: shouldCreateStarter,
           level,
@@ -502,6 +504,7 @@ export class PlayerInitializationService {
         },
         update: resetExisting
           ? {
+            spiritInstanceId: shouldCreateStarter ? randomUUID() : null,
             spiritDefinitionId: shouldCreateStarter ? starterDefinition.id : null,
             isMain: shouldCreateStarter,
             level,

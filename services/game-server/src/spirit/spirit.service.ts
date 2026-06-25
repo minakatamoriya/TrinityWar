@@ -1,5 +1,6 @@
 ﻿import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { SocialRelationStatus, SocialRelationType } from '@prisma/client';
 import type { Prisma, PrismaClient, SpiritElement, SpiritRarity, SpiritRole } from '@prisma/client';
 import { APP_NAME, getBasicSpiritTraitRollGoldCost, type ClientBreakthroughSpiritRequest, type ClientBuySpiritShopItemRequest, type ClientBuySpiritSoulRequest, type ClientClaimSpiritAdRewardRequest, type ClientCodexState, type ClientComposeSpiritRequest, type ClientDissolveSpiritRequest, type ClientFeedSpiritRequest, type ClientResolveSpiritTraitRollRequest, type ClientRollSpiritTraitsRequest, type ClientRollSpiritTraitsResponse, type ClientSceneVisibility, type ClientSetMainSpiritRequest, type ClientSpiritActiveRollMode, type ClientSpiritCodexEntry, type ClientSpiritDefinition, type ClientSpiritElement, type ClientSpiritMutationResponse, type ClientSpiritPublicProfileResponse, type ClientSpiritPublicSlot, type ClientSpiritShopItem, type ClientSpiritSlot, type ClientSpiritState, type ClientSpiritStateResponse, type ClientSpiritTrait, type ClientSpiritTraitCode, type ClientSpiritTraitRollMaterial, type ClientUpgradeSpiritRequest } from '@trinitywar/shared';
@@ -155,6 +156,7 @@ export class SpiritService {
       orderBy: { slotIndex: 'asc' },
       select: {
         id: true,
+        spiritInstanceId: true,
         slotIndex: true,
         isMain: true,
         appearanceSkinId: true,
@@ -211,7 +213,7 @@ export class SpiritService {
         : null;
 
       return {
-        spiritInstanceId: slot.spiritDefinition ? slot.id : null,
+        spiritInstanceId: slot.spiritDefinition ? (slot.spiritInstanceId ?? slot.id) : null,
         slotIndex: slot.slotIndex,
         spiritId: slot.spiritDefinition?.spiritId ?? null,
         label: slot.spiritDefinition?.label ?? `空栏位 ${slot.slotIndex}`,
@@ -1263,6 +1265,7 @@ export class SpiritService {
         where: { playerId },
         select: {
           id: true,
+          spiritInstanceId: true,
           slotIndex: true,
           spiritDefinitionId: true,
           isMain: true,
@@ -1440,6 +1443,7 @@ export class SpiritService {
       await client.playerSpiritSlot.update({
         where: { id: slot.id },
         data: {
+          spiritInstanceId: null,
           spiritDefinitionId: null,
           isMain: false,
           level: 1,
@@ -1592,6 +1596,7 @@ export class SpiritService {
       await client.playerSpiritSlot.update({
         where: { id: targetSlot.id },
         data: {
+          spiritInstanceId: randomUUID(),
           spiritDefinitionId: codexEntry.spiritDefinitionId,
           isMain: targetSlot.isMain || !existingMainSlot,
           level: 1,
@@ -1710,6 +1715,7 @@ export class SpiritService {
         orderBy: { slotIndex: 'asc' },
         select: {
           id: true,
+          spiritInstanceId: true,
           slotIndex: true,
           isMain: true,
           appearanceSkinId: true,
@@ -1985,6 +1991,7 @@ function buildSpiritState(
   resource: SpiritReadResource,
   slots: Array<{
     id: string;
+    spiritInstanceId?: string | null;
     slotIndex: number;
     isMain: boolean;
     appearanceSkinId: string | null;
@@ -2040,7 +2047,7 @@ function buildSpiritState(
     };
     const unlockedTraitSlots = getUnlockedTraitSlots(settled.breakthroughStage);
     const mappedSlot: ClientSpiritSlot = {
-      spiritInstanceId: slot.id,
+      spiritInstanceId: slot.spiritDefinition ? (slot.spiritInstanceId ?? slot.id) : null,
       slotIndex: slot.slotIndex,
       spiritId: slot.spiritDefinition?.spiritId ?? null,
       isMain: slot.isMain,
@@ -2285,8 +2292,10 @@ function buildSpiritSlotSwapData(slot: {
   maxHp: number;
   acquiredAt: Date | null;
   dissolvedAt: Date | null;
+  spiritInstanceId?: string | null;
 }) {
   return {
+    spiritInstanceId: slot.spiritInstanceId ?? null,
     spiritDefinitionId: slot.spiritDefinitionId,
     appearanceSkinId: slot.appearanceSkinId,
     appearanceFrameId: slot.appearanceFrameId,

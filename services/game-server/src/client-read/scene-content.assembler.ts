@@ -496,18 +496,29 @@ export class SceneContentAssembler {
             return battleDelta;
           }
 
-          return right.winCount - left.winCount;
+          const winDelta = right.winCount - left.winCount;
+          if (winDelta !== 0) {
+            return winDelta;
+          }
+
+          return right.updatedAt.getTime() - left.updatedAt.getTime();
         })
         .slice(0, 10)
         .map((item) => ({
+          playerId: item.playerId,
+          spiritInstanceId: item.spiritInstanceId,
           spiritId: item.spiritId,
           label: item.label,
           rarity: item.rarity,
+          element: item.element,
           battleCount: item.battleCount,
           winCount: item.winCount,
           lossCount: item.lossCount,
           drawCount: item.drawCount,
           winRatePercent: computeSpiritWinRate(item),
+          isMain: item.isMain,
+          traitItems: item.traitItems,
+          innateTraitItems: item.innateTraitItems,
         })),
     };
   }

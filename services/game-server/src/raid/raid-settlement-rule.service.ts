@@ -13,7 +13,9 @@ type BattleResult = 'WIN' | 'LOSS' | 'DRAW';
 
 export interface SpiritBattleSnapshot {
   slotId: string;
+  spiritInstanceId?: string | null;
   slotIndex: number;
+  isMain?: boolean;
   level: number;
   element: Element | null;
   currentHp: number;

@@ -62,6 +62,37 @@ interface GlobalFeatureModalContentProps {
   tianjiShop?: TianjiShopPanelProps;
 }
 
+const seasonSignInChestByDayCount: Record<number, { closed: string; open: string }> = {
+  1: {
+    closed: '/assets/icon/icon_chest_wood_gold_64.png',
+    open: '/assets/icon/icon_chest_wood_gold_open_64.png',
+  },
+  2: {
+    closed: '/assets/icon/icon_chest_blue_silver_64.png',
+    open: '/assets/icon/icon_chest_blue_silver_open_64.png',
+  },
+  3: {
+    closed: '/assets/icon/icon_chest_purple_64.png',
+    open: '/assets/icon/icon_chest_purple_open_64.png',
+  },
+  5: {
+    closed: '/assets/icon/icon_chest_red_legend_64.png',
+    open: '/assets/icon/icon_chest_red_legend_open_64.png',
+  },
+  7: {
+    closed: '/assets/icon/icon_chest_teal_gold_64.png',
+    open: '/assets/icon/icon_chest_teal_gold_open_64.png',
+  },
+  14: {
+    closed: '/assets/icon/icon_chest_dark_red_64.png',
+    open: '/assets/icon/icon_chest_dark_red_open_64.png',
+  },
+  21: {
+    closed: '/assets/icon/icon_chest_winged_gold_64.png',
+    open: '/assets/icon/icon_chest_winged_gold_open_64.png',
+  },
+};
+
 function SeasonResetRulesPanel(props: { title: string; reset: string[]; retained: string[]; onOpenSignIn?: () => void }): JSX.Element {
   return (
     <div className="contribution-tier-list">
@@ -121,7 +152,7 @@ function buildSeasonMilestoneStatusLabel(milestone: SeasonSignInMilestoneView): 
   }
 
   if (milestone.debugUnlocked) {
-    return `测试可领 -${milestone.remainingDays}`;
+    return `测试可领，还差 ${milestone.remainingDays} 天`;
   }
 
   return `还差 ${milestone.remainingDays} 天`;
@@ -159,7 +190,7 @@ function SeasonSignInPanel(props: SeasonSignInPanelProps): JSX.Element {
             key={day.day}
           >
             <span>{day.day}</span>
-            <strong>{day.missed ? '未签' : `天机符 x${day.reward}`}</strong>
+            <strong>{day.missed ? '未签到' : `天机符 x${day.reward}`}</strong>
           </div>
         ))}
       </div>
@@ -167,25 +198,40 @@ function SeasonSignInPanel(props: SeasonSignInPanelProps): JSX.Element {
         {claimedToday ? '今日已签到' : '签到领取'}
       </button>
       <div className="season-signin-milestones" aria-label="累计签到宝箱">
-        {milestones.map((milestone) => (
-          <div className={`season-signin-milestone ${milestone.reached ? 'reached' : ''}`} key={milestone.dayCount}>
-            <span className="season-signin-milestone-icon" aria-hidden="true">箱</span>
-            <strong>{milestone.dayCount} 天</strong>
-            <em>{buildSeasonMilestoneStatusLabel(milestone)}</em>
-            <button
-              className="secondary-button small season-signin-milestone-button"
-              disabled={!milestone.claimable || pendingActionKey === `season:sign-in-milestone:${milestone.dayCount}`}
-              onClick={() => onClaimMilestone(milestone.dayCount)}
-              type="button"
-            >
-              {milestone.claimed
-                ? '已领'
-                : pendingActionKey === `season:sign-in-milestone:${milestone.dayCount}`
-                  ? '领取中...'
-                  : '宝箱'}
-            </button>
-          </div>
-        ))}
+        {milestones.map((milestone) => {
+          const chestArt = seasonSignInChestByDayCount[milestone.dayCount];
+          const chestSrc = milestone.claimed ? chestArt?.open : chestArt?.closed;
+
+          return (
+            <div className={`season-signin-milestone ${milestone.reached ? 'reached' : ''}`} key={milestone.dayCount}>
+              {chestSrc ? (
+                <img
+                  alt=""
+                  aria-hidden="true"
+                  className="season-signin-milestone-art"
+                  src={chestSrc}
+                />
+              ) : (
+                <span className="season-signin-milestone-icon" aria-hidden="true">箱</span>
+              )}
+              <span className="season-signin-milestone-caption">{milestone.title}</span>
+              <strong>{milestone.dayCount} 天</strong>
+              <em>{buildSeasonMilestoneStatusLabel(milestone)}</em>
+              <button
+                className="secondary-button small season-signin-milestone-button"
+                disabled={!milestone.claimable || pendingActionKey === `season:sign-in-milestone:${milestone.dayCount}`}
+                onClick={() => onClaimMilestone(milestone.dayCount)}
+                type="button"
+              >
+                {milestone.claimed
+                  ? '已领'
+                  : pendingActionKey === `season:sign-in-milestone:${milestone.dayCount}`
+                    ? '领取中...'
+                    : '宝箱'}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

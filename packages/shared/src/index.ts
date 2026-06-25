@@ -1780,15 +1780,27 @@ export interface ClientFactionLeaderboardEntry {
   isCurrentPlayer?: boolean;
 }
 
-export interface ClientFactionSpiritLeaderboardEntry {
+export interface ClientFactionSpiritInstanceLeaderboardEntry {
+  playerId: string;
+  spiritInstanceId: string;
   spiritId: string;
   label: string;
   rarity: ClientSpiritRarity;
+  element: ClientSpiritElement | null;
   battleCount: number;
   winCount: number;
   lossCount: number;
   drawCount: number;
   winRatePercent: number;
+  isMain: boolean;
+  traitItems: Array<{
+    label: string;
+    description: string;
+  }>;
+  innateTraitItems: Array<{
+    label: string;
+    description: string;
+  }>;
 }
 
 export interface ClientFactionDonateRequest {
@@ -2199,6 +2211,6 @@ export interface ClientSceneContentResponse {
     }>;
     stipend?: ClientFactionStipendSummary;
     rankings: ClientFactionLeaderboardEntry[];
-    spiritRankings?: ClientFactionSpiritLeaderboardEntry[];
+    spiritRankings?: ClientFactionSpiritInstanceLeaderboardEntry[];
   };
 }

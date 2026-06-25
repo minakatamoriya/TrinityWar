@@ -61,7 +61,7 @@ export function SpiritCodexModal(props: SpiritCodexModalProps): JSX.Element | nu
         ariaLabel="灵宠图鉴"
         bodyClassName="seed-codex-body"
         className="spirit-codex-screen"
-        description="点击已可见灵宠图标查看卡片展示"
+        description="点击已可见灵宠图标查看卡片展示。"
         onBack={onClose}
         title="灵宠图鉴"
       >
@@ -114,6 +114,7 @@ function buildCodexShowcaseData(entry: ClientSpiritCodexEntry) {
 
   return {
     label: getSpiritCodexName(entry),
+    artSrc: getSpiritCodexArtSrc(entry.spiritId),
     ownerLabel: '灵宠图鉴',
     rarity: entry.definition.rarity,
     relationLabel: getSpiritCodexProgressLabel(entry),
@@ -135,4 +136,12 @@ function buildCodexShowcaseData(entry: ClientSpiritCodexEntry) {
     emptyDetailTitle: '特性待开放',
     emptyDetailText: '这只灵宠还没有录入可展示的本体特性说明。',
   };
+}
+
+function getSpiritCodexArtSrc(spiritId: string): string | undefined {
+  if (spiritId === 'canglang') {
+    return '/assets/pet/canglang_3.png';
+  }
+
+  return undefined;
 }
